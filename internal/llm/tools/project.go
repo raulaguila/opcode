@@ -122,7 +122,9 @@ func goOutline(path string, raw []byte) ([]codeSymbol, error) {
 		switch node := decl.(type) {
 		case *ast.FuncDecl:
 			name := node.Name.Name
+			kind := "function"
 			if node.Recv != nil && len(node.Recv.List) > 0 {
+				kind = "method"
 				recv := node.Recv.List[0].Type
 				if star, ok := recv.(*ast.StarExpr); ok {
 					recv = star.X
@@ -131,12 +133,19 @@ func goOutline(path string, raw []byte) ([]codeSymbol, error) {
 					name = ident.Name + "." + name
 				}
 			}
-			result = append(result, codeSymbol{name, "function", set.Position(node.Pos()).Line, set.Position(node.End()).Line})
+			result = append(result, codeSymbol{name, kind, set.Position(node.Pos()).Line, set.Position(node.End()).Line})
 		case *ast.GenDecl:
 			for _, spec := range node.Specs {
 				switch s := spec.(type) {
 				case *ast.TypeSpec:
-					result = append(result, codeSymbol{s.Name.Name, "type", set.Position(s.Pos()).Line, set.Position(s.End()).Line})
+					kind := "type"
+					switch s.Type.(type) {
+					case *ast.StructType:
+						kind = "struct"
+					case *ast.InterfaceType:
+						kind = "interface"
+					}
+					result = append(result, codeSymbol{s.Name.Name, kind, set.Position(s.Pos()).Line, set.Position(s.End()).Line})
 				case *ast.ValueSpec:
 					for _, name := range s.Names {
 						result = append(result, codeSymbol{name.Name, node.Tok.String(), set.Position(s.Pos()).Line, set.Position(s.End()).Line})

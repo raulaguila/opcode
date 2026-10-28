@@ -394,7 +394,11 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 		args = append(args, "--glob", pattern)
 	}
 	args = append(args, "--", root)
-	cmd, err := shell.Command(ctx, config.WorkingDirectory(), commandString(args))
+	cwd := root
+	if info, err := os.Stat(root); err == nil && !info.IsDir() {
+		cwd = filepath.Dir(root)
+	}
+	cmd, err := shell.Command(ctx, cwd, commandString(args))
 	if err != nil {
 		return nil, false, err
 	}

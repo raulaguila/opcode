@@ -55,6 +55,31 @@ OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \
     -count=1 -v -timeout=280s
 ```
 
+## Listagem paginada e busca filtrada — 28/10/2026
+
+`TestLiveOllamaPagedIndexLookup` usa o binário real e o `llama3.1:8b` com janela
+manual de 16.384. Em quatro turnos explícitos, retoma a mesma sessão por
+`--resume`, exige duas chamadas `ls` com `limit: 2` e offsets 0/2, uma chamada
+`search_code_index` filtrada por Python e uma leitura `view` do arquivo atual.
+Verifica chamadas/resultados no SQLite e a preservação dos arquivos. Uma função
+TypeScript com o mesmo nome serve de controle contra vazamento do filtro.
+Passou no Ollama local, sem aprovação automática ou alteração da configuração
+do usuário. Não executa comandos nem instala ferramentas no projeto sintético.
+
+```sh
+OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \
+  OPCODE_EVAL_BINARY=/tmp/opcode-context-capacity \
+  go test -tags=integration ./internal/evaluation \
+    -run '^TestLiveOllamaPagedIndexLookup$' -count=1 -v -timeout=280s
+```
+
+O pedido composto com as quatro etapas em um único turno não foi consistente:
+houve resposta final inválida/mesclada recusada pelo adaptador, e outra execução
+consultou o índice mas pulou a paginação e a leitura solicitadas. O teste
+versionado comprova o fluxo em turnos explícitos; não comprova planejamento
+autônomo confiável desse modelo para todos os pedidos. As proteções de chamadas
+e aprovações permaneceram ativas.
+
 ## Atualização de 28/10/2026: respostas sobre o projeto
 
 O caminho nativo do Ollama agora pode ser selecionado com `api: "ollama"` na definição do modelo local. O contexto é enviado por requisição (`options.num_ctx`), junto com o limite de saída e temperatura zero. O servidor recebe `truncate: false`: um contexto insuficiente deve causar erro em vez de descartar silenciosamente instruções. A implementação segue o protocolo de [chat do Ollama](https://docs.ollama.com/api/chat) e seu [streaming NDJSON](https://docs.ollama.com/api/streaming), sem SDK adicional.

@@ -8,13 +8,17 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 )
 
 type LSParams struct {
-	Path   string   `json:"path"`
-	Ignore []string `json:"ignore"`
+	Path      string   `json:"path"`
+	Ignore    []string `json:"ignore"`
+	Offset    int      `json:"offset"`
+	Limit     int      `json:"limit"`
+	Glob      string   `json:"glob"`
+	Language  string   `json:"language"`
+	Extension string   `json:"extension"`
 }
 
 type TreeNode struct {
@@ -34,34 +38,7 @@ type lsTool struct{}
 const (
 	LSToolName    = "ls"
 	MaxLSFiles    = 1000
-	lsDescription = `Directory listing tool that shows files and subdirectories in a tree structure, helping you explore and understand the project organization.
-
-WHEN TO USE THIS TOOL:
-- Use when you need to explore the structure of a directory
-- Helpful for understanding the organization of a project
-- Good first step when getting familiar with a new codebase
-
-HOW TO USE:
-- Provide a path to list (defaults to current working directory)
-- Optionally specify glob patterns to ignore
-- Results are displayed in a tree structure
-
-FEATURES:
-- Displays a hierarchical view of files and directories
-- Automatically skips hidden files/directories (starting with '.')
-- Skips common system directories like __pycache__
-- Can filter out files matching specific patterns
-
-LIMITATIONS:
-- Results are limited to 1000 files
-- Very large directories will be truncated
-- Does not show file sizes or permissions
-- Cannot recursively list all directories in a large project
-
-TIPS:
-- Use Glob tool for finding files by name patterns instead of browsing
-- Use Grep tool for searching file contents
-- Combine with other tools for more effective exploration`
+	lsDescription = `List allowed project file paths in sorted pages. Use offset/limit (default and maximum 60), glob, language, extension and ignore filters. Read next_offset when more=true to continue with the same filters. Each page is bounded to 6000 bytes of paths; directory scan is bounded to 20000 files. Respects ripgrep ignores when available and omits secrets, storage, dependencies and symlinks. Listing is navigation, not proof of file contents.`
 )
 
 func NewLsTool() BaseTool {
@@ -69,24 +46,11 @@ func NewLsTool() BaseTool {
 }
 
 func (l *lsTool) Info() ToolInfo {
-	return ToolInfo{
-		Name:        LSToolName,
-		Description: lsDescription,
-		Parameters: map[string]any{
-			"path": map[string]any{
-				"type":        "string",
-				"description": "The path to the directory to list (defaults to current working directory)",
-			},
-			"ignore": map[string]any{
-				"type":        "array",
-				"description": "List of glob patterns to ignore",
-				"items": map[string]any{
-					"type": "string",
-				},
-			},
-		},
-		Required: []string{"path"},
-	}
+	params := scopeParameters()
+	params["ignore"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	params["offset"] = map[string]any{"type": "integer", "minimum": 0, "maximum": 20000}
+	params["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 60}
+	return ToolInfo{Name: LSToolName, Description: lsDescription, Parameters: params, Required: []string{"path"}}
 }
 
 func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
@@ -94,39 +58,52 @@ func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	if err := json.Unmarshal([]byte(call.Input), &params); err != nil {
 		return NewTextErrorResponse(fmt.Sprintf("error parsing parameters: %s", err)), nil
 	}
-
-	searchPath := params.Path
-	if searchPath == "" {
-		searchPath = config.WorkingDirectory()
+	if params.Offset < 0 || params.Offset > 20000 || params.Limit < 0 || params.Limit > 60 || len(params.Ignore) > 32 {
+		return NewTextErrorResponse("offset must be 0–20000, limit 1–60, and at most 32 ignore patterns"), nil
 	}
-
-	if !filepath.IsAbs(searchPath) {
-		searchPath = filepath.Join(config.WorkingDirectory(), searchPath)
+	scope := retrievalScope{Path: params.Path, Glob: params.Glob, Language: params.Language, Extension: params.Extension}
+	if err := scope.validate(); err != nil {
+		return NewTextErrorResponse(err.Error()), nil
 	}
-
-	if _, err := os.Stat(searchPath); os.IsNotExist(err) {
-		return NewTextErrorResponse(fmt.Sprintf("path does not exist: %s", searchPath)), nil
+	for _, pattern := range params.Ignore {
+		if len(pattern) > 500 {
+			return NewTextErrorResponse("ignore patterns must be at most 500 bytes"), nil
+		}
 	}
-
-	files, truncated, err := listDirectory(searchPath, params.Ignore, MaxLSFiles, ctx)
+	root, err := authorizeFile(ctx, params.Path, "read")
 	if err != nil {
-		return ToolResponse{}, fmt.Errorf("error listing directory: %w", err)
+		return ToolResponse{}, err
 	}
-
-	tree := createFileTree(files)
-	output := printTree(tree, searchPath)
-
-	if truncated {
-		output = fmt.Sprintf("There are more than %d files in the directory. Use a more specific path or use the Glob tool to find specific files. The first %d files and directories are included below:\n\n%s", MaxLSFiles, MaxLSFiles, output)
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		return NewTextErrorResponse(fmt.Sprintf("path does not exist: %s", root)), nil
 	}
-
-	return WithResponseMetadata(
-		NewTextResponse(output),
-		LSResponseMetadata{
-			NumberOfFiles: len(files),
-			Truncated:     truncated,
-		},
-	), nil
+	files, truncated, err := scopedFilePaths(ctx, root, scope, params.Ignore)
+	if err != nil {
+		return ToolResponse{}, err
+	}
+	limit := params.Limit
+	if limit == 0 {
+		limit = 60
+	}
+	start, size := min(params.Offset, len(files)), 0
+	end := start
+	for end < len(files) && end-start < limit {
+		raw, _ := json.Marshal(files[end])
+		if size+len(raw)+1 > 6000 {
+			if end == start {
+				return NewTextErrorResponse("one path exceeds the page byte limit; use a narrower directory scope"), nil
+			}
+			break
+		}
+		size += len(raw) + 1
+		end++
+	}
+	var next *int
+	if end < len(files) {
+		next = &end
+	}
+	response := jsonToolResult(map[string]any{"root": root, "files": files[start:end], "total": len(files), "offset": start, "next_offset": next, "more": next != nil, "truncated": truncated, "navigation_only": true})
+	return WithResponseMetadata(response, LSResponseMetadata{NumberOfFiles: end - start, Truncated: next != nil || truncated}), nil
 }
 
 func listDirectory(initialPath string, ignorePatterns []string, limit int, contexts ...context.Context) ([]string, bool, error) {

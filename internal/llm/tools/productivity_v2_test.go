@@ -61,7 +61,7 @@ func TestCodeIndexIncrementalIgnorePrivacyAndRemoval(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, response.Content, `"results":[]`)
 	config.Get().Security.DenyPaths = nil
-	indexPath := filepath.Join(config.Get().Data.Directory, "code-index", indexDigest(dir)+".sqlite")
+	indexPath := filepath.Join(config.Get().Data.Directory, "code-index", indexDigest(dir)+"-v2.sqlite")
 	info, err := os.Stat(indexPath)
 	require.NoError(t, err)
 	require.EqualValues(t, 0600, info.Mode().Perm())
@@ -74,7 +74,7 @@ func TestCodeIndexIncrementalIgnorePrivacyAndRemoval(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "normal.go"), []byte("package demo\nfunc ReplacementDeclaration() {}"), 0600))
 	response, err = tool.Run(toolContext(), toolInput(map[string]any{"query": "UniqueDeclaration"}))
 	require.NoError(t, err)
-	require.Contains(t, response.Content, `"results":[]`)
+	require.NotContains(t, response.Content, "func UniqueDeclaration", "fuzzy matches may remain, but stale declarations must not")
 	require.NoError(t, os.Remove(filepath.Join(dir, "normal.go")))
 	response, err = tool.Run(toolContext(), toolInput(map[string]any{"query": "ReplacementDeclaration"}))
 	require.NoError(t, err)

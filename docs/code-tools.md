@@ -4,6 +4,15 @@ As ferramentas novas entram no catálogo progressivo do agente. Os modos Pergunt
 e Planejar podem consultar o mapa, símbolos, validações, artefatos e recursos MCP;
 renomear ou substituir símbolos só está disponível em Executar.
 
+- `ls`: lista caminhos permitidos em ordem estável, com `offset`, `limit`
+  (padrão/máximo 60), `glob`, `language`, `extension` e `ignore`. Retorna
+  `next_offset`, `more`, `total` e `truncated`. Cada página contém até 6.000 bytes
+  de caminhos; a varredura para em 20 mil arquivos. Continue com os mesmos
+  filtros e o `next_offset` recebido; se `truncated=true`, reduza o escopo.
+  Alterações no diretório entre páginas podem mudar a ordem: nesse caso, reinicie
+  pelo offset zero. Arquivos ocultos, sensíveis, dependências, armazenamento e
+  links ficam fora. Com `rg` instalado respeita `.gitignore`; sem ele, usa a
+  descoberta local com exclusões básicas, sem garantir regras completas do Git.
 - `get_project_map`: caminhos, tamanhos e extensões do projeto, com `offset` e
   `limit` (100 por padrão, máximo 500). Ignora credenciais, links, armazenamento,
   dependências e saídas comuns de build. O percurso para em 20 mil entradas e
@@ -92,22 +101,49 @@ os bytes originais, inclusive NUL e sequências inválidas.
 
 ## Índice incremental e formatação
 
-`search_code_index` recebe `query` (até 512 bytes e 32 termos) e `limit` (padrão
-20, máximo 50). Usa o SQLite já incluído, com FTS5 e ranking BM25. Cada consulta
-atualiza os arquivos alterados, remove entradas apagadas/ignoradas e retorna
-trechos de até 80 linhas/8 KiB. O índice privado fica em
-`data.directory/code-index/<hash-do-workspace>.sqlite`, com arquivo 0600 e
-diretório 0700. Não há serviço externo nem embeddings obrigatórios.
+`search_code_index` recebe `query` (até 512 bytes/60 termos), `limit`
+(padrão 6, máximo 12) e filtros `path`, `glob`, `language`, `extension`, `kind`.
+Exemplo: `{"query":"autenticação usuário","path":"internal","language":"go","kind":"function"}`.
+Usa SQLite/FTS5 e ranking BM25, prioriza identificadores exatos e evita resultados
+sobrepostos. A normalização reconhece camelCase/snake_case e alguns conceitos
+em português, sem inferência nem embeddings. Quando `more=true`, refine a busca;
+a consulta examina até 120 candidatos classificados e não promete listar todos.
+
+Retorna caminho, símbolo, tipo, linguagem, linhas, hash, assinatura (até 160 bytes)
+e prévia (até 240 bytes), com orçamento de aproximadamente 8 KiB para a resposta.
+Leia o código atual com `view`/`read_symbol` antes de concluir ou editar. O índice
+é uma ferramenta inicial do agente, respeitando os modos e permissões.
+
+Go usa declarações do parser nativo para funções, métodos, tipos, structs,
+interfaces e valores. Janelas textuais complementam o índice para código fora
+das declarações, Go incompleto e outras linguagens. A identificação de extensões
+não comprova disponibilidade de parser ou LSP: resultados `kind: "text"` são
+navegação textual. Os outlines das demais linguagens continuam dependendo do LSP.
+
+O índice privado fica em
+`data.directory/code-index/<hash-do-workspace>-v2.sqlite`, com arquivo 0600 e
+diretório 0700. O cache anterior sem `-v2` é preservado: versões anteriores
+podem voltar a usá-lo; a nova versão reconstrói o seu cache sob demanda.
+Configuração, conversas e arquivos do usuário não são migrados por essa mudança.
+Remover `code-index` com o aplicativo fechado descarta somente os caches.
+
+Cada busca atualiza a lista de arquivos permitidos e remove entradas apagadas ou
+ignoradas. Metadados de tamanho/mtime/identidade/ctime, quando fornecidos pelo SO,
+e o hash das credenciais conhecidas permitem reaproveitar arquivos por até 60 s.
+Mudança nos metadados, expiração ou mudança de credenciais força releitura. Os
+campos `scan_reads`, `reused_files`, `updated_files` descrevem a atualização;
+`scan_reads` não inclui a verificação adicional dos resultados retornados.
+Cada resultado autoriza novamente a leitura e compara o hash atual. Prévia
+indexada não concede evidência integral para uma edição. Em sistemas sem
+identidade/ctime, uma alteração que preserve tamanho e mtime pode ficar fora da
+busca até a expiração; resultados antigos nunca passam sem verificação de hash.
 
 A descoberta exige `rg`, respeita `.gitignore` inclusive fora de repositórios e
-omite caminhos sensíveis, links, dependências, armazenamento e
-`.opcode-worktrees`. Cada varredura tem limite de 10 mil arquivos, 256 KiB por
-arquivo e 20 MiB de texto; exceder um limite aborta a atualização sem substituir
-o índice anterior. O banco tem teto de 32768 páginas SQLite. Credenciais
-conhecidas são redigidas antes da persistência. A recuperação autoriza novamente
-o arquivo e compara seu conteúdo atual com o hash indexado. Snippets continuam
-sendo navegação: não concedem evidência integral para uma edição. Remover o
-diretório `code-index` com o aplicativo fechado descarta somente esse cache.
+omite caminhos sensíveis, links, dependências, armazenamento e `.opcode-worktrees`.
+Cada varredura tem limite de 20 mil arquivos, 256 KiB por arquivo e 20 MiB de texto;
+exceder um limite aborta a atualização sem substituir o índice anterior. O banco
+tem teto de 32768 páginas SQLite. Credenciais conhecidas são removidas antes da
+persistência. Não há serviço externo, downloads nem dependência nova.
 
 `format_project` recebe `preset` e `files` explícitos (1–64 arquivos regulares,
 até 2 MiB cada). Os presets `go`, `python` e `javascript`/`typescript`/`json`
@@ -121,3 +157,33 @@ saída ao vivo, sandbox e cancelamento de `bash`. Revise o diff e execute
 Os outlines continuam estruturais: parser Go e document symbols do servidor
 LSP configurado nas demais linguagens. Um LSP ausente é informado, sem inventar
 declarações a partir de expressões regulares.
+
+## Comparação multilíngue com o Codaro — 28/10/2026
+
+Comparação com o checkout local em `~/Documents/GitHub/codaro`, incluindo execução
+dos 36 casos `test_symbols_are_searchable_and_read_from_current_source`.
+Todos passaram em diretórios temporários, sem alterar o checkout do Codaro.
+
+| Capacidade | Codaro local | Opcode |
+| --- | --- | --- |
+| Cadastro de linguagens/formatos | 81 identificadores, 131 extensões | IDs LSP existentes e extensões adicionais nos filtros; sem promessa de parser para cada extensão |
+| Parsing local | Tree-sitter disponível nos 80 identificadores além de `text`; 36 casos com fixture exercitados | Parser Go, sem gramáticas adicionais |
+| Python, JS/TS/TSX, Java, C/C++, C#, Rust, SQL, Kotlin etc. | Símbolos estruturais locais, busca por símbolo e leitura da declaração | Busca textual filtrada; outline/leitura por símbolo exigem LSP configurado |
+| Filtros de busca | Caminho, glob, linguagem, extensão, tipo de símbolo | Mesmos campos; tipo estrutural no índice atual apenas para Go |
+| Atualização | Hash e metadados, com reutilização e serviço de observação | Hash e metadados com TTL de 60 s, descoberta renovada a cada busca |
+| Busca | Léxica/exata; combinação semântica opcional | Léxica/exata, sem embeddings |
+| LSP | Presets para servidores conhecidos e pool reutilizável | Servidores configuráveis; símbolos, definição, referências, hierarquia e renomeação/edição protegidas |
+| Inventário consultável | `get_language_support` paginado distingue parser, fixtures e LSP instalado | Sem inventário equivalente por linguagem; configuração e status das integrações LSP |
+
+Os testes do Opcode exercitam filtros em Go, Python, JavaScript, TypeScript, TSX,
+Rust, Java, C++, C#, Kotlin, SQL e texto desconhecido. Isso comprova recuperação
+textual e classificação dessas fixtures, não suporte estrutural equivalente ao
+Codaro. Por exemplo, `.h` é classificado como C pelo filtro; o Codaro também
+inspeciona conteúdo para distinguir cabeçalhos C++. Os filtros não iniciam nem
+instalam servidores LSP.
+
+Para ampliar a paridade estrutural, o próximo passo é integrar gramáticas locais
+com testes de símbolos/escopos por linguagem, começando por Python, JS/TS/TSX e
+Rust. Só declarar extensões ou usar expressões regulares não substitui parsing.
+Build/testes continuam exigindo ferramentas instaladas e verificações explícitas,
+independentemente do reconhecimento de linguagem ou disponibilidade de parser.

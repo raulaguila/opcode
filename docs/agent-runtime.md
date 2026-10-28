@@ -49,13 +49,13 @@ antecipadas quando há pedido de trabalho em segundo plano ou referência explí
 a essas ferramentas. O carregamento vale por uma execução; não concede permissões.
 
 O prompt de sistema não embute a árvore de arquivos do diretório atual. Listagens
-entram por ferramentas, quando necessárias. `get_project_map` oferece `offset`,
-`limit`, `next_offset` e `more`; pode ser carregado por `request_tools`.
-`search_code_index` mantém um índice local SQLite/FTS5 e retorna resultados
-classificados, sem enviar o índice inteiro ao provedor. O índice atual atualiza
-os trechos alterados por hash, mas ainda relê os arquivos durante a busca. A
-`ls` mantém um limite de 1.000 entradas sem paginação; para continuar uma
-exploração, prefira o mapa paginado ou refine o caminho/padrão de busca.
+entram por ferramentas, quando necessárias. A `ls` oferece filtros e páginas de
+até 60 caminhos/6.000 bytes, com `offset`, `next_offset` e `more`; `get_project_map`
+permanece disponível para mapas com metadados. `search_code_index` integra o
+conjunto inicial, mantém um índice local SQLite/FTS5 e retorna seis prévias por
+padrão. Reaproveita metadados por até 60 segundos e verifica o conteúdo atual dos
+resultados retornados. Consulte [ferramentas de código](code-tools.md) para os
+limites, a atualização do cache e a comparação multilíngue com o Codaro.
 
 Perguntas que mencionam o projeto/repositório recebem leituras iniciais reais de
 até quatro arquivos existentes: README, manifesto, ponto de entrada conhecido e

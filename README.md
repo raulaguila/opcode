@@ -123,7 +123,7 @@ resultado esperado de tarefas e trabalhar com Git/worktrees.
 | Contexto | Estimativa preventiva do payload e schemas, reserva de resposta e compactação local preservando a conversa salva. |
 | Revisão | Diffs por interação, recibos de checks e undo/redo de edições de arquivos com detecção de conflitos e aprovação. |
 | Conversas | Busca, renomeação, arquivamento, exportação, retomada opcional e ações de recuperação de erro. |
-| Ferramentas | Mapa, outline/símbolos, artefatos paginados, descoberta de checks, hierarquia/renomeação/substituição LSP e ferramentas/recursos MCP sob demanda. |
+| Ferramentas | Listagem paginada, índice local com filtros e prévias curtas, mapa, outline/símbolos, artefatos paginados, checks, navegação/edição LSP e MCP sob demanda. |
 | Extensões | Skills invocadas explicitamente pelo usuário e hooks globais opt-in, sujeitos às permissões e ao sandbox. |
 | Avaliações | Fixtures determinísticas e avaliações reais opt-in, com critérios observáveis e suporte a Ollama. |
 | Confiabilidade | Conclusão com evidência de alteração ou justificativa explícita, estado parcial/bloqueado e recuperação de contexto/OOM com calibração local temporária. |

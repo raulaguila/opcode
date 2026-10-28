@@ -196,7 +196,7 @@ func TestLocalSixteenKContextFitsInitialProgressiveTools(t *testing.T) {
 		require.NoError(t, os.WriteFile(path, []byte("package example\n"), 0600))
 	}
 	a.systemMessage = prompt.CoderPrompt(models.ProviderLocal)
-	a.tools = []tools.BaseTool{tools.SecureTool(tools.NewViewTool(nil), nil), tools.SecureTool(tools.NewLsTool(), nil), tools.SecureTool(tools.NewGlobTool(), nil), tools.SecureTool(tools.NewGrepTool(), nil)}
+	a.tools = []tools.BaseTool{tools.SecureTool(tools.NewViewTool(nil), nil), tools.SecureTool(tools.NewLsTool(), nil), tools.SecureTool(tools.NewGlobTool(), nil), tools.SecureTool(tools.NewGrepTool(), nil), tools.SecureTool(tools.NewCodeIndexTool(), nil)}
 	run := &generationRun{}
 	require.NoError(t, a.configureRun(run, "llama"))
 	history := []message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "O que pode me falar desse projeto?"}}}}

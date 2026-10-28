@@ -128,7 +128,7 @@ func (a *agent) configureRun(run *generationRun, session string) error {
 		run.requiresPlan = task.Contract.Kind == "plan"
 	}
 	run.available = append(run.available, a.workflowTools(run, session)...)
-	for _, name := range []string{"view", "ls", "grep", "glob", "request_tools", "get_tools_catalog", "ask_user_question", "get_task", "get_context_status"} {
+	for _, name := range []string{"view", "ls", "grep", "glob", "search_code_index", "request_tools", "get_tools_catalog", "ask_user_question", "get_task", "get_context_status"} {
 		run.selected[name] = true
 	}
 	if run.mode != workflow.Ask {

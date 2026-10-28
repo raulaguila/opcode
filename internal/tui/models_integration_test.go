@@ -105,12 +105,12 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 		}
 	}
 	program.Send(tea.WindowSizeMsg{Width: 110, Height: 32})
-	frame := wait("Old local")
+	frame := wait("old:8b")
 	sized = true
 	// Locate the rendered footer, then deliver an actual Bubble Tea mouse event.
 	lines := strings.Split(frame, "\n")
 	last := lines[len(lines)-1]
-	x := strings.Index(last, "Old local")
+	x := strings.Index(last, "old:8b")
 	require.GreaterOrEqual(t, x, 0)
 	program.Send(tea.MouseMsg{X: x + 1, Y: len(lines) - 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	wait("Provider catalog · 2 models")

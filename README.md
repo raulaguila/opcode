@@ -65,8 +65,10 @@ será aberta.
 
 Sem modelo configurado, a abertura interativa inicia a configuração guiada. `N` cadastra
 uma conexão com um preset; `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha então o modelo
-pelo seletor. A última etapa mostra o JSON salvo e oferece testes opcionais com
-confirmação. `/setup` reabre o fluxo. `~/.opcode/config.json` é reutilizado entre projetos;
+pelo seletor. A última etapa oferece começar a conversar; detalhes da configuração
+e testes opcionais com confirmação ficam em uma ação secundária. `/setup` reabre
+o fluxo. A barra inferior reúne modo, comandos e modelo; processo e lateral
+começam recolhidos. `~/.opcode/config.json` é reutilizado entre projetos;
 `./.opcode/config.json` pode acrescentar ou sobrescrever configurações do projeto.
 Os formatos anteriores `.opcode.json` e `.opencode.json` continuam reconhecidos
 e os arquivos do projeto permanecem no próprio caminho. Veja [precedência e compatibilidade](docs/migration.md).

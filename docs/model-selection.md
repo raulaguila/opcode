@@ -9,6 +9,11 @@ está em [`internal/config/template.json`](../internal/config/template.json), co
 Ollama, LM Studio e exemplos remotos desativados, sem credenciais ou modelo escolhido.
 Reinicie o aplicativo depois de editar os provedores no JSON.
 
+Clique no modelo no rodapé para abrir o seletor. Escolha pelo nome; `Ctrl+D`
+mostra contexto informado pelo provedor, origem dos metadados, protocolo e
+capacidades. O formulário básico da conexão mostra nome, URL e variável da
+chave; `Ctrl+A` abre os campos técnicos sem alterar valores escondidos.
+
 Uma cópia de referência também é criada em `~/opcode/config.example.json` a cada
 inicialização normal em que estiver ausente. Esse arquivo não é carregado e não
 recebe suas credenciais; use seus campos como guia ao editar a configuração

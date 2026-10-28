@@ -102,10 +102,8 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 	wait("Add connection")
 	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	wait("Configure provider")
-	// The endpoint is the fourth field; replace its default without ever entering a key.
-	for range 3 {
-		program.Send(tea.KeyMsg{Type: tea.KeyTab})
-	}
+	// Basic setup starts with Name; the next visible field is the endpoint.
+	program.Send(tea.KeyMsg{Type: tea.KeyTab})
 	program.Send(tea.KeyMsg{Type: tea.KeyCtrlU})
 	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("http://local.invalid/v1")})
 	wait("http://local.invalid/v1")

@@ -104,7 +104,7 @@ func generateSchema() map[string]any {
 		"type":        "object",
 		"description": "Terminal User Interface configuration",
 		"properties": map[string]any{
-			"sidebar":       map[string]any{"type": "string", "enum": []string{"auto", "shown", "hidden"}, "default": "auto"},
+			"sidebar":       map[string]any{"type": "string", "enum": []string{"auto", "shown", "hidden"}, "default": "hidden"},
 			"language":      map[string]any{"type": "string", "enum": []string{"pt", "en"}, "default": "en"},
 			"notifications": map[string]any{"type": "string", "enum": []string{"off", "bell"}, "default": "off"},
 			"keybindings":   map[string]any{"type": "object", "additionalProperties": false, "properties": keybindingSchema()},
@@ -279,7 +279,7 @@ func generateSchema() map[string]any {
 	schema["properties"].(map[string]any)["providerProfiles"] = map[string]any{"type": "object", "description": "Named connections: multiple endpoints may use the same backend.", "propertyNames": map[string]any{"pattern": "^[a-z0-9_-]{1,64}$"}, "additionalProperties": map[string]any{"type": "object", "required": []string{"backend"}, "properties": profileProperties}}
 	schema["properties"].(map[string]any)["preferences"] = map[string]any{"type": "object", "properties": map[string]any{
 		"resumeLast":     map[string]any{"type": "boolean", "default": false},
-		"showProcess":    map[string]any{"type": "boolean", "default": true},
+		"showProcess":    map[string]any{"type": "boolean", "default": false},
 		"favoriteModels": map[string]any{"type": "array", "maxItems": 100, "uniqueItems": true, "items": map[string]any{"type": "string"}},
 		"recentModels":   map[string]any{"type": "array", "maxItems": 20, "uniqueItems": true, "items": map[string]any{"type": "string"}},
 	}}

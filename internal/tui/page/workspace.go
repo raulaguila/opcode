@@ -131,6 +131,14 @@ func (p *chatPage) workspaceResult(msg WorkspaceResultMsg) tea.Cmd {
 }
 func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 	switch command {
+	case "new":
+		return p.newConversation()
+	case "files":
+		return util.CmdHandler(OpenFilesMsg{})
+	case "commands":
+		return util.CmdHandler(OpenCommandsMsg{})
+	case "terminal":
+		return p.toggleTerminal()
 	case "worktrees":
 		return p.openGitWorkspace()
 	case "setup":
@@ -195,6 +203,8 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 // Messages are handled by the root, avoiding a page→root import cycle.
 type OpenModelsMsg struct{}
 type OpenSessionsMsg struct{}
+type OpenFilesMsg struct{}
+type OpenCommandsMsg struct{}
 type openModelsMsg = OpenModelsMsg
 type openSessionsMsg = OpenSessionsMsg
 
@@ -243,9 +253,10 @@ func (p *chatPage) takeQueue(edit bool) tea.Cmd {
 }
 func (p *chatPage) openContext(compact bool) tea.Cmd {
 	p.showWorkspace("context", "Contexto do modelo", "")
+	usage := fmt.Sprintf(config.Text("Uso acumulado da conversa\nEntrada: %d tokens · saída: %d tokens\nCusto estimado: $%.4f\n\n", "Conversation totals\nInput: %d tokens · output: %d tokens\nEstimated cost: $%.4f\n\n"), p.session.PromptTokens, p.session.CompletionTokens, p.session.Cost)
 	control, ok := p.app.CoderAgent.(agent.ContextControl)
 	if !ok {
-		p.workspace.body = "Este agente não expõe o orçamento de contexto"
+		p.workspace.body = usage + "Este agente não expõe o orçamento de contexto"
 		return nil
 	}
 	id := p.session.ID
@@ -259,7 +270,7 @@ func (p *chatPage) openContext(compact bool) tea.Cmd {
 		}
 		total := status.EstimatedInputTokens + status.ReservedOutputTokens + status.SafetyTokens
 		text := fmt.Sprintf("Método: %s\nJanela: %d tokens\nEntrada estimada: %d\nSchemas das ferramentas: %d\nReserva de resposta: %d\nMargem: %d\nTotal previsto: %d\nCabe na janela: %t\nMensagens compactadas: %d\n\nA estimativa inclui instruções, histórico e schemas. R recalibra o limite aprendido. O limite do servidor pode ser menor. Compactar altera apenas a preparação do contexto, preservando a conversa salva.", status.Method, status.ContextWindow, status.EstimatedInputTokens, status.ToolSchemaTokens, status.ReservedOutputTokens, status.SafetyTokens, total, status.Fits, status.CompactedMessages)
-		return text, false, nil
+		return usage + text, false, nil
 	})
 }
 func (p *chatPage) openSkills() tea.Cmd {
@@ -543,7 +554,7 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 		return p.gitChoose(item)
 	case "contract-kind":
 		return p.editContract(item.text)
-	case "setup-providers", "setup-models", "setup-probe", "setup-read", "setup-done", "setup-probe-confirm", "setup-read-confirm", "local-status":
+	case "setup-details", "setup-providers", "setup-models", "setup-probe", "setup-read", "setup-done", "setup-probe-confirm", "setup-read-confirm", "local-status":
 		return p.setupChoose(item.kind)
 	case "diff-file":
 		rendered := dialog.RenderReviewDiff(p.workspace.body, max(1, p.width-4), p.workspace.diffMode)
@@ -708,7 +719,7 @@ func (p *chatPage) handleWorkspaceMessage(text string, attachments []message.Att
 		return nil, false
 	}
 	switch command {
-	case "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
+	case "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
 	default:
 		return nil, false
 	}

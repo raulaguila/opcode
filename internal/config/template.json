@@ -36,13 +36,13 @@
   },
   "tui": {
     "theme": "opcode",
-    "sidebar": "auto",
+    "sidebar": "hidden",
     "language": "en",
     "notifications": "off"
   },
   "preferences": {
     "resumeLast": false,
-    "showProcess": true
+    "showProcess": false
   },
   "runtime": {
     "mode": "execute"

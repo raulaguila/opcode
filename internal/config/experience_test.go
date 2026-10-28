@@ -40,7 +40,7 @@ func TestUserSettingUpdatesOwningLayerAndResetRevealsInheritedValue(t *testing.T
 	require.NoError(t, err)
 	require.Contains(t, string(data), `"unknown": 1`)
 	require.NoError(t, SaveUserSetting("tui.sidebar", "", true))
-	require.Equal(t, "auto", cfg.TUI.Sidebar)
+	require.Equal(t, "hidden", cfg.TUI.Sidebar)
 	data, err = os.ReadFile(global)
 	require.NoError(t, err)
 	require.Contains(t, string(data), "future")

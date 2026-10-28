@@ -145,7 +145,7 @@ func TestUserApprovesTerminalEntersInputAndReturnsToChat(t *testing.T) {
 	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFrame("PTY_OK")
 	program.Send(tea.KeyMsg{Type: tea.KeyCtrlP})
-	waitFrame("ctrl+? help")
+	waitFrame("Terminal running")
 	program.Send(tea.KeyMsg{Type: tea.KeyCtrlP})
 	program.Send(tea.KeyMsg{Type: tea.KeyCtrlC}) // Must interrupt the child, not open Quit.
 	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("exit")})

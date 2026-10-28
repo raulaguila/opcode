@@ -103,7 +103,7 @@ func (m *messagesCmp) renderTurns() {
 		}
 		if hasProcess {
 			active := gi == len(groups)-1 && m.IsAgentWorking()
-			expanded := active
+			expanded := false
 			if cfg := config.Get(); cfg != nil {
 				expanded = active && cfg.Preferences.ProcessVisible()
 			}
@@ -117,7 +117,10 @@ func (m *messagesCmp) renderTurns() {
 			if expanded {
 				mark = "⌄"
 			}
-			label := fmt.Sprintf("%s Processo · %d ações · %s · clique para %s", mark, actions, state, map[bool]string{true: "recolher", false: "expandir"}[expanded])
+			label := fmt.Sprintf(config.Text("%s Processo · %d ações", "%s Process · %d actions"), mark, actions)
+			if active {
+				label += " · " + config.Text(state, "working")
+			}
 			start := pos
 			appendText(g.key+":process", base.Foreground(t.TextMuted()).Render(ansi.Truncate(label, m.width, "…")), toolMessageType)
 			m.hits = append(m.hits, transcriptHit{start, start + 1, "process", g.key, ""})
@@ -160,6 +163,7 @@ func (m *messagesCmp) renderTurns() {
 					v.Parts = append(v.Parts, part)
 				}
 			}
+			start := pos
 			cached, ok := m.cachedContent[v.ID]
 			if !ok || cached.width != m.width {
 				cached = cacheItem{width: m.width, content: renderAssistantMessage(v, final, m.messages, m.app.Messages, m.currentMsgID, m.session.SummaryMessageID == v.ID, m.width, pos)}
@@ -168,9 +172,7 @@ func (m *messagesCmp) renderTurns() {
 			for _, item := range cached.content {
 				appendItem(item)
 			}
-			start := pos
-			appendText(v.ID+":actions", base.Foreground(t.Primary()).Render(ansi.Truncate(" Copiar resposta · Copiar código · Abrir arquivo citado", m.width, "…")), assistantMessageType)
-			m.hits = append(m.hits, transcriptHit{start, start + 1, "actions", v.ID, v.Content().String()})
+			m.hits = append(m.hits, transcriptHit{start, pos - 1, "actions", v.ID, v.Content().String()})
 		}
 	}
 	m.viewport.SetContent(base.Width(m.width).Render(strings.Join(rendered, "\n")))
@@ -181,9 +183,9 @@ func (m *messagesCmp) toggleProcess(id string) {
 		m.toggled = map[string]bool{}
 	}
 	if !m.toggled[id] {
-		m.expanded[id] = m.IsAgentWorking() && len(m.groups()) > 0 && m.groups()[len(m.groups())-1].key == id
+		m.expanded[id] = false
 		if cfg := config.Get(); cfg != nil {
-			m.expanded[id] = m.expanded[id] && cfg.Preferences.ProcessVisible()
+			m.expanded[id] = m.IsAgentWorking() && len(m.groups()) > 0 && m.groups()[len(m.groups())-1].key == id && cfg.Preferences.ProcessVisible()
 		}
 	}
 	m.expanded[id] = !m.expanded[id]

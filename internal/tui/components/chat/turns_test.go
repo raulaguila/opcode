@@ -1,14 +1,16 @@
 package chat
 
 import (
+	"testing"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestTurnProcessCanCollapseWithoutHidingResponse(t *testing.T) {
@@ -21,7 +23,8 @@ func TestTurnProcessCanCollapseWithoutHidingResponse(t *testing.T) {
 		{ID: "final", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "visible response"}}},
 	}
 	m.renderView()
-	require.Contains(t, ansi.Strip(m.viewport.View()), "Processo")
+	require.Contains(t, ansi.Strip(m.viewport.View()), config.Text("Processo", "Process"))
+	require.NotContains(t, ansi.Strip(m.viewport.View()), "Copiar resposta")
 	require.NotContains(t, ansi.Strip(m.viewport.View()), "process details")
 	require.Contains(t, ansi.Strip(m.viewport.View()), "visible response")
 	m.Update(ToggleProcessMsg{})
@@ -43,7 +46,7 @@ func TestUnreadIndicatorAndJumpToLatest(t *testing.T) {
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: updated})
 	require.True(t, m.unread)
 	require.Equal(t, old, m.viewport.YOffset)
-	require.Contains(t, m.working(), "Novas mensagens")
+	require.Contains(t, m.working(), config.Text("Novas mensagens", "New messages"))
 	m.Update(JumpToLatestMsg{})
 	require.False(t, m.unread)
 	require.True(t, m.viewport.AtBottom())

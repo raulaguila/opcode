@@ -53,6 +53,7 @@ type modelDialogCmp struct {
 	target                                   config.AgentName
 	probeConfirm, probeRunning               bool
 	setup                                    bool
+	details                                  bool
 }
 
 var modelKeys = struct {
@@ -70,6 +71,7 @@ var modelKeys = struct {
 func (m *modelDialogCmp) Init() tea.Cmd { return nil }
 func (m *modelDialogCmp) Open() tea.Cmd {
 	m.Close()
+	m.details = false
 	cfg := config.Get()
 	m.availableProviders = getEnabledProviders(cfg)
 	selected := GetSelectedModel(cfg)
@@ -145,6 +147,10 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.keepVisible()
 	case tea.KeyMsg:
 		switch {
+		case msg.String() == "ctrl+d":
+			m.details = !m.details
+			m.keepVisible()
+			return m, nil
 		case key.Matches(msg, modelKeys.Up):
 			m.move(-1)
 		case key.Matches(msg, modelKeys.Down):
@@ -293,7 +299,11 @@ func (m *modelDialogCmp) visibleRows() int {
 	if m.height == 0 {
 		return numVisibleModels
 	}
-	return max(1, min(numVisibleModels, m.height-12))
+	reserve := 10
+	if m.details {
+		reserve = 13
+	}
+	return max(1, min(numVisibleModels, m.height-reserve))
 }
 func (m *modelDialogCmp) contentWidth() int {
 	if m.width == 0 {
@@ -358,7 +368,7 @@ func (m *modelDialogCmp) View() string {
 		}
 		lines = append(lines, row.Render(ansi.Truncate(label, width, "…")))
 	}
-	if len(m.filtered) > 0 {
+	if m.details && len(m.filtered) > 0 {
 		selected := m.filtered[m.selectedIdx]
 		contextNote := ""
 		if selected.ContextEstimated {
@@ -398,10 +408,15 @@ func (m *modelDialogCmp) View() string {
 		}
 		lines = append(lines, line("API: "+protocol+config.Text(" · capacidades declaradas: ", " · capabilities declared: ")+strings.Join(caps, ", ")))
 	}
-	lines = append(lines, line("↑↓ select · ←→ provider · Enter choose · Ctrl+F favorite"), line("Ctrl+P settings · Ctrl+A role · Ctrl+R catalog · Ctrl+T probe · Esc"))
+	lines = append(lines, line(config.Text("↑↓ modelos · ←→ provedor · Enter escolhe · Ctrl+D detalhes", "↑↓ models · ←→ provider · Enter choose · Ctrl+D details")))
+	if m.details {
+		lines = append(lines, line("Ctrl+P settings · Ctrl+A role · Ctrl+R catalog · Ctrl+T probe · Esc"))
+	}
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
-func (m *modelDialogCmp) BindingKeys() []key.Binding { return layout.KeyMapToSlice(modelKeys) }
+func (m *modelDialogCmp) BindingKeys() []key.Binding {
+	return append(layout.KeyMapToSlice(modelKeys), key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", config.Text("detalhes", "details"))))
+}
 func GetSelectedModel(cfg *config.Config) models.Model {
 	if cfg == nil {
 		return models.Model{}

@@ -279,10 +279,9 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 		if a.currentPage == page.ChatPage && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft &&
-			msg.Y == lipgloss.Height(a.pages[a.currentPage].View()) &&
-			msg.X >= lipgloss.Width(a.status.View())-core.ModelButtonWidth() && msg.X < lipgloss.Width(a.status.View()) {
-			a.showModelDialog = true
-			return a, a.modelDialog.Open()
+			msg.Y == lipgloss.Height(a.pages[a.currentPage].View()) {
+			cmd := a.footerClick(msg.X)
+			return a, cmd
 		}
 	case tea.WindowSizeMsg:
 		msg.Height -= 1 // Make space for the status bar
@@ -931,7 +930,7 @@ func (a appModel) View() string {
 		a.pages[a.currentPage].View(),
 	}
 
-	components = append(components, a.status.View())
+	components = append(components, a.statusView())
 
 	appView := lipgloss.JoinVertical(lipgloss.Top, components...)
 
@@ -1260,7 +1259,7 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 }
 
 func (a appModel) modelDialogOrigin() (int, int) {
-	base := lipgloss.JoinVertical(lipgloss.Top, a.pages[a.currentPage].View(), a.status.View())
+	base := lipgloss.JoinVertical(lipgloss.Top, a.pages[a.currentPage].View(), a.statusView())
 	overlay := a.modelDialog.View()
 	width, height := lipgloss.Width(base), lipgloss.Height(base)
 	ow, oh := lipgloss.Width(overlay), lipgloss.Height(overlay)

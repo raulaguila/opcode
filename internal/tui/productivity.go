@@ -100,6 +100,14 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		a.closeSettings()
 		a.showCommandDialog = false
 		return a.openSessions(), true
+	case page.OpenFilesMsg:
+		a.showFilepicker = true
+		a.filepicker.ToggleFilepicker(true)
+		return nil, true
+	case page.OpenCommandsMsg:
+		a.commandDialog.SetCommands(a.commands)
+		a.showCommandDialog = true
+		return nil, true
 	case dialog.SessionActionMsg:
 		return a.sessionAction(msg), true
 	}
@@ -193,7 +201,7 @@ func (a *appModel) sessionAction(msg dialog.SessionActionMsg) tea.Cmd {
 	return util.ReportError(fmt.Errorf("ação de conversa desconhecida"))
 }
 func (a appModel) dialogOrigin(overlay string) (int, int) {
-	base := lipgloss.JoinVertical(lipgloss.Top, a.pages[a.currentPage].View(), a.status.View())
+	base := lipgloss.JoinVertical(lipgloss.Top, a.pages[a.currentPage].View(), a.statusView())
 	w, h := lipgloss.Width(base), lipgloss.Height(base)
 	ow, oh := lipgloss.Width(overlay), lipgloss.Height(overlay)
 	return max(0, min(w/2-ow/2, w-ow-1)), max(0, min(h/2-oh/2, h-oh-1))

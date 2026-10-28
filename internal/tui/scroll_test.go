@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/tui/components/core"
 	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/stretchr/testify/require"
 )
@@ -70,7 +71,7 @@ func (p *inputPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func TestQuestionMarkReachesEditorWhileAgentWorks(t *testing.T) {
 	p := &inputPage{}
-	a := appModel{app: &app.App{CoderAgent: &busyInputAgent{}}, currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: p}, status: &inputPage{}}
+	a := appModel{app: &app.App{CoderAgent: &busyInputAgent{}}, currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: p}, status: core.NewStatusCmp(nil)}
 	updated, _ := a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
 	require.False(t, updated.(appModel).showHelp)
 	require.Len(t, p.received, 1)

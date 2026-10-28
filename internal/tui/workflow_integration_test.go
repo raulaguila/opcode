@@ -15,6 +15,8 @@ import (
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/session"
+	"github.com/raulaguila/opcode/internal/tui/components/chat"
+	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -72,8 +74,12 @@ func TestHeadlessPlanModeAndUserQuestionPreserveDraft(t *testing.T) {
 			}
 		}
 	}
+	wait("Executar")
+	program.Send(chat.SessionSelectedMsg(session.Session{ID: "s", Title: "Workflow"}))
+	program.Send(page.WorkflowCommandMsg{Command: "plan"})
 	wait("Plano 1/2")
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	program.Send(page.WorkflowCommandMsg{Command: "plan"})
+	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/mod")})
 	wait("Escolher modo de trabalho")
 	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	wait("somente leitura")

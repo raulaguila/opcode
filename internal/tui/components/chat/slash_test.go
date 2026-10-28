@@ -36,7 +36,7 @@ func TestSlashOpensOptionsFiltersAndCompletesWithoutSending(t *testing.T) {
 	enterText(m, "/")
 	require.True(t, m.SlashMenuOpen())
 	view := m.SlashMenuView(80, 10)
-	for _, command := range []string{"/mode", "/plan", "/task", "/resume"} {
+	for _, command := range []string{"/new", "/models", "/settings", "/files", "/terminal", "/commands"} {
 		require.Contains(t, view, command)
 	}
 	enterText(m, "p")
@@ -53,7 +53,7 @@ func TestSlashOpensOptionsFiltersAndCompletesWithoutSending(t *testing.T) {
 func TestSlashModeSelectionAndAttachmentPreservationOnRejection(t *testing.T) {
 	m := slashEditor()
 	m.attachments = []message.Attachment{{FileName: "file.png"}}
-	enterText(m, "/")
+	enterText(m, "/mod")
 	require.Nil(t, editorKey(m, tea.KeyMsg{Type: tea.KeyEnter}))
 	require.Equal(t, "/mode ", m.textarea.Value())
 	require.False(t, m.submitting)

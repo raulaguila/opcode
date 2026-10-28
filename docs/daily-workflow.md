@@ -25,9 +25,17 @@ não fazem o reset, mesmo quando combinados com a flag.
 
 Sem modelo, a interface abre a etapa 1: editar ou adicionar uma conexão. `N`
 oferece presets; `Ctrl+T` consulta metadados e `Ctrl+S` salva. A etapa 2 lista os
-modelos do provedor para seleção. A etapa 3 mostra o modelo, o caminho do JSON e
-opções para revisar a configuração, testar ou começar a conversar. `/setup`
+modelos do provedor para seleção. A etapa 3 destaca “Começar a conversar”.
+“Detalhes e testes opcionais” reúne o caminho do JSON e as verificações. `/setup`
 reabre esse fluxo. Idioma e preferências ficam em `/settings` → `P`.
+
+No uso diário, o modo e o modelo ficam na barra inferior e abrem seus seletores
+ao clicar. O centro mostra comandos ou a atividade atual. `/` oferece as ações
+mais usadas; `/commands` e `Ctrl+K` abrem a busca por todas as ações. Detalhes de
+modelos usam `Ctrl+D` no seletor, e campos técnicos da conexão usam `Ctrl+A` no
+formulário. Processo e lateral começam recolhidos, respeitando preferências
+explicitamente salvas. `/plan` mostra o plano quando você precisar consultá-lo;
+perguntas, aprovações e erros continuam aparecendo durante o trabalho.
 
 Os dois testes opcionais exigem confirmação. O probe faz uma inferência com uma
 ferramenta inerte; nenhuma ferramenta é executada. A tarefa de exemplo muda a

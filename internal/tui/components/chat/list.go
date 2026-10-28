@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
@@ -245,136 +244,27 @@ func formatTimeDifference(unixTime1, unixTime2 int64) string {
 func (m *messagesCmp) renderView() { m.renderTurns() }
 
 func (m *messagesCmp) View() string {
-	baseStyle := styles.BaseStyle()
-
+	content := m.viewport.View()
 	if m.rendering {
-		return baseStyle.
-			Width(m.width).
-			Render(
-				lipgloss.JoinVertical(
-					lipgloss.Top,
-					"Loading...",
-					m.working(),
-					m.help(),
-				),
-			)
+		content = config.Text("Carregando conversa…", "Loading conversation…")
+	} else if len(m.messages) == 0 {
+		content = m.initialScreen()
 	}
-	if len(m.messages) == 0 {
-		content := baseStyle.
-			Width(m.width).
-			Height(m.height - 1).
-			Render(
-				m.initialScreen(),
-			)
-
-		return baseStyle.
-			Width(m.width).
-			Render(
-				lipgloss.JoinVertical(
-					lipgloss.Top,
-					content,
-					"",
-					m.help(),
-				),
-			)
+	if m.unread {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, m.working())
 	}
-
-	return baseStyle.
-		Width(m.width).
-		Render(
-			lipgloss.JoinVertical(
-				lipgloss.Top,
-				m.viewport.View(),
-				m.working(),
-				m.help(),
-			),
-		)
-}
-
-func hasToolsWithoutResponse(messages []message.Message) bool {
-	toolCalls := make([]message.ToolCall, 0)
-	toolResults := make([]message.ToolResult, 0)
-	for _, m := range messages {
-		toolCalls = append(toolCalls, m.ToolCalls()...)
-		toolResults = append(toolResults, m.ToolResults()...)
-	}
-
-	for _, v := range toolCalls {
-		found := false
-		for _, r := range toolResults {
-			if v.ID == r.ToolCallID {
-				found = true
-				break
-			}
-		}
-		if !found && v.Finished {
-			return true
-		}
-	}
-	return false
-}
-
-func hasUnfinishedToolCalls(messages []message.Message) bool {
-	toolCalls := make([]message.ToolCall, 0)
-	for _, m := range messages {
-		toolCalls = append(toolCalls, m.ToolCalls()...)
-	}
-	for _, v := range toolCalls {
-		if !v.Finished {
-			return true
-		}
-	}
-	return false
+	return styles.BaseStyle().Width(m.width).Height(max(0, m.height)).MaxHeight(max(0, m.height)).Render(content)
 }
 
 func (m *messagesCmp) working() string {
-	text := ""
 	if m.unread {
-		return styles.BaseStyle().Foreground(theme.CurrentTheme().Primary()).Width(m.width).Render(" Novas mensagens ↓ · Ctrl+End acompanha")
+		return styles.BaseStyle().Foreground(theme.CurrentTheme().Primary()).Width(m.width).Render(config.Text(" Novas mensagens ↓ · Ctrl+End acompanha", " New messages ↓ · Ctrl+End to follow"))
 	}
-	if m.IsAgentWorking() && len(m.messages) > 0 {
-		t := theme.CurrentTheme()
-		baseStyle := styles.BaseStyle()
-
-		task := "Thinking..."
-		lastMessage := m.messages[len(m.messages)-1]
-		if hasToolsWithoutResponse(m.messages) {
-			task = "Waiting for tool response..."
-		} else if hasUnfinishedToolCalls(m.messages) {
-			task = "Building tool call..."
-		} else if !lastMessage.IsFinished() {
-			task = "Generating..."
-		}
-		if task != "" {
-			text += baseStyle.
-				Width(m.width).
-				Foreground(t.Primary()).
-				Bold(true).
-				Render(fmt.Sprintf("%s %s ", m.spinner.View(), task))
-		}
-	}
-	return text
-}
-
-func (m *messagesCmp) help() string {
-	text := config.Text("Enter envia · Shift+Enter/Alt+Enter nova linha · / comandos · @ arquivos", "Enter sends · Shift+Enter/Alt+Enter new line · / commands · @ files")
-	if m.app.CoderAgent.IsBusy() {
-		text = config.Text("Esc cancela · Enter envia instrução · ", "Esc cancels · Enter sends instructions · ") + config.Shortcut("terminal") + " terminal"
-	}
-	return styles.BaseStyle().Foreground(theme.CurrentTheme().TextMuted()).Width(m.width).Render(ansi.Truncate(text, max(1, m.width), "…"))
+	return ""
 }
 
 func (m *messagesCmp) initialScreen() string {
-	baseStyle := styles.BaseStyle()
-
-	return baseStyle.Width(m.width).Render(
-		lipgloss.JoinVertical(
-			lipgloss.Top,
-			header(m.width),
-			"",
-			lspsConfigured(m.width),
-		),
-	)
+	return styles.BaseStyle().Foreground(theme.CurrentTheme().Text()).Width(m.width).Render(config.Text("O que vamos fazer neste projeto?", "What would you like to do in this project?"))
 }
 
 func (m *messagesCmp) rerender() {
@@ -391,7 +281,7 @@ func (m *messagesCmp) SetSize(width, height int) tea.Cmd {
 	m.width = width
 	m.height = height
 	m.viewport.Width = width
-	m.viewport.Height = height - 2
+	m.viewport.Height = max(0, height-1)
 	m.attachments.Width = width + 40
 	m.attachments.Height = 3
 	m.rerender()

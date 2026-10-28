@@ -55,6 +55,9 @@ func TestSetupIsOptionalRequiresConfirmationAndEscapePreservesDraft(t *testing.T
 	p.editor.Update(chat.RestoreDraftMsg{Text: "draft"})
 	require.Nil(t, p.openSetup())
 	require.Equal(t, "setup", p.workspace.kind)
+	require.Len(t, p.workspace.actions, 2)
+	require.Equal(t, "setup-done", p.workspace.actions[0].kind)
+	require.Nil(t, p.setupChoose("setup-details"))
 	for i, item := range p.workspace.actions {
 		if item.kind == "setup-probe" {
 			p.workspace.selected = i

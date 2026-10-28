@@ -7,13 +7,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/lsp/protocol"
-	"github.com/raulaguila/opcode/internal/pubsub"
-	"github.com/raulaguila/opcode/internal/session"
-	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -21,278 +19,156 @@ import (
 
 type StatusCmp interface {
 	tea.Model
+	ViewFor(util.FooterState) string
+	ActionAt(int, util.FooterState) string
 }
-
 type statusCmp struct {
 	info       util.InfoMsg
 	width      int
 	messageTTL time.Duration
 	lspClients map[string]*lsp.Client
-	session    session.Session
 }
 
-// clearMessageCmd is a command that clears status messages after a timeout
-func (m statusCmp) clearMessageCmd(ttl time.Duration) tea.Cmd {
-	return tea.Tick(ttl, func(time.Time) tea.Msg {
-		return util.ClearStatusMsg{}
-	})
-}
-
-func (m statusCmp) Init() tea.Cmd {
-	return nil
-}
-
+func (m statusCmp) Init() tea.Cmd { return nil }
 func (m statusCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
-		return m, nil
-	case chat.SessionSelectedMsg:
-		m.session = msg
-	case chat.SessionClearedMsg:
-		m.session = session.Session{}
-	case pubsub.Event[session.Session]:
-		if msg.Type == pubsub.UpdatedEvent {
-			if m.session.ID == msg.Payload.ID {
-				m.session = msg.Payload
-			}
-		}
 	case util.InfoMsg:
 		m.info = msg
 		ttl := msg.TTL
 		if ttl == 0 {
 			ttl = m.messageTTL
 		}
-		return m, m.clearMessageCmd(ttl)
+		return m, tea.Tick(ttl, func(time.Time) tea.Msg { return util.ClearStatusMsg{} })
 	case util.ClearStatusMsg:
 		m.info = util.InfoMsg{}
 	}
 	return m, nil
 }
-
-var helpWidget = ""
-
-// getHelpWidget returns the help widget with current theme colors
-func getHelpWidget() string {
-	t := theme.CurrentTheme()
-	helpText := config.Text("ctrl+? ajuda", "ctrl+? help")
-
-	return styles.Padded().
-		Background(t.TextMuted()).
-		Foreground(t.BackgroundDarker()).
-		Bold(true).
-		Render(helpText)
-}
-
-func formatTokensAndCost(tokens, contextWindow int64, cost float64) string {
-	// Format tokens in human-readable format (e.g., 110K, 1.2M)
-	var formattedTokens string
-	switch {
-	case tokens >= 1_000_000:
-		formattedTokens = fmt.Sprintf("%.1fM", float64(tokens)/1_000_000)
-	case tokens >= 1_000:
-		formattedTokens = fmt.Sprintf("%.1fK", float64(tokens)/1_000)
+func (m statusCmp) View() string { return m.ViewFor(util.FooterState{}) }
+func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
+	mode := state.Mode
+	if mode == "" && config.Get() != nil {
+		mode = config.Get().Runtime.Defaults().Mode
+	}
+	switch mode {
+	case "ask":
+		left = config.Text("Perguntar", "Ask")
+	case "plan":
+		left = config.Text("Planejar", "Plan")
 	default:
-		formattedTokens = fmt.Sprintf("%d", tokens)
+		left = config.Text("Executar", "Execute")
 	}
-
-	// Remove .0 suffix if present
-	if strings.HasSuffix(formattedTokens, ".0K") {
-		formattedTokens = strings.Replace(formattedTokens, ".0K", "K", 1)
+	left += " ▾"
+	right = config.Text("Escolher modelo", "Choose model")
+	if cfg := config.Get(); cfg != nil {
+		if model, ok := models.SupportedModels[cfg.Agents[config.AgentCoder].Model]; ok {
+			right = model.APIModel
+			if right == "" {
+				right = model.Name
+			}
+		}
 	}
-	if strings.HasSuffix(formattedTokens, ".0M") {
-		formattedTokens = strings.Replace(formattedTokens, ".0M", "M", 1)
+	right += " ▾"
+	center = config.Text("/ comandos · Shift+Enter nova linha", "/ commands · Shift+Enter new line")
+	if state.Terminal {
+		center = config.Shortcut("terminal") + config.Text(" conversa", " chat")
+	} else if state.Activity != "" {
+		center = state.Activity
+		if state.Busy {
+			center += config.Text(" · Esc cancela", " · Esc cancels")
+		}
 	}
-
-	// Format cost with $ symbol and 2 decimal places
-	formattedCost := fmt.Sprintf("$%.2f", cost)
-
-	percentage := (float64(tokens) / float64(contextWindow)) * 100
-	if percentage > 80 {
-		// add the warning icon and percentage
-		formattedTokens = fmt.Sprintf("%s(%d%%)", styles.WarningIcon, int(percentage))
+	if state.Pending > 0 {
+		center = fmt.Sprintf(config.Text("%d na fila · ", "%d queued · "), state.Pending) + center
 	}
-
-	return fmt.Sprintf("Context: %s, Cost: %s", formattedTokens, formattedCost)
+	if diagnostics := m.projectDiagnostics(); diagnostics != "" && !state.Busy {
+		center = diagnostics + " · " + center
+	}
+	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
+		center = strings.Join(strings.Fields(m.info.Msg), " ")
+	}
+	return
 }
 
-func (m statusCmp) View() string {
-	t := theme.CurrentTheme()
-	modelID := config.Get().Agents[config.AgentCoder].Model
-	model := models.SupportedModels[modelID]
-
-	// Initialize the help widget
-	status := getHelpWidget()
-
-	tokenInfoWidth := 0
-	if m.session.ID != "" {
-		totalTokens := m.session.PromptTokens + m.session.CompletionTokens
-		tokens := formatTokensAndCost(totalTokens, model.ContextWindow, m.session.Cost)
-		tokensStyle := styles.Padded().
-			Background(t.Text()).
-			Foreground(t.BackgroundSecondary())
-		percentage := (float64(totalTokens) / float64(model.ContextWindow)) * 100
-		if percentage > 80 {
-			tokensStyle = tokensStyle.Background(t.Warning())
-		}
-		tokenInfoWidth = lipgloss.Width(tokens) + 2
-		status += tokensStyle.Render(tokens)
-	}
-
-	diagnostics := styles.Padded().
-		Background(t.BackgroundDarker()).
-		Render(m.projectDiagnostics())
-
-	availableWidht := max(0, m.width-lipgloss.Width(helpWidget)-lipgloss.Width(m.model())-lipgloss.Width(diagnostics)-tokenInfoWidth)
-
-	if m.info.Msg != "" {
-		infoStyle := styles.Padded().
-			Foreground(t.Background()).
-			Width(availableWidht)
-
-		switch m.info.Type {
-		case util.InfoTypeInfo:
-			infoStyle = infoStyle.Background(t.Info())
-		case util.InfoTypeWarn:
-			infoStyle = infoStyle.Background(t.Warning())
-		case util.InfoTypeError:
-			infoStyle = infoStyle.Background(t.Error())
-		}
-
-		infoWidth := availableWidht - 10
-		// Truncate message if it's longer than available width
-		msg := m.info.Msg
-		if len(msg) > infoWidth && infoWidth > 0 {
-			msg = msg[:infoWidth] + "..."
-		}
-		status += infoStyle.Render(msg)
-	} else {
-		status += styles.Padded().
-			Foreground(t.Text()).
-			Background(t.BackgroundSecondary()).
-			Width(availableWidht).
-			Render("")
-	}
-
-	status += diagnostics
-	status += m.model()
-	return status
+// Rendering and mouse hits use the same width allocation.
+func (m statusCmp) widths() (left, center, right int) {
+	width := max(0, m.width)
+	left = min(12, width/3)
+	right = min(28, width/3)
+	center = width - left - right
+	return
 }
-
-func (m *statusCmp) projectDiagnostics() string {
+func (m statusCmp) ViewFor(state util.FooterState) string {
+	left, center, right := m.labels(state)
+	lw, cw, rw := m.widths()
 	t := theme.CurrentTheme()
-
-	// Check if any LSP server is still initializing
-	initializing := false
-	for _, client := range m.lspClients {
-		if client.GetServerState() == lsp.StateStarting {
-			initializing = true
-			break
+	segment := func(text string, width int, accent, alignRight bool) string {
+		if width == 0 {
+			return ""
 		}
+		style := styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Text()).Width(width).MaxWidth(width)
+		if alignRight {
+			style = style.Align(lipgloss.Right)
+		}
+		if accent {
+			style = style.Foreground(t.Text())
+			if width >= 4 {
+				return style.Render(ansi.Truncate(" "+strings.TrimSuffix(text, " ▾"), width-2, "…") + " ▾")
+			}
+		}
+		return style.Render(ansi.Truncate(" "+text, width, "…"))
 	}
-
-	// If any server is initializing, show that status
-	if initializing {
-		return lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Warning()).
-			Render(fmt.Sprintf("%s Initializing LSP...", styles.SpinnerIcon))
+	middle := segment(center, cw, false, false)
+	if m.info.Msg != "" && (m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
+		color := t.Warning()
+		if m.info.Type == util.InfoTypeError {
+			color = t.Error()
+		}
+		middle = styles.BaseStyle().Foreground(color).Background(t.BackgroundSecondary()).Width(cw).MaxWidth(cw).Render(ansi.Truncate(" "+center, cw, "…"))
 	}
-
-	errorDiagnostics := []protocol.Diagnostic{}
-	warnDiagnostics := []protocol.Diagnostic{}
-	hintDiagnostics := []protocol.Diagnostic{}
-	infoDiagnostics := []protocol.Diagnostic{}
+	return lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, segment(right, rw, true, true))
+}
+func (m statusCmp) ActionAt(x int, state util.FooterState) string {
+	lw, cw, _ := m.widths()
+	if x < 0 || x >= m.width {
+		return ""
+	}
+	if x < lw {
+		return "mode"
+	}
+	if x >= lw+cw {
+		return "models"
+	}
+	if state.Pending > 0 {
+		return "queue"
+	}
+	return "commands"
+}
+func (m statusCmp) projectDiagnostics() string {
+	errors, warnings := 0, 0
 	for _, client := range m.lspClients {
-		for _, d := range client.GetDiagnostics() {
-			for _, diag := range d {
-				switch diag.Severity {
+		for _, file := range client.GetDiagnostics() {
+			for _, diagnostic := range file {
+				switch diagnostic.Severity {
 				case protocol.SeverityError:
-					errorDiagnostics = append(errorDiagnostics, diag)
+					errors++
 				case protocol.SeverityWarning:
-					warnDiagnostics = append(warnDiagnostics, diag)
-				case protocol.SeverityHint:
-					hintDiagnostics = append(hintDiagnostics, diag)
-				case protocol.SeverityInformation:
-					infoDiagnostics = append(infoDiagnostics, diag)
+					warnings++
 				}
 			}
 		}
 	}
-
-	if len(errorDiagnostics) == 0 && len(warnDiagnostics) == 0 && len(hintDiagnostics) == 0 && len(infoDiagnostics) == 0 {
-		return config.Text("Sem diagnósticos", "No diagnostics")
+	var parts []string
+	if errors > 0 {
+		parts = append(parts, fmt.Sprintf(config.Text("%d erro(s)", "%d error(s)"), errors))
 	}
-
-	diagnostics := []string{}
-
-	if len(errorDiagnostics) > 0 {
-		errStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Error()).
-			Render(fmt.Sprintf("%s %d", styles.ErrorIcon, len(errorDiagnostics)))
-		diagnostics = append(diagnostics, errStr)
+	if warnings > 0 {
+		parts = append(parts, fmt.Sprintf(config.Text("%d aviso(s)", "%d warning(s)"), warnings))
 	}
-	if len(warnDiagnostics) > 0 {
-		warnStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Warning()).
-			Render(fmt.Sprintf("%s %d", styles.WarningIcon, len(warnDiagnostics)))
-		diagnostics = append(diagnostics, warnStr)
-	}
-	if len(hintDiagnostics) > 0 {
-		hintStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Text()).
-			Render(fmt.Sprintf("%s %d", styles.HintIcon, len(hintDiagnostics)))
-		diagnostics = append(diagnostics, hintStr)
-	}
-	if len(infoDiagnostics) > 0 {
-		infoStr := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Info()).
-			Render(fmt.Sprintf("%s %d", styles.InfoIcon, len(infoDiagnostics)))
-		diagnostics = append(diagnostics, infoStr)
-	}
-
-	return strings.Join(diagnostics, " ")
+	return strings.Join(parts, " · ")
 }
-
-func (m statusCmp) availableFooterMsgWidth(diagnostics, tokenInfo string) int {
-	tokensWidth := 0
-	if m.session.ID != "" {
-		tokensWidth = lipgloss.Width(tokenInfo) + 2
-	}
-	return max(0, m.width-lipgloss.Width(helpWidget)-lipgloss.Width(m.model())-lipgloss.Width(diagnostics)-tokensWidth)
-}
-
-func (m statusCmp) model() string {
-	t := theme.CurrentTheme()
-
-	cfg := config.Get()
-
-	label := config.Text("Escolher modelo", "Choose model")
-	if cfg != nil {
-		if model, ok := models.SupportedModels[cfg.Agents[config.AgentCoder].Model]; ok && model.Name != "" {
-			label = model.Name
-		}
-	}
-
-	return styles.Padded().
-		Background(t.Secondary()).
-		Foreground(t.Background()).
-		Render(label + " ▾")
-}
-
-func ModelButtonWidth() int {
-	return lipgloss.Width((statusCmp{}).model())
-}
-
 func NewStatusCmp(lspClients map[string]*lsp.Client) StatusCmp {
-	helpWidget = getHelpWidget()
-
-	return &statusCmp{
-		messageTTL: 10 * time.Second,
-		lspClients: lspClients,
-	}
+	return &statusCmp{messageTTL: 5 * time.Second, lspClients: lspClients}
 }

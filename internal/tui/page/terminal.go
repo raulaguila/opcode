@@ -86,7 +86,7 @@ func (p *chatPage) refreshTerminal() {
 }
 
 func (p *chatPage) terminalVisible() bool {
-	return p.terminal.selected != "" && p.height >= 12 && p.width >= 20
+	return p.terminal.focused && p.terminal.selected != "" && p.height >= 12 && p.width >= 20
 }
 
 func (p *chatPage) resizeContent() tea.Cmd {

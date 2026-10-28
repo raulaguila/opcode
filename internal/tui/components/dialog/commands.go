@@ -1,9 +1,13 @@
 package dialog
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/commands"
 	utilComponents "github.com/raulaguila/opcode/internal/tui/components/util"
@@ -66,6 +70,8 @@ type CommandDialog interface {
 
 type commandDialogCmp struct {
 	listView utilComponents.SimpleList[Command]
+	commands []Command
+	search   textinput.Model
 	width    int
 	height   int
 }
@@ -105,6 +111,12 @@ func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, commandKeys.Escape):
 			return c, util.CmdHandler(CloseCommandDialogMsg{})
 		}
+		if msg.String() != "up" && msg.String() != "down" {
+			var cmd tea.Cmd
+			c.search, cmd = c.search.Update(msg)
+			c.filter()
+			return c, cmd
+		}
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
@@ -121,22 +133,11 @@ func (c *commandDialogCmp) View() string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
-	maxWidth := 40
-
-	commands := c.listView.GetItems()
-
-	for _, cmd := range commands {
-		if len(cmd.Title) > maxWidth-4 {
-			maxWidth = len(cmd.Title) + 4
-		}
-		if cmd.Description != "" {
-			if len(cmd.Description) > maxWidth-4 {
-				maxWidth = len(cmd.Description) + 4
-			}
-		}
+	maxWidth := 64
+	if c.width > 0 {
+		maxWidth = max(8, min(maxWidth, c.width-8))
 	}
-
-	c.listView.SetMaxWidth(maxWidth)
+	c.search.Width = maxWidth - 2
 
 	title := baseStyle.
 		Foreground(t.Primary()).
@@ -145,13 +146,28 @@ func (c *commandDialogCmp) View() string {
 		Padding(0, 1).
 		Render(config.Text("Comandos", "Commands"))
 
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		baseStyle.Width(maxWidth).Render(""),
-		baseStyle.Width(maxWidth).Render(c.listView.View()),
-		baseStyle.Width(maxWidth).Render(""),
-	)
+	rows := []string{title, baseStyle.Width(maxWidth).Render(c.search.View()), ""}
+	items := c.listView.GetItems()
+	_, selected := c.listView.GetSelectedItem()
+	count := 8
+	if c.height > 0 {
+		count = max(1, min(count, c.height-8))
+	}
+	start := max(0, selected-count+1)
+	for i := start; i < min(len(items), start+count); i++ {
+		item := items[i]
+		name, _ := commands.Presentation(item.ID, item.Title, item.Description)
+		style := baseStyle.Width(maxWidth)
+		if i == selected {
+			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
+		}
+		rows = append(rows, style.Render(ansi.Truncate(" "+name, maxWidth, "…")))
+	}
+	if len(items) == 0 {
+		rows = append(rows, config.Text("Nenhum comando encontrado", "No commands found"))
+	}
+	rows = append(rows, ansi.Truncate(config.Text("↑↓ escolher · Enter executar · Esc voltar", "↑↓ select · Enter run · Esc back"), maxWidth, "…"))
+	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
 	return baseStyle.Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
@@ -166,7 +182,22 @@ func (c *commandDialogCmp) BindingKeys() []key.Binding {
 }
 
 func (c *commandDialogCmp) SetCommands(commands []Command) {
-	c.listView.SetItems(commands)
+	c.commands = commands
+	c.search.SetValue("")
+	c.search.Focus()
+	c.filter()
+}
+
+func (c *commandDialogCmp) filter() {
+	query := strings.ToLower(strings.TrimSpace(c.search.Value()))
+	var matches []Command
+	for _, item := range c.commands {
+		title, description := commands.Presentation(item.ID, item.Title, item.Description)
+		if strings.Contains(strings.ToLower(item.ID+" "+title+" "+description), query) {
+			matches = append(matches, item)
+		}
+	}
+	c.listView.SetItems(matches)
 }
 
 // NewCommandDialogCmp creates a new command selection dialog
@@ -175,9 +206,14 @@ func NewCommandDialogCmp() CommandDialog {
 		[]Command{},
 		10,
 		"No commands available",
-		true,
+		false,
 	)
+	search := textinput.New()
+	search.Prompt = "/ "
+	search.Placeholder = config.Text("Buscar comando", "Search commands")
+	search.CharLimit = 128
 	return &commandDialogCmp{
 		listView: listView,
+		search:   search,
 	}
 }

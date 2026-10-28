@@ -7,6 +7,10 @@ type Command struct {
 }
 
 var Builtins = []Command{
+	{ID: "new", Title: "Nova conversa", Description: "Começar outra conversa"},
+	{ID: "files", Title: "Arquivos", Description: "Escolher arquivos para anexar"},
+	{ID: "terminal", Title: "Terminal", Description: "Abrir ou voltar ao terminal"},
+	{ID: "commands", Title: "Todos os comandos", Description: "Buscar ações e ferramentas"},
 	{ID: "mode ", Title: "Modo de trabalho", Description: "Escolher modo de trabalho…", Group: true},
 	{ID: "plan", Title: "Mostrar/recolher plano", Description: "Mostrar ou recolher o plano"},
 	{ID: "task", Title: "Tarefa atual", Description: "Ver tarefa e critérios de aceite"},

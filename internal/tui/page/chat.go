@@ -103,6 +103,10 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.progress = msg.State
 		}
 		return p, nil
+	case pubsub.Event[session.Session]:
+		if msg.Type == pubsub.UpdatedEvent && msg.Payload.ID == p.session.ID {
+			p.session = msg.Payload
+		}
 	case chat.ProcessPreferencesChangedMsg:
 		return p, tea.Batch(p.syncSidebar(), p.resizeContent())
 	case AgentOutcomeMsg:
@@ -300,15 +304,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.showCompletionDialog = true
 			// Continue sending keys to layout->chat
 		case key.Matches(msg, keyMap.NewSession):
-			if err := p.PrepareSessionDraft(""); err != nil {
-				return p, util.ReportError(err)
-			}
-			p.resetTerminal()
-			p.session = session.Session{}
-			return p, tea.Batch(
-				p.clearSidebar(),
-				util.CmdHandler(chat.SessionClearedMsg{}),
-			)
+			return p, p.newConversation()
 		case key.Matches(msg, keyMap.Cancel):
 			if p.session.ID != "" {
 				// Cancel the current session's generation process
@@ -340,6 +336,18 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p *chatPage) setSidebar() tea.Cmd { return p.syncSidebar() }
+
+func (p *chatPage) newConversation() tea.Cmd {
+	if err := p.PrepareSessionDraft(""); err != nil {
+		return util.ReportError(err)
+	}
+	p.resetTerminal()
+	p.session = session.Session{}
+	p.workflow = workflowPanel{}
+	p.progress, p.outcome = "", ""
+	p.recovery = recoveryState{}
+	return tea.Batch(p.clearSidebar(), util.CmdHandler(chat.SessionClearedMsg{}))
+}
 func (p *chatPage) syncSidebar() tea.Cmd {
 	visible := p.session.ID != "" && config.Get() != nil && config.Get().TUI.SidebarVisible(p.width)
 	if !visible {
@@ -455,7 +463,7 @@ func (p *chatPage) View() string {
 		if config.Get() != nil {
 			project += " · " + filepath.Base(config.WorkingDirectory())
 		}
-		layoutView = lipgloss.JoinVertical(lipgloss.Left, ansi.Truncate(project+" · "+modeLabel(p.mode()), max(1, p.width), "…"), layoutView)
+		layoutView = lipgloss.JoinVertical(lipgloss.Left, ansi.Truncate(project, max(1, p.width), "…"), layoutView)
 	}
 	return layoutView
 }

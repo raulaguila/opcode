@@ -140,6 +140,10 @@ func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 		}
 	}
 	m.setFields([]string{"Profile ID", "Name", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API base URL", "API key environment variable", "API (empty/chat_completions/responses/ollama)", "Context window (0 uses catalog)", "Default output tokens (0 uses catalog)", "Disabled (true/false)"}, []string{id, profile.Name, string(profile.Backend), profile.BaseURL, profile.APIKeyEnv, profile.API, strconv.FormatInt(profile.ContextWindow, 10), strconv.FormatInt(profile.DefaultMaxTokens, 10), strconv.FormatBool(profile.Disabled)})
+	m.advanced = false
+	m.fields[0].Blur()
+	m.focus = 1
+	m.fields[m.focus].Focus()
 	return textinput.Blink
 }
 func (m *providerDialogCmp) preferences() tea.Cmd {
@@ -284,11 +288,12 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else {
 				count := m.formRows()
-				start := max(0, m.focus-count+1)
+				indices := m.fieldIndices()
+				start := max(0, slices.Index(indices, m.focus)-count+1)
 				i := start + (msg.Y-3)/2
-				if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(m.fields) {
+				if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(indices) {
 					m.fields[m.focus].Blur()
-					m.focus = i
+					m.focus = indices[i]
 					return m, m.fields[i].Focus()
 				}
 			}
@@ -340,8 +345,10 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+a":
 			if m.screen == "provider" {
 				m.advanced = !m.advanced
-				if !m.advanced {
-					m.focus = min(m.focus, 4)
+				if !slices.Contains(m.fieldIndices(), m.focus) {
+					m.fields[m.focus].Blur()
+					m.focus = m.fieldIndices()[0]
+					m.fields[m.focus].Focus()
 				}
 			}
 			return m, nil
@@ -356,7 +363,9 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "shift+tab" || msg.String() == "up" {
 				delta = -1
 			}
-			m.focus = (m.focus + delta + m.fieldCount()) % m.fieldCount()
+			indices := m.fieldIndices()
+			index := slices.Index(indices, m.focus)
+			m.focus = indices[(index+delta+len(indices))%len(indices)]
 			return m, m.fields[m.focus].Focus()
 		}
 	}
@@ -418,8 +427,9 @@ func (m *providerDialogCmp) View() string {
 	} else {
 		// Keep the focused field visible on small terminals; labels remain attached.
 		count := m.formRows()
-		start := max(0, m.focus-count+1)
-		for i := start; i < min(m.fieldCount(), start+count); i++ {
+		indices := m.fieldIndices()
+		start := max(0, slices.Index(indices, m.focus)-count+1)
+		for _, i := range indices[start:min(len(indices), start+count)] {
 			label := m.labels[i]
 			if i == m.focus {
 				label = "› " + label
@@ -459,10 +469,18 @@ func (m *providerDialogCmp) formRows() int {
 }
 
 func (m *providerDialogCmp) fieldCount() int {
+	return len(m.fieldIndices())
+}
+
+func (m *providerDialogCmp) fieldIndices() []int {
 	if m.screen == "provider" && !m.advanced {
-		return min(5, len(m.fields))
+		return []int{1, 3, 4}
 	}
-	return len(m.fields)
+	indices := make([]int, len(m.fields))
+	for i := range indices {
+		indices[i] = i
+	}
+	return indices
 }
 
 func (m *providerDialogCmp) Setup() {

@@ -35,10 +35,6 @@ type workflowPanel struct {
 func (p *chatPage) refreshWorkflow() {
 	if p.app.Workflows != nil && p.session.ID != "" {
 		if task, err := p.app.Workflows.Get(context.Background(), p.session.ID); err == nil {
-			if len(p.workflow.task.Steps) == 0 && len(task.Steps) > 0 {
-				p.workflow.expanded = true
-				p.workflow.offset = -1
-			}
 			p.workflow.task = task
 		}
 	}
@@ -137,6 +133,9 @@ func (p *chatPage) planOffset() int {
 }
 func (p *chatPage) workflowHeight() int {
 	if p.app == nil || p.app.Workflows == nil || p.width < 20 || p.height < 8 {
+		return 0
+	}
+	if !p.workflow.expanded && p.workflow.question.ID == "" {
 		return 0
 	}
 	h := 1

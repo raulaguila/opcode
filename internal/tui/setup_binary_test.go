@@ -147,7 +147,7 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		// The composer remains visible behind modals; its hint alone cannot
 		// establish that Escape has been consumed before typing the next command.
 		require.Eventually(t, func() bool { return !strings.Contains(snapshot(), title) }, 5*time.Second, 20*time.Millisecond)
-		wait("Enter sends")
+		wait("/ commands")
 	}
 	wait("Connections and preferences")
 	send("n")
@@ -159,6 +159,7 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	wait("Provider catalog")
 	send("llama3.1:8b")
 	wait("llama3.1:8b")
+	send("\x04")
 	wait("model maximum", "server allocation", "server parameter")
 	send("\r")
 	wait("Setup · 3/3")
@@ -185,7 +186,9 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		}
 	}
 	require.True(t, foundLocal)
-	closeDialog("Setup · 3/3")
+	send("\r") // Primary action starts the conversation without running tests.
+	require.Eventually(t, func() bool { return !strings.Contains(snapshot(), "Setup · 3/3") }, 5*time.Second, 20*time.Millisecond)
+	wait("/ commands")
 	// Acknowledge enhanced-key support, then exercise an encoded Ctrl+O.
 	send("\x1b[?0u")
 	send("\x1b[111;5u")
@@ -201,18 +204,21 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		if strings.TrimSpace(line) == ">" {
 			promptRow = row
 		}
-		if strings.Contains(line, "ctrl+? help") {
+		if strings.Contains(line, "/ commands") {
 			footerRow = row
 		}
 	}
 	require.NotEqual(t, -1, promptRow, "chat composer must be visible")
 	require.GreaterOrEqual(t, footerRow-promptRow, 3, "empty composer must retain three writing rows")
+	require.NotContains(t, snapshot(), "/mode ask|plan|execute")
+	require.NotContains(t, snapshot(), "No diagnostics")
+	require.NotContains(t, snapshot(), "Context:")
 	send("/contract\r")
 	wait("Expected outcome")
 	send("\r")
 	wait("Configure task: explain")
 	send("\x13")
-	wait("Task: Explain")
+	require.Eventually(t, func() bool { return !strings.Contains(snapshot(), "Configure task: explain") }, 5*time.Second, 20*time.Millisecond)
 	send("/local-status\r")
 	wait("Allocated context:", "Model is not loaded.")
 	closeDialog("Ollama · observed allocation")

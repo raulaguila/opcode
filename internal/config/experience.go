@@ -24,7 +24,7 @@ func Text(portuguese, english string) string {
 	return english
 }
 func (t TUIConfig) SidebarVisible(width int) bool {
-	return t.Sidebar != "hidden" && width >= 110 && (t.Sidebar == "shown" || width >= 140)
+	return (t.Sidebar == "shown" || t.Sidebar == "auto" && width >= 140) && width >= 110
 }
 
 var DefaultKeybindings = map[string]string{"commands": "ctrl+k", "models": "ctrl+o", "sessions": "ctrl+s", "terminal": "ctrl+p", "files": "ctrl+f", "theme": "ctrl+t", "sidebar": "alt+b"}
@@ -81,11 +81,11 @@ type Setting struct {
 }
 
 var UserSettings = []Setting{
-	{"tui.sidebar", "interface", "Lateral / Sidebar", "auto, shown, hidden", "auto", false},
+	{"tui.sidebar", "interface", "Lateral / Sidebar", "auto, shown, hidden", "hidden", false},
 	{"tui.language", "interface", "Idioma / Language", "pt, en", "en", false},
 	{"tui.notifications", "interface", "Notificações / Notifications", "off, bell (only when unfocused)", "off", false},
 	{"preferences.resumeLast", "sessions", "Retomar conversa / Resume last session", "true, false", false, false},
-	{"preferences.showProcess", "interface", "Mostrar processo / Show process", "true, false", true, false},
+	{"preferences.showProcess", "interface", "Mostrar processo / Show process", "true, false", false, false},
 	{"runtime.mode", "execution", "Modo inicial / Initial mode", "ask, plan, execute", "execute", false},
 	{"runtime.maxSteps", "execution", "Limite de etapas / Step limit", "1–200", 32, true},
 	{"runtime.maxSeconds", "execution", "Tempo máximo / Time limit", "1–7200 seconds", 1800, true},

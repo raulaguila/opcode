@@ -33,6 +33,17 @@ func slashOptions(value string) ([]slashOption, bool) {
 	}
 	query := strings.ToLower(value)
 	var options []slashOption
+	if query == "/" {
+		for _, id := range []string{"new", "models", "settings", "files", "terminal", "sessions", "commands"} {
+			for _, cmd := range commands.Builtins {
+				if cmd.ID == id {
+					cmd = commands.Localized(cmd)
+					options = append(options, slashOption{"/" + cmd.ID, cmd.Description, cmd.Group})
+				}
+			}
+		}
+		return options, true
+	}
 	for _, cmd := range commands.Builtins {
 		cmd = commands.Localized(cmd)
 		options = append(options, slashOption{"/" + cmd.ID, cmd.Description, cmd.Group})
@@ -129,7 +140,7 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 	}
 	t := theme.CurrentTheme()
 	rowWidth := width - 2
-	count := min(len(options), maxHeight-3)
+	count := min(8, len(options), maxHeight-3)
 	start := max(0, min(selected-count+1, len(options)-count))
 	var rows []string
 	for i := start; i < start+count; i++ {

@@ -96,7 +96,7 @@ type Preferences struct {
 	RecentModels   []models.ModelID `json:"recentModels,omitempty"`
 }
 
-func (p Preferences) ProcessVisible() bool { return p.ShowProcess == nil || *p.ShowProcess }
+func (p Preferences) ProcessVisible() bool { return p.ShowProcess != nil && *p.ShowProcess }
 
 // ShellConfig defines the configuration for the shell used by the bash tool.
 type ShellConfig struct {

@@ -18,8 +18,14 @@ func (p *chatPage) openSetup() tea.Cmd {
 		return util.CmdHandler(dialog.OpenProviderDialogMsg{Setup: true})
 	}
 	m := p.app.CoderAgent.Model()
+	p.showWorkspace("setup", config.Text("Configuração · 3/3 · pronto para conversar", "Setup · 3/3 · ready to chat"), fmt.Sprintf(config.Text("Modelo: %s\n\nSua configuração foi salva. Você já pode começar.", "Model: %s\n\nYour configuration is saved. You can start chatting."), panelText(m.APIModel)))
+	p.workspace.actions = []workspaceAction{{kind: "setup-done", label: config.Text("Começar a conversar", "Start chatting")}, {kind: "setup-details", label: config.Text("Detalhes e testes opcionais", "Details and optional tests")}}
+	return nil
+}
+
+func (p *chatPage) openSetupDetails() tea.Cmd {
 	path, _ := config.Paths(config.WorkingDirectory())
-	p.showWorkspace("setup", config.Text("Configuração · 3/3 · pronto para conversar", "Setup · 3/3 · ready to chat"), fmt.Sprintf(config.Text("Modelo selecionado: %s\nConfiguração: %s\n\nA conexão e o modelo estão configurados. Os testes abaixo são opcionais e geram requisições reais; um teste de ferramenta não garante qualidade em tarefas. Escolha idioma e preferências em /settings.", "Selected model: %s\nConfiguration: %s\n\nConnection and model are configured. The tests below are optional and send real requests; a tool probe does not certify task quality. Choose language and preferences in /settings."), panelText(m.APIModel), panelText(path)))
+	p.showWorkspace("setup-details", config.Text("Detalhes da configuração", "Setup details"), config.Text("Configuração: ", "Configuration: ")+panelText(path)+"\n\n"+config.Text("Testes são opcionais e pedem confirmação antes de enviar requisições reais.", "Tests are optional and require confirmation before sending real requests."))
 	for _, v := range []struct{ kind, pt, en string }{{"setup-providers", "1. Rever provedor", "1. Review provider"}, {"setup-models", "2. Escolher outro modelo", "2. Choose another model"}, {"setup-probe", "Teste opcional de ferramenta (confirmação)", "Optional tool probe (confirmation)"}, {"setup-read", "Teste opcional no projeto (confirmação)", "Optional project task (confirmation)"}, {"local-status", "Consultar alocação do Ollama (sem inferência)", "Inspect Ollama allocation (no inference)"}, {"setup-done", "Concluir e conversar", "Finish and chat"}} {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{kind: v.kind, label: config.Text(v.pt, v.en)})
 	}
@@ -27,6 +33,8 @@ func (p *chatPage) openSetup() tea.Cmd {
 }
 func (p *chatPage) setupChoose(action string) tea.Cmd {
 	switch action {
+	case "setup-details":
+		return p.openSetupDetails()
 	case "setup-providers":
 		return util.CmdHandler(dialog.OpenProviderDialogMsg{Setup: true})
 	case "setup-models":

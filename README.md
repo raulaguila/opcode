@@ -63,20 +63,21 @@ Para configurar Ollama uma vez, por exemplo:
       "backend": "local",
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 0,
       "defaultMaxTokens": 2048
     }
   }
 }
 ```
 
-`contextWindow: 0` usa os metadados do servidor; um valor positivo define um limite manual.
+O contexto é consultado no provedor, sem guardar seu tamanho no JSON.
+Um `contextWindow` positivo é uma opção para definir um limite manual.
 O seletor identifica contexto alocado, máximo anunciado ou estimativa alternativa.
 Consultar o catálogo não baixa
 pesos nem gera respostas. Clique no modelo do rodapé, pressione `Ctrl+O` ou use
 `/models` para buscar, trocar de perfil e escolher. `Ctrl+F` marca favoritos,
 `Ctrl+A` alterna a função principal/auxiliar e `Ctrl+R` atualiza o catálogo.
-A escolha e os metadados são salvos, sem serializar chaves resolvidas do ambiente.
+A escolha é salva; o contexto descoberto fica em memória, sem serializar chaves
+resolvidas do ambiente.
 
 Provedores remotos podem usar `apiKeyEnv` com o nome de uma variável. As variáveis
 usuais (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, etc.) e o formato

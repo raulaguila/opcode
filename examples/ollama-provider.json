@@ -4,7 +4,6 @@
     "local": {
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 0,
       "defaultMaxTokens": 2048
     }
   }

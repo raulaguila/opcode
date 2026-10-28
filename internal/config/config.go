@@ -311,7 +311,7 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 	}
 
 	if discoverLocal {
-		refreshLocalContexts()
+		refreshAutomaticContexts()
 	}
 	applyDefaultValues()
 	defaultLevel := slog.LevelInfo

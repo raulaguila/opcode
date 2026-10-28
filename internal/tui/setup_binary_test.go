@@ -113,10 +113,11 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	wait("Provider catalog")
 	send("llama3.1:8b")
 	wait("llama3.1:8b")
+	wait("model maximum", "server allocation", "server parameter")
 	send("\r")
 	wait("Setup · 3/3")
-	// Choosing a local model must persist automatic metadata, rather than turn
-	// the discovery result into a permanent manual 16k override on restart.
+	// Runtime metadata must be visible in the picker without being written into
+	// the user's configuration as an apparently manual limit.
 	configJSON, err := os.ReadFile(filepath.Join(home, ".opcode", "config.json"))
 	require.NoError(t, err)
 	var saved struct {
@@ -127,9 +128,9 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	for _, model := range saved.Models {
 		if model.APIModel == "llama3.1:8b" {
 			foundLocal = true
-			require.True(t, model.ContextAuto)
-			require.True(t, strings.HasPrefix(model.ContextSource, "ollama:"))
-			require.Positive(t, model.ContextWindow)
+			require.True(t, model.UsesAutomaticContext())
+			require.Empty(t, model.ContextSource)
+			require.Zero(t, model.ContextWindow)
 		}
 	}
 	require.True(t, foundLocal)

@@ -14,6 +14,9 @@ func registerModels(definitions map[models.ModelID]models.Model) error {
 		if err != nil {
 			return err
 		}
+		if cfg != nil && normalized.ContextAuto {
+			normalized = ModelWithProviderDefaults(normalized)
+		}
 		validated[id] = normalized
 	}
 	// Publish only after every definition validates, so a failed load is retryable.
@@ -24,8 +27,19 @@ func registerModels(definitions map[models.ModelID]models.Model) error {
 }
 
 func normalizeModel(id models.ModelID, model models.Model) (models.Model, error) {
-	if id == "" || model.APIModel == "" || model.ContextWindow <= 0 {
-		return models.Model{}, fmt.Errorf("model %q requires api_model and a positive context_window", id)
+	if id == "" || model.APIModel == "" || model.ContextWindow < 0 {
+		return models.Model{}, fmt.Errorf("model %q requires api_model and a nonnegative context_window (omit it for automatic discovery)", id)
+	}
+	if model.ContextWindow == 0 {
+		model.ID = id
+		model.ContextAuto = true
+		model.ContextWindow, model.ContextEstimated, model.ContextSource = 4096, true, "fallback"
+		if known, ok := models.BuiltinMetadata(model); ok && known.ContextWindow > 0 {
+			model.ContextWindow, model.ContextEstimated, model.ContextSource = known.ContextWindow, false, "catalog"
+		}
+		if model.DefaultMaxTokens > 0 {
+			model.DefaultMaxTokens = min(model.DefaultMaxTokens, model.ContextWindow/2)
+		}
 	}
 	switch model.Provider {
 	case models.ProviderLocal:

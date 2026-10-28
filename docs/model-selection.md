@@ -17,7 +17,6 @@ Para Ollama, não é necessário cadastrar manualmente cada modelo:
     "local": {
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 0,
       "defaultMaxTokens": 2048
     }
   }
@@ -74,8 +73,8 @@ configurada como alternativa. A troca é recusada enquanto o agente trabalha;
 aguarde terminar ou cancele a execução antes de tentar novamente.
 
 A escolha altera o agente `coder`. As configurações dos agentes auxiliares
-permanecem independentes. O ID e a definição do modelo são salvos para funcionar
-também na próxima inicialização, sem depender de uma consulta para reconhecê-lo.
+permanecem independentes. O ID e a referência do modelo são salvos para reconhecê-lo na próxima
+inicialização. O contexto automático é consultado no provedor e fica em memória.
 Se o projeto já define `agents.coder.model`, a escolha vai para esse
 `.opcode/config.json` (ou o formato anterior em uso); caso contrário, vai para
 o arquivo global. A atualização
@@ -93,8 +92,8 @@ promete uma listagem das permissões ou deployments dessas plataformas.
 mesmo endereço é usado para inferência. As plataformas com autenticação própria
 continuam usando suas configurações específicas de endpoint.
 
-As definições explícitas em `models` têm precedência sobre os metadados da
-consulta e os padrões do provedor. Nomes e IDs são separados para distinguir
+Limites positivos definidos manualmente em `models.context_window` têm
+precedência sobre os metadados da consulta e os padrões do provedor. Nomes e IDs são separados para distinguir
 variantes como `:7b` e `:8b`. Modelos conhecidos preservam seus limites,
 capacidades e preços cadastrados. Para modelos novos, usamos os limites
 informados pelo servidor, ou padrões conservadores quando não há metadados;
@@ -106,9 +105,11 @@ Referências dos protocolos de catálogo:
 [Anthropic](https://platform.claude.com/docs/en/api/models/list) e
 [Gemini](https://ai.google.dev/api/models#method:-models.list).
 
-### Contexto local automático
+### Contexto automático
 
-Os presets locais usam `contextWindow: 0` (ou campo omitido). Ollama consulta
+Os presets omitem `contextWindow`; não é necessário preencher o tamanho do
+contexto. Omitir `models.<id>.context_window` também solicita descoberta automática.
+Ollama consulta
 `GET /api/ps` e `POST /api/show`, sem carregar modelos nem executar inferência.
 Usa primeiro o contexto de um modelo já alocado; se não estiver carregado,
 usa `num_ctx` do Modelfile quando presente, ou o máximo anunciado em
@@ -119,17 +120,39 @@ As APIs compatíveis que não expõem esses dados usam uma estimativa identifica
 Veja as referências de [metadados do Ollama](https://docs.ollama.com/api-reference/show-model-details)
 e [contexto alocado](https://docs.ollama.com/api/ps).
 
-A seleção local salva `context_auto: true`, o contexto e sua origem. A inicialização
-normal e `Ctrl+R` atualizam esses metadados; offline ou sem metadados novos,
-o último valor salvo continua disponível. Não há regravação do JSON só para
-atualizar o contexto em memória. `contextWindow` positivo no provedor continua
-tendo precedência. Definições manuais em `models` sem `context_auto: true`
-também preservam seu `context_window` explícito.
+A inicialização normal e `Ctrl+R` consultam os metadados. A seleção automática
+não grava `context_window`, `context_source`, `context_estimated` nem
+`context_auto` no JSON: o valor descoberto e sua origem ficam somente em memória.
+Offline ou sem metadados do provedor, usa o catálogo interno quando disponível ou
+uma estimativa de 4.096 tokens, identificada na interface. Não há cache de contexto
+no arquivo de configuração. Nem todos os provedores expõem esse dado em sua API.
 
-Para ativar a descoberta em uma configuração antiga, coloque `contextWindow: 0`
-no provedor em `/settings`. Se a definição antiga em `models` era manual,
-remova essa definição ou adicione `"context_auto": true` antes de reiniciar.
-As configurações antigas não têm seus limites alterados silenciosamente.
+Um `contextWindow` positivo no provedor ou `context_window` positivo no modelo
+continua sendo um limite manual. Omitir o campo (ou usar zero) ativa o automático.
+Por exemplo, uma referência suficiente em `models` é:
+
+```json
+{
+  "models": {
+    "local.llama3.1:8b": {
+      "provider": "local",
+      "api": "ollama",
+      "api_model": "llama3.1:8b"
+    }
+  },
+  "agents": {
+    "coder": { "model": "local.llama3.1:8b" }
+  }
+}
+```
+
+A conexão local deve estar configurada em `providers.local`; um perfil nomeado
+usa `provider_profile` na referência. O formato anterior com `context_auto: true`
+e valores salvos continua aceito e atualizado em memória; selecionar novamente
+remove os metadados de contexto antigos do JSON. Para ativar o automático em uma
+definição manual antiga, remova `context_window` e o `contextWindow` do provedor,
+sem alterar os demais campos. Para voltar a uma versão antiga que exige contexto
+no JSON, restaure um backup da configuração ou informe o limite manualmente.
 
 ## Perfis, favoritos e preferências
 
@@ -156,7 +179,6 @@ independente do `backend`, enquanto `name` é o rótulo exibido na interface:
       "backend": "local",
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 0,
       "defaultMaxTokens": 2048
     },
     "trabalho": {

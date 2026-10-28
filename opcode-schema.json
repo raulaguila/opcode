@@ -394,7 +394,7 @@
             "type": "boolean"
           },
           "context_auto": {
-            "description": "Refresh local context metadata at startup and catalog refresh; the saved window is an offline cache. False keeps a manual model override.",
+            "description": "Compatibility flag for older automatic snapshots. Omit context_window to discover provider context without persisting metadata.",
             "type": "boolean"
           },
           "context_estimated": {
@@ -402,11 +402,12 @@
             "type": "boolean"
           },
           "context_source": {
-            "description": "Origin of cached context metadata, shown in the model picker.",
+            "description": "Legacy context metadata; new automatic selections keep the source in memory only.",
             "type": "string"
           },
           "context_window": {
-            "minimum": 1,
+            "description": "Optional manual override. Omit or use zero to discover context from the provider.",
+            "minimum": 0,
             "type": "integer"
           },
           "cost_per_1m_in": {
@@ -452,12 +453,11 @@
         },
         "required": [
           "provider",
-          "api_model",
-          "context_window"
+          "api_model"
         ],
         "type": "object"
       },
-      "description": "Additional model definitions or explicit overrides of built-in models",
+      "description": "Model references with automatic context discovery, or explicit manual overrides of model metadata",
       "type": "object"
     },
     "preferences": {

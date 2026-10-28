@@ -134,13 +134,18 @@ func modelCatalog(id models.ModelProvider, profile string, p Provider) func(cont
 		for i, model := range found {
 			model = providerModelDefaults(p, model)
 			if existing, ok := byWire[model.APIModel]; ok {
-				if existing.ContextAuto {
+				_, overridden := explicit[existing.ID]
+				if existing.ContextAuto || !overridden {
+					existing.ContextAuto = true
 					if !model.ContextEstimated || existing.ContextEstimated {
 						existing.ContextWindow = model.ContextWindow
 						existing.ContextEstimated = model.ContextEstimated
 						existing.ContextSource = model.ContextSource
-					} else {
+					} else if existing.ContextSource != "catalog" {
 						existing.ContextSource = "cache"
+					}
+					if configured, ok := explicit[existing.ID]; ok && configured.DefaultMaxTokens > 0 {
+						existing.DefaultMaxTokens = configured.DefaultMaxTokens
 					}
 					existing.DefaultMaxTokens = min(existing.DefaultMaxTokens, existing.ContextWindow/2)
 				}
@@ -176,7 +181,7 @@ func providerModelDefaults(p Provider, model models.Model) models.Model {
 }
 
 func ModelWithProviderDefaults(model models.Model) models.Model {
-	if configured, explicit := cfg.Models[model.ID]; explicit && !configured.ContextAuto {
+	if configured, explicit := cfg.Models[model.ID]; explicit && !configured.UsesAutomaticContext() {
 		return model
 	}
 	p, err := ProviderForModel(model)
@@ -186,27 +191,31 @@ func ModelWithProviderDefaults(model models.Model) models.Model {
 	return providerModelDefaults(p, model)
 }
 
-// Refresh selected local metadata after restart, including named profiles. The
-// saved definition remains a usable offline cache; manual model limits win.
-func refreshLocalContexts() {
-	connections := map[string]bool{}
+// Refresh selected automatic metadata after restart, including named profiles.
+// Only the runtime registry receives the discovered context.
+func refreshAutomaticContexts() {
+	type connection struct {
+		backend models.ModelProvider
+		profile string
+	}
+	connections := map[connection]bool{}
 	for _, agent := range cfg.Agents {
 		model, ok := cfg.Models[agent.Model]
-		if !ok || model.Provider != models.ProviderLocal || !model.ContextAuto || connections[model.ProviderProfile] {
+		key := connection{model.Provider, model.ProviderProfile}
+		if !ok || !model.UsesAutomaticContext() || connections[key] {
 			continue
 		}
 		p, err := ProviderForModel(model)
 		if err != nil {
 			continue
 		}
-		connections[model.ProviderProfile] = true
+		connections[key] = true
 		found, err := modelCatalog(model.Provider, model.ProviderProfile, p)(context.Background())
 		if err != nil {
 			continue
 		}
 		for _, fresh := range found {
-			if existing, ok := cfg.Models[fresh.ID]; ok && existing.ContextAuto {
-				cfg.Models[fresh.ID] = fresh
+			if existing, ok := cfg.Models[fresh.ID]; ok && existing.UsesAutomaticContext() {
 				models.SupportedModels[fresh.ID] = fresh
 			}
 		}

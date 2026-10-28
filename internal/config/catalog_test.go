@@ -136,12 +136,22 @@ func TestAutomaticLocalContextRefreshesAfterRestartAndHonorsOverrides(t *testing
 				}
 				data, err := json.Marshal(document)
 				require.NoError(t, err)
+				var rawDocument map[string]json.RawMessage
+				var rawModels map[models.ModelID]map[string]json.RawMessage
+				require.NoError(t, json.Unmarshal(data, &rawDocument))
+				require.NoError(t, json.Unmarshal(rawDocument["models"], &rawModels))
+				rawModels[model.ID]["future_model_field"] = json.RawMessage(`{"large":9007199254740993}`)
+				rawDocument["models"], err = json.Marshal(rawModels)
+				require.NoError(t, err)
+				data, err = json.Marshal(rawDocument)
+				require.NoError(t, err)
 				path := filepath.Join(root, "settings.json")
 				require.NoError(t, os.WriteFile(path, data, 0600))
 				viper.SetConfigFile(path)
 				previous := http.DefaultTransport
 				t.Cleanup(func() { http.DefaultTransport = previous })
 				calls := 0
+				allocated := int64(32768)
 				http.DefaultTransport = localDiscoveryTransport(func(req *http.Request) (*http.Response, error) {
 					calls++
 					status, body := 404, `{}`
@@ -149,7 +159,7 @@ func TestAutomaticLocalContextRefreshesAfterRestartAndHonorsOverrides(t *testing
 					case "/v1/models":
 						status, body = 200, `{"data":[{"id":"active"}]}`
 					case "/api/ps":
-						status, body = 200, `{"models":[{"name":"active","context_length":32768}]}`
+						status, body = 200, fmt.Sprintf(`{"models":[{"name":"active","context_length":%d}]}`, allocated)
 					}
 					return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
 				})
@@ -165,14 +175,39 @@ func TestAutomaticLocalContextRefreshesAfterRestartAndHonorsOverrides(t *testing
 				require.NoError(t, err)
 				require.Equal(t, want, found[0].ContextWindow)
 				require.NoError(t, UpdateAgentModelDefinition(AgentCoder, found[0]))
+				saved, err := os.ReadFile(path)
+				require.NoError(t, err)
+				var persisted struct {
+					Models map[models.ModelID]map[string]json.RawMessage `json:"models"`
+				}
+				require.NoError(t, json.Unmarshal(saved, &persisted))
+				require.JSONEq(t, `{"large":9007199254740993}`, string(persisted.Models[model.ID]["future_model_field"]))
+				for _, key := range []string{"context_window", "context_source", "context_estimated", "context_auto"} {
+					require.NotContains(t, persisted.Models[model.ID], key, "discovered context belongs in memory, not user configuration")
+				}
+				cfg = nil
+				viper.Reset()
+				viper.SetConfigFile(path)
+				allocated = 65536
+				restarted, err := Load(root, false)
+				require.NoError(t, err)
+				if override == 0 {
+					want = allocated
+				}
+				require.Equal(t, want, models.SupportedModels[restarted.Agents[AgentCoder].Model].ContextWindow)
+				require.Zero(t, restarted.Models[model.ID].ContextWindow, "configuration stays free of runtime metadata")
 				cfg = nil
 				viper.Reset()
 				viper.SetConfigFile(path)
 				calls = 0
 				_, err = LoadOffline(root)
 				require.NoError(t, err)
-				require.Zero(t, calls, "offline commands must use saved metadata without network")
-				require.Equal(t, want, models.SupportedModels[model.ID].ContextWindow)
+				require.Zero(t, calls, "offline commands must not query a provider")
+				offlineWindow := int64(4096)
+				if override > 0 {
+					offlineWindow = override
+				}
+				require.Equal(t, offlineWindow, models.SupportedModels[model.ID].ContextWindow)
 			})
 		}
 	}

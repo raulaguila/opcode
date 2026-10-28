@@ -37,8 +37,15 @@ func UpdateAgentModelDefinition(name AgentName, model models.Model) error {
 	if err != nil {
 		return err
 	}
-	// Persist the metadata as well as the ID: newly discovered models must still
-	// work after restarting offline, without requiring a catalog request first.
+	// Discovered context belongs to the runtime, not the user's settings.
+	// Omission requests discovery on restart; positive manual overrides remain.
+	configured := model
+	if model.UsesAutomaticContext() {
+		configured.ContextWindow = 0
+		configured.ContextSource = ""
+		configured.ContextEstimated = false
+		configured.ContextAuto = false
+	}
 	update := func(file *Config) {
 		if file.Agents == nil {
 			file.Agents = map[AgentName]Agent{}
@@ -47,7 +54,7 @@ func UpdateAgentModelDefinition(name AgentName, model models.Model) error {
 			file.Models = map[models.ModelID]models.Model{}
 		}
 		file.Agents[name] = agent
-		file.Models[model.ID] = model
+		file.Models[model.ID] = configured
 		file.Preferences.RecentModels = uniqueModels(append([]models.ModelID{model.ID}, cfg.Preferences.RecentModels...), 20)
 		if name == AgentCoder {
 			for _, auxiliary := range []AgentName{AgentTitle, AgentSummarizer, AgentTask} {
@@ -84,7 +91,7 @@ func UpdateAgentModelDefinition(name AgentName, model models.Model) error {
 			}
 		}
 	}
-	cfg.Models[model.ID] = model
+	cfg.Models[model.ID] = configured
 	models.SupportedModels[model.ID] = model
 	return nil
 }

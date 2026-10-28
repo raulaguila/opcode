@@ -375,6 +375,10 @@ func (m *modelDialogCmp) View() string {
 				contextNote = config.Text(" (configurado)", " (configured)")
 			case "cache":
 				contextNote = config.Text(" (última consulta)", " (cached metadata)")
+			case "catalog":
+				contextNote = config.Text(" (catálogo interno)", " (built-in catalog)")
+			case "provider":
+				contextNote = config.Text(" (informado pelo provedor)", " (provider metadata)")
 			}
 		}
 		lines = append(lines, line(fmt.Sprintf(config.Text("Contexto: %d%s · saída: %d", "Context: %d%s · output: %d"), selected.ContextWindow, contextNote, selected.DefaultMaxTokens)))

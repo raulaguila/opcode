@@ -22,10 +22,28 @@ type Model struct {
 	ContextEstimated    bool          `json:"context_estimated,omitempty" mapstructure:"context_estimated"`
 	ContextAuto         bool          `json:"context_auto,omitempty" mapstructure:"context_auto"`
 	ContextSource       string        `json:"context_source,omitempty" mapstructure:"context_source"`
-	ContextWindow       int64         `json:"context_window" mapstructure:"context_window"`
+	ContextWindow       int64         `json:"context_window,omitempty" mapstructure:"context_window"`
 	DefaultMaxTokens    int64         `json:"default_max_tokens" mapstructure:"default_max_tokens"`
 	CanReason           bool          `json:"can_reason" mapstructure:"can_reason"`
 	SupportsAttachments bool          `json:"supports_attachments" mapstructure:"supports_attachments"`
+}
+
+// A missing context is a request for provider metadata. ContextAuto also accepts
+// snapshots written by older versions, which included the discovered window.
+func (m Model) UsesAutomaticContext() bool { return m.ContextAuto || m.ContextWindow == 0 }
+
+var builtinModels map[ModelID]Model
+
+func BuiltinMetadata(reference Model) (Model, bool) {
+	if model, ok := builtinModels[reference.ID]; ok && model.Provider == reference.Provider && model.APIModel == reference.APIModel {
+		return model, true
+	}
+	for _, model := range builtinModels {
+		if model.Provider == reference.Provider && model.APIModel == reference.APIModel {
+			return model, true
+		}
+	}
+	return Model{}, false
 }
 
 // Model IDs
@@ -101,4 +119,5 @@ func init() {
 	maps.Copy(SupportedModels, XAIModels)
 	maps.Copy(SupportedModels, VertexAIGeminiModels)
 	maps.Copy(SupportedModels, CopilotModels)
+	builtinModels = maps.Clone(SupportedModels)
 }

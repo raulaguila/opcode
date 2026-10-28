@@ -325,13 +325,13 @@ func generateSchema() map[string]any {
 		"provider":             map[string]any{"type": "string"},
 		"provider_profile":     map[string]any{"type": "string", "description": "Optional named provider connection; backend must match provider."},
 		"context_estimated":    map[string]any{"type": "boolean", "description": "Context is a conservative fallback rather than server or explicit model metadata."},
-		"context_auto":         map[string]any{"type": "boolean", "description": "Refresh local context metadata at startup and catalog refresh; the saved window is an offline cache. False keeps a manual model override."},
-		"context_source":       map[string]any{"type": "string", "description": "Origin of cached context metadata, shown in the model picker."},
+		"context_auto":         map[string]any{"type": "boolean", "description": "Compatibility flag for older automatic snapshots. Omit context_window to discover provider context without persisting metadata."},
+		"context_source":       map[string]any{"type": "string", "description": "Legacy context metadata; new automatic selections keep the source in memory only."},
 		"api_model":            map[string]any{"type": "string", "minLength": 1},
 		"name":                 map[string]any{"type": "string"},
 		"api":                  map[string]any{"type": "string", "enum": []string{"chat_completions", "responses", "ollama"}},
 		"thinking_mode":        map[string]any{"type": "string", "enum": []string{"enabled", "adaptive"}},
-		"context_window":       map[string]any{"type": "integer", "minimum": 1},
+		"context_window":       map[string]any{"type": "integer", "minimum": 0, "description": "Optional manual override. Omit or use zero to discover context from the provider."},
 		"default_max_tokens":   map[string]any{"type": "integer", "minimum": 1},
 		"can_reason":           map[string]any{"type": "boolean"},
 		"supports_attachments": map[string]any{"type": "boolean"},
@@ -341,10 +341,10 @@ func generateSchema() map[string]any {
 	}
 	schema["properties"].(map[string]any)["models"] = map[string]any{
 		"type":        "object",
-		"description": "Additional model definitions or explicit overrides of built-in models",
+		"description": "Model references with automatic context discovery, or explicit manual overrides of model metadata",
 		"additionalProperties": map[string]any{
 			"type": "object", "properties": modelProperties,
-			"required": []string{"provider", "api_model", "context_window"},
+			"required": []string{"provider", "api_model"},
 		},
 	}
 

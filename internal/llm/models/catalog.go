@@ -137,14 +137,16 @@ func DiscoverProviderModels(ctx context.Context, provider ModelProvider, endpoin
 				name = id
 			}
 			estimated := contextWindow <= 0
+			source := "provider"
 			if contextWindow <= 0 {
 				contextWindow = 4096
+				source = "fallback"
 			}
 			if maxTokens <= 0 {
 				maxTokens = 2048
 			}
 			maxTokens = min(maxTokens, contextWindow/2)
-			found = append(found, Model{ID: ModelID(string(provider) + "." + id), Name: name, Provider: provider, APIModel: id, ContextWindow: contextWindow, ContextEstimated: estimated, DefaultMaxTokens: maxTokens})
+			found = append(found, Model{ID: ModelID(string(provider) + "." + id), Name: name, Provider: provider, APIModel: id, ContextWindow: contextWindow, ContextAuto: true, ContextSource: source, ContextEstimated: estimated, DefaultMaxTokens: maxTokens})
 		}
 		for _, item := range result.Data {
 			// These endpoints also expose embeddings, audio and image-only models.

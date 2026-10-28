@@ -21,9 +21,9 @@ func TestLocalDiscoveryReadsOllamaContextMetadata(t *testing.T) {
 		case "/api/v0/models":
 			status = 404
 		case "/v1/models":
-			body = `{"data":[{"id":"loaded:8b"},{"id":"preset:8b"},{"id":"maximum:8b"},{"id":"unknown:8b"}]}`
+			body = `{"data":[{"id":"loaded:8b"},{"id":"preset:8b"},{"id":"maximum:8b"},{"id":"unknown:8b"},{"id":"loaded-fallback:8b"}]}`
 		case "/api/ps":
-			body = `{"models":[{"name":"loaded:8b","context_length":8192}]}`
+			body = `{"models":[{"name":"loaded:8b","context_length":16384},{"name":"preset:8b","context_length":8192},{"name":"loaded-fallback:8b","context_length":8192}]}`
 		case "/api/show":
 			require.Equal(t, http.MethodPost, req.Method)
 			var request struct {
@@ -49,7 +49,7 @@ func TestLocalDiscoveryReadsOllamaContextMetadata(t *testing.T) {
 	for _, model := range found {
 		byID[model.APIModel] = model
 	}
-	for id, window := range map[string]int64{"loaded:8b": 8192, "preset:8b": 32768, "maximum:8b": 131072, "unknown:8b": 4096} {
+	for id, window := range map[string]int64{"loaded:8b": 131072, "preset:8b": 32768, "maximum:8b": 131072, "unknown:8b": 4096, "loaded-fallback:8b": 8192} {
 		require.Equal(t, window, byID[id].ContextWindow, id)
 		require.Equal(t, id == "unknown:8b", byID[id].ContextEstimated, id)
 	}

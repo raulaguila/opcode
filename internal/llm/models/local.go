@@ -155,6 +155,10 @@ func convertLocalModel(model localModel) Model {
 			source = "fallback"
 		}
 	}
+	window := cmp.Or(model.LoadedContextLength, model.MaxContextLength, 4096)
+	if strings.HasPrefix(source, "ollama:") && model.MaxContextLength > 0 {
+		window = model.MaxContextLength
+	}
 	return Model{
 		ID:                  ModelID("local." + model.ID),
 		Name:                friendlyModelName(model.ID),
@@ -163,8 +167,8 @@ func convertLocalModel(model localModel) Model {
 		ContextEstimated:    model.LoadedContextLength == 0 && model.MaxContextLength == 0,
 		ContextAuto:         true,
 		ContextSource:       source,
-		ContextWindow:       cmp.Or(model.LoadedContextLength, model.MaxContextLength, 4096),
-		DefaultMaxTokens:    min(4096, cmp.Or(model.LoadedContextLength, model.MaxContextLength, 4096)/2),
+		ContextWindow:       window,
+		DefaultMaxTokens:    min(4096, window/2),
 		CanReason:           false,
 		SupportsAttachments: false,
 	}

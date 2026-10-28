@@ -1,5 +1,30 @@
 # Validação real do terminal e das instruções com Ollama
 
+## Contexto automático e primeira pergunta
+
+`TestLiveOllamaFirstQuestionUsesAdvertisedContext` executa o binário de produção
+em um projeto descartável, com JSON sem `context_window`. Descobre os metadados,
+faz uma primeira pergunta sobre o projeto e verifica a janela realmente alocada
+em `/api/ps`, a resposta concluída e a preservação dos arquivos. Não usa
+`--auto-approve`; o modo ask permanece ativo. Há inferência real, sem downloads.
+
+```sh
+go build -o /tmp/opcode-context-capacity .
+OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \
+  OPCODE_EVAL_BINARY=/tmp/opcode-context-capacity \
+  go test -tags=integration ./internal/evaluation \
+    -run '^TestLiveOllamaFirstQuestionUsesAdvertisedContext$' \
+    -count=1 -v -timeout=280s
+```
+
+Na validação de 28/10/2026, passou com `llama3.1:8b` e **131.072 tokens alocados**.
+O teste determinístico de metadados também cobre o caso que antes falhava:
+um modelo já alocado com 16.384 tokens, mas anunciando capacidade de 131.072.
+A alocação antiga não deve substituir a capacidade disponível pela API nativa.
+Limites manuais e a redução após uma falha real de memória continuam válidos.
+Os testes históricos abaixo usam 16.384 tokens deliberadamente para testar
+qualidade e ferramentas sob esse orçamento; eles não definem o limite da aplicação.
+
 ## Atualização de 28/10/2026: respostas sobre o projeto
 
 O caminho nativo do Ollama agora pode ser selecionado com `api: "ollama"` na definição do modelo local. O contexto é enviado por requisição (`options.num_ctx`), junto com o limite de saída e temperatura zero. O servidor recebe `truncate: false`: um contexto insuficiente deve causar erro em vez de descartar silenciosamente instruções. A implementação segue o protocolo de [chat do Ollama](https://docs.ollama.com/api/chat) e seu [streaming NDJSON](https://docs.ollama.com/api/streaming), sem SDK adicional.

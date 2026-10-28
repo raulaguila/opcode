@@ -111,9 +111,12 @@ Os presets omitem `contextWindow`; não é necessário preencher o tamanho do
 contexto. Omitir `models.<id>.context_window` também solicita descoberta automática.
 Ollama consulta
 `GET /api/ps` e `POST /api/show`, sem carregar modelos nem executar inferência.
-Usa primeiro o contexto de um modelo já alocado; se não estiver carregado,
-usa `num_ctx` do Modelfile quando presente, ou o máximo anunciado em
-`model_info["<arquitetura>.context_length"]`. LM Studio preserva o contexto
+Consulta os detalhes mesmo se o modelo já estiver carregado. Usa `num_ctx` do
+Modelfile quando presente, ou o máximo anunciado em
+`model_info["<arquitetura>.context_length"]`. A alocação anterior retornada por
+`/api/ps` é uma alternativa quando os detalhes não estão disponíveis; ela não
+limita permanentemente um modelo nativo capaz de receber um novo `num_ctx`.
+LM Studio preserva o contexto
 carregado ou o máximo de seu catálogo. O máximo arquitetural pode exigir mais
 memória que a disponível; limites aprendidos após falhas de memória continuam ativos.
 As APIs compatíveis que não expõem esses dados usam uma estimativa identificada.

@@ -26,9 +26,8 @@ func enrichOllamaContexts(ctx context.Context, client *http.Client, endpoint, ke
 				break
 			}
 		}
-		if model.LoadedContextLength > 0 {
-			continue
-		}
+		// Allocation is only a fallback. Native Ollama requests can resize num_ctx;
+		// a previous 16k allocation must not hide the model's advertised capacity.
 		body, _ := json.Marshal(struct {
 			Model string `json:"model"`
 		}{model.ID})

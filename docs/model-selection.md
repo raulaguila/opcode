@@ -2,8 +2,9 @@
 
 Configure uma vez em `~/.opcode/config.json` (ou no arquivo global já utilizado
 pelo aplicativo). `./.opcode/config.json` pode sobrescrever essas configurações
-por projeto. A primeira inicialização normal cria um template quando nenhum
-arquivo global compatível existe; não substitui configurações antigas. O template
+por projeto. A inicialização normal cria o arquivo global canônico quando ausente:
+preserva nele a configuração global antiga, mantendo o original, ou usa um template
+se nenhuma existir. Não sobrescreve um destino existente. O template
 está em [`internal/config/template.json`](../internal/config/template.json), com
 Ollama, LM Studio e exemplos remotos desativados, sem credenciais ou modelo escolhido.
 Reinicie o aplicativo depois de editar os provedores no JSON.
@@ -16,7 +17,7 @@ Para Ollama, não é necessário cadastrar manualmente cada modelo:
     "local": {
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 16384,
+      "contextWindow": 0,
       "defaultMaxTokens": 2048
     }
   }
@@ -105,6 +106,31 @@ Referências dos protocolos de catálogo:
 [Anthropic](https://platform.claude.com/docs/en/api/models/list) e
 [Gemini](https://ai.google.dev/api/models#method:-models.list).
 
+### Contexto local automático
+
+Os presets locais usam `contextWindow: 0` (ou campo omitido). Ollama consulta
+`GET /api/ps` e `POST /api/show`, sem carregar modelos nem executar inferência.
+Usa primeiro o contexto de um modelo já alocado; se não estiver carregado,
+usa `num_ctx` do Modelfile quando presente, ou o máximo anunciado em
+`model_info["<arquitetura>.context_length"]`. LM Studio preserva o contexto
+carregado ou o máximo de seu catálogo. O máximo arquitetural pode exigir mais
+memória que a disponível; limites aprendidos após falhas de memória continuam ativos.
+As APIs compatíveis que não expõem esses dados usam uma estimativa identificada.
+Veja as referências de [metadados do Ollama](https://docs.ollama.com/api-reference/show-model-details)
+e [contexto alocado](https://docs.ollama.com/api/ps).
+
+A seleção local salva `context_auto: true`, o contexto e sua origem. A inicialização
+normal e `Ctrl+R` atualizam esses metadados; offline ou sem metadados novos,
+o último valor salvo continua disponível. Não há regravação do JSON só para
+atualizar o contexto em memória. `contextWindow` positivo no provedor continua
+tendo precedência. Definições manuais em `models` sem `context_auto: true`
+também preservam seu `context_window` explícito.
+
+Para ativar a descoberta em uma configuração antiga, coloque `contextWindow: 0`
+no provedor em `/settings`. Se a definição antiga em `models` era manual,
+remova essa definição ou adicione `"context_auto": true` antes de reiniciar.
+As configurações antigas não têm seus limites alterados silenciosamente.
+
 ## Perfis, favoritos e preferências
 
 `Ctrl+P` dentro do seletor abre **Connections and preferences**. Use `N` para
@@ -130,7 +156,7 @@ independente do `backend`, enquanto `name` é o rótulo exibido na interface:
       "backend": "local",
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 16384,
+      "contextWindow": 0,
       "defaultMaxTokens": 2048
     },
     "trabalho": {

@@ -90,6 +90,57 @@ func TestFreshStartupCreatesPrivateProviderTemplateOnceWithoutNetwork(t *testing
 	require.Zero(t, calls)
 }
 
+func TestStartupAdoptsLegacyGlobalInCanonicalPrivateFile(t *testing.T) {
+	isolateMigrationConfig(t)
+	old := filepath.Join(os.Getenv("HOME"), ".opencode.json")
+	body := `{"future":9007199254740993,"providers":{"openai":{"apiKey":"private-fixture"}},"runtime":{"mode":"ask"}}`
+	writeMigrationJSON(t, old, body)
+	_, err := Load(t.TempDir(), false)
+	require.NoError(t, err)
+	path := filepath.Join(os.Getenv("HOME"), ".opcode", "config.json")
+	require.Equal(t, path, viper.ConfigFileUsed())
+	for _, file := range []string{old, path} {
+		data, err := os.ReadFile(file)
+		require.NoError(t, err)
+		require.Equal(t, body, string(data))
+	}
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+}
+
+func TestExplicitAndOfflineLoadsDoNotAdoptLegacyGlobal(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) {
+			isolateMigrationConfig(t)
+			root := t.TempDir()
+			writeMigrationJSON(t, filepath.Join(os.Getenv("HOME"), ".opencode.json"), `{}`)
+			if explicit {
+				path := filepath.Join(root, "explicit.json")
+				writeMigrationJSON(t, path, `{}`)
+				viper.SetConfigFile(path)
+				_, err := Load(root, false)
+				require.NoError(t, err)
+			} else {
+				_, err := LoadOffline(root)
+				require.NoError(t, err)
+			}
+			_, err := os.Stat(filepath.Join(os.Getenv("HOME"), ".opcode", "config.json"))
+			require.True(t, os.IsNotExist(err))
+		})
+	}
+}
+
+func TestLegacyAdoptionRejectsSymlinkSource(t *testing.T) {
+	isolateMigrationConfig(t)
+	target := filepath.Join(t.TempDir(), "outside.json")
+	writeMigrationJSON(t, target, `{}`)
+	require.NoError(t, os.Symlink(target, filepath.Join(os.Getenv("HOME"), ".opencode.json")))
+	require.Error(t, ensureGlobalTemplate())
+	_, err := os.Stat(filepath.Join(os.Getenv("HOME"), ".opcode", "config.json"))
+	require.True(t, os.IsNotExist(err))
+}
+
 func TestNewProjectConfigurationFolderKeepsExistingLegacyDatabase(t *testing.T) {
 	root := t.TempDir()
 	old := filepath.Join(root, ".opencode")
@@ -134,8 +185,9 @@ func TestTemplateConcurrentStartupIsAtomicAndNeverOverwritesLegacy(t *testing.T)
 	after, err := os.ReadFile(old)
 	require.NoError(t, err)
 	require.Equal(t, before, after)
-	_, err = os.Stat(path)
-	require.True(t, os.IsNotExist(err), "legacy credentials must not be duplicated")
+	adopted, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, before, adopted, "normal startup preserves legacy global settings at the canonical path")
 }
 
 func TestTemplateFailureDoesNotWriteThroughSymlinkOrOverwriteMalformedConfig(t *testing.T) {

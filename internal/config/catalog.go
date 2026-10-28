@@ -134,8 +134,18 @@ func modelCatalog(id models.ModelProvider, profile string, p Provider) func(cont
 		for i, model := range found {
 			model = providerModelDefaults(p, model)
 			if existing, ok := byWire[model.APIModel]; ok {
+				if existing.ContextAuto {
+					if !model.ContextEstimated || existing.ContextEstimated {
+						existing.ContextWindow = model.ContextWindow
+						existing.ContextEstimated = model.ContextEstimated
+						existing.ContextSource = model.ContextSource
+					} else {
+						existing.ContextSource = "cache"
+					}
+					existing.DefaultMaxTokens = min(existing.DefaultMaxTokens, existing.ContextWindow/2)
+				}
 				model = existing
-				if _, overridden := explicit[existing.ID]; !overridden {
+				if _, overridden := explicit[existing.ID]; !overridden || existing.ContextAuto {
 					model = providerModelDefaults(p, model)
 				}
 			}
@@ -156,6 +166,7 @@ func providerModelDefaults(p Provider, model models.Model) models.Model {
 	if p.ContextWindow > 0 {
 		model.ContextWindow = p.ContextWindow
 		model.ContextEstimated = false
+		model.ContextSource = "configuration"
 	}
 	if p.DefaultMaxTokens > 0 {
 		model.DefaultMaxTokens = p.DefaultMaxTokens
@@ -165,7 +176,7 @@ func providerModelDefaults(p Provider, model models.Model) models.Model {
 }
 
 func ModelWithProviderDefaults(model models.Model) models.Model {
-	if _, explicit := cfg.Models[model.ID]; explicit {
+	if configured, explicit := cfg.Models[model.ID]; explicit && !configured.ContextAuto {
 		return model
 	}
 	p, err := ProviderForModel(model)
@@ -173,4 +184,31 @@ func ModelWithProviderDefaults(model models.Model) models.Model {
 		return model
 	}
 	return providerModelDefaults(p, model)
+}
+
+// Refresh selected local metadata after restart, including named profiles. The
+// saved definition remains a usable offline cache; manual model limits win.
+func refreshLocalContexts() {
+	connections := map[string]bool{}
+	for _, agent := range cfg.Agents {
+		model, ok := cfg.Models[agent.Model]
+		if !ok || model.Provider != models.ProviderLocal || !model.ContextAuto || connections[model.ProviderProfile] {
+			continue
+		}
+		p, err := ProviderForModel(model)
+		if err != nil {
+			continue
+		}
+		connections[model.ProviderProfile] = true
+		found, err := modelCatalog(model.Provider, model.ProviderProfile, p)(context.Background())
+		if err != nil {
+			continue
+		}
+		for _, fresh := range found {
+			if existing, ok := cfg.Models[fresh.ID]; ok && existing.ContextAuto {
+				cfg.Models[fresh.ID] = fresh
+				models.SupportedModels[fresh.ID] = fresh
+			}
+		}
+	}
 }

@@ -480,8 +480,8 @@ type ProviderPreset struct {
 }
 
 var ProviderPresets = []ProviderPreset{
-	{"ollama", ProviderProfile{Name: "Ollama", Backend: models.ProviderLocal, Provider: Provider{BaseURL: "http://127.0.0.1:11434/v1", API: "ollama", ContextWindow: 16384, DefaultMaxTokens: 2048}}},
-	{"lmstudio", ProviderProfile{Name: "LM Studio", Backend: models.ProviderLocal, Provider: Provider{BaseURL: "http://127.0.0.1:1234/v1", API: "chat_completions", ContextWindow: 16384, DefaultMaxTokens: 2048}}},
+	{"ollama", ProviderProfile{Name: "Ollama", Backend: models.ProviderLocal, Provider: Provider{BaseURL: "http://127.0.0.1:11434/v1", API: "ollama", ContextWindow: 0, DefaultMaxTokens: 2048}}},
+	{"lmstudio", ProviderProfile{Name: "LM Studio", Backend: models.ProviderLocal, Provider: Provider{BaseURL: "http://127.0.0.1:1234/v1", API: "chat_completions", ContextWindow: 0, DefaultMaxTokens: 2048}}},
 	{"openai", ProviderProfile{Name: "OpenAI", Backend: models.ProviderOpenAI, Provider: Provider{APIKeyEnv: "OPENAI_API_KEY"}}},
 	{"anthropic", ProviderProfile{Name: "Anthropic", Backend: models.ProviderAnthropic, Provider: Provider{APIKeyEnv: "ANTHROPIC_API_KEY"}}},
 	{"gemini", ProviderProfile{Name: "Gemini", Backend: models.ProviderGemini, Provider: Provider{APIKeyEnv: "GEMINI_API_KEY"}}},

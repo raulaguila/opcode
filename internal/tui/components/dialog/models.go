@@ -363,6 +363,19 @@ func (m *modelDialogCmp) View() string {
 		contextNote := ""
 		if selected.ContextEstimated {
 			contextNote = config.Text(" (estimativa alternativa)", " (fallback estimate)")
+		} else {
+			switch selected.ContextSource {
+			case "ollama:loaded", "lmstudio:loaded":
+				contextNote = config.Text(" (alocado no servidor)", " (server allocation)")
+			case "ollama:model", "lmstudio:model":
+				contextNote = config.Text(" (máximo do modelo)", " (model maximum)")
+			case "ollama:parameter":
+				contextNote = config.Text(" (parâmetro do servidor)", " (server parameter)")
+			case "configuration":
+				contextNote = config.Text(" (configurado)", " (configured)")
+			case "cache":
+				contextNote = config.Text(" (última consulta)", " (cached metadata)")
+			}
 		}
 		lines = append(lines, line(fmt.Sprintf(config.Text("Contexto: %d%s · saída: %d", "Context: %d%s · output: %d"), selected.ContextWindow, contextNote, selected.DefaultMaxTokens)))
 		caps := []string{}

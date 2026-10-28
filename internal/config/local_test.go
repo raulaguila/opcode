@@ -37,7 +37,7 @@ func TestLocalEndpointDiscoversConfiguredModelWithoutAPIKey(t *testing.T) {
 				if req.URL.Path == "/v1/models" {
 					status, body = 200, `{"data":[{"id":"llama3.1:8b","object":"model"}]}`
 				} else {
-					require.Equal(t, "/api/v0/models", req.URL.Path)
+					require.Contains(t, []string{"/api/v0/models", "/api/ps"}, req.URL.Path)
 				}
 				return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
 			})
@@ -46,7 +46,7 @@ func TestLocalEndpointDiscoversConfiguredModelWithoutAPIKey(t *testing.T) {
 			require.NoError(t, os.WriteFile(path, []byte(`{"providers":{"local":{"baseURL":"http://local.invalid"}},"agents":{"coder":{"model":"`+selected+`"}}}`), 0600))
 			viper.SetConfigFile(path)
 			loaded, err := Load(dir, false)
-			require.Equal(t, 2, calls)
+			require.Equal(t, 3, calls)
 			if selected == "local.unavailable" {
 				require.ErrorContains(t, err, "unavailable")
 				require.Nil(t, loaded)

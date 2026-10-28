@@ -7,7 +7,7 @@
       "backend": "local",
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 16384,
+      "contextWindow": 0,
       "defaultMaxTokens": 2048,
       "disabled": false
     },
@@ -16,7 +16,7 @@
       "backend": "local",
       "baseURL": "http://127.0.0.1:1234/v1",
       "api": "chat_completions",
-      "contextWindow": 16384,
+      "contextWindow": 0,
       "defaultMaxTokens": 2048,
       "disabled": true
     },

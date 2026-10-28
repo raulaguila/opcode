@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/rand"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,16 +14,33 @@ import (
 //go:embed template.json
 var defaultConfigTemplate []byte
 
-// ensureGlobalTemplate expands the default only when no compatible global
-// configuration exists. A hard link publishes the fully written private file
-// atomically without replacing a file created concurrently by another process.
+// ensureGlobalTemplate creates the canonical global file, preserving legacy JSON
+// and leaving the original for rollback. A hard link publishes the fully written
+// private file atomically without replacing a concurrently created file.
 func ensureGlobalTemplate() error {
-	path, exists := globalConfigPath()
-	if path == "" {
+	source, exists := globalConfigPath()
+	if source == "" {
 		return fmt.Errorf("cannot determine the user configuration directory")
 	}
-	if exists {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(home, "."+appName, "config.json")
+	if source == path && exists {
 		return nil
+	}
+	data := defaultConfigTemplate
+	if exists {
+		// Bound reads, reject symlinks, preserve secrets and large numbers exactly.
+		var original json.RawMessage
+		if err := localstate.Read(source, 4<<20, &original); err != nil {
+			return fmt.Errorf("read config: cannot adopt legacy global configuration: %w", err)
+		}
+		if err := ValidateDocument(source); err != nil {
+			return err
+		}
+		data = original
 	}
 	root, err := localstate.OpenPrivateRoot(filepath.Dir(path), true)
 	if err != nil {
@@ -35,7 +53,7 @@ func ensureGlobalTemplate() error {
 		return fmt.Errorf("cannot create configuration template: %w", err)
 	}
 	defer root.Remove(temp)
-	_, writeErr := file.Write(defaultConfigTemplate)
+	_, writeErr := file.Write(data)
 	if writeErr == nil {
 		writeErr = file.Sync()
 	}

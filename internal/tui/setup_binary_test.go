@@ -17,6 +17,7 @@ import (
 
 	"github.com/creack/pty"
 	"github.com/hinshun/vt10x"
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
 )
 
@@ -94,6 +95,14 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 		}
 	}
 	send := func(text string) { t.Helper(); _, err := io.WriteString(terminal, text); require.NoError(t, err) }
+	closeDialog := func(title string) {
+		t.Helper()
+		send("\x1b")
+		// The composer remains visible behind modals; its hint alone cannot
+		// establish that Escape has been consumed before typing the next command.
+		require.Eventually(t, func() bool { return !strings.Contains(snapshot(), title) }, 5*time.Second, 20*time.Millisecond)
+		wait("Enter sends")
+	}
 	wait("Connections and preferences")
 	send("n")
 	wait("Add connection")
@@ -106,13 +115,29 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	wait("llama3.1:8b")
 	send("\r")
 	wait("Setup · 3/3")
-	send("\x1b")
-	wait("Enter sends")
+	// Choosing a local model must persist automatic metadata, rather than turn
+	// the discovery result into a permanent manual 16k override on restart.
+	configJSON, err := os.ReadFile(filepath.Join(home, ".opcode", "config.json"))
+	require.NoError(t, err)
+	var saved struct {
+		Models map[string]models.Model `json:"models"`
+	}
+	require.NoError(t, json.Unmarshal(configJSON, &saved))
+	foundLocal := false
+	for _, model := range saved.Models {
+		if model.APIModel == "llama3.1:8b" {
+			foundLocal = true
+			require.True(t, model.ContextAuto)
+			require.True(t, strings.HasPrefix(model.ContextSource, "ollama:"))
+			require.Positive(t, model.ContextWindow)
+		}
+	}
+	require.True(t, foundLocal)
+	closeDialog("Setup · 3/3")
 	send("\x0f")
 	wait("Select main model")
 	require.NotContains(t, snapshot(), "Setup · 2/3", "normal model picker must leave the setup presentation behind")
-	send("\x1b")
-	wait("Enter sends")
+	closeDialog("Select main model")
 	send("/contract\r")
 	wait("Expected outcome")
 	send("\r")
@@ -121,15 +146,13 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	wait("Task: Explain")
 	send("/local-status\r")
 	wait("Allocated context:", "Model is not loaded.")
-	send("\x1b")
-	wait("Enter sends")
+	closeDialog("Ollama · observed allocation")
 	send("/worktrees\r")
 	wait("Project · Git and worktrees")
 	wait("Branch: main")
 	send("\r")
 	wait("Git diff")
-	send("\x1b")
-	wait("Enter sends")
+	closeDialog("Git diff")
 	send("\x03")
 	wait("Are you sure you want to quit?")
 	send("y")

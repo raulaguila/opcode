@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Legacy names live here so compatibility does not leak credentials into copied
-// files. Existing configurations and SQLite files are used in place.
+// Legacy names live here. Offline reads and project/SQLite paths retain their
+// original locations; normal startup adopts global JSON in the canonical path.
 const legacyAppName = "opencode"
 const legacyEnvironmentPrefix = "OPENCODE_"
 const currentEnvironmentPrefix = "OPCODE_"

@@ -124,7 +124,7 @@ func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 	m.originalID = ""
 	m.originalKey = ""
 	id := "local"
-	profile := config.ProviderProfile{Name: "Local Ollama", Backend: models.ProviderLocal, Provider: config.Provider{BaseURL: "http://127.0.0.1:11434/v1", API: "ollama", ContextWindow: 16384, DefaultMaxTokens: 2048}}
+	profile := config.ProviderProfile{Name: "Local Ollama", Backend: models.ProviderLocal, Provider: config.Provider{BaseURL: "http://127.0.0.1:11434/v1", API: "ollama", ContextWindow: 0, DefaultMaxTokens: 2048}}
 	if row != nil {
 		id = row.id
 		m.originalID = id

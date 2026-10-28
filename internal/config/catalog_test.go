@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -18,7 +19,7 @@ import (
 func TestCatalogSnapshotPreservesExplicitModelsAndProviderDefaults(t *testing.T) {
 	isolateModelConfig(t)
 	p := Provider{BaseURL: "http://local.invalid/v1", API: "ollama", ContextWindow: 16384, DefaultMaxTokens: 2048}
-	explicit := models.Model{ID: "my.llama", Provider: models.ProviderLocal, APIModel: "llama3.1:8b", API: "ollama", Name: "My Llama", ContextWindow: 32768, DefaultMaxTokens: 1024, CanReason: true}
+	explicit := models.Model{ID: "my.llama", Provider: models.ProviderLocal, APIModel: "llama3.1:8b", API: "ollama", Name: "My Llama", ContextWindow: 32768, DefaultMaxTokens: 20000, CanReason: true}
 	require.NoError(t, registerModels(map[models.ModelID]models.Model{explicit.ID: explicit}))
 	cfg = &Config{Providers: map[models.ModelProvider]Provider{models.ProviderLocal: p}, Models: map[models.ModelID]models.Model{explicit.ID: explicit}, Agents: map[AgentName]Agent{AgentCoder: {Model: explicit.ID}}}
 	fetch := ModelCatalog(models.ProviderLocal)
@@ -114,4 +115,65 @@ func TestSelectedDiscoveredModelPersistsThroughRestartInProject(t *testing.T) {
 	require.Error(t, UpdateAgentModelDefinition(AgentCoder, candidate))
 	require.Equal(t, models.ModelID("local.new.model:7b"), reloaded.Agents[AgentCoder].Model)
 	require.NotContains(t, models.SupportedModels, candidate.ID)
+}
+
+func TestAutomaticLocalContextRefreshesAfterRestartAndHonorsOverrides(t *testing.T) {
+	for _, profile := range []bool{false, true} {
+		for _, override := range []int64{0, 16384} {
+			t.Run(fmt.Sprintf("profile=%t/override=%d", profile, override), func(t *testing.T) {
+				isolateMigrationConfig(t)
+				root := t.TempDir()
+				p := Provider{BaseURL: "http://local.invalid/v1", API: "ollama", ContextWindow: override}
+				model := models.Model{ID: "local.active", Provider: models.ProviderLocal, APIModel: "active", API: "ollama", ContextWindow: 4096, ContextAuto: true, DefaultMaxTokens: 2048}
+				document := Config{Models: map[models.ModelID]models.Model{model.ID: model}, Agents: map[AgentName]Agent{AgentCoder: {Model: model.ID}}}
+				if profile {
+					model.ID, model.ProviderProfile = "profile.home.active", "home"
+					document.Models = map[models.ModelID]models.Model{model.ID: model}
+					document.Agents[AgentCoder] = Agent{Model: model.ID}
+					document.ProviderProfiles = map[string]ProviderProfile{"home": {Backend: models.ProviderLocal, Provider: p}}
+				} else {
+					document.Providers = map[models.ModelProvider]Provider{models.ProviderLocal: p}
+				}
+				data, err := json.Marshal(document)
+				require.NoError(t, err)
+				path := filepath.Join(root, "settings.json")
+				require.NoError(t, os.WriteFile(path, data, 0600))
+				viper.SetConfigFile(path)
+				previous := http.DefaultTransport
+				t.Cleanup(func() { http.DefaultTransport = previous })
+				calls := 0
+				http.DefaultTransport = localDiscoveryTransport(func(req *http.Request) (*http.Response, error) {
+					calls++
+					status, body := 404, `{}`
+					switch req.URL.Path {
+					case "/v1/models":
+						status, body = 200, `{"data":[{"id":"active"}]}`
+					case "/api/ps":
+						status, body = 200, `{"models":[{"name":"active","context_length":32768}]}`
+					}
+					return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
+				})
+				loaded, err := Load(root, false)
+				require.NoError(t, err)
+				want := int64(32768)
+				if override > 0 {
+					want = override
+				}
+				require.Equal(t, want, models.SupportedModels[loaded.Agents[AgentCoder].Model].ContextWindow)
+				require.Positive(t, calls)
+				found, err := modelCatalog(models.ProviderLocal, model.ProviderProfile, p)(context.Background())
+				require.NoError(t, err)
+				require.Equal(t, want, found[0].ContextWindow)
+				require.NoError(t, UpdateAgentModelDefinition(AgentCoder, found[0]))
+				cfg = nil
+				viper.Reset()
+				viper.SetConfigFile(path)
+				calls = 0
+				_, err = LoadOffline(root)
+				require.NoError(t, err)
+				require.Zero(t, calls, "offline commands must use saved metadata without network")
+				require.Equal(t, want, models.SupportedModels[model.ID].ContextWindow)
+			})
+		}
+	}
 }

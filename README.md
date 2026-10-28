@@ -36,8 +36,9 @@ ou AUR configurada para este fork.
 
 ## Primeiro acesso e modelos
 
-Na primeira inicialização normal, se não houver configuração global compatível,
-o Opcode cria `~/.opcode/config.json` com um template editável. Ele inclui Ollama,
+Na inicialização normal, se `~/.opcode/config.json` não existir, o Opcode cria esse
+arquivo. Se houver uma configuração global antiga, preserva seu JSON no novo
+caminho e mantém o original para rollback. Caso contrário, usa um template com Ollama,
 LM Studio, OpenAI e Anthropic, preferências e opções básicas. Nenhum modelo é
 selecionado pelo template; exemplos remotos ficam desativados e chaves são
 referenciadas por variáveis de ambiente. Criar o arquivo não consulta provedores,
@@ -50,7 +51,7 @@ pelo seletor. A última etapa mostra o JSON salvo e oferece testes opcionais com
 confirmação. `/setup` reabre o fluxo. `~/.opcode/config.json` é reutilizado entre projetos;
 `./.opcode/config.json` pode acrescentar ou sobrescrever configurações do projeto.
 Os formatos anteriores `.opcode.json` e `.opencode.json` continuam reconhecidos
-e são atualizados no próprio caminho. Veja [precedência e compatibilidade](docs/migration.md).
+e os arquivos do projeto permanecem no próprio caminho. Veja [precedência e compatibilidade](docs/migration.md).
 
 Para configurar Ollama uma vez, por exemplo:
 
@@ -62,14 +63,16 @@ Para configurar Ollama uma vez, por exemplo:
       "backend": "local",
       "baseURL": "http://127.0.0.1:11434/v1",
       "api": "ollama",
-      "contextWindow": 16384,
+      "contextWindow": 0,
       "defaultMaxTokens": 2048
     }
   }
 }
 ```
 
-Use limites adequados ao modelo e ao servidor. Consultar o catálogo não baixa
+`contextWindow: 0` usa os metadados do servidor; um valor positivo define um limite manual.
+O seletor identifica contexto alocado, máximo anunciado ou estimativa alternativa.
+Consultar o catálogo não baixa
 pesos nem gera respostas. Clique no modelo do rodapé, pressione `Ctrl+O` ou use
 `/models` para buscar, trocar de perfil e escolher. `Ctrl+F` marca favoritos,
 `Ctrl+A` alterna a função principal/auxiliar e `Ctrl+R` atualiza o catálogo.

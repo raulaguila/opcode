@@ -2,8 +2,9 @@
 
 O módulo Go agora é `github.com/raulaguila/opcode` e o executável se chama
 `opcode`. Instalações novas usam os nomes Opcode. A aplicação mantém caminhos e
-variáveis anteriores como aliases de leitura; iniciar a nova versão não copia
-credenciais nem move configurações, históricos ou bancos SQLite.
+variáveis anteriores como aliases de leitura. A inicialização normal adota o JSON
+global antigo no caminho canônico, mantendo o original; históricos e bancos SQLite
+permanecem no próprio caminho.
 
 ## Configuração
 
@@ -20,27 +21,31 @@ precedência. No projeto, `.opcode/config.json` vence `.opcode.json`, que vence
 `.opencode.json`; somente um deles é carregado. A segurança e as extensões executáveis continuam vindo apenas da
 configuração global, mesmo quando o projeto usa um arquivo antigo.
 
-Salvar uma opção existente atualiza seu arquivo original com escrita privada e
-atômica. Não cria outra cópia da chave. Referências `apiKeyEnv`, campos JSON
+Após a adoção, salvar uma opção global atualiza `~/.opcode/config.json`; o original
+antigo fica inativo. Opções do projeto continuam sendo atualizadas no próprio
+arquivo, com escrita privada e atômica. Referências `apiKeyEnv`, campos JSON
 independentes e números grandes desconhecidos são preservados. Uma configuração
 antiga inválida causa um erro; não é motivo para selecionar outro provedor
 silenciosamente.
 
-Na primeira inicialização normal sem configuração global compatível, a aplicação
-cria `~/.opcode/config.json` a partir de um template embutido. A pasta é criada
+Na inicialização normal, a aplicação cria `~/.opcode/config.json` quando ausente.
+Se houver um JSON global antigo, seu conteúdo é preservado no novo arquivo,
+incluindo referências de credenciais, chaves literais e campos desconhecidos; o
+arquivo antigo permanece intacto para rollback. Caso contrário, usa um template
+embutido. A pasta é criada
 com modo 0700 e o arquivo com 0600, quando suportados pelo sistema. O template
 inclui exemplos de provedores e preferências, sem chaves e sem escolher modelo;
 não faz consultas de rede. A publicação é atômica e não substitui um arquivo
-criado por outra instância. Configurações antigas não são copiadas nem movidas.
+criado por outra instância. Não há migração automática de arquivos do projeto.
 Diagnósticos offline e execuções com configuração fornecida explicitamente não
-geram o template. Se um arquivo existente estiver inválido, o erro é apresentado
+criam o arquivo canônico nem adotam configurações antigas. Se um arquivo existente estiver inválido, o erro é apresentado
 e seu conteúdo permanece intacto.
 
 Para adotar o novo caminho manualmente, encerre a aplicação e mova o JSON global
 para `~/.opcode/config.json`, ou o JSON do projeto para `.opcode/config.json`.
 Não sobrescreva um destino existente: compare e combine os campos antes.
-O rollback de caminho consiste em mover esse mesmo JSON de volta, mantendo um
-único arquivo ativo. Não remova a pasta `.opcode`, que também pode conter dados.
+O rollback de caminho consiste em mover o JSON atualizado de volta ao caminho
+anterior, guardando antes o original inativo quando existir. Não remova a pasta `.opcode`, que também pode conter dados.
 
 ## Histórico e SQLite
 

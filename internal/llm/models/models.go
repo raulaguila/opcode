@@ -20,6 +20,8 @@ type Model struct {
 	CostPer1MInCached   float64       `json:"cost_per_1m_in_cached" mapstructure:"cost_per_1m_in_cached"`
 	CostPer1MOutCached  float64       `json:"cost_per_1m_out_cached" mapstructure:"cost_per_1m_out_cached"`
 	ContextEstimated    bool          `json:"context_estimated,omitempty" mapstructure:"context_estimated"`
+	ContextAuto         bool          `json:"context_auto,omitempty" mapstructure:"context_auto"`
+	ContextSource       string        `json:"context_source,omitempty" mapstructure:"context_source"`
 	ContextWindow       int64         `json:"context_window" mapstructure:"context_window"`
 	DefaultMaxTokens    int64         `json:"default_max_tokens" mapstructure:"default_max_tokens"`
 	CanReason           bool          `json:"can_reason" mapstructure:"can_reason"`

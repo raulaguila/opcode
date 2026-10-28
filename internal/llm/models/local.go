@@ -49,6 +49,7 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 	defer cancel()
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	var found []localModel
+	compatibleCatalog := false
 	// Keep LM Studio's loaded-context metadata when its richer API is available.
 	u, _ := url.Parse(endpoint)
 	if u.Path == "/v1" {
@@ -56,6 +57,7 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 		found, _ = listLocalModels(ctx, client, u.String(), apiKey, true)
 	}
 	if len(found) == 0 {
+		compatibleCatalog = true
 		found, err = listLocalModels(ctx, client, endpoint+"/models", apiKey, false)
 		if err != nil {
 			return nil, err
@@ -63,6 +65,11 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 	}
 	if len(found) == 0 {
 		return nil, fmt.Errorf("local server returned no language models; load a model in Ollama or LM Studio")
+	}
+	if compatibleCatalog {
+		if running, err := InspectOllama(ctx, endpoint, apiKey); err == nil {
+			enrichOllamaContexts(ctx, client, endpoint, apiKey, found, running)
+		}
 	}
 	slices.SortStableFunc(found, func(a, b localModel) int {
 		if (a.State == "loaded") == (b.State == "loaded") {
@@ -95,6 +102,7 @@ type localModel struct {
 	State               string `json:"state"`
 	MaxContextLength    int64  `json:"max_context_length"`
 	LoadedContextLength int64  `json:"loaded_context_length"`
+	ContextSource       string
 }
 
 func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey string, lmStudio bool) ([]localModel, error) {
@@ -136,12 +144,25 @@ func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey 
 }
 
 func convertLocalModel(model localModel) Model {
+	source := model.ContextSource
+	if source == "" {
+		switch {
+		case model.LoadedContextLength > 0:
+			source = "lmstudio:loaded"
+		case model.MaxContextLength > 0:
+			source = "lmstudio:model"
+		default:
+			source = "fallback"
+		}
+	}
 	return Model{
 		ID:                  ModelID("local." + model.ID),
 		Name:                friendlyModelName(model.ID),
 		Provider:            ProviderLocal,
 		APIModel:            model.ID,
 		ContextEstimated:    model.LoadedContextLength == 0 && model.MaxContextLength == 0,
+		ContextAuto:         true,
+		ContextSource:       source,
 		ContextWindow:       cmp.Or(model.LoadedContextLength, model.MaxContextLength, 4096),
 		DefaultMaxTokens:    min(4096, cmp.Or(model.LoadedContextLength, model.MaxContextLength, 4096)/2),
 		CanReason:           false,

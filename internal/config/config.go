@@ -199,7 +199,8 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 		return cfg, nil
 	}
 	// Standalone offline diagnostics and explicitly supplied configurations are
-	// read-only. Normal first startup creates a safe editable provider template.
+	// read-only. Normal startup creates the canonical file from legacy global
+	// settings or a safe editable provider template.
 	if discoverLocal && viper.ConfigFileUsed() == "" {
 		if err := ensureGlobalTemplate(); err != nil {
 			return nil, err
@@ -309,6 +310,9 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 		return nil, err
 	}
 
+	if discoverLocal {
+		refreshLocalContexts()
+	}
 	applyDefaultValues()
 	defaultLevel := slog.LevelInfo
 	if cfg.Debug {

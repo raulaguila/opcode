@@ -393,9 +393,17 @@
           "can_reason": {
             "type": "boolean"
           },
+          "context_auto": {
+            "description": "Refresh local context metadata at startup and catalog refresh; the saved window is an offline cache. False keeps a manual model override.",
+            "type": "boolean"
+          },
           "context_estimated": {
             "description": "Context is a conservative fallback rather than server or explicit model metadata.",
             "type": "boolean"
+          },
+          "context_source": {
+            "description": "Origin of cached context metadata, shown in the model picker.",
+            "type": "string"
           },
           "context_window": {
             "minimum": 1,

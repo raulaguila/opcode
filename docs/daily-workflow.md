@@ -2,9 +2,9 @@
 
 ## Primeiro acesso
 
-Ao iniciar sem configuração global compatível, o Opcode cria um template privado
-em `~/.opcode/config.json`. Não sobrescreve configurações existentes, não copia
-chaves antigas e não baixa modelos. A configuração opcional do projeto fica em
+Ao iniciar, o Opcode cria `~/.opcode/config.json` quando ausente: preserva o JSON
+global antigo no novo arquivo privado, mantendo o original, ou usa um template
+se nenhuma configuração global existir. Não sobrescreve o destino nem baixa modelos. A configuração opcional do projeto fica em
 `.opcode/config.json`; os formatos anteriores continuam funcionando no próprio
 caminho. `doctor` e os comandos de leitura de configuração não criam o template.
 

@@ -325,6 +325,8 @@ func generateSchema() map[string]any {
 		"provider":             map[string]any{"type": "string"},
 		"provider_profile":     map[string]any{"type": "string", "description": "Optional named provider connection; backend must match provider."},
 		"context_estimated":    map[string]any{"type": "boolean", "description": "Context is a conservative fallback rather than server or explicit model metadata."},
+		"context_auto":         map[string]any{"type": "boolean", "description": "Refresh local context metadata at startup and catalog refresh; the saved window is an offline cache. False keeps a manual model override."},
+		"context_source":       map[string]any{"type": "string", "description": "Origin of cached context metadata, shown in the model picker."},
 		"api_model":            map[string]any{"type": "string", "minLength": 1},
 		"name":                 map[string]any{"type": "string"},
 		"api":                  map[string]any{"type": "string", "enum": []string{"chat_completions", "responses", "ollama"}},

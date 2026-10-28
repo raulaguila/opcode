@@ -502,6 +502,9 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.modelDialog.Close()
 		a.showModelDialog = false
+		if d, ok := a.modelDialog.(interface{ SetSetup(bool) }); ok {
+			d.SetSetup(false)
+		}
 
 		if a.setupActive {
 			a.setupActive = false

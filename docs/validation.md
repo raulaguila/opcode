@@ -145,3 +145,10 @@ seguiu a instrução posterior, preservando a ordem das mensagens e resultados.
 `go test -race ./...`, `go vet ./...`, build e checagem de whitespace passaram.
 Os quatro arquivos Linux/macOS amd64/arm64 foram cross-compilados e tiveram
 conteúdo e SHA256 conferidos. Não houve teste manual em equipamentos macOS/ARM.
+
+A primeira CI remota identificou a ausência de `rg` no runner. Os workflows de
+verificação/release passaram a instalar explicitamente essa dependência de teste,
+para executar também os testes de privacidade do índice em vez de ignorá-los.
+Sem `rg` na máquina do usuário, o índice agora retorna uma orientação clara
+antes de criar o banco; não instala pacotes nem enfraquece regras de descoberta.
+Um teste cobre esse caminho e preserva a prioridade do cancelamento.

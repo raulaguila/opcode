@@ -17,5 +17,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Install code-search test prerequisite
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ripgrep
+          fi
       - run: go test -race ./...
       - run: go vet ./...

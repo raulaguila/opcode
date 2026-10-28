@@ -161,3 +161,17 @@ func TestWorktreeApprovalDirtyRemovalAndNoForce(t *testing.T) {
 	require.Contains(t, response.Content, "filters")
 	require.NoFileExists(t, filepath.Join(dir, "unexpected"))
 }
+
+func TestCodeIndexMissingRipgrepDoesNotCreateIndex(t *testing.T) {
+	productivityV2Workspace(t)
+	t.Setenv("PATH", t.TempDir())
+	response, err := NewCodeIndexTool().Run(toolContext(), toolInput(map[string]any{"query": "symbol"}))
+	require.NoError(t, err)
+	require.True(t, response.IsError)
+	require.Contains(t, response.Content, "ripgrep (rg) is required")
+	require.NoDirExists(t, filepath.Join(config.Get().Data.Directory, "code-index"))
+	ctx, cancel := context.WithCancel(toolContext())
+	cancel()
+	_, err = NewCodeIndexTool().Run(ctx, toolInput(map[string]any{"query": "symbol"}))
+	require.ErrorIs(t, err, context.Canceled)
+}

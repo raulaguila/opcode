@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -40,6 +41,12 @@ func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 	}
 	if input.Limit == 0 {
 		input.Limit = 20
+	}
+	if err := ctx.Err(); err != nil {
+		return ToolResponse{}, err
+	}
+	if _, err := exec.LookPath("rg"); err != nil {
+		return NewTextErrorResponse("ripgrep (rg) is required for code indexing; install it explicitly or use the regular file tools. No index was created."), nil
 	}
 	root, err := canonicalPath(config.WorkingDirectory())
 	if err != nil {

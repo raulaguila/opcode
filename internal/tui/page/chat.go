@@ -3,6 +3,8 @@ package page
 import (
 	"context"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -10,7 +12,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/completions"
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
@@ -36,6 +41,10 @@ type chatPage struct {
 	workspace            workspacePanel
 	recovery             recoveryState
 	lastRequest          chat.SendMsg
+	sidebar              layout.Container
+	sidebarVisible       bool
+	progress             string
+	outcome              string
 }
 
 type ChatKeyMap struct {
@@ -72,15 +81,34 @@ func (p *chatPage) Init() tea.Cmd {
 
 func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+	if !p.sidebarVisible && p.sidebar != nil {
+		switch msg.(type) {
+		case pubsub.Event[history.File], pubsub.Event[session.Session], chat.SessionSelectedMsg:
+			updated, c := p.sidebar.Update(msg)
+			p.sidebar = updated.(layout.Container)
+			cmds = append(cmds, c)
+		}
+	}
 	switch msg := msg.(type) {
 	case WorkspaceCommandMsg:
 		return p, p.workspaceCommand(msg.Command, msg.Value)
+	case GitWorkspaceMsg:
+		return p, p.gitWorkspaceResult(msg)
 	case WorkspaceResultMsg:
 		return p, p.workspaceResult(msg)
 	case chat.ResponseActionsMsg:
 		return p, p.openResponseActions(msg.Text)
+	case ActivityMsg:
+		if msg.SessionID == p.session.ID {
+			p.progress = msg.State
+		}
+		return p, nil
+	case chat.ProcessPreferencesChangedMsg:
+		return p, tea.Batch(p.syncSidebar(), p.resizeContent())
 	case AgentOutcomeMsg:
 		if msg.SessionID == p.session.ID {
+			p.outcome = msg.Outcome
+			p.progress = ""
 			if msg.Error != nil {
 				p.recovery = recoveryState{err: msg.Error}
 			} else if msg.Done && p.recovery.err != nil {
@@ -90,7 +118,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return p, p.resizeContent()
 	case tea.WindowSizeMsg:
 		p.width, p.height = msg.Width, msg.Height
-		cmd := p.resizeContent()
+		cmd := tea.Batch(p.syncSidebar(), p.resizeContent())
 		return p, cmd
 	case TerminalTickMsg:
 		p.refreshWorkflow()
@@ -117,6 +145,12 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if p.terminal.focused {
 			return p, nil
+		}
+		if p.height >= 12 {
+			if msg.Y == 0 {
+				return p, nil
+			}
+			msg.Y--
 		}
 		// Mouse coordinates are relative to the terminal. The message panel
 		// starts at the top left; don't scroll it over the editor or sidebar.
@@ -193,8 +227,11 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.closeWorkspace()
 		p.recovery = recoveryState{}
 		p.lastRequest = chat.SendMsg{}
+		p.progress = ""
+		p.outcome = ""
 		p.resetTerminal()
 		p.session = session.Session{}
+		cmds = append(cmds, p.syncSidebar())
 	case chat.SessionSelectedMsg:
 		if msg.ID != p.session.ID {
 			if err := p.PrepareSessionDraft(msg.ID); err != nil {
@@ -204,6 +241,8 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.closeWorkspace()
 			p.recovery = recoveryState{}
 			p.lastRequest = chat.SendMsg{}
+			p.progress = ""
+			p.outcome = ""
 			p.resetTerminal()
 		}
 		if p.session.ID == "" {
@@ -213,6 +252,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		p.session = msg
+		cmds = append(cmds, p.syncSidebar())
 		p.refreshWorkflow()
 	case tea.KeyMsg:
 		if p.WorkspaceFocused() {
@@ -237,7 +277,19 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			p.workflow.offset = max(0, p.planOffset()+step)
 			return p, nil
 		}
-		if key.Matches(msg, keyMap.Terminal) {
+		if msg.String() == config.Shortcut("sidebar") {
+			if config.Get() != nil {
+				next := "hidden"
+				if !p.sidebarVisible {
+					next = "shown"
+				}
+				if err := config.SaveUserSetting("tui.sidebar", next, false); err != nil {
+					return p, util.ReportError(err)
+				}
+			}
+			return p, tea.Batch(p.syncSidebar(), p.resizeContent())
+		}
+		if msg.String() == config.Shortcut("terminal") {
 			return p, p.toggleTerminal()
 		}
 		if p.terminal.focused {
@@ -283,18 +335,27 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 	p.layout = u.(layout.SplitPaneLayout)
 
+	cmds = append(cmds, p.resizeContent())
 	return p, tea.Batch(cmds...)
 }
 
-func (p *chatPage) setSidebar() tea.Cmd {
-	sidebarContainer := layout.NewContainer(
-		chat.NewSidebarCmp(p.session, p.app.History),
-		layout.WithPadding(1, 1, 1, 1),
-	)
-	return tea.Batch(p.layout.SetRightPanel(sidebarContainer), sidebarContainer.Init())
+func (p *chatPage) setSidebar() tea.Cmd { return p.syncSidebar() }
+func (p *chatPage) syncSidebar() tea.Cmd {
+	visible := p.session.ID != "" && config.Get() != nil && config.Get().TUI.SidebarVisible(p.width)
+	if !visible {
+		p.sidebarVisible = false
+		return p.layout.ClearRightPanel()
+	}
+	var init tea.Cmd
+	if p.sidebar == nil {
+		p.sidebar = layout.NewContainer(chat.NewSidebarCmp(p.session, p.app.History), layout.WithPadding(1, 1, 1, 1))
+		init = p.sidebar.Init()
+	}
+	p.sidebarVisible = true
+	return tea.Batch(p.layout.SetRightPanel(p.sidebar), init)
 }
-
 func (p *chatPage) clearSidebar() tea.Cmd {
+	p.sidebarVisible = false
 	return p.layout.ClearRightPanel()
 }
 
@@ -333,17 +394,19 @@ func (p *chatPage) submitAgentMessage(text string, attachments []message.Attachm
 	if err != nil {
 		return tea.Batch(util.ReportError(err), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: err}))
 	}
+	p.outcome = ""
+	p.progress = config.Text("Investigando", "Investigating")
 	p.lastRequest = chat.SendMsg{Text: text, Attachments: cloneUserAttachments(attachments)}
 	cmds := []tea.Cmd{util.CmdHandler(chat.SubmissionResultMsg{Text: draft})}
 	if queued {
-		cmds = append(cmds, util.ReportInfo("Instruction queued; it will apply after the current operation"))
+		cmds = append(cmds, util.ReportInfo("Instrução pendente; será incorporada após a operação atual"))
 	}
 	return tea.Batch(cmds...)
 }
 
 func (p *chatPage) SetSize(width, height int) tea.Cmd {
 	p.width, p.height = width, height
-	return p.resizeContent()
+	return tea.Batch(p.syncSidebar(), p.resizeContent())
 }
 
 func (p *chatPage) GetSize() (int, int) {
@@ -387,11 +450,20 @@ func (p *chatPage) View() string {
 		}
 	}
 
+	if p.height >= 12 {
+		project := "Opcode"
+		if config.Get() != nil {
+			project += " · " + filepath.Base(config.WorkingDirectory())
+		}
+		layoutView = lipgloss.JoinVertical(lipgloss.Left, ansi.Truncate(project+" · "+modeLabel(p.mode()), max(1, p.width), "…"), layoutView)
+	}
 	return layoutView
 }
 
 func (p *chatPage) BindingKeys() []key.Binding {
-	bindings := layout.KeyMapToSlice(keyMap)
+	localKeys := keyMap
+	localKeys.Terminal = key.NewBinding(key.WithKeys(config.Shortcut("terminal")), key.WithHelp(config.Shortcut("terminal"), config.Text("terminal / conversa", "terminal / chat")))
+	bindings := layout.KeyMapToSlice(localKeys)
 	bindings = append(bindings, p.messages.BindingKeys()...)
 	bindings = append(bindings, p.editor.BindingKeys()...)
 	return bindings

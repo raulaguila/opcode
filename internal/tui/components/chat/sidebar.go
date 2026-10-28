@@ -86,8 +86,8 @@ func (m *sidebarCmp) View() string {
 
 	return baseStyle.
 		Width(m.width).
-		PaddingLeft(4).
-		PaddingRight(2).
+		PaddingLeft(1).
+		PaddingRight(1).
 		Height(m.height - 1).
 		Render(
 			lipgloss.JoinVertical(
@@ -110,7 +110,7 @@ func (m *sidebarCmp) sessionSection() string {
 	sessionKey := baseStyle.
 		Foreground(t.Primary()).
 		Bold(true).
-		Render("Session")
+		Render(config.Text("Conversa", "Session"))
 
 	sessionValue := baseStyle.
 		Foreground(t.Text()).
@@ -177,11 +177,11 @@ func (m *sidebarCmp) modifiedFiles() string {
 		Width(m.width).
 		Foreground(t.Primary()).
 		Bold(true).
-		Render("Modified Files:")
+		Render(config.Text("Arquivos alterados:", "Modified Files:"))
 
 	// If no modified files, show a placeholder message
 	if m.modFiles == nil || len(m.modFiles) == 0 {
-		message := "No modified files"
+		message := config.Text("Nenhum arquivo alterado", "No modified files")
 		remainingWidth := m.width - lipgloss.Width(message)
 		if remainingWidth > 0 {
 			message += strings.Repeat(" ", remainingWidth)

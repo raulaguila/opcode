@@ -30,16 +30,27 @@ opcode
 
 O binário é instalado em `GOBIN`, quando definido, ou em `GOPATH/bin`; inclua esse
 diretório no `PATH`. O helper local `sh ./install` usa o mesmo `go install`, sem
-editar arquivos do shell. Builds de release e checksums só estarão disponíveis
-quando uma versão for publicada neste repositório. Não há distribuição Homebrew
+editar arquivos do shell. Builds de release e checksums são publicados pelo workflow de versões após
+a aprovação dos testes e do vet. Veja [releases](https://github.com/raulaguila/opcode/releases). Não há distribuição Homebrew
 ou AUR configurada para este fork.
 
 ## Primeiro acesso e modelos
 
-Sem modelo configurado, a abertura interativa mostra **Settings**. `N` cadastra
-uma conexão; `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha então o modelo
-pelo seletor. Um `.opcode.json` global pode ser reutilizado entre projetos;
-`./.opcode.json` pode acrescentar ou sobrescrever configurações do projeto.
+Na primeira inicialização normal, se não houver configuração global compatível,
+o Opcode cria `~/.opcode/config.json` com um template editável. Ele inclui Ollama,
+LM Studio, OpenAI e Anthropic, preferências e opções básicas. Nenhum modelo é
+selecionado pelo template; exemplos remotos ficam desativados e chaves são
+referenciadas por variáveis de ambiente. Criar o arquivo não consulta provedores,
+não executa inferência e não baixa modelos. Arquivos existentes não são
+sobrescritos. `doctor` continua sendo uma leitura sem criar o template.
+
+Sem modelo configurado, a abertura interativa inicia a configuração guiada. `N` cadastra
+uma conexão com um preset; `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha então o modelo
+pelo seletor. A última etapa mostra o JSON salvo e oferece testes opcionais com
+confirmação. `/setup` reabre o fluxo. `~/.opcode/config.json` é reutilizado entre projetos;
+`./.opcode/config.json` pode acrescentar ou sobrescrever configurações do projeto.
+Os formatos anteriores `.opcode.json` e `.opencode.json` continuam reconhecidos
+e são atualizados no próprio caminho. Veja [precedência e compatibilidade](docs/migration.md).
 
 Para configurar Ollama uma vez, por exemplo:
 
@@ -74,10 +85,14 @@ Veja [configuração de provedores/modelos](docs/model-selection.md),
 [o schema JSON](opcode-schema.json) e
 [integrações MCP/LSP](docs/integrations-settings.md).
 
+Veja o [guia de uso diário](docs/daily-workflow.md) para configurar, definir o
+resultado esperado de tarefas e trabalhar com Git/worktrees.
+
 ## Recursos
 
 | Frente | Disponível neste fork |
 | --- | --- |
+| Tarefas | Contratos explícitos em `/contract` ou `--task-kind`, com alvos, critérios e checks da revisão atual. |
 | Configuração | Perfis com ID, nome e backend separados; múltiplos endpoints, formulários, teste de conexão, catálogo dinâmico, favoritos, recentes e modelos auxiliares independentes. |
 | Chat | Processo recolhível por interação, resposta final separada, ações de texto/código/arquivos, aviso de novas mensagens, histórico e rascunhos por conversa. |
 | Execução | Terminal PTY com entrada do usuário, saída ao vivo e fila de instruções editável durante o trabalho. |
@@ -87,6 +102,48 @@ Veja [configuração de provedores/modelos](docs/model-selection.md),
 | Ferramentas | Mapa, outline/símbolos, artefatos paginados, descoberta de checks, hierarquia/renomeação/substituição LSP e ferramentas/recursos MCP sob demanda. |
 | Extensões | Skills invocadas explicitamente pelo usuário e hooks globais opt-in, sujeitos às permissões e ao sandbox. |
 | Avaliações | Fixtures determinísticas e avaliações reais opt-in, com critérios observáveis e suporte a Ollama. |
+| Confiabilidade | Conclusão com evidência de alteração ou justificativa explícita, estado parcial/bloqueado e recuperação de contexto/OOM com calibração local temporária. |
+| Produtividade | Índice incremental FTS5/BM25, exploração somente leitura com orçamento, formatação e worktrees protegidas. |
+| Preferências | Lateral adaptável, input crescente, busca de configurações com origem efetiva, atalhos, idioma e notificações opcionais. |
+| Reconexão | Servidor local autenticado e cliente `attach`, com snapshots de sessão, aprovações, perguntas e PTY sem repetir comandos. |
+
+## Configuração pela CLI
+
+```sh
+opcode config path
+opcode config validate
+opcode config show --redacted
+opcode config migrate  # backup privado antes de adicionar schemaVersion
+```
+
+Os JSONs antigos continuam aceitos. A migração não move arquivos nem resolve
+chaves do ambiente para gravá-las no disco. Veja [compatibilidade](docs/migration.md).
+`/local-status` e `opcode doctor --ollama-status` consultam contexto e CPU/GPU
+observados no Ollama, sem carregar ou baixar modelos.
+
+## Diagnóstico, configuração e reconexão
+
+`opcode doctor` verifica a instalação sem exigir modelo nem acessar o provedor.
+`--check-provider` consulta somente o catálogo; `--probe-model` executa um teste
+real e inerte de chamada de ferramenta, que pode consumir tokens. Um teste de
+catálogo aprovado não certifica a capacidade de executar tarefas.
+
+As preferências pesquisáveis mostram o valor efetivo e sua origem. Por exemplo,
+no JSON global, `"tui": {"language":"pt","sidebar":"auto","notifications":"off"}`
+seleciona controles em português e lateral adaptável. Atalhos podem ser alterados
+em `tui.keybindings`; valores controlados por ambiente precisam ser alterados na
+variável correspondente. Alguns textos legados e mensagens técnicas mantêm o
+idioma original.
+
+Para manter a aplicação e os PTYs abertos enquanto um cliente desconecta, use
+`opcode serve` e `opcode attach`. A autenticação vem de `OPCODE_SERVER_TOKEN`;
+o servidor aceita somente loopback e nunca autoaprova ferramentas. Leia o
+[guia do servidor e OAuth](docs/server-and-auth.md) antes de usar a API.
+OAuth de integrações MCP é iniciado explicitamente por `opcode mcp login NOME`
+ou pelo cadastro da integração. Não concede permissão de executar ferramentas.
+
+Arquivos e checksums locais são gerados por `make release-local`, conforme
+[builds reproduzíveis](docs/local-release.md). Isso não publica uma release.
 
 Comece pelo [guia da interface](docs/workspace-ui.md). Os principais controles:
 

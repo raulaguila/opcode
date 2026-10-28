@@ -9,7 +9,7 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/models"
 )
 
-func configureLocalProvider() error {
+func configureLocalProvider(discovery ...bool) error {
 	local := cfg.Providers[models.ProviderLocal]
 	if local.Disabled {
 		return nil
@@ -39,7 +39,7 @@ func configureLocalProvider() error {
 	}
 	local.BaseURL = baseURL
 	cfg.Providers[models.ProviderLocal] = local
-	if !needsDiscovery {
+	if !needsDiscovery || len(discovery) > 0 && !discovery[0] {
 		return nil
 	}
 	found, err := models.DiscoverLocalModels(context.Background(), baseURL, local.APIKey)

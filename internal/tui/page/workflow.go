@@ -64,7 +64,7 @@ func (p *chatPage) refreshWorkflow() {
 }
 func (p *chatPage) mode() workflow.Mode {
 	if p.workflow.task.Mode.Valid() {
-		return p.workflow.task.Mode
+		return p.workflow.task.EffectiveMode()
 	}
 	if cfg := config.Get(); cfg != nil {
 		return workflow.Mode(cfg.Runtime.Defaults().Mode)
@@ -74,16 +74,28 @@ func (p *chatPage) mode() workflow.Mode {
 func modeLabel(mode workflow.Mode) string {
 	switch mode {
 	case workflow.Ask:
-		return "Perguntar"
+		return config.Text("Perguntar", "Ask")
 	case workflow.Plan:
-		return "Planejar"
+		return config.Text("Planejar", "Plan")
 	default:
-		return "Executar"
+		return config.Text("Executar", "Execute")
 	}
 }
 func (p *chatPage) planRows() []string {
 	task := p.workflow.task
-	rows := []string{" Sessão: " + p.session.ID}
+	rows := []string{config.Text(" Sessão: ", " Session: ") + p.session.ID}
+	if task.Contract != nil {
+		rows = append(rows, " "+config.Text("Resultado esperado: ", "Expected outcome: ")+task.Contract.Kind)
+		for _, target := range task.Contract.Targets {
+			rows = append(rows, " "+config.Text("Alvo: ", "Target: ")+panelText(target))
+		}
+		if len(task.Contract.Checks) > 0 {
+			rows = append(rows, " "+config.Text("Checks exigidos: ", "Required checks: ")+strings.Join(task.Contract.Checks, ", "))
+		}
+		for _, criterion := range task.Contract.Acceptance {
+			rows = append(rows, " "+config.Text("Aceite: ", "Acceptance: ")+panelText(criterion))
+		}
+	}
 	if task.Objective != "" {
 		rows = append(rows, " "+panelText(task.Objective))
 	}
@@ -158,7 +170,10 @@ func (p *chatPage) workflowView() string {
 		}
 		line = fmt.Sprintf(" %s · Plano %d/%d · %s · /plan", modeLabel(p.mode()), done, len(task.Steps), task.Status)
 	}
-	lines := []string{ansi.Truncate(line+p.queueSummary(), w, "…")}
+	if task.Contract != nil {
+		line = fmt.Sprintf(" %s · %s: %s · /contract · /plan", modeLabel(p.mode()), config.Text("Tarefa", "Task"), contractLabel(task.Contract.Kind))
+	}
+	lines := []string{ansi.Truncate(line+" · "+p.activityLabel()+p.queueSummary(), w, "…")}
 	if p.workflow.expanded && p.workflow.question.ID == "" {
 		rows := p.planRows()
 		offset := p.planOffset()
@@ -267,6 +282,8 @@ func (p *chatPage) applyWorkflowCommand(command, value string) (tea.Cmd, error) 
 	}
 	ctx := context.Background()
 	switch command {
+	case "setup-read":
+		return p.setupRead()
 	case "mode":
 		if value == "" {
 			return util.ReportInfo("Modo: " + modeLabel(p.mode()) + " · /mode ask|plan|execute"), nil

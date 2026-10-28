@@ -1,7 +1,11 @@
 # Configurar provedores e escolher o modelo
 
-Configure uma vez em `~/.opcode.json` (ou no arquivo global já utilizado pelo
-aplicativo). Um `.opcode.json` no projeto pode sobrescrever essas configurações.
+Configure uma vez em `~/.opcode/config.json` (ou no arquivo global já utilizado
+pelo aplicativo). `./.opcode/config.json` pode sobrescrever essas configurações
+por projeto. A primeira inicialização normal cria um template quando nenhum
+arquivo global compatível existe; não substitui configurações antigas. O template
+está em [`internal/config/template.json`](../internal/config/template.json), com
+Ollama, LM Studio e exemplos remotos desativados, sem credenciais ou modelo escolhido.
 Reinicie o aplicativo depois de editar os provedores no JSON.
 
 Para Ollama, não é necessário cadastrar manualmente cada modelo:
@@ -72,7 +76,8 @@ A escolha altera o agente `coder`. As configurações dos agentes auxiliares
 permanecem independentes. O ID e a definição do modelo são salvos para funcionar
 também na próxima inicialização, sem depender de uma consulta para reconhecê-lo.
 Se o projeto já define `agents.coder.model`, a escolha vai para esse
-`.opcode.json`; caso contrário, vai para o arquivo global em uso. A atualização
+`.opcode/config.json` (ou o formato anterior em uso); caso contrário, vai para
+o arquivo global. A atualização
 preserva campos desconhecidos, referências a variáveis de ambiente e as demais
 configurações. O arquivo é substituído atomicamente com permissão `0600`.
 
@@ -165,3 +170,41 @@ herdam essa escolha. Preferências permitem definir modo inicial, retomada da
 IDs de perfis usam letras minúsculas, números, `_` ou `-` (até 64 caracteres).
 O nome exibido pode conter letras maiúsculas e espaços. Em **Settings**, `I`
 abre o [cadastro de integrações MCP e LSP](integrations-settings.md).
+
+## Presets e opções avançadas
+
+Em `/settings`, `N` abre presets de Ollama, LM Studio, OpenAI, Anthropic, Gemini e
+OpenRouter. `↑↓` escolhe e `Enter` prepara o formulário; nada é salvo ou conectado
+nesse passo. Revise o ID, endereço e referência da chave antes de salvar.
+`Ctrl+A` mostra/oculta protocolo, limites de contexto/saída e desativação.
+Os modelos não são baixados automaticamente.
+
+A consulta `Ctrl+T` do formulário verifica **somente metadados do catálogo**.
+Ela não confirma a qualidade do modelo nem sua capacidade de chamar ferramentas.
+O catálogo cancelável e a seleção mantêm o modelo ativo quando uma consulta falha;
+resultados de uma consulta fechada ou anterior são descartados.
+
+A origem efetiva e referências redigidas ficam em `/settings` → `P` → `Ctrl+E`.
+Variáveis `OPCODE_...` e aliases anteriores `OPENCODE_...` são identificadas pelo
+nome da variável realmente definida, sem serializar seu valor.
+
+No seletor de modelos, `Ctrl+T` abre uma confirmação separada para **teste real de
+ferramentas**. Revise o modelo e pressione `Enter` para enviar uma inferência;
+`Esc` volta sem enviar. Pode haver cobrança do provedor. O teste usa um desafio
+aleatório e schema inerte, limita contexto a 4096 e saída a 256 tokens, e não
+executa comandos nem ferramentas. Ele não envia o repositório ou a conversa.
+Enquanto testa, `Esc` cancela; resultados atrasados são descartados. A seleção
+ativa não é alterada pelo teste, e um sucesso comprova apenas aquela chamada
+estruturada, não a qualidade geral nem a segurança de futuras execuções.
+
+## Alocação real do Ollama
+
+`/local-status` e `opcode doctor --ollama-status [--model ID]` usam somente
+[GET /api/ps](https://docs.ollama.com/api/ps). Mostram a janela configurada, o
+contexto observado no modelo carregado, CPU/GPU e `size_vram`. Não medem a memória
+livre e não prometem que outra janela caberá. Se o modelo estiver descarregado,
+o diagnóstico informa isso sem carregá-lo. Não há redirects com credenciais.
+
+O próximo pedido pode mudar a alocação; um limite aprendido após erro de memória
+pode reduzir a janela da requisição. Use `/context` para o orçamento efetivo e
+`/recalibrate` para remover esse limite, sem repetir ferramentas.

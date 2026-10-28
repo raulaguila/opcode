@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -132,7 +133,7 @@ func (t *themeDialogCmp) View() string {
 			BorderBackground(currentTheme.Background()).
 			BorderForeground(currentTheme.TextMuted()).
 			Width(40).
-			Render("No themes available")
+			Render(config.Text("Nenhum tema disponível", "No themes available"))
 	}
 
 	// Calculate max width needed for theme names
@@ -165,7 +166,7 @@ func (t *themeDialogCmp) View() string {
 		Bold(true).
 		Width(maxWidth).
 		Padding(0, 1).
-		Render("Select Theme")
+		Render(config.Text("Escolher tema", "Select Theme"))
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -195,4 +196,3 @@ func NewThemeDialogCmp() ThemeDialog {
 		currentTheme: "",
 	}
 }
-

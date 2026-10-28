@@ -4,7 +4,11 @@ O agente de código e o agente de pesquisa recebem ferramentas através de `Secu
 
 ## Configuração única do usuário
 
-Adicione as opções necessárias à configuração global existente, por exemplo `$HOME/.opcode.json` ou `$XDG_CONFIG_HOME/opcode/.opcode.json`. Preserve os campos de provedores e modelos que já usa. O arquivo `examples/tools.example.json` contém um exemplo sem credenciais.
+Adicione as opções necessárias à configuração global `~/.opcode/config.json`,
+ou ao arquivo anterior que a aplicação já utiliza. Preserve os campos de
+provedores e modelos existentes. A primeira inicialização normal cria um
+template sem credenciais quando ainda não há configuração. O arquivo
+`examples/tools.example.json` contém opções adicionais sem credenciais.
 
 ```json
 {
@@ -23,7 +27,10 @@ Adicione as opções necessárias à configuração global existente, por exempl
 }
 ```
 
-`security` é lido antes da configuração do repositório e não pode ser sobrescrito por `./.opcode.json`. Os comandos `checks` podem ser definidos por projeto; executar um deles sempre exige a autorização normal de comando. Os prazos são em milissegundos.
+`security` é lido antes da configuração do repositório e não pode ser sobrescrito
+por `./.opcode/config.json` nem pelos arquivos anteriores. Os comandos `checks`
+podem ser definidos por projeto; executar um deles exige a autorização normal
+de comando. Os prazos são em milissegundos.
 
 No Linux, o padrão exige Bubblewrap (`bwrap`). Ele fornece namespaces separados, rede desabilitada, diretórios de sistema somente para leitura, workspace gravável e `/tmp` privado. Caminhos convencionais de credenciais dentro do workspace são mascarados, incluindo dependências locais. A inspeção tem limite de 100000 entradas; workspaces maiores exigem escolher um diretório de trabalho mais específico. `.git` também é oculto para comandos genéricos; as ferramentas específicas de Git recebem acesso de leitura aos metadados do repositório. LSP e servidores MCP stdio usam o mesmo executor.
 
@@ -36,6 +43,33 @@ Se o binário ou o suporte a namespaces estiver indisponível, o comando falha. 
 - `allowPrivateNetwork` controla destinos privados/loopback de `fetch` e `sourcegraph`. Não libera endereços link-local de metadata. É independente de `allowNetwork`, que trata de subprocessos.
 
 O sandbox protege os limites documentados do processo. Ele não transforma scripts do projeto em código confiável nem fornece limites de CPU/disco. Um comando autorizado pode modificar arquivos comuns do workspace. A opção de autoaprovação da CLI continua sendo uma autorização explícita e ampla.
+
+## Diagnóstico sem iniciar o agente
+
+`opcode doctor --cwd /caminho/do/projeto` verifica configuração, seleção do
+modelo, executáveis, LSP configurado e inicialização do sandbox com um comando
+inerte limitado a cinco segundos. Funciona mesmo sem agente/modelo cadastrado.
+Não inicia LSP/MCP, não mostra valores de ambiente ou chaves e não chama o
+modelo. `--json` produz um relatório estruturado; erros retornam código diferente
+de zero, e avisos indicam recursos opcionais indisponíveis.
+
+- `--check-provider [--profile ID]`: permite uma consulta de catálogo/metadados,
+  limitada a 15 segundos. Não faz inferência.
+- `--probe-model --model ID`: permite **uma requisição real de inferência**, até
+  45 segundos, com um schema inerte e desafio aleatório. Pode gerar cobrança.
+  Exige o ID configurado explicitamente e não executa nenhuma ferramenta. O
+  relatório guarda somente sucesso/falha, sem resposta bruta ou credenciais.
+  Sucesso confirma esse exemplo de chamada estruturada, não qualidade geral.
+
+A CLI e o seletor de modelos compartilham `diagnostic.ProbeModel`: recebem um
+snapshot da conexão e um modelo candidato, inclusive ainda não salvo. A sondagem
+usa cópias limitadas a 4096 tokens de contexto e 256 de saída, sem trocar o modelo
+ativo. Cancelamento e prazo são preservados; erros exibíveis omitem os corpos
+do provedor. Uma geração pode ter reenvios de falhas transitórias pelo transporte,
+sempre dentro do prazo total de 45 segundos.
+
+Os detalhes de erros de configuração são omitidos no relatório porque erros de
+parse podem conter valores que ainda não foram registrados para redação.
 
 ## Arquivos e edição
 
@@ -79,6 +113,24 @@ Os metadados incluem `exit_code`, `timed_out`, `cancelled`, `truncated`, início
 | `references` | Referências, incluindo declaração; mesmos parâmetros de posição |
 
 Git usa operações de inspeção, desativa hooks, fsmonitor, diff externo, textconv e prompts de credenciais. Não executa stage, commit, checkout, reset ou clean. Filtros de caminho ficam depois de `--`. Resultados são estruturados e limitados; `git_diff` considera até 100 arquivos por chamada.
+
+`manage_worktrees` é uma ferramenta separada, disponível em Executar. `action:
+"list"` lista até 256 worktrees. `create` e `remove` recebem `name` (1–64 letras,
+dígitos, `_` ou `-`) e atuam somente em um filho direto de `.opcode-worktrees`.
+Criação usa HEAD destacado, sem alterar a branch principal. A aprovação mostra
+os argumentos exatos; uma capacidade interna estreita permite ao Git gravar
+seus metadados mantendo o sandbox. Shell genérico continua sem esse acesso.
+
+Hooks e fsmonitor ficam desativados; repositórios com filtros de checkout
+configurados exigem criação manual. A remoção usa Git sem `--force`: alterações
+locais, worktrees bloqueados, submódulos ou remoção do principal/atual impedem a
+operação. Caminhos externos, nomes de traversal e links são recusados. Aprovar
+não concede permissão para comandos futuros. A execução tem prazo de 30 segundos
+após a aprovação; um worktree com metadados comuns fora do sandbox pode não estar
+disponível. Para trabalhar no criado, abra `opcode --cwd <caminho-retornado>`;
+o agente atual não muda de workspace silenciosamente.
+Em outros projetos, inclua `.opcode-worktrees/` nas regras de ignore que desejar;
+a ferramenta não modifica silenciosamente o `.gitignore` do usuário.
 
 A navegação LSP usa linhas e posições baseadas em zero; `character` conta unidades UTF-16. O resultado mantém o formato do protocolo, limitado a 100 itens de topo e 2 MiB. O prazo da navegação é 10 segundos. Clientes indisponíveis ou métodos sem suporte geram erro, sem fallback para uma localização inventada. Mensagens LSP recebidas são limitadas a 4 MiB; chamadas respeitam cancelamento, e as gravações do protocolo são serializadas. Diagnósticos não substituem o handler de notificações a cada consulta.
 

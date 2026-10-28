@@ -178,3 +178,60 @@ modo, pergunta e preservação do rascunho sem API externa.
 Os testes reais opt-in do Ollama permanecem em
 [ollama-live-tests.md](ollama-live-tests.md), executados separadamente por causa
 da configuração global do aplicativo.
+
+## Conclusão verificável e trabalho parcial
+
+Pedidos diretos de implementação/edição em Executar registram a impressão dos
+arquivos antes da geração. Uma resposta final sem mudança verificável provoca
+até duas tentativas de correção, dentro dos mesmos limites da execução. Se o
+trabalho continuar incompleto, a execução termina bloqueada em vez de informar
+sucesso. Essa identificação de intenção é auxiliar e não concede autorização.
+Perguntas, análises e planejamento não exigem uma alteração artificial.
+
+`finish_task` aceita `partial` para trabalho incompleto e `no_change_reason` para
+justificar explicitamente uma conclusão sem mudanças (por exemplo, comportamento
+já implementado). A justificativa fica salva na tarefa. O evento final carrega
+`Outcome` como `completed`, `planned`, `partial` ou `blocked`; uma resposta recebida
+não significa automaticamente que a tarefa foi concluída. Uma retomada preserva
+a impressão inicial; uma nova solicitação independente começa outra comparação.
+Os recibos continuam vinculados à revisão e ao comando efetivamente executado.
+
+A impressão detecta mudanças de arquivos, não a correção semântica da alteração.
+Uma justificativa do modelo é um registro explícito, não uma prova independente.
+
+## Exploração separada e limitada
+
+`explore_code` investiga uma pergunta de até 4.000 bytes em um histórico separado.
+Disponibiliza somente leitura e navegação local: arquivos, diretórios, busca,
+mapa, outline, símbolos e índice textual. Não inclui comandos arbitrários,
+escritas, MCP, hooks nem outras chamadas de agentes. O nome legado `agent` usa
+os mesmos limites e não cria outro worker independente.
+
+Cada exploração tem no máximo seis etapas de modelo, 120 segundos, oito leituras
+por etapa, 32 KiB de resultados lidos e relatório de até 8 KiB. Etapas, resultados,
+tempo e custo também pertencem ao orçamento da execução principal. Cancelar o
+turno cancela a exploração. O relatório é informação auxiliar: não aprova
+operações, não comprova conclusão e deve ser conferido antes de editar arquivos.
+
+## Contrato explícito e planos locais
+
+O usuário pode salvar um contrato pelo painel `/contract` ou pelos flags
+`--task-kind`, `--target`, `--accept` e `--check` de um prompt. O contrato fica no
+JSON da tarefa e não pode ser configurado por ferramentas do modelo. Sem contrato,
+as heurísticas de texto permanecem compatíveis. Ele não amplia o modo atual; um
+contrato incompatível é recusado antes de chamar o provedor. Explicar restringe a
+leitura; Verificar filtra ferramentas tanto na exposição quanto na execução,
+incluindo chamadas forjadas e `request_tools`, e exige recibos válidos.
+
+Para a API nativa do Ollama, `update_plan` anuncia `objective`, `steps_text`,
+`criteria_text` e `checks_text` como strings. Etapas usam uma linha `status|title`;
+critérios e checks usam uma linha por item. Esse binding evita listas
+serializadas como texto por templates locais, sem avaliar literais Python ou
+converter argumentos de ferramentas arbitrárias. Outros bindings mantêm arrays
+JSON estruturados. Ambos passam pela mesma validação do Store e não autorizam
+comandos. O modelo fornece o conteúdo; a aplicação não fabrica o plano.
+
+Ao encerrar uma edição simples sem checks disponíveis, o runtime registra
+`partial`, alterações observadas e ausência de validação. Não gera recibos nem
+converte esse estado em conclusão. Tarefas com verificações ou planos ativos
+continuam sujeitas aos seus critérios e ao reparo limitado.

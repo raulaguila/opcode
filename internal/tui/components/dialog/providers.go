@@ -20,7 +20,7 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
-type OpenProviderDialogMsg struct{}
+type OpenProviderDialogMsg struct{ Setup bool }
 type CloseProviderDialogMsg struct{}
 type ProviderSettingsSavedMsg struct{ ProviderChanged bool }
 type providerTestMsg struct {
@@ -52,6 +52,9 @@ type providerDialogCmp struct {
 	testing                        bool
 	request                        uint64
 	cancel                         context.CancelFunc
+	settingsFilter                 textinput.Model
+	advanced                       bool
+	settingPath                    string
 }
 
 func NewProviderDialogCmp(allowSave ...func() error) ProviderDialog {
@@ -244,6 +247,9 @@ func (m *providerDialogCmp) save() tea.Cmd {
 	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed})
 }
 func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.experienceUpdate(msg); handled {
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case providerTestMsg:
 		if msg.request != m.request {
@@ -252,9 +258,9 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.testing = false
 		m.cancel = nil
 		if msg.err != nil {
-			m.note = "Connection test failed: " + msg.err.Error()
+			m.note = config.Text("Falha na consulta: ", "Connection test failed: ") + msg.err.Error()
 		} else {
-			m.note = fmt.Sprintf("Connected · %d models available. Ctrl+S saves this connection.", msg.count)
+			m.note = fmt.Sprintf(config.Text("Conectado · %d modelos disponíveis. Ctrl+S salva.", "Connected · %d models available. Ctrl+S saves this connection."), msg.count)
 		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -316,9 +322,12 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, m.edit(nil)
 			case "n":
-				return m, m.edit(nil)
+				m.screen = "presets"
+				m.selected = 0
+				m.note = config.Text("↑↓ escolhe · Enter configura · Esc volta", "↑↓ choose · Enter configure · Esc back")
+				return m, nil
 			case "p":
-				return m, m.preferences()
+				return m, m.settings()
 			case "i":
 				m.Close()
 				return m, util.CmdHandler(OpenIntegrationDialogMsg{})
@@ -328,6 +337,14 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+s":
 			return m, m.save()
+		case "ctrl+a":
+			if m.screen == "provider" {
+				m.advanced = !m.advanced
+				if !m.advanced {
+					m.focus = min(m.focus, 4)
+				}
+			}
+			return m, nil
 		case "ctrl+t":
 			if m.screen == "provider" {
 				return m, m.test()
@@ -339,7 +356,7 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "shift+tab" || msg.String() == "up" {
 				delta = -1
 			}
-			m.focus = (m.focus + delta + len(m.fields)) % len(m.fields)
+			m.focus = (m.focus + delta + m.fieldCount()) % m.fieldCount()
 			return m, m.fields[m.focus].Focus()
 		}
 	}
@@ -361,10 +378,13 @@ func (m *providerDialogCmp) contentWidth() int {
 	return max(12, min(72, m.width-8))
 }
 func (m *providerDialogCmp) View() string {
+	if m.screen == "settings" || m.screen == "setting" || m.screen == "effective" || m.screen == "presets" {
+		return m.experienceView()
+	}
 	t := theme.CurrentTheme()
 	width := m.contentWidth()
 	base := styles.BaseStyle().Width(width)
-	line := func(s string) string { return base.Render(ansi.Truncate(s, width, "…")) }
+	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), width, "…")) }
 	title := "Connections and preferences"
 	if m.screen == "provider" {
 		title = "Configure provider"
@@ -372,7 +392,7 @@ func (m *providerDialogCmp) View() string {
 	if m.screen == "preferences" {
 		title = "Preferences"
 	}
-	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(title)}
+	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(interfaceCopy(title))}
 	if m.screen == "list" {
 		if len(m.rows) == 0 {
 			lines = append(lines, line("No connections yet. Press N to add Ollama or another provider."))
@@ -399,7 +419,7 @@ func (m *providerDialogCmp) View() string {
 		// Keep the focused field visible on small terminals; labels remain attached.
 		count := m.formRows()
 		start := max(0, m.focus-count+1)
-		for i := start; i < min(len(m.fields), start+count); i++ {
+		for i := start; i < min(m.fieldCount(), start+count); i++ {
 			label := m.labels[i]
 			if i == m.focus {
 				label = "› " + label
@@ -410,7 +430,7 @@ func (m *providerDialogCmp) View() string {
 		}
 		hint := "Tab/↑↓ fields · Ctrl+S save · Esc back"
 		if m.screen == "provider" {
-			hint = "Tab fields · Ctrl+T test · Ctrl+S save · Esc back"
+			hint = config.Text("Ctrl+A avançado · Ctrl+T catálogo · Ctrl+S salvar", "Ctrl+A advanced · Ctrl+T metadata · Ctrl+S save")
 		}
 		lines = append(lines, line(hint))
 	}
@@ -433,7 +453,19 @@ func (m *providerDialogCmp) listRows() int {
 }
 func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {
-		return len(m.fields)
+		return m.fieldCount()
 	}
-	return max(1, min(len(m.fields), (m.height-8)/2))
+	return max(1, min(m.fieldCount(), (m.height-8)/2))
+}
+
+func (m *providerDialogCmp) fieldCount() int {
+	if m.screen == "provider" && !m.advanced {
+		return min(5, len(m.fields))
+	}
+	return len(m.fields)
+}
+
+func (m *providerDialogCmp) Setup() {
+	path, _ := config.Paths(config.WorkingDirectory())
+	m.note = config.Text("Configuração · 1/3 · salve o provedor para escolher o modelo. Arquivo: ", "Setup · 1/3 · save a provider to choose a model. File: ") + path
 }

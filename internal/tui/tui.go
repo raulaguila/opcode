@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -98,6 +99,7 @@ var logsKeyReturnKey = key.NewBinding(
 
 type appModel struct {
 	width, height   int
+	unfocused       bool
 	currentPage     page.PageID
 	previousPage    page.PageID
 	pages           map[page.PageID]tea.Model
@@ -124,6 +126,7 @@ type appModel struct {
 
 	showModelDialog       bool
 	modelDialog           dialog.ModelDialog
+	setupActive           bool
 	showProviderDialog    bool
 	providerDialog        dialog.ProviderDialog
 	showIntegrationDialog bool
@@ -172,7 +175,7 @@ func (a appModel) Init() tea.Cmd {
 	// Check if we should show the init dialog
 	cmds = append(cmds, func() tea.Msg {
 		if a.app.CoderAgent != nil && a.app.CoderAgent.Model().ID == "" {
-			return dialog.OpenProviderDialogMsg{}
+			return dialog.OpenProviderDialogMsg{Setup: true}
 		}
 		shouldShow, err := config.ShouldShowInitDialog()
 		if err != nil {
@@ -197,17 +200,39 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
-	case dialog.ModelCatalogLoadedMsg:
+	case tea.FocusMsg:
+		a.unfocused = false
+		return a, nil
+	case tea.BlurMsg:
+		a.unfocused = true
+		return a, nil
+	case dialog.ModelCatalogLoadedMsg, dialog.ModelProbeResultMsg:
 		d, cmd := a.modelDialog.Update(msg)
 		a.modelDialog = d.(dialog.ModelDialog)
 		return a, cmd
-	case page.TerminalTickMsg, page.TerminalStartedMsg, page.WorkflowCommandMsg, page.WorkspaceCommandMsg, page.WorkspaceResultMsg, chat.ResponseActionsMsg, chat.SubmissionResultMsg:
+	case page.GitWorkspaceMsg, page.TerminalTickMsg, page.TerminalStartedMsg, page.WorkflowCommandMsg, page.WorkspaceCommandMsg, page.WorkspaceResultMsg, chat.ResponseActionsMsg, chat.SubmissionResultMsg:
 		if chatPage, ok := a.pages[page.ChatPage]; ok {
 			a.pages[page.ChatPage], cmd = chatPage.Update(msg)
 			return a, cmd
 		}
 		return a, nil
 	case tea.MouseMsg:
+		if a.showPermissions && a.permissions != nil {
+			col, row := a.dialogOrigin(a.permissions.View())
+			msg.X -= col
+			msg.Y -= row
+			updated, c := a.permissions.Update(msg)
+			a.permissions = updated.(dialog.PermissionDialogCmp)
+			return a, c
+		}
+		if a.showHelp && a.help != nil {
+			col, row := a.dialogOrigin(a.help.View())
+			msg.X -= col
+			msg.Y -= row
+			updated, c := a.help.Update(msg)
+			a.help = updated.(dialog.HelpCmp)
+			return a, c
+		}
 		// Capturing the wheel must not scroll the conversation underneath a
 		// modal dialog. The model picker handles its own mouse navigation.
 		if a.showPermissions || a.showHelp || a.showQuit ||
@@ -357,7 +382,9 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Permission
 	case pubsub.Event[permission.PermissionRequest]:
 		a.showPermissions = true
-		return a, a.permissions.SetPermissions(msg.Payload)
+		activity, activityCmd := a.pages[page.ChatPage].Update(page.ActivityMsg{SessionID: msg.Payload.SessionID, State: config.Text("Aguardando aprovação", "Waiting for approval")})
+		a.pages[page.ChatPage] = activity
+		return a, tea.Batch(a.permissions.SetPermissions(msg.Payload), activityCmd, a.notify())
 	case dialog.PermissionResponseMsg:
 		var cmd tea.Cmd
 		switch msg.Action {
@@ -369,7 +396,9 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.app.Permissions.Deny(msg.Permission)
 		}
 		a.showPermissions = false
-		return a, cmd
+		activity, activityCmd := a.pages[page.ChatPage].Update(page.ActivityMsg{SessionID: msg.Permission.SessionID, State: config.Text("Executando operação", "Running operation")})
+		a.pages[page.ChatPage] = activity
+		return a, tea.Batch(cmd, activityCmd)
 
 	case page.PageChangeMsg:
 		return a, a.moveToPage(msg.ID)
@@ -402,6 +431,14 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case pubsub.Event[agent.AgentEvent]:
 		payload := msg.Payload
+		if p, ok := a.pages[page.ChatPage]; ok && payload.Message.SessionID != "" {
+			updated, c := p.Update(page.ActivityMsg{SessionID: payload.Message.SessionID, State: page.ActivityForMessage(payload.Message)})
+			a.pages[page.ChatPage] = updated
+			cmds = append(cmds, c)
+		}
+		if payload.Done && payload.Type == agent.AgentEventTypeResponse {
+			cmds = append(cmds, a.notify())
+		}
 		if payload.Type == agent.AgentEventTypeInstructions {
 			if payload.SessionID == a.selectedSession.ID {
 				return a, util.ReportInfo(payload.Progress)
@@ -414,12 +451,12 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if id == "" {
 				id = a.selectedSession.ID
 			}
-			p, pcmd := a.pages[page.ChatPage].Update(page.AgentOutcomeMsg{SessionID: id, Error: payload.Error, Done: payload.Done})
+			p, pcmd := a.pages[page.ChatPage].Update(page.AgentOutcomeMsg{SessionID: id, Error: payload.Error, Done: payload.Done, Outcome: payload.Outcome})
 			a.pages[page.ChatPage] = p
 			return a, tea.Batch(pcmd, util.ReportError(payload.Error))
 		}
 		if payload.Done {
-			p, pcmd := a.pages[page.ChatPage].Update(page.AgentOutcomeMsg{SessionID: agentEventSession(payload, a.selectedSession.ID), Done: true})
+			p, pcmd := a.pages[page.ChatPage].Update(page.AgentOutcomeMsg{SessionID: agentEventSession(payload, a.selectedSession.ID), Done: true, Outcome: payload.Outcome})
 			a.pages[page.ChatPage] = p
 			cmds = append(cmds, pcmd)
 		}
@@ -428,7 +465,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if payload.Done && payload.Type == agent.AgentEventTypeSummarize {
 			a.isCompacting = false
-			return a, util.ReportInfo("Session summarization complete")
+			return a, util.ReportInfo(config.Text("Resumo da conversa concluído", "Session summarization complete"))
 		} else if payload.Done && payload.Type == agent.AgentEventTypeResponse && a.selectedSession.ID != "" {
 			model := a.app.CoderAgent.Model()
 			contextWindow := model.ContextWindow
@@ -447,7 +484,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dialog.ThemeChangedMsg:
 		a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(msg)
 		a.showThemeDialog = false
-		return a, tea.Batch(cmd, util.ReportInfo("Theme changed to: "+msg.ThemeName))
+		return a, tea.Batch(cmd, util.ReportInfo(config.Text("Tema alterado para: ", "Theme changed to: ")+msg.ThemeName))
 
 	case dialog.CloseModelDialogMsg:
 		a.modelDialog.Close()
@@ -466,7 +503,11 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.modelDialog.Close()
 		a.showModelDialog = false
 
-		return a, util.ReportInfo(fmt.Sprintf("Model changed to %s", model.Name))
+		if a.setupActive {
+			a.setupActive = false
+			return a, tea.Batch(util.ReportInfo(fmt.Sprintf(config.Text("Modelo alterado para %s", "Model changed to %s"), model.Name)), util.CmdHandler(page.WorkspaceCommandMsg{Command: "setup"}))
+		}
+		return a, util.ReportInfo(fmt.Sprintf(config.Text("Modelo alterado para %s", "Model changed to %s"), model.Name))
 
 	case dialog.ShowInitDialogMsg:
 		a.showInitDialog = msg.Show && !a.showProviderDialog && !a.showIntegrationDialog && a.app.CoderAgent != nil && a.app.CoderAgent.Model().ID != ""
@@ -538,7 +579,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Command.Handler != nil {
 			return a, msg.Command.Handler(msg.Command)
 		}
-		return a, util.ReportInfo("Command selected: " + msg.Command.Title)
+		return a, util.ReportInfo(config.Text("Comando selecionado: ", "Command selected: ") + msg.Command.Title)
 
 	case dialog.ShowMultiArgumentsDialogMsg:
 		// Show multi-arguments dialog
@@ -609,13 +650,18 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Modal shortcuts belong to the focused dialog. In particular Ctrl+H
 		// shows archived sessions and Ctrl+F filters favorite models.
+		if a.showHelp && msg.String() != "ctrl+c" && msg.String() != "esc" && !key.Matches(msg, helpEsc) && !key.Matches(msg, keys.Help) {
+			updated, c := a.help.Update(msg)
+			a.help = updated.(dialog.HelpCmp)
+			return a, c
+		}
 		if msg.String() != "ctrl+c" && !a.showPermissions && !a.showQuit && !a.showHelp {
 			if a.showSessionDialog {
 				updated, c := a.sessionDialog.Update(msg)
 				a.sessionDialog = updated.(dialog.SessionDialog)
 				return a, c
 			}
-			if a.showModelDialog && msg.String() != "ctrl+o" {
+			if a.showModelDialog && msg.String() != config.Shortcut("models") {
 				updated, c := a.modelDialog.Update(msg)
 				a.modelDialog = updated.(dialog.ModelDialog)
 				return a, c
@@ -653,23 +699,23 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.showMultiArgumentsDialog = false
 			}
 			return a, nil
-		case key.Matches(msg, keys.SwitchSession):
+		case msg.String() == config.Shortcut("sessions"):
 			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showCommandDialog {
 				return a, a.openSessions()
 			}
 			return a, nil
-		case key.Matches(msg, keys.Commands):
+		case msg.String() == config.Shortcut("commands"):
 			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showThemeDialog && !a.showFilepicker {
 				// Show commands dialog
 				if len(a.commands) == 0 {
-					return a, util.ReportWarn("No commands available")
+					return a, util.ReportWarn(config.Text("Nenhum comando disponível", "No commands available"))
 				}
 				a.commandDialog.SetCommands(a.commands)
 				a.showCommandDialog = true
 				return a, nil
 			}
 			return a, nil
-		case key.Matches(msg, keys.Models):
+		case msg.String() == config.Shortcut("models"):
 			if a.showModelDialog {
 				a.modelDialog.Close()
 				a.showModelDialog = false
@@ -680,7 +726,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, a.modelDialog.Open()
 			}
 			return a, nil
-		case key.Matches(msg, keys.SwitchTheme):
+		case msg.String() == config.Shortcut("theme"):
 			if !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog {
 				// Show theme switcher dialog
 				a.showThemeDialog = true
@@ -732,7 +778,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.showHelp = false
 				return a, nil
 			}
-		case key.Matches(msg, keys.Filepicker):
+		case msg.String() == config.Shortcut("files"):
 			a.showFilepicker = !a.showFilepicker
 			a.filepicker.ToggleFilepicker(a.showFilepicker)
 			return a, nil
@@ -858,7 +904,7 @@ func (a *appModel) findCommand(id string) (dialog.Command, bool) {
 func (a *appModel) moveToPage(pageID page.PageID) tea.Cmd {
 	if a.app.CoderAgent.IsBusy() {
 		// For now we don't move to any page if the agent is busy
-		return util.ReportWarn("Agent is busy, please wait...")
+		return util.ReportWarn(config.Text("O agente está trabalhando; aguarde…", "Agent is busy, please wait..."))
 	}
 
 	var cmds []tea.Cmd
@@ -943,7 +989,7 @@ func (a appModel) View() string {
 	}
 
 	if a.showHelp {
-		bindings := layout.KeyMapToSlice(keys)
+		bindings := layout.KeyMapToSlice(configuredKeys())
 		if p, ok := a.pages[a.currentPage].(layout.Bindings); ok {
 			bindings = append(bindings, p.BindingKeys()...)
 		}
@@ -1127,6 +1173,21 @@ func New(app *app.App, initial ...session.Session) tea.Model {
 	}
 	model.providerDialog = dialog.NewProviderDialogCmp(guard)
 	model.integrationDialog = dialog.NewIntegrationDialogCmp(app.ProbeIntegration, guard)
+	if d, ok := model.integrationDialog.(interface{ SetOAuthHandler(dialog.OAuthHandler) }); ok {
+		d.SetOAuthHandler(func(ctx context.Context, action, name string, notify func(string) error) (string, error) {
+			switch action {
+			case "login":
+				err := agent.LoginMCPOAuth(ctx, config.Get().MCPServers[name], notify)
+				return config.Text("Autenticação concluída.", "Authentication completed."), err
+			case "logout":
+				err := agent.LogoutMCPOAuth(ctx, config.Get().MCPServers[name])
+				return config.Text("Credenciais removidas.", "Credentials removed."), err
+			default:
+				connected, err := agent.MCPOAuthStatus(ctx, config.Get().MCPServers[name])
+				return fmt.Sprintf("OAuth: %t", connected), err
+			}
+		})
+	}
 	for _, entry := range commands.Builtins {
 		id := strings.TrimSpace(entry.ID)
 		if id == "mode" || id == "plan" || id == "task" || id == "resume" || id == "compact" || id == "skill" {
@@ -1212,4 +1273,25 @@ func agentEventSession(event agent.AgentEvent, fallback string) string {
 		return event.Message.SessionID
 	}
 	return fallback
+}
+
+func configuredKeys() keyMap {
+	k := keys
+	k.Commands.SetKeys(config.Shortcut("commands"))
+	k.Commands.SetHelp(config.Shortcut("commands"), "commands")
+	k.Models.SetKeys(config.Shortcut("models"))
+	k.Models.SetHelp(config.Shortcut("models"), "model selection")
+	k.SwitchSession.SetKeys(config.Shortcut("sessions"))
+	k.SwitchSession.SetHelp(config.Shortcut("sessions"), "switch session")
+	k.Filepicker.SetKeys(config.Shortcut("files"))
+	k.Filepicker.SetHelp(config.Shortcut("files"), "select files to upload")
+	k.SwitchTheme.SetKeys(config.Shortcut("theme"))
+	k.SwitchTheme.SetHelp(config.Shortcut("theme"), "switch theme")
+	return k
+}
+func (a appModel) notify() tea.Cmd {
+	if !a.unfocused || config.Get() == nil || config.Get().TUI.Notifications != "bell" {
+		return nil
+	}
+	return func() tea.Msg { _, _ = os.Stderr.WriteString("\a"); return nil }
 }

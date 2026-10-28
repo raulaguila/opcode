@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/raulaguila/opcode/internal/config"
 
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -95,7 +96,7 @@ func (m InitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m InitDialogCmp) View() string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
-	
+
 	// Calculate width needed for content
 	maxWidth := 60 // Width for explanation text
 
@@ -104,19 +105,19 @@ func (m InitDialogCmp) View() string {
 		Bold(true).
 		Width(maxWidth).
 		Padding(0, 1).
-		Render("Initialize Project")
+		Render(config.Text("Inicializar projeto", "Initialize Project"))
 
 	explanation := baseStyle.
 		Foreground(t.Text()).
 		Width(maxWidth).
 		Padding(0, 1).
-		Render("Initialization generates a new Opcode.md file that contains information about your codebase, this file serves as memory for each project, you can freely add to it to help the agents be better at their job.")
+		Render(config.Text("A inicialização cria Opcode.md com informações do projeto. Você pode editar esse arquivo para orientar o agente.", "Initialization generates a new Opcode.md file that contains information about your codebase, this file serves as memory for each project, you can freely add to it to help the agents be better at their job."))
 
 	question := baseStyle.
 		Foreground(t.Text()).
 		Width(maxWidth).
 		Padding(1, 1).
-		Render("Would you like to initialize this project?")
+		Render(config.Text("Deseja inicializar este projeto?", "Would you like to initialize this project?"))
 
 	maxWidth = min(maxWidth, m.width-10)
 	yesStyle := baseStyle
@@ -140,8 +141,8 @@ func (m InitDialogCmp) View() string {
 			Foreground(t.Primary())
 	}
 
-	yes := yesStyle.Padding(0, 3).Render("Yes")
-	no := noStyle.Padding(0, 3).Render("No")
+	yes := yesStyle.Padding(0, 3).Render(config.Text("Sim", "Yes"))
+	no := noStyle.Padding(0, 3).Render(config.Text("Não", "No"))
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yes, baseStyle.Render("  "), no)
 	buttons = baseStyle.

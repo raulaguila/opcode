@@ -83,18 +83,44 @@ func Environment() []string {
 }
 
 func Command(ctx context.Context, cwd, command string) (*exec.Cmd, error) {
-	return commandProcess(ctx, cwd, command, false, false)
+	return commandProcess(ctx, cwd, command, false, false, false)
 }
 func GitCommand(ctx context.Context, cwd, command string) (*exec.Cmd, error) {
-	return commandProcess(ctx, cwd, command, true, false)
+	return commandProcess(ctx, cwd, command, true, false, false)
+}
+
+// WorktreeCommand accepts only typed, bounded worktree mutations. Callers must
+// obtain approval for these exact arguments before running the returned command.
+// This capability is not available to arbitrary shell commands.
+func WorktreeCommand(ctx context.Context, cwd string, args []string) (*exec.Cmd, error) {
+	valid := len(args) == 5 && args[0] == "add" && args[1] == "--detach" && args[2] == "--" && args[4] == "HEAD"
+	valid = valid || len(args) == 3 && args[0] == "remove" && args[1] == "--"
+	if !valid {
+		return nil, fmt.Errorf("only managed detached worktree add/remove are supported")
+	}
+	path := args[len(args)-1]
+	if args[0] == "add" {
+		path = args[3]
+	}
+	rel, err := filepath.Rel(filepath.Join(cwd, ".opcode-worktrees"), path)
+	if err != nil || rel == "." || filepath.Dir(rel) != "." || strings.HasPrefix(rel, ".") || strings.ContainsAny(rel, "/\\\n\r") {
+		return nil, fmt.Errorf("worktree path must be a named direct child of .opcode-worktrees")
+	}
+	argv := []string{"git", "--no-pager", "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.file.allow=never", "worktree"}
+	argv = append(argv, args...)
+	quoted := make([]string, len(argv))
+	for i, arg := range argv {
+		quoted[i] = "'" + strings.ReplaceAll(arg, "'", "'\\''") + "'"
+	}
+	return commandProcess(ctx, cwd, strings.Join(quoted, " "), false, false, true)
 }
 
 // PTYCommand retains the same sandbox and environment. The PTY starter creates
 // a separate session with its own controlling terminal before executing it.
 func PTYCommand(ctx context.Context, cwd, command string) (*exec.Cmd, error) {
-	return commandProcess(ctx, cwd, command, false, true)
+	return commandProcess(ctx, cwd, command, false, true, false)
 }
-func commandProcess(ctx context.Context, cwd, command string, readGit, interactive bool) (*exec.Cmd, error) {
+func commandProcess(ctx context.Context, cwd, command string, readGit, interactive, writeGit bool) (*exec.Cmd, error) {
 	cfg := config.Get()
 	path := "/bin/bash"
 	args := []string{}
@@ -161,8 +187,12 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 				return nil
 			}
 			base := strings.ToLower(d.Name())
-			if base == ".git" && readGit && filepath.Dir(name) == cwd {
-				wrapped = append(wrapped, "--ro-bind", name, name)
+			if base == ".git" && (readGit || writeGit) && filepath.Dir(name) == cwd {
+				bind := "--ro-bind"
+				if writeGit {
+					bind = "--bind"
+				}
+				wrapped = append(wrapped, bind, name, name)
 				if d.IsDir() {
 					return filepath.SkipDir
 				}
@@ -190,6 +220,12 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 	return cmd, nil
 }
 func SensitivePath(path string) bool {
+	if directory, err := config.AuthDirectory(); err == nil {
+		candidate, _ := filepath.Abs(path)
+		if relative, err := filepath.Rel(directory, candidate); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
+			return true
+		}
+	}
 	if config.LegacySensitivePath(path) {
 		return true
 	}

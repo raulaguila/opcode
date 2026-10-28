@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/pressly/goose/v3"
 	"github.com/raulaguila/opcode/internal/db"
 	"github.com/raulaguila/opcode/internal/workflow"
-	"github.com/pressly/goose/v3"
 	"github.com/stretchr/testify/require"
 )
 
@@ -110,4 +110,26 @@ func TestPlanBoundsAndIndependentValidationReceipts(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.UpdatePlan(ctx, "s", "goal", []workflow.Step{{Title: "a", Status: "pending"}}, []string{"criterion"}, nil)
 	require.ErrorContains(t, err, "ask")
+}
+
+func TestCompletionBaselineNoChangeReasonAndResumption(t *testing.T) {
+	ctx := context.Background()
+	store := workflow.New(nil, t.TempDir(), workflow.Execute)
+	_, err := store.Observe(ctx, "s", "baseline")
+	require.NoError(t, err)
+	_, err = store.BeginTurn(ctx, "s", true)
+	require.NoError(t, err)
+	_, err = store.Finish(ctx, "s", "completed", "done", nil)
+	require.ErrorContains(t, err, "no file changes")
+	_, err = store.Finish(ctx, "s", "partial", "pending", nil)
+	require.NoError(t, err)
+	resumed, err := store.BeginTurn(ctx, "s", false, true)
+	require.NoError(t, err)
+	require.True(t, resumed.RequiresChanges)
+	_, err = store.FinishWithReason(ctx, "s", "completed", "already correct", "Existing implementation matches the request", nil)
+	require.NoError(t, err)
+	next, err := store.BeginTurn(ctx, "s", false)
+	require.NoError(t, err)
+	require.False(t, next.RequiresChanges)
+	require.Empty(t, next.NoChangeReason)
 }

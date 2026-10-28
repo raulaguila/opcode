@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/app"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
@@ -115,7 +116,7 @@ func TestClipboardFailureKeepsSelectableTextAndRecoveryPersists(t *testing.T) {
 	p.Update(AgentOutcomeMsg{SessionID: "s", Error: errors.New("connection failed")})
 	require.Contains(t, p.composerPanel(), "/retry")
 	p.Update(AgentOutcomeMsg{SessionID: "s", Done: true})
-	require.Contains(t, p.composerPanel(), "retomada")
+	require.Contains(t, p.composerPanel(), config.Text("Execução retomada", "Run resumed"))
 	// The plan/recovery panel is above the editor, below the conversation.
 	require.Contains(t, p.insertComposerPanel("conversation\ncomposer"), "/retry")
 }

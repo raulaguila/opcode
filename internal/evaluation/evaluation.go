@@ -47,21 +47,32 @@ type CriterionResult struct {
 	Passed *bool  `json:"passed"`
 }
 type CaseResult struct {
-	ID        string            `json:"id"`
-	Status    string            `json:"status"`
-	Criteria  []CriterionResult `json:"criteria"`
-	Error     string            `json:"error,omitempty"`
-	Model     string            `json:"model,omitempty"`
-	ToolCalls int               `json:"tool_calls,omitempty"`
+	Trial                 int               `json:"trial,omitempty"`
+	DurationMS            int64             `json:"duration_ms,omitempty"`
+	ID                    string            `json:"id"`
+	Status                string            `json:"status"`
+	Criteria              []CriterionResult `json:"criteria"`
+	Error                 string            `json:"error,omitempty"`
+	Model                 string            `json:"model,omitempty"`
+	ToolCalls             int               `json:"tool_calls,omitempty"`
+	TaskStatus            string            `json:"task_status,omitempty"`
+	RequiresChanges       bool              `json:"requires_changes,omitempty"`
+	ChangesVerified       bool              `json:"changes_verified,omitempty"`
+	NoChangeJustification bool              `json:"no_change_justification,omitempty"`
+	ToolNames             []string          `json:"tool_names,omitempty"`
 }
 type Report struct {
-	Version     int          `json:"version"`
-	Mode        string       `json:"mode"`
-	SuiteSHA256 string       `json:"suite_sha256"`
-	Cases       []CaseResult `json:"cases"`
-	Notice      string       `json:"notice"`
+	Repeats       int          `json:"repeats,omitempty"`
+	SelectedCases []string     `json:"selected_cases,omitempty"`
+	Version       int          `json:"version"`
+	Mode          string       `json:"mode"`
+	SuiteSHA256   string       `json:"suite_sha256"`
+	Cases         []CaseResult `json:"cases"`
+	Notice        string       `json:"notice"`
 }
 type Options struct {
+	Repeats        int
+	CaseIDs        []string
 	Live           bool
 	AllowExecution bool
 	ProviderConfig string
@@ -214,8 +225,35 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 	if err := suite.Validate(); err != nil {
 		return Report{}, err
 	}
+	repeats := options.Repeats
+	if repeats == 0 {
+		repeats = 1
+	}
+	if repeats < 1 || repeats > 3 {
+		return Report{}, fmt.Errorf("repeat must be 1–3")
+	}
+	if !options.Live && repeats != 1 {
+		return Report{}, fmt.Errorf("repeat requires --live; offline validates fixtures once")
+	}
+	if len(options.CaseIDs) > 0 {
+		selected := map[string]bool{}
+		for _, id := range options.CaseIDs {
+			selected[id] = true
+		}
+		var cases []Case
+		for _, c := range suite.Cases {
+			if selected[c.ID] {
+				cases = append(cases, c)
+				delete(selected, c.ID)
+			}
+		}
+		if len(selected) > 0 {
+			return Report{}, fmt.Errorf("unknown evaluation case")
+		}
+		suite.Cases = cases
+	}
 	hash := sha256.Sum256(raw)
-	report := Report{Version: 1, Mode: "offline_fixture_validation", SuiteSHA256: hex.EncodeToString(hash[:]), Notice: "Offline only validates fixture contracts and safe preparation. Null criteria were not run; this is not an agent quality score."}
+	report := Report{Repeats: repeats, SelectedCases: options.CaseIDs, Version: 1, Mode: "offline_fixture_validation", SuiteSHA256: hex.EncodeToString(hash[:]), Notice: "Offline only validates fixture contracts and safe preparation. Null criteria were not run; this is not an agent quality score."}
 	if options.Live {
 		if options.ProviderConfig == "" {
 			return Report{}, fmt.Errorf("--live requires --provider-config; providers are never enabled implicitly")
@@ -231,32 +269,41 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 		report.Mode = "live_provider"
 		report.Notice = "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
 	}
-	for _, c := range suite.Cases {
-		if err := ctx.Err(); err != nil {
-			return report, err
+	for trial := 1; trial <= repeats; trial++ {
+		for _, c := range suite.Cases {
+			started := time.Now()
+			if err := ctx.Err(); err != nil {
+				return report, err
+			}
+			result := CaseResult{ID: c.ID, Status: "validated"}
+			for _, criterion := range c.Criteria {
+				result.Criteria = append(result.Criteria, CriterionResult{Kind: criterion.Kind, Path: criterion.Path})
+			}
+			if options.Live && c.Mode == "execute" && !options.AllowExecution {
+				return report, fmt.Errorf("case %s requires --allow-execution", c.ID)
+			}
+			base, workspace, err := Prepare(c)
+			if err != nil {
+				return report, err
+			}
+			if options.Live {
+				result, err = runLive(ctx, base, workspace, c, options)
+			}
+			removeErr := os.RemoveAll(base)
+			if err != nil {
+				return report, err
+			}
+			if removeErr != nil {
+				return report, removeErr
+			}
+			if options.Live {
+				result.DurationMS = time.Since(started).Milliseconds()
+				if repeats > 1 {
+					result.Trial = trial
+				}
+			}
+			report.Cases = append(report.Cases, result)
 		}
-		result := CaseResult{ID: c.ID, Status: "validated"}
-		for _, criterion := range c.Criteria {
-			result.Criteria = append(result.Criteria, CriterionResult{Kind: criterion.Kind, Path: criterion.Path})
-		}
-		if options.Live && c.Mode == "execute" && !options.AllowExecution {
-			return report, fmt.Errorf("case %s requires --allow-execution", c.ID)
-		}
-		base, workspace, err := Prepare(c)
-		if err != nil {
-			return report, err
-		}
-		if options.Live {
-			result, err = runLive(ctx, base, workspace, c, options)
-		}
-		removeErr := os.RemoveAll(base)
-		if err != nil {
-			return report, err
-		}
-		if removeErr != nil {
-			return report, removeErr
-		}
-		report.Cases = append(report.Cases, result)
 	}
 	return report, nil
 }

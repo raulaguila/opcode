@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
@@ -68,11 +69,11 @@ type DeleteAttachmentKeyMaps struct {
 var editorMaps = EditorKeyMaps{
 	Send: key.NewBinding(
 		key.WithKeys("enter", "ctrl+s"),
-		key.WithHelp("enter", "send message"),
+		key.WithHelp("enter", "enviar / send"),
 	),
 	OpenEditor: key.NewBinding(
 		key.WithKeys("ctrl+e"),
-		key.WithHelp("ctrl+e", "open editor"),
+		key.WithHelp("ctrl+e", "editor"),
 	),
 }
 
@@ -366,7 +367,7 @@ func (m *editorCmp) View() string {
 	if len(m.attachments) == 0 {
 		return lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"), m.textarea.View())
 	}
-	m.textarea.SetHeight(m.height - 1)
+	m.textarea.SetHeight(max(1, m.height-m.attachmentRows(m.width)))
 	return lipgloss.JoinVertical(lipgloss.Top,
 		m.attachmentsContent(),
 		lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"),
@@ -377,14 +378,13 @@ func (m *editorCmp) View() string {
 func (m *editorCmp) SetSize(width, height int) tea.Cmd {
 	m.width = width
 	m.height = height
-	m.textarea.SetWidth(width - 3) // account for the prompt and padding right
-	m.textarea.SetHeight(height)
-	m.textarea.SetWidth(width)
+	m.textarea.SetWidth(max(1, width-2))
+	m.textarea.SetHeight(max(1, height-m.attachmentRows(width)))
 	return nil
 }
 
 func (m *editorCmp) GetSize() (int, int) {
-	return m.textarea.Width(), m.textarea.Height()
+	return m.width, m.height
 }
 
 func (m *editorCmp) attachmentsContent() string {
@@ -407,7 +407,7 @@ func (m *editorCmp) attachmentsContent() string {
 		styledAttachments = append(styledAttachments, attachmentStyles.Render(filename))
 	}
 	content := lipgloss.JoinHorizontal(lipgloss.Left, styledAttachments...)
-	return content
+	return ansi.Hardwrap(content, max(1, m.width), true)
 }
 
 func (m *editorCmp) BindingKeys() []key.Binding {
@@ -455,4 +455,27 @@ func newEditorWithDraftStorage(app *app.App, root, path string) *editorCmp {
 	editor := &editorCmp{app: app, textarea: CreateTextArea(nil), drafts: map[string]editorDraft{}, draftRoot: root, draftPath: path}
 	editor.draftInitError = editor.restoreSessionDraft()
 	return editor
+}
+
+// DesiredHeight includes attachment rows and the surrounding editor border.
+func (m *editorCmp) DesiredHeight(width, available int) int {
+	width = max(1, width-3)
+	rows := 0
+	for _, line := range strings.Split(m.textarea.Value(), "\n") {
+		rows += max(1, (ansi.StringWidth(line)+width-1)/width)
+	}
+	rows = min(8, rows)
+	if len(m.attachments) > 0 {
+		rows += m.attachmentRows(width)
+	}
+	return min(max(2, rows+1), max(2, available/3))
+}
+
+func (m *editorCmp) attachmentRows(width int) int {
+	if len(m.attachments) == 0 {
+		return 0
+	}
+	content := strings.ReplaceAll(m.attachmentsContent(), "\n", "")
+	content = ansi.Hardwrap(content, max(1, width), true)
+	return max(1, strings.Count(content, "\n")+1)
 }

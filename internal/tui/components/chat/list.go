@@ -10,7 +10,9 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
@@ -355,32 +357,11 @@ func (m *messagesCmp) working() string {
 }
 
 func (m *messagesCmp) help() string {
-	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
-
-	text := ""
-
+	text := config.Text("Enter envia · \\ + Enter nova linha · / comandos · @ arquivos", "Enter sends · \\ + Enter new line · / commands · @ files")
 	if m.app.CoderAgent.IsBusy() {
-		text += lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			baseStyle.Foreground(t.TextMuted()).Bold(true).Render("press "),
-			baseStyle.Foreground(t.Text()).Bold(true).Render("esc"),
-			baseStyle.Foreground(t.TextMuted()).Bold(true).Render(" cancel • enter send instructions • ctrl+p terminal"),
-		)
-	} else {
-		text += lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			baseStyle.Foreground(t.TextMuted()).Bold(true).Render("press "),
-			baseStyle.Foreground(t.Text()).Bold(true).Render("enter"),
-			baseStyle.Foreground(t.TextMuted()).Bold(true).Render(" to send the message,"),
-			baseStyle.Foreground(t.TextMuted()).Bold(true).Render(" write"),
-			baseStyle.Foreground(t.Text()).Bold(true).Render(" \\"),
-			baseStyle.Foreground(t.TextMuted()).Bold(true).Render(" and enter to add a new line"),
-		)
+		text = config.Text("Esc cancela · Enter envia instrução · ", "Esc cancels · Enter sends instructions · ") + config.Shortcut("terminal") + " terminal"
 	}
-	return baseStyle.
-		Width(m.width).
-		Render(text)
+	return styles.BaseStyle().Foreground(theme.CurrentTheme().TextMuted()).Width(m.width).Render(ansi.Truncate(text, max(1, m.width), "…"))
 }
 
 func (m *messagesCmp) initialScreen() string {

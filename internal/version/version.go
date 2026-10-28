@@ -1,25 +1,45 @@
 package version
 
-import "runtime/debug"
+import (
+	"runtime/debug"
+	"strings"
+)
 
-// Build-time parameters set via -ldflags
-var Version = "unknown"
+// Release builds replace Version via -ldflags. Source builds remain identifiable.
+const developmentVersion = "0.2.0-dev"
 
-// A user may install pug using `go install github.com/raulaguila/opcode@latest`.
-// without -ldflags, in which case the version above is unset. As a workaround
-// we use the embedded build version that *is* set when using `go install` (and
-// is only set for `go install` and not for `go build`).
+var Version = developmentVersion
+
+func buildVersion(configured string, info *debug.BuildInfo) string {
+	if configured != developmentVersion {
+		return configured
+	}
+	if info == nil {
+		return developmentVersion
+	}
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	revision, dirty := "", false
+	for _, setting := range info.Settings {
+		switch setting.Key {
+		case "vcs.revision":
+			revision = setting.Value
+		case "vcs.modified":
+			dirty = setting.Value == "true"
+		}
+	}
+	result := developmentVersion
+	if len(revision) >= 12 && strings.Trim(revision, "0123456789abcdef") == "" {
+		result += "." + revision[:12]
+	}
+	if dirty {
+		result += ".dirty"
+	}
+	return result
+}
 func init() {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		// < go v1.18
-		return
+	if info, ok := debug.ReadBuildInfo(); ok {
+		Version = buildVersion(Version, info)
 	}
-	mainVersion := info.Main.Version
-	if mainVersion == "" || mainVersion == "(devel)" {
-		// bin not built using `go install`
-		return
-	}
-	// bin built using `go install`
-	Version = mainVersion
 }

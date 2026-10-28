@@ -91,8 +91,16 @@ func (p *chatPage) terminalVisible() bool {
 
 func (p *chatPage) resizeContent() tea.Cmd {
 	height := p.height - p.composerPanelHeight()
+	if p.height >= 12 {
+		height--
+	}
 	if !p.terminal.focused && p.terminalVisible() {
 		height -= 6
+	}
+	if adaptive, ok := p.composer.(interface{ DesiredHeight(int, int) int }); ok {
+		if split, ok := p.layout.(interface{ SetBottomHeight(int) }); ok {
+			split.SetBottomHeight(adaptive.DesiredHeight(p.width, height))
+		}
 	}
 	return p.layout.SetSize(max(0, p.width), max(0, height))
 }

@@ -2,6 +2,8 @@ package permission
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -25,13 +27,14 @@ type CreatePermissionRequest struct {
 }
 
 type PermissionRequest struct {
-	ID          string `json:"id"`
-	SessionID   string `json:"session_id"`
-	ToolName    string `json:"tool_name"`
-	Description string `json:"description"`
-	Action      string `json:"action"`
-	Params      any    `json:"params"`
-	Path        string `json:"path"`
+	ID            string `json:"id"`
+	SessionID     string `json:"session_id"`
+	ToolName      string `json:"tool_name"`
+	Description   string `json:"description"`
+	Action        string `json:"action"`
+	Params        any    `json:"params"`
+	Path          string `json:"path"`
+	parameterHash [32]byte
 }
 
 type Service interface {
@@ -111,6 +114,11 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 		Action:      opts.Action,
 		Params:      opts.Params,
 	}
+	encodedParams, err := json.Marshal(opts.Params)
+	if err != nil {
+		return false
+	}
+	permission.parameterHash = sha256.Sum256(encodedParams)
 
 	s.mu.Lock()
 	if slices.Contains(s.autoApproveSessions, opts.SessionID) {
@@ -118,7 +126,7 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 		return ctx.Err() == nil
 	}
 	for _, p := range s.sessionPermissions {
-		if p.ToolName == permission.ToolName && p.Action == permission.Action && p.SessionID == permission.SessionID && p.Path == permission.Path {
+		if p.ToolName == permission.ToolName && p.Action == permission.Action && p.SessionID == permission.SessionID && p.Path == permission.Path && p.parameterHash == permission.parameterHash {
 			s.mu.Unlock()
 			return ctx.Err() == nil
 		}

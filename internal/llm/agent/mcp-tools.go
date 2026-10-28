@@ -153,6 +153,22 @@ func newMCPClient(server config.MCPServer) (MCPClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	if server.OAuth != nil {
+		oauth, store, err := oauthClientConfig(server, "")
+		if err != nil {
+			return nil, err
+		}
+		if _, err := store.GetToken(context.Background()); err != nil {
+			return nil, fmt.Errorf("MCP OAuth login required: use opcode mcp login <server>")
+		}
+		if server.Type == config.MCPHTTP {
+			return client.NewOAuthStreamableHttpClient(server.URL, oauth, transport.WithHTTPHeaders(server.Headers), transport.WithHTTPBasicClient(oauth.HTTPClient))
+		}
+		if server.Type == config.MCPSse {
+			return client.NewOAuthSSEClient(server.URL, oauth, client.WithHeaders(server.Headers), client.WithHTTPClient(oauth.HTTPClient))
+		}
+		return nil, fmt.Errorf("OAuth requires HTTP or SSE transport")
+	}
 	switch server.Type {
 	case "", config.MCPStdio:
 		return client.NewClient(transport.NewStdioWithOptions(server.Command, server.Env, server.Args, transport.WithCommandFunc(func(ctx context.Context, command string, env, args []string) (*exec.Cmd, error) {

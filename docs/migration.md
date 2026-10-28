@@ -9,28 +9,47 @@ credenciais nem move configurações, históricos ou bancos SQLite.
 
 A busca global prefere os arquivos novos, nesta ordem:
 
-1. `~/.opcode.json`;
-2. `$XDG_CONFIG_HOME/opcode/.opcode.json`;
-3. `~/.config/opcode/.opcode.json`.
+1. `~/.opcode/config.json`;
+2. `~/.opcode.json`;
+3. `$XDG_CONFIG_HOME/opcode/.opcode.json`;
+4. `~/.config/opcode/.opcode.json`.
 
 Se nenhum existir, usa o equivalente anterior `.opencode.json`, nas pastas
 `opencode`. Um caminho de configuração fornecido explicitamente continua tendo
-precedência. No projeto, `.opcode.json` vence `.opencode.json`; somente um deles
-é carregado. A segurança e as extensões executáveis continuam vindo apenas da
+precedência. No projeto, `.opcode/config.json` vence `.opcode.json`, que vence
+`.opencode.json`; somente um deles é carregado. A segurança e as extensões executáveis continuam vindo apenas da
 configuração global, mesmo quando o projeto usa um arquivo antigo.
 
 Salvar uma opção existente atualiza seu arquivo original com escrita privada e
 atômica. Não cria outra cópia da chave. Referências `apiKeyEnv`, campos JSON
 independentes e números grandes desconhecidos são preservados. Uma configuração
 antiga inválida causa um erro; não é motivo para selecionar outro provedor
-silenciosamente. Para uma instalação nova sem arquivo, a configuração é salva
-em `~/.opcode.json`.
+silenciosamente.
+
+Na primeira inicialização normal sem configuração global compatível, a aplicação
+cria `~/.opcode/config.json` a partir de um template embutido. A pasta é criada
+com modo 0700 e o arquivo com 0600, quando suportados pelo sistema. O template
+inclui exemplos de provedores e preferências, sem chaves e sem escolher modelo;
+não faz consultas de rede. A publicação é atômica e não substitui um arquivo
+criado por outra instância. Configurações antigas não são copiadas nem movidas.
+Diagnósticos offline e execuções com configuração fornecida explicitamente não
+geram o template. Se um arquivo existente estiver inválido, o erro é apresentado
+e seu conteúdo permanece intacto.
+
+Para adotar o novo caminho manualmente, encerre a aplicação e mova o JSON global
+para `~/.opcode/config.json`, ou o JSON do projeto para `.opcode/config.json`.
+Não sobrescreva um destino existente: compare e combine os campos antes.
+O rollback de caminho consiste em mover esse mesmo JSON de volta, mantendo um
+único arquivo ativo. Não remova a pasta `.opcode`, que também pode conter dados.
 
 ## Histórico e SQLite
 
 Sem `data.directory` explícito:
 
-- uma pasta `.opcode` existente tem precedência;
+- uma pasta `.opcode` com banco existente tem precedência;
+- caso contrário, um banco existente em `.opencode` continua sendo usado, mesmo
+  que a pasta nova `.opcode` já contenha apenas `config.json`;
+- sem banco existente, uma pasta `.opcode` existente tem precedência;
 - caso contrário, uma pasta `.opencode` existente continua sendo usada;
 - se nenhuma existe, a aplicação usa `.opcode` no projeto.
 
@@ -82,3 +101,18 @@ confirmados em WAL enquanto a aplicação o conecta, sem criar `opcode.db`.
 go test -race ./internal/config ./internal/db ./internal/llm/provider \
   ./internal/llm/provider/integration ./internal/llm/prompt
 ```
+
+## Versão do JSON e manutenção explícita
+
+`schemaVersion: 1` identifica o formato atual; omissão permanece compatível.
+Versões futuras e tipos incorretos nos campos conhecidos são recusados sem
+regravar o arquivo. `opcode config validate` não exige modelo e não acessa rede;
+`config show --redacted` omite credenciais, URLs e campos arbitrários.
+
+`opcode config migrate [--file CAMINHO]` grava no próprio arquivo, preserva
+campos desconhecidos e números inteiros grandes e salva antes um backup exato
+0600 em `.opcode/config-backups` ao lado do JSON. Se o JSON já está em `.opcode`,
+usa sua subpasta `config-backups`. A área privada evita expor backups de chaves
+antigas às ferramentas. A migração atual só adiciona a versão; repetir é inócuo.
+Para rollback, restaure o backup no caminho original. Não altera configuração
+inválida, não segue symlinks e não move configurações legadas.

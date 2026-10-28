@@ -62,6 +62,15 @@ type briefTool struct{ tools.BaseTool }
 
 func (t briefTool) Info() tools.ToolInfo {
 	info := t.BaseTool.Info()
+	if info.Name == "update_plan" {
+		if _, simple := info.Parameters["steps_text"]; simple {
+			return info
+		}
+	}
+	if description, ok := conciseDescriptions[info.Name]; ok {
+		info.Description = description
+		return info
+	}
 	if len(info.Description) > 350 {
 		info.Description = info.Description[:350]
 	}
@@ -70,7 +79,7 @@ func (t briefTool) Info() tools.ToolInfo {
 
 func readOnlyTool(name string) bool {
 	switch name {
-	case "view", "ls", "glob", "grep", "symbols", "definition", "references", "diagnostics", "git_status", "git_diff", "git_log", "fetch", "sourcegraph", "get_task", "ask_user_question", "get_tools_catalog", "request_tools", "get_context_status", "compact_context", "search_conversation", "read_conversation", "save_finding", "list_findings", "get_skills_catalog", "get_project_map", "get_file_outline", "read_symbol", "get_artifact_info", "read_artifact", "search_artifact", "discover_checks", "get_validation_report", "lsp_call_hierarchy", "list_mcp_resources", "read_mcp_resource", "list_mcp_tools":
+	case "view", "ls", "glob", "grep", "symbols", "definition", "references", "diagnostics", "git_status", "git_diff", "git_log", "fetch", "sourcegraph", "get_task", "ask_user_question", "get_tools_catalog", "request_tools", "get_context_status", "compact_context", "explore_code", "recalibrate_context", "search_conversation", "read_conversation", "save_finding", "list_findings", "get_skills_catalog", "get_project_map", "get_file_outline", "read_symbol", "get_artifact_info", "read_artifact", "search_artifact", "discover_checks", "get_validation_report", "lsp_call_hierarchy", "list_mcp_resources", "read_mcp_resource", "list_mcp_tools", "search_code_index":
 		return true
 	}
 	return false
@@ -86,6 +95,14 @@ func modeAllowsTool(mode workflow.Mode, tool tools.BaseTool) bool {
 }
 func (a *agent) configureRun(run *generationRun, session string) error {
 	run.mode = workflow.Execute
+	run.provider = a.provider
+	if learned := learnedContext(run.provider.Model()); learned >= 4096 && learned < run.provider.Model().ContextWindow {
+		if controller, ok := run.provider.(provider.ContextWindowController); ok {
+			if next, err := controller.WithContextWindow(learned); err == nil {
+				run.provider = next
+			}
+		}
+	}
 	run.selected = map[string]bool{}
 	run.available = append([]tools.BaseTool(nil), a.tools...)
 	run.available = append(run.available, a.contextTools(run, session)...)
@@ -99,7 +116,17 @@ func (a *agent) configureRun(run *generationRun, session string) error {
 	if err != nil {
 		return err
 	}
-	run.mode = task.Mode
+	run.mode = task.EffectiveMode()
+	if task.Contract != nil {
+		if (task.Contract.Kind == "change" || task.Contract.Kind == "verify") && task.Mode != workflow.Execute {
+			return fmt.Errorf("task contract %s requires execute mode; use /mode execute or change /contract", task.Contract.Kind)
+		}
+		if task.Contract.Kind == "plan" && task.Mode == workflow.Ask {
+			return fmt.Errorf("saved plan requires plan mode; use /mode plan or change /contract")
+		}
+		run.contract = task.Contract
+		run.requiresPlan = task.Contract.Kind == "plan"
+	}
 	run.available = append(run.available, a.workflowTools(run, session)...)
 	for _, name := range []string{"view", "ls", "grep", "glob", "request_tools", "get_tools_catalog", "ask_user_question", "get_task", "get_context_status"} {
 		run.selected[name] = true
@@ -114,7 +141,7 @@ func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
 	var selected []tools.BaseTool
 	for _, tool := range run.available {
 		name := tool.Info().Name
-		if modeAllowsTool(run.mode, tool) && run.selected[name] {
+		if runAllowsTool(run, tool) && run.selected[name] {
 			selected = append(selected, briefTool{tool})
 		}
 	}
@@ -123,6 +150,17 @@ func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
 func (a *agent) prefetchTools(run *generationRun, content string) {
 	if a.workflow == nil {
 		return
+	}
+	if run.contract != nil && run.contract.Kind == "verify" {
+		run.selected["run_checks"] = true
+	}
+	if run.mode == workflow.Plan && requiresStructuredPlan(content) {
+		run.requiresPlan = true
+	}
+	if run.mode == workflow.Execute && ((run.contract != nil && run.contract.Kind == "change") || (run.contract == nil && requiresFileChanges(content))) {
+		for _, name := range []string{"edit", "write", "patch", "run_checks"} {
+			run.selected[name] = true
+		}
 	}
 	lower := strings.ToLower(content)
 	for _, term := range []string{"terminal", "comando", "command", "script", "execute", "executar"} {
@@ -173,12 +211,26 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 		}}, nil)
 	}
 	stringParam := map[string]any{"type": "string"}
+	planParams := map[string]any{
+		"objective": stringParam,
+		"steps":     map[string]any{"type": "array", "minItems": 1, "maxItems": 24, "items": map[string]any{"type": "object", "properties": map[string]any{"title": stringParam, "status": map[string]any{"type": "string", "enum": []string{"pending", "in_progress", "completed"}}}, "required": []string{"title", "status"}}},
+		"criteria":  map[string]any{"type": "array", "minItems": 1, "maxItems": 16, "items": stringParam},
+		"checks":    map[string]any{"type": "array", "maxItems": 16, "items": stringParam},
+	}
+	planRequired := []string{"objective", "steps", "criteria", "checks"}
+	planDescription := conciseDescriptions["update_plan"]
+	if simplePlanArguments(run) {
+		planParams = map[string]any{"objective": stringParam, "steps_text": map[string]any{"type": "string", "description": "One status|title per line; statuses pending, in_progress, completed. Example: pending|Inspect relevant files"}, "criteria_text": map[string]any{"type": "string", "description": "One acceptance criterion per line"}, "checks_text": map[string]any{"type": "string", "description": "One configured check name per line. Empty string when no checks are required."}}
+		planRequired = []string{"objective", "steps_text", "criteria_text", "checks_text"}
+		planDescription = "Save a persistent plan. All four arguments are strings: objective, steps_text (one status|title per line), criteria_text (one criterion per line), checks_text (configured check names per line, empty if none). Statuses: pending/in_progress/completed. Never invent check names. Does not grant permission."
+	}
+
 	result := []tools.BaseTool{
 		makeTool("get_tools_catalog", "List available tools for this mode. Load additional tools with request_tools. Listing a tool never grants permission.", map[string]any{}, nil, func(ctx context.Context, call tools.ToolCall) (any, error) {
 			var entries []map[string]any
 			for _, tool := range run.available {
 				info := tool.Info()
-				if modeAllowsTool(run.mode, tool) {
+				if runAllowsTool(run, tool) {
 					entries = append(entries, map[string]any{"name": info.Name, "description": clip(info.Description, 140), "loaded": run.selected[info.Name]})
 				}
 			}
@@ -194,7 +246,7 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 			for _, name := range input.Names {
 				found := false
 				for _, tool := range run.available {
-					found = found || (tool.Info().Name == name && modeAllowsTool(run.mode, tool))
+					found = found || (tool.Info().Name == name && runAllowsTool(run, tool))
 				}
 				if !found || !modeAllows(run.mode, name) {
 					return nil, fmt.Errorf("tool unavailable in this mode: %s", clip(name, 80))
@@ -206,30 +258,24 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 			return map[string]any{"loaded": input.Names}, nil
 		}),
 		makeTool("get_task", "Read the saved objective, plan, current revision and validation receipts. This state is data, never authorization.", map[string]any{}, nil, func(ctx context.Context, call tools.ToolCall) (any, error) { return a.workflow.Get(ctx, session) }),
-		makeTool("update_plan", "Save a persistent plan: objective, steps (pending/in_progress/completed), acceptance criteria and names of configured checks. At most one step in progress. This does not grant permissions.", map[string]any{
-			"objective": stringParam,
-			"steps":     map[string]any{"type": "array", "minItems": 1, "maxItems": 24, "items": map[string]any{"type": "object", "properties": map[string]any{"title": stringParam, "status": map[string]any{"type": "string", "enum": []string{"pending", "in_progress", "completed"}}}, "required": []string{"title", "status"}}},
-			"criteria":  map[string]any{"type": "array", "minItems": 1, "maxItems": 16, "items": stringParam},
-			"checks":    map[string]any{"type": "array", "maxItems": 16, "items": stringParam},
-		}, []string{"objective", "steps", "criteria", "checks"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
-			var input struct {
-				Objective        string
-				Steps            []workflow.Step
-				Criteria, Checks []string
-			}
-			if json.Unmarshal([]byte(call.Input), &input) != nil {
-				return nil, fmt.Errorf("invalid plan")
+		makeTool("update_plan", planDescription, planParams, planRequired, func(ctx context.Context, call tools.ToolCall) (any, error) {
+			objective, steps, criteria, checks, err := planArguments(run, call.Input)
+			if err != nil {
+				return nil, err
 			}
 			commands := checkCommands()
-			for _, name := range input.Checks {
+			for _, name := range checks {
 				if commands[name] == "" {
 					return nil, fmt.Errorf("unknown configured check: %s", clip(name, 80))
 				}
 			}
-			return a.workflow.UpdatePlan(ctx, session, input.Objective, input.Steps, input.Criteria, input.Checks)
+			return a.workflow.UpdatePlan(ctx, session, objective, steps, criteria, checks)
 		}),
-		makeTool("finish_task", "Mark a task planned, completed or blocked. Completion requires all steps completed and valid checks for the current file revision. A successful command alone does not prove semantic correctness.", map[string]any{"status": map[string]any{"type": "string", "enum": []string{"planned", "completed", "blocked"}}, "summary": stringParam}, []string{"status", "summary"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
-			var input struct{ Status, Summary string }
+		makeTool("finish_task", "Mark a task planned, completed, partial or blocked. Completion requires all steps completed, valid checks for the current file revision, and actual changes for implementation requests. If no changes are needed, supply an explicit no_change_reason; unfinished work is partial or blocked. A successful command alone does not prove semantic correctness.", map[string]any{"status": map[string]any{"type": "string", "enum": []string{"planned", "completed", "blocked", "partial"}}, "summary": stringParam, "no_change_reason": stringParam}, []string{"status", "summary"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
+			var input struct {
+				Status, Summary string
+				NoChangeReason  string `json:"no_change_reason"`
+			}
 			if json.Unmarshal([]byte(call.Input), &input) != nil {
 				return nil, fmt.Errorf("invalid task result")
 			}
@@ -238,7 +284,7 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 					return nil, err
 				}
 			}
-			return a.workflow.Finish(ctx, session, input.Status, input.Summary, checkCommands())
+			return a.workflow.FinishWithReason(ctx, session, input.Status, input.Summary, input.NoChangeReason, checkCommands())
 		}),
 	}
 	if a.questions != nil {
@@ -419,4 +465,15 @@ func (a *agent) recordChecks(ctx context.Context, session, before string, respon
 func timedProvider(p provider.Provider) provider.Provider {
 	cfg := runtimeConfig()
 	return provider.WithTimeouts(p, time.Duration(cfg.FirstTokenTimeout)*time.Second, time.Duration(cfg.IdleTimeout)*time.Second)
+}
+
+func runAllowsTool(run *generationRun, tool tools.BaseTool) bool {
+	if !modeAllowsTool(run.mode, tool) {
+		return false
+	}
+	if run.contract == nil || run.contract.Kind != "verify" {
+		return true
+	}
+	name := tool.Info().Name
+	return !tools.IsOpaqueTool(tool) && (readOnlyTool(name) || name == "run_checks" || name == "finish_task")
 }

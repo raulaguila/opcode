@@ -4,16 +4,20 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
 type helpCmp struct {
-	width  int
-	height int
-	keys   []key.Binding
+	width    int
+	height   int
+	keys     []key.Binding
+	viewport viewport.Model
 }
 
 func (h *helpCmp) Init() tea.Cmd {
@@ -26,11 +30,24 @@ func (h *helpCmp) SetBindings(k []key.Binding) {
 
 func (h *helpCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.Type == tea.KeyEnd {
+			h.viewport.GotoBottom()
+			return h, nil
+		}
+		if msg.Type == tea.KeyHome {
+			h.viewport.GotoTop()
+			return h, nil
+		}
 	case tea.WindowSizeMsg:
-		h.width = 90
+		h.width = min(90, max(8, msg.Width-4))
 		h.height = msg.Height
+		h.viewport.Width = max(1, h.width-4)
+		h.viewport.Height = max(1, msg.Height-8)
 	}
-	return h, nil
+	var cmd tea.Cmd
+	h.viewport, cmd = h.viewport.Update(msg)
+	return h, cmd
 }
 
 func removeDuplicateBindings(bindings []key.Binding) []key.Binding {
@@ -54,140 +71,22 @@ func removeDuplicateBindings(bindings []key.Binding) []key.Binding {
 }
 
 func (h *helpCmp) render() string {
-	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
-
-	helpKeyStyle := styles.Bold().
-		Background(t.Background()).
-		Foreground(t.Text()).
-		Padding(0, 1, 0, 0)
-
-	helpDescStyle := styles.Regular().
-		Background(t.Background()).
-		Foreground(t.TextMuted())
-
-	// Compile list of bindings to render
-	bindings := removeDuplicateBindings(h.keys)
-
-	// Enumerate through each group of bindings, populating a series of
-	// pairs of columns, one for keys, one for descriptions
-	var (
-		pairs []string
-		width int
-		rows  = 12 - 2
-	)
-
-	for i := 0; i < len(bindings); i += rows {
-		var (
-			keys  []string
-			descs []string
-		)
-		for j := i; j < min(i+rows, len(bindings)); j++ {
-			keys = append(keys, helpKeyStyle.Render(bindings[j].Help().Key))
-			descs = append(descs, helpDescStyle.Render(bindings[j].Help().Desc))
-		}
-
-		// Render pair of columns; beyond the first pair, render a three space
-		// left margin, in order to visually separate the pairs.
-		var cols []string
-		if len(pairs) > 0 {
-			cols = []string{baseStyle.Render("   ")}
-		}
-
-		maxDescWidth := 0
-		for _, desc := range descs {
-			if maxDescWidth < lipgloss.Width(desc) {
-				maxDescWidth = lipgloss.Width(desc)
-			}
-		}
-		for i := range descs {
-			remainingWidth := maxDescWidth - lipgloss.Width(descs[i])
-			if remainingWidth > 0 {
-				descs[i] = descs[i] + baseStyle.Render(strings.Repeat(" ", remainingWidth))
-			}
-		}
-		maxKeyWidth := 0
-		for _, key := range keys {
-			if maxKeyWidth < lipgloss.Width(key) {
-				maxKeyWidth = lipgloss.Width(key)
-			}
-		}
-		for i := range keys {
-			remainingWidth := maxKeyWidth - lipgloss.Width(keys[i])
-			if remainingWidth > 0 {
-				keys[i] = keys[i] + baseStyle.Render(strings.Repeat(" ", remainingWidth))
-			}
-		}
-
-		cols = append(cols,
-			strings.Join(keys, "\n"),
-			strings.Join(descs, "\n"),
-		)
-
-		pair := baseStyle.Render(lipgloss.JoinHorizontal(lipgloss.Top, cols...))
-		// check whether it exceeds the maximum width avail (the width of the
-		// terminal, subtracting 2 for the borders).
-		width += lipgloss.Width(pair)
-		if width > h.width-2 {
-			break
-		}
-		pairs = append(pairs, pair)
+	width := max(1, h.width-4)
+	lines := []string{}
+	for _, binding := range removeDuplicateBindings(h.keys) {
+		lines = append(lines, ansi.Wrap(binding.Help().Key+"  "+interfaceCopy(binding.Help().Desc), width, ""))
 	}
-
-	// https://github.com/charmbracelet/lipgloss/issues/209
-	if len(pairs) > 1 {
-		prefix := pairs[:len(pairs)-1]
-		lastPair := pairs[len(pairs)-1]
-		prefix = append(prefix, lipgloss.Place(
-			lipgloss.Width(lastPair),   // width
-			lipgloss.Height(prefix[0]), // height
-			lipgloss.Left,              // x
-			lipgloss.Top,               // y
-			lastPair,                   // content
-			lipgloss.WithWhitespaceBackground(t.Background()),
-		))
-		content := baseStyle.Width(h.width).Render(
-			lipgloss.JoinHorizontal(
-				lipgloss.Top,
-				prefix...,
-			),
-		)
-		return content
+	h.viewport.Width = width
+	if h.viewport.Height == 0 {
+		h.viewport.Height = 10
 	}
-
-	// Join pairs of columns and enclose in a border
-	content := baseStyle.Width(h.width).Render(
-		lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			pairs...,
-		),
-	)
-	return content
+	h.viewport.SetContent(strings.Join(lines, "\n"))
+	return h.viewport.View()
 }
-
 func (h *helpCmp) View() string {
-	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
-
-	content := h.render()
-	header := baseStyle.
-		Bold(true).
-		Width(lipgloss.Width(content)).
-		Foreground(t.Primary()).
-		Render("Keyboard Shortcuts")
-
-	return baseStyle.Padding(1).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.TextMuted()).
-		Width(h.width).
-		BorderBackground(t.Background()).
-		Render(
-			lipgloss.JoinVertical(lipgloss.Center,
-				header,
-				baseStyle.Render(strings.Repeat(" ", lipgloss.Width(header))),
-				content,
-			),
-		)
+	title := config.Text("Atalhos do teclado", "Keyboard shortcuts")
+	hint := config.Text("↑↓/PgUp/PgDn rola · Esc fecha", "↑↓/PgUp/PgDn scroll · Esc closes")
+	return styles.BaseStyle().Width(max(1, h.width-2)).Padding(1).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(strings.Join([]string{title, h.render(), ansi.Truncate(hint, max(1, h.width-4), "…")}, "\n"))
 }
 
 type HelpCmp interface {

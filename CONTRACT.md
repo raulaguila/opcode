@@ -13,6 +13,12 @@ Origem: pedido do usuário de implementar todos os itens da comparação de
 - Provedores/perfis: JSON e formulário TUI; catálogo assíncrono cancelável,
   favoritos/recentes, metadados e seleção persistente. Primeiro acesso abre
   configuração; cadastros existentes continuam válidos.
+- Configuração em pasta: novos arquivos globais usam `~/.opcode/config.json` e
+  overrides de projeto usam `.opcode/config.json`. Sem global compatível, o
+  startup normal cria um template privado, sem credenciais/inferência e sem
+  sobrescrever arquivos. Diagnóstico offline/configuração explícita não o criam.
+  Formatos anteriores permanecem como fallback em seus próprios caminhos; criar
+  a pasta de configuração não pode esconder um banco anterior.
 - Chat: processo recolhível por turno, resposta separada, copiar/abrir citação,
   notificações de novas mensagens, histórico e fila inspecionável/editável.
 - Contexto: contabilizar payload e schemas antes de gerar; compactação preserva
@@ -70,6 +76,37 @@ permissão automaticamente. Busca vetorial não é necessária para o mapa textu
 
 Nenhuma informação adicional é necessária para iniciar as frentes autorizadas.
 
+## Segunda evolução — comparação e experiência diária
+
+Status: accepted. Origem: pedido explícito “Faça tudo” após a nova comparação.
+Esta seção amplia os limites anteriores (inclusive o antigo non-goal de HTTP).
+
+- Conclusão: pedidos de implementação em Executar não podem terminar com sucesso
+  sem alteração verificável ou justificativa explícita; trabalho parcial continua
+  parcial. Recibos continuam vinculados ao conteúdo validado.
+- Recuperação: distinguir autenticação, indisponibilidade, contexto/memória,
+  cancelamento e conflitos. Contexto local aprende limites por conexão/modelo,
+  com validade e opção de recalibrar, sem repetir ferramentas mutáveis.
+- Diagnóstico: `opcode doctor` funciona sem modelo configurado; consulta de
+  catálogo e teste real com ferramentas são operações distintas e optativas.
+- Interface: lateral automática/opcional, input adaptável, estados e fila claros,
+  diff unificado/lado a lado/tela cheia, preferências pesquisáveis, atalhos e
+  notificações opcionais. Configuração mostra origem e valor efetivo redigido.
+- Ferramentas: índice incremental privado com busca ranqueada; exploração
+  separada somente leitura e limitada; formatação e checks por projeto.
+- Integrações: OAuth MCP explícito com PKCE/estado, credenciais privadas,
+  cancelamento e revogação; nada é conectado ou autenticado automaticamente.
+- Workspaces: criação/listagem/remoção segura de worktrees, sem reset/force;
+  comandos do agente continuam sujeitos às permissões e ao sandbox.
+- Servidor: execução local optativa, autenticação obrigatória, limite de corpo,
+  propriedade de sessões/processos e encerramento/cancelamento. Reconexão usa
+  snapshots limitados; não reexecuta comandos nem restaura permissões do disco.
+- Entrega: binários/checksums geráveis e documentação reproduzível; publicar
+  release ou fazer push não é requisito desta etapa.
+
+Mocks continuam exclusivos dos testes. APIs novas precisam de testes de recusa,
+limites, cancelamento e preservação de rascunho/estado quando aplicável.
+
 ## Identidade e entrega
 
 O produto e binário públicos usam Opcode/opcode; o módulo é
@@ -78,3 +115,10 @@ Arquivos locais anteriores não são renomeados por uma troca de identidade do
 código. A licença original permanece intacta. Métodos de instalação publicados
 não devem apontar a owners ou pacotes do projeto anterior. CI testa o fork e
 releases são artefatos futuros, disparados somente por tags explícitas.
+
+Contratos explícitos de tarefa são dados definidos pelo usuário, separados de
+permissões e de planos gerados pelo modelo. Checks declarados exigem recibos
+atuais; alvos/critérios não provam semântica nem liberam caminhos. Bindings
+simplificados de planos locais preservam a validação do estado. Uma mudança sem
+checks disponíveis deve permanecer parcial. Backups de configuração pertencem
+à área privada `.opcode`, inclusive quando o arquivo original é legado.

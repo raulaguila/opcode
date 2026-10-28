@@ -110,3 +110,17 @@ func TestWorkerRejectsOriginalWorkspaceAndReportsContainNoPayload(t *testing.T) 
 	require.NoError(t, err)
 	require.NotContains(t, string(encoded), "SECRET-SAMPLE-KEY")
 }
+
+func TestCaseSelectionKeepsCriteriaAndRejectsImplicitExtraRequests(t *testing.T) {
+	suite, raw, err := Load("")
+	require.NoError(t, err)
+	report, err := Run(context.Background(), suite, raw, Options{CaseIDs: []string{"edit", "resume"}})
+	require.NoError(t, err)
+	require.Len(t, report.Cases, 2)
+	require.Equal(t, "edit", report.Cases[0].ID)
+	require.Len(t, report.Cases[0].Criteria, 2)
+	for _, options := range []Options{{CaseIDs: []string{"missing"}}, {Repeats: 4}, {Repeats: 2}} {
+		_, err := Run(context.Background(), suite, raw, options)
+		require.Error(t, err)
+	}
+}

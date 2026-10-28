@@ -24,7 +24,7 @@ The generated schema includes:
 
 You can use the generated schema in several ways:
 
-1. **Editor Integration**: Many editors (VS Code, JetBrains IDEs, etc.) support JSON Schema for validation and autocompletion. You can configure your editor to use the generated schema for `.opcode.json` files.
+1. **Editor Integration**: Many editors (VS Code, JetBrains IDEs, etc.) support JSON Schema for validation and autocompletion. Configure the generated schema for `.opcode/config.json` files; the startup template already contains `$schema`. Legacy `.opcode.json` files remain supported.
 
 2. **Validation Tools**: You can use tools like [jsonschema](https://github.com/Julian/jsonschema) to validate your configuration files against the schema.
 

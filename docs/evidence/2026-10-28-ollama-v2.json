@@ -1,0 +1,171 @@
+{
+  "version": 1,
+  "mode": "live_provider",
+  "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+  "cases": [
+    {
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "id": "edit",
+      "status": "failed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": false
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": false
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "partial",
+      "requires_changes": true,
+      "tool_names": [
+        "finish_task",
+        "view"
+      ]
+    },
+    {
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "id": "resume",
+      "status": "failed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": false
+        },
+        {
+          "kind": "tool_called",
+          "passed": false
+        },
+        {
+          "kind": "task_status",
+          "passed": false
+        }
+      ],
+      "error": "agent returned an error (payload omitted)",
+      "model": "local.llama3.1:8b",
+      "tool_calls": 8,
+      "task_status": "blocked",
+      "tool_names": [
+        "finish_task",
+        "update_plan",
+        "view"
+      ]
+    }
+  ],
+  "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+}

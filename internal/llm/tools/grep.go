@@ -389,7 +389,7 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 	parent := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	args := []string{"rg", "--files", "--no-config", "--null", "--sort", "path"}
+	args := []string{"rg", "--files", "--no-config", "--no-require-git", "--null", "--sort", "path"}
 	if pattern != "" {
 		args = append(args, "--glob", pattern)
 	}

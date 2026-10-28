@@ -14,6 +14,8 @@ import (
 func newEvaluateCommand() *cobra.Command {
 	var casesPath, outputPath, providerPath string
 	var live, allowExecution bool
+	var repeat int
+	var caseIDs []string
 	command := &cobra.Command{Use: "evaluate", Short: "Validate reproducible fixtures, or explicitly run a real provider in disposable workspaces", Args: cobra.NoArgs, RunE: func(command *cobra.Command, _ []string) error {
 		command.SilenceUsage = true
 		suite, raw, err := evaluation.Load(casesPath)
@@ -35,7 +37,7 @@ func newEvaluateCommand() *cobra.Command {
 				}
 			}
 		}
-		report, err := evaluation.Run(command.Context(), suite, raw, evaluation.Options{Live: live, AllowExecution: allowExecution, ProviderConfig: providerPath, Executable: executable})
+		report, err := evaluation.Run(command.Context(), suite, raw, evaluation.Options{Repeats: repeat, CaseIDs: caseIDs, Live: live, AllowExecution: allowExecution, ProviderConfig: providerPath, Executable: executable})
 		if err != nil {
 			return err
 		}
@@ -55,6 +57,8 @@ func newEvaluateCommand() *cobra.Command {
 		}
 		return nil
 	}}
+	command.Flags().IntVar(&repeat, "repeat", 1, "Repeat live cases 1–3 times in fresh workspaces (multiplies inference requests)")
+	command.Flags().StringSliceVar(&caseIDs, "case", nil, "Run only these bundled/custom case IDs (comma separated); criteria stay unchanged")
 	command.Flags().StringVar(&casesPath, "cases", "", "JSON suite (default: six bundled fixtures)")
 	command.Flags().StringVar(&outputPath, "output", "", "Write a private JSON report")
 	command.Flags().BoolVar(&live, "live", false, "Explicitly allow real provider requests (may incur costs)")

@@ -326,6 +326,35 @@
             "description": "Header name to environment variable name. Values resolve only in memory.",
             "type": "object"
           },
+          "oauth": {
+            "additionalProperties": false,
+            "description": "Explicit MCP HTTP/SSE OAuth. Tokens are stored separately in a private user auth directory.",
+            "properties": {
+              "clientID": {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              "clientSecretEnv": {
+                "description": "Environment variable name, never a resolved client secret",
+                "type": "string"
+              },
+              "redirectPort": {
+                "default": 0,
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "scopes": {
+                "items": {
+                  "maxLength": 256,
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "type": {
             "default": "stdio",
             "description": "Type of MCP server",
@@ -674,6 +703,12 @@
       },
       "type": "object"
     },
+    "schemaVersion": {
+      "description": "Configuration format version; omission preserves legacy compatibility",
+      "maximum": 1,
+      "minimum": 0,
+      "type": "integer"
+    },
     "security": {
       "description": "Execution policy from user-global configuration only; repository configuration cannot override it.",
       "properties": {
@@ -717,6 +752,72 @@
     "tui": {
       "description": "Terminal User Interface configuration",
       "properties": {
+        "keybindings": {
+          "additionalProperties": false,
+          "properties": {
+            "commands": {
+              "default": "ctrl+k",
+              "pattern": "^(ctrl|alt)\\+[a-z]$",
+              "type": "string"
+            },
+            "files": {
+              "default": "ctrl+f",
+              "pattern": "^(ctrl|alt)\\+[a-z]$",
+              "type": "string"
+            },
+            "models": {
+              "default": "ctrl+o",
+              "pattern": "^(ctrl|alt)\\+[a-z]$",
+              "type": "string"
+            },
+            "sessions": {
+              "default": "ctrl+s",
+              "pattern": "^(ctrl|alt)\\+[a-z]$",
+              "type": "string"
+            },
+            "sidebar": {
+              "default": "alt+b",
+              "pattern": "^(ctrl|alt)\\+[a-z]$",
+              "type": "string"
+            },
+            "terminal": {
+              "default": "ctrl+p",
+              "pattern": "^(ctrl|alt)\\+[a-z]$",
+              "type": "string"
+            },
+            "theme": {
+              "default": "ctrl+t",
+              "pattern": "^(ctrl|alt)\\+[a-z]$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "language": {
+          "default": "en",
+          "enum": [
+            "pt",
+            "en"
+          ],
+          "type": "string"
+        },
+        "notifications": {
+          "default": "off",
+          "enum": [
+            "off",
+            "bell"
+          ],
+          "type": "string"
+        },
+        "sidebar": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "shown",
+            "hidden"
+          ],
+          "type": "string"
+        },
         "theme": {
           "default": "opcode",
           "description": "TUI theme name",

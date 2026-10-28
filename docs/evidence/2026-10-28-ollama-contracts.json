@@ -1,0 +1,361 @@
+{
+  "repeats": 2,
+  "version": 1,
+  "mode": "live_provider",
+  "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+  "cases": [
+    {
+      "trial": 1,
+      "duration_ms": 3323,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "trial": 1,
+      "duration_ms": 2827,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "trial": 1,
+      "duration_ms": 3969,
+      "id": "edit",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "partial",
+      "requires_changes": true,
+      "changes_verified": true,
+      "tool_names": [
+        "edit",
+        "view"
+      ]
+    },
+    {
+      "trial": 1,
+      "duration_ms": 2112,
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "trial": 1,
+      "duration_ms": 2507,
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "trial": 1,
+      "duration_ms": 9251,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "planned",
+      "tool_names": [
+        "finish_task",
+        "get_task",
+        "update_plan",
+        "view"
+      ]
+    },
+    {
+      "trial": 2,
+      "duration_ms": 3308,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "trial": 2,
+      "duration_ms": 4084,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "trial": 2,
+      "duration_ms": 4159,
+      "id": "edit",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "partial",
+      "requires_changes": true,
+      "changes_verified": true,
+      "tool_names": [
+        "edit",
+        "view"
+      ]
+    },
+    {
+      "trial": 2,
+      "duration_ms": 2256,
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "trial": 2,
+      "duration_ms": 2729,
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "trial": 2,
+      "duration_ms": 8546,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "planned",
+      "tool_names": [
+        "finish_task",
+        "get_task",
+        "update_plan",
+        "view"
+      ]
+    }
+  ],
+  "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+}

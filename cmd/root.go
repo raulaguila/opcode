@@ -66,6 +66,9 @@ to assist developers in writing, debugging, and understanding code directly from
 		outputFormat, _ := cmd.Flags().GetString("output-format")
 		quiet, _ := cmd.Flags().GetBool("quiet")
 		autoApprove, _ := cmd.Flags().GetBool("auto-approve")
+		if kind, _ := cmd.Flags().GetString("task-kind"); kind == "" && (cmd.Flags().Changed("target") || cmd.Flags().Changed("accept") || cmd.Flags().Changed("check")) {
+			return fmt.Errorf("--target, --accept and --check require --task-kind")
+		}
 		if autoApprove && prompt == "" {
 			return fmt.Errorf("--auto-approve requires a non-interactive --prompt")
 		}
@@ -134,8 +137,26 @@ to assist developers in writing, debugging, and understanding code directly from
 			logging.Error("Failed to create app: %v", err)
 			return err
 		}
-		// Defer shutdown here so it runs for both interactive and non-interactive modes
 		defer app.Shutdown()
+		kind, _ := cmd.Flags().GetString("task-kind")
+		if kind != "" {
+			targets, _ := cmd.Flags().GetStringArray("target")
+			criteria, _ := cmd.Flags().GetStringArray("accept")
+			checks, _ := cmd.Flags().GetStringArray("check")
+			contract := &workflow.Contract{Kind: kind, Targets: targets, Acceptance: criteria, Checks: checks}
+			if err := contract.Validate(); err != nil {
+				return err
+			}
+			if prompt == "" {
+				return fmt.Errorf("--task-kind requires --prompt; use /contract in interactive mode")
+			}
+			for _, name := range checks {
+				if loadedConfig.Checks[name].Command == "" {
+					return fmt.Errorf("--check must name a configured check")
+				}
+			}
+			app.InitialContract = contract
+		}
 
 		var initialSessions []session.Session
 		if resumeID != "" {
@@ -169,6 +190,7 @@ to assist developers in writing, debugging, and understanding code directly from
 			tui.New(app, initialSessions...),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
+			tea.WithReportFocus(),
 		)
 
 		// Setup the subscriptions, this will send services events to the TUI
@@ -342,6 +364,10 @@ func Execute() {
 
 func init() {
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
+	rootCmd.Flags().String("task-kind", "", "Explicit outcome: explain, plan, change, verify (with --prompt)")
+	rootCmd.Flags().StringArray("target", nil, "Relative task target (repeatable; advisory, never permission)")
+	rootCmd.Flags().StringArray("accept", nil, "Acceptance criterion (repeatable)")
+	rootCmd.Flags().StringArray("check", nil, "Required configured check (repeatable)")
 	rootCmd.Flags().BoolP("version", "v", false, "Version")
 	rootCmd.Flags().BoolP("debug", "d", false, "Debug")
 	rootCmd.Flags().StringP("cwd", "c", "", "Current working directory")

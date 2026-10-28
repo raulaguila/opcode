@@ -119,3 +119,30 @@ janela inicial de 16K com ferramentas progressivas, preservação de pares e
 assinaturas, remoção concorrente da fila, hashes obsoletos, arquivos de skills
 limitados, recusa de permissões e hooks bloqueados nos modos de leitura. Nenhuma
 chamada paga ou download de modelo é necessário para executá-los.
+
+## Aprendizado de limites de contexto
+
+Erros reconhecidos de contexto do provedor ou de memória do Ollama podem reduzir
+a janela de contexto pela metade, até o mínimo de 4.096 tokens. Há no máximo duas
+novas tentativas de geração por turno, sujeitas aos limites normais. A tentativa
+só ocorre antes de conteúdo ou chamadas de ferramenta serem recebidos. Nenhuma
+ferramenta mutável é repetida por esse mecanismo. Autenticação, cancelamento,
+timeout e erros genéricos não são tratados como indicação de janela excessiva.
+
+O orçamento considera a janela menor e a saída reservada. A compactação preserva
+instruções do usuário, pares de chamadas/resultados e o intercâmbio atual; se isso
+não couber, a aplicação informa o limite em vez de descartar instruções. Reduzir
+`num_ctx` pode ajudar memória no Ollama, mas não faz uma solicitação longa caber
+automaticamente e não substitui a escolha de um modelo apropriado.
+
+O arquivo privado `context-calibration.json`, na pasta de dados configurada,
+guarda somente identificadores hash, janela e expiração. A chave distingue
+projeto, provedor, perfil, endpoint e modelo; não contém prompts ou credenciais.
+As entradas expiram em 24 horas, há limite de 128 entradas e leitura/gravação de
+64 KiB, com proteção contra links simbólicos e arquivo de modo 0600. Falha de
+persistência é informada no diagnóstico e não impede a redução em memória.
+
+`ContextCalibrationControl.RecalibrateContext` remove a entrada da conexão/modelo
+atual e reconstrói o provedor pelos valores configurados. Exige agente ocioso;
+não executa teste de inferência nem altera permissões. Também é possível remover
+esse arquivo privado com o aplicativo fechado para descartar todo o aprendizado.

@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"fmt"
+	"github.com/raulaguila/opcode/internal/config"
 	"slices"
 	"strings"
 	"unicode"
@@ -183,9 +184,9 @@ func (s *sessionDialogCmp) View() string {
 	t := theme.CurrentTheme()
 	base := styles.BaseStyle().Width(width)
 	line := func(text string) string { return base.Render(ansi.Truncate(text, width, "…")) }
-	rows := []string{base.Foreground(t.Primary()).Bold(true).Render("Conversas"), line("Buscar: " + s.query)}
+	rows := []string{base.Foreground(t.Primary()).Bold(true).Render(config.Text("Conversas", "Conversations")), line(config.Text("Buscar: ", "Search: ") + s.query)}
 	if len(s.filtered) == 0 {
-		rows = append(rows, line("Nenhuma conversa encontrada"))
+		rows = append(rows, line(config.Text("Nenhuma conversa encontrada", "No conversations found")))
 	}
 	for i := s.offset; i < min(len(s.filtered), s.offset+s.rows()); i++ {
 		item := s.filtered[i]
@@ -194,7 +195,7 @@ func (s *sessionDialogCmp) View() string {
 			label = "● " + label
 		}
 		if s.archived[item.ID] {
-			label += " · arquivada"
+			label += config.Text(" · arquivada", " · archived")
 		}
 		row := base
 		if i == s.selectedIdx {
@@ -203,9 +204,9 @@ func (s *sessionDialogCmp) View() string {
 		rows = append(rows, row.Render(ansi.Truncate(label, width, "…")))
 	}
 	if s.editing {
-		rows = append(rows, line("Novo título: "+s.rename), line("Enter salva · Esc volta"))
+		rows = append(rows, line(config.Text("Novo título: ", "New title: ")+s.rename), line(config.Text("Enter salva · Esc volta", "Enter save · Esc back")))
 	} else {
-		rows = append(rows, line(fmt.Sprintf("%d conversas · arquivadas: %t", len(s.filtered), s.showArchived)), line("↑↓ navegar · Enter abrir · Ctrl+R renomear"), line("Ctrl+A arquivar/restaurar · Ctrl+E exportar"), line("Ctrl+H mostrar arquivadas · Esc fechar"))
+		rows = append(rows, line(fmt.Sprintf(config.Text("%d conversas · arquivadas: %t", "%d conversations · archived: %t"), len(s.filtered), s.showArchived)), line(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename")), line(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export")), line(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close")))
 	}
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 }

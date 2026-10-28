@@ -36,6 +36,7 @@ type MCPServer struct {
 	HeadersEnv map[string]string `json:"headersEnv,omitempty"`
 	EnvVars    map[string]string `json:"envVars,omitempty"`
 	Disabled   bool              `json:"disabled,omitempty"`
+	OAuth      *MCPOAuthConfig   `json:"oauth,omitempty"`
 }
 
 type AgentName string
@@ -80,7 +81,11 @@ type LSPConfig struct {
 
 // TUIConfig defines the configuration for the Terminal User Interface.
 type TUIConfig struct {
-	Theme string `json:"theme,omitempty"`
+	Theme         string            `json:"theme,omitempty"`
+	Sidebar       string            `json:"sidebar,omitempty"`
+	Language      string            `json:"language,omitempty"`
+	Notifications string            `json:"notifications,omitempty"`
+	Keybindings   map[string]string `json:"keybindings,omitempty"`
 }
 
 // Preferences are user choices; resolved credentials never belong here.
@@ -115,6 +120,7 @@ type CheckConfig struct {
 
 // Config is the main configuration structure for the application.
 type Config struct {
+	SchemaVersion    int                               `json:"schemaVersion,omitempty"`
 	Data             Data                              `json:"data"`
 	WorkingDir       string                            `json:"wd,omitempty"`
 	MCPServers       map[string]MCPServer              `json:"mcpServers,omitempty"`
@@ -168,7 +174,7 @@ var cfg *Config
 func (c *Config) ValidateStartup() error {
 	for _, name := range []AgentName{AgentCoder, AgentTitle, AgentSummarizer, AgentTask} {
 		if c == nil || c.Agents[name].Model == "" {
-			return fmt.Errorf("no model configured for agent %q: set LOCAL_ENDPOINT for Ollama/LM Studio, set a provider API key (e.g. OPENAI_API_KEY or ANTHROPIC_API_KEY), or configure providers and agents.coder.model in ~/.opcode.json", name)
+			return fmt.Errorf("no model configured for agent %q: set LOCAL_ENDPOINT for Ollama/LM Studio, set a provider API key (e.g. OPENAI_API_KEY or ANTHROPIC_API_KEY), or configure providers and agents.coder.model in ~/.opcode/config.json", name)
 		}
 	}
 	return nil
@@ -178,8 +184,26 @@ func (c *Config) ValidateStartup() error {
 // If debug is true, debug mode is enabled and log level is set to debug.
 // It returns an error if configuration loading fails.
 func Load(workingDir string, debug bool) (*Config, error) {
+	return loadConfiguration(workingDir, debug, true)
+}
+
+// LoadOffline loads configuration for a standalone diagnostic command. It
+// does not discover local models, start integrations or create debug logs.
+// Application startup continues to use the cached Load path.
+func LoadOffline(workingDir string) (*Config, error) {
+	return loadConfiguration(workingDir, false, false)
+}
+
+func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, error) {
 	if cfg != nil {
 		return cfg, nil
+	}
+	// Standalone offline diagnostics and explicitly supplied configurations are
+	// read-only. Normal first startup creates a safe editable provider template.
+	if discoverLocal && viper.ConfigFileUsed() == "" {
+		if err := ensureGlobalTemplate(); err != nil {
+			return nil, err
+		}
 	}
 
 	cfg = &Config{
@@ -193,8 +217,20 @@ func Load(workingDir string, debug bool) (*Config, error) {
 	setDefaults(debug)
 
 	// Read global config
+	if path := viper.ConfigFileUsed(); path != "" {
+		if err := ValidateDocument(path); err != nil {
+			cfg = nil
+			return nil, fmt.Errorf("read config: %w", err)
+		}
+	}
 	if err := readConfig(viper.ReadInConfig()); err != nil {
 		return cfg, err
+	}
+	if path := viper.ConfigFileUsed(); path != "" {
+		if err := ValidateDocument(path); err != nil {
+			cfg = nil
+			return nil, err
+		}
 	}
 
 	// Repository configuration cannot weaken the user's execution policy.
@@ -209,6 +245,12 @@ func Load(workingDir string, debug bool) (*Config, error) {
 	if err := mergeLocalConfig(workingDir); err != nil {
 		cfg = nil
 		return nil, err
+	}
+	if path := ProjectConfigPath(workingDir); path != viper.ConfigFileUsed() {
+		if err := ValidateDocument(path); err != nil {
+			cfg = nil
+			return nil, err
+		}
 	}
 
 	setProviderDefaults()
@@ -242,6 +284,10 @@ func Load(workingDir string, debug bool) (*Config, error) {
 		cfg = nil
 		return nil, err
 	}
+	if err := cfg.TUI.Validate(); err != nil {
+		cfg = nil
+		return nil, err
+	}
 	if err := cfg.Runtime.Validate(); err != nil {
 		cfg = nil
 		return nil, err
@@ -258,7 +304,7 @@ func Load(workingDir string, debug bool) (*Config, error) {
 		cfg = nil
 		return nil, err
 	}
-	if err := configureLocalProvider(); err != nil {
+	if err := configureLocalProvider(discoverLocal); err != nil {
 		cfg = nil
 		return nil, err
 	}
@@ -268,7 +314,7 @@ func Load(workingDir string, debug bool) (*Config, error) {
 	if cfg.Debug {
 		defaultLevel = slog.LevelDebug
 	}
-	if Environment("OPCODE_DEV_DEBUG") == "true" {
+	if discoverLocal && Environment("OPCODE_DEV_DEBUG") == "true" {
 		loggingFile := fmt.Sprintf("%s/%s", cfg.Data.Directory, "debug.log")
 		messagesPath := fmt.Sprintf("%s/%s", cfg.Data.Directory, "messages")
 
@@ -322,16 +368,14 @@ func Load(workingDir string, debug bool) (*Config, error) {
 // configureViper sets up viper's configuration paths and environment variables.
 func configureViper() {
 	explicitFile := viper.ConfigFileUsed()
-	viper.SetConfigName(fmt.Sprintf(".%s", appName))
+	viper.SetConfigName("config")
 	viper.SetConfigType("json")
 	if explicitFile != "" {
 		viper.SetConfigFile(explicitFile)
 	} else if path, exists := globalConfigPath(); exists {
 		viper.SetConfigFile(path)
 	}
-	viper.AddConfigPath("$HOME")
-	viper.AddConfigPath(fmt.Sprintf("$XDG_CONFIG_HOME/%s", appName))
-	viper.AddConfigPath(fmt.Sprintf("$HOME/.config/%s", appName))
+	viper.AddConfigPath("$HOME/.opcode")
 	viper.SetEnvPrefix(strings.ToUpper(appName))
 	viper.AllowEmptyEnv(true)
 	viper.AutomaticEnv()
@@ -974,13 +1018,21 @@ func updateCfgFile(updateCfg func(config *Config)) error {
 	configFile := viper.ConfigFileUsed()
 	var configData []byte
 	if configFile == "" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to get home directory: %w", err)
+		configFile = configuredFilePath()
+		if configFile == "" {
+			return fmt.Errorf("cannot determine configuration path")
 		}
-		configFile = filepath.Join(homeDir, fmt.Sprintf(".%s.json", appName))
-		logging.Info("config file not found, creating new one", "path", configFile)
-		configData = []byte(`{}`)
+		data, err := os.ReadFile(configFile)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(filepath.Dir(configFile), 0700); err != nil {
+				return err
+			}
+			data = []byte(`{}`)
+		}
+		configData = data
 	} else {
 		// Read the existing config file
 		data, err := os.ReadFile(configFile)

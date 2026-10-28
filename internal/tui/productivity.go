@@ -29,10 +29,24 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		a.showInitDialog = false
 		a.showCommandDialog = false
 		a.showProviderDialog = true
-		return a.providerDialog.Open(), true
+		cmd := a.providerDialog.Open()
+		a.setupActive = msg.Setup
+		if msg.Setup {
+			if d, ok := a.providerDialog.(interface{ Setup() }); ok {
+				d.Setup()
+			}
+		}
+		return cmd, true
 	case dialog.CloseProviderDialogMsg:
 		a.providerDialog.Close()
 		a.showProviderDialog = false
+		return nil, true
+	case dialog.UserPreferencesChangedMsg:
+		if p, ok := a.pages[page.ChatPage]; ok {
+			updated, cmd := p.Update(chat.ProcessPreferencesChangedMsg{})
+			a.pages[page.ChatPage] = updated
+			return cmd, true
+		}
 		return nil, true
 	case dialog.ProviderSettingsSavedMsg:
 		a.providerDialog.Close()
@@ -43,6 +57,9 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 				err = a.app.ConfigureCoderAgent()
 			}
 			a.showModelDialog = true
+			if d, ok := a.modelDialog.(interface{ SetSetup(bool) }); ok {
+				d.SetSetup(a.setupActive)
+			}
 			return tea.Batch(a.modelDialog.Open(), func() tea.Msg {
 				if err != nil {
 					return util.InfoMsg{Type: util.InfoTypeWarn, Msg: tools.RedactCredentials(err.Error())}

@@ -133,7 +133,7 @@ func (a *agent) systemPrompt() string {
 }
 func (a *agent) budgetRequest(session string, history []message.Message, run *generationRun) ([]message.Message, error) {
 	ts := a.exposedTools(run)
-	status, err := a.estimateProviderContext(a.provider, history, ts)
+	status, err := a.estimateProviderContext(runProvider(a, run), history, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 		compacted, count := compactHistory(history)
 		if count > 0 {
 			history = compacted
-			status, err = a.estimateProviderContext(a.provider, history, ts)
+			status, err = a.estimateProviderContext(runProvider(a, run), history, ts)
 			if err != nil {
 				return nil, err
 			}
@@ -266,4 +266,11 @@ func (a *agent) estimateProviderContext(p provider.Provider, history []message.M
 		status.Fits = status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens <= status.ContextWindow
 	}
 	return status, nil
+}
+
+func runProvider(a *agent, run *generationRun) provider.Provider {
+	if run != nil && run.provider != nil {
+		return run.provider
+	}
+	return a.provider
 }

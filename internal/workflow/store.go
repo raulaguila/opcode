@@ -37,18 +37,22 @@ type Receipt struct {
 	At       int64  `json:"at"`
 }
 type Task struct {
-	SessionID  string    `json:"session_id"`
-	Mode       Mode      `json:"mode"`
-	Objective  string    `json:"objective,omitempty"`
-	Steps      []Step    `json:"steps,omitempty"`
-	Criteria   []string  `json:"criteria,omitempty"`
-	Checks     []string  `json:"checks,omitempty"`
-	Status     string    `json:"status"`
-	Revision   int64     `json:"revision"`
-	Digest     string    `json:"digest,omitempty"`
-	Changed    bool      `json:"changed"`
-	Validation []Receipt `json:"validation,omitempty"`
-	Summary    string    `json:"summary,omitempty"`
+	Contract        *Contract `json:"contract,omitempty"`
+	SessionID       string    `json:"session_id"`
+	Mode            Mode      `json:"mode"`
+	Objective       string    `json:"objective,omitempty"`
+	Steps           []Step    `json:"steps,omitempty"`
+	Criteria        []string  `json:"criteria,omitempty"`
+	Checks          []string  `json:"checks,omitempty"`
+	Status          string    `json:"status"`
+	Revision        int64     `json:"revision"`
+	Digest          string    `json:"digest,omitempty"`
+	Changed         bool      `json:"changed"`
+	Validation      []Receipt `json:"validation,omitempty"`
+	Summary         string    `json:"summary,omitempty"`
+	RequiresChanges bool      `json:"requires_changes,omitempty"`
+	StartDigest     string    `json:"start_digest,omitempty"`
+	NoChangeReason  string    `json:"no_change_reason,omitempty"`
 }
 
 // Store owns task state only. It never stores or restores permission grants.
@@ -68,6 +72,13 @@ func New(db *sql.DB, root string, initial Mode) *Store {
 	return &Store{db: db, root: filepath.Clean(root), initial: initial, memory: map[string]Task{}}
 }
 func clone(t Task) Task {
+	if t.Contract != nil {
+		c := *t.Contract
+		c.Targets = slices.Clone(c.Targets)
+		c.Acceptance = slices.Clone(c.Acceptance)
+		c.Checks = slices.Clone(c.Checks)
+		t.Contract = &c
+	}
 	t.Steps = slices.Clone(t.Steps)
 	t.Criteria = slices.Clone(t.Criteria)
 	t.Checks = slices.Clone(t.Checks)
@@ -240,6 +251,13 @@ func (s *Store) RecordCheck(ctx context.Context, id string, r Receipt) error {
 }
 func (t Task) ValidationProblem(commands map[string]string) string {
 	required := slices.Clone(t.Checks)
+	if t.Contract != nil {
+		for _, name := range t.Contract.Checks {
+			if !slices.Contains(required, name) {
+				required = append(required, name)
+			}
+		}
+	}
 	if len(required) == 0 && t.Changed {
 		for _, r := range t.Validation {
 			if !slices.Contains(required, r.Name) {
@@ -264,11 +282,41 @@ func (t Task) ValidationProblem(commands map[string]string) string {
 	return ""
 }
 func (s *Store) Finish(ctx context.Context, id, status, summary string, commands map[string]string) (Task, error) {
-	if len(summary) > 2000 || (status != "planned" && status != "completed" && status != "blocked") {
+	return s.FinishWithReason(ctx, id, status, summary, "", commands)
+}
+
+// BeginTurn records the actual baseline before generation. It does not confer permissions.
+func (s *Store) BeginTurn(ctx context.Context, id string, requiresChanges bool, resume ...bool) (Task, error) {
+	return s.update(ctx, id, func(t *Task) error {
+		if len(resume) == 0 || !resume[0] || !t.RequiresChanges || t.Status == "completed" || t.Status == "idle" {
+			t.RequiresChanges = requiresChanges
+			t.StartDigest = t.Digest
+			t.NoChangeReason = ""
+		}
+		return nil
+	})
+}
+
+func (t Task) CompletionProblem() string {
+	if t.Mode == Execute && t.RequiresChanges && (t.StartDigest == "" || t.Digest == "") {
+		return "Implementation cannot be verified: the workspace fingerprint is unavailable"
+	}
+	if t.Mode == Execute && t.RequiresChanges && t.StartDigest == t.Digest && strings.TrimSpace(t.NoChangeReason) == "" {
+		return "Implementation requested but no file changes were verified. Implement the requested change or call finish_task with an explicit no_change_reason explaining why no change is needed; mark blocked/partial when unfinished"
+	}
+	return ""
+}
+
+func (s *Store) FinishWithReason(ctx context.Context, id, status, summary, noChangeReason string, commands map[string]string) (Task, error) {
+	if len(summary) > 2000 || len(noChangeReason) > 2000 || (status != "planned" && status != "completed" && status != "blocked" && status != "partial") {
 		return Task{}, fmt.Errorf("invalid task status or summary")
 	}
 	return s.update(ctx, id, func(t *Task) error {
 		if status == "completed" {
+			t.NoChangeReason = strings.TrimSpace(noChangeReason)
+			if problem := t.CompletionProblem(); problem != "" {
+				return errors.New(problem)
+			}
 			if t.Mode != Execute {
 				return fmt.Errorf("completion requires execute mode")
 			}

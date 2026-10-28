@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -125,6 +126,7 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 	if taskErr != nil || historyErr != nil {
 		return fmt.Errorf("evaluation results unavailable")
 	}
+
 	calls := map[string]bool{}
 	count := 0
 	for _, msg := range history {
@@ -136,6 +138,21 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 	result := Evaluate(job.Case, job.Workspace, Observation{Response: response.String(), Error: runError, Tools: calls, Task: task})
 	result.Model = string(service.Model().ID)
 	result.ToolCalls = count
+	result.TaskStatus = task.Status
+	result.RequiresChanges = task.RequiresChanges
+	result.ChangesVerified = task.StartDigest != "" && task.Digest != "" && task.StartDigest != task.Digest
+	result.NoChangeJustification = strings.TrimSpace(task.NoChangeReason) != ""
+	for name := range calls {
+		if len(result.ToolNames) < 64 {
+			result.ToolNames = append(result.ToolNames, tools.RedactCredentials(strings.Map(func(r rune) rune {
+				if r < ' ' || r == 127 {
+					return -1
+				}
+				return r
+			}, name)))
+		}
+	}
+	sort.Strings(result.ToolNames)
 	return json.NewEncoder(out).Encode(result)
 }
 func allowedPermission(root string, execution bool, mode string, request permission.PermissionRequest) bool {

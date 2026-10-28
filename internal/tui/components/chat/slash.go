@@ -34,6 +34,7 @@ func slashOptions(value string) ([]slashOption, bool) {
 	query := strings.ToLower(value)
 	var options []slashOption
 	for _, cmd := range commands.Builtins {
+		cmd = commands.Localized(cmd)
 		options = append(options, slashOption{"/" + cmd.ID, cmd.Description, cmd.Group})
 	}
 	if query == "/mode" || strings.HasPrefix(query, "/mode ") {

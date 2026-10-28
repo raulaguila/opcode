@@ -25,6 +25,7 @@ type splitPaneLayout struct {
 	height        int
 	ratio         float64
 	verticalRatio float64
+	bottomHeight  int
 
 	rightPanel  Container
 	leftPanel   Container
@@ -132,6 +133,9 @@ func (s *splitPaneLayout) SetSize(width, height int) tea.Cmd {
 	var topHeight, bottomHeight int
 	if s.bottomPanel != nil {
 		topHeight = int(float64(height) * s.verticalRatio)
+		if s.bottomHeight > 0 {
+			topHeight = max(0, height-min(s.bottomHeight, height))
+		}
 		bottomHeight = height - topHeight
 	} else {
 		topHeight = height
@@ -281,3 +285,5 @@ func WithVerticalRatio(ratio float64) SplitPaneOption {
 		s.verticalRatio = ratio
 	}
 }
+
+func (s *splitPaneLayout) SetBottomHeight(height int) { s.bottomHeight = max(1, height) }

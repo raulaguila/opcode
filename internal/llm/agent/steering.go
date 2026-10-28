@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/review"
 	"github.com/raulaguila/opcode/internal/workflow"
@@ -25,6 +26,7 @@ type instruction struct {
 }
 
 type generationRun struct {
+	contract         *workflow.Contract
 	ctx              context.Context
 	cancel           context.CancelFunc
 	done             chan struct{}
@@ -37,6 +39,8 @@ type generationRun struct {
 	limits           config.RuntimeConfig
 	steps, toolBytes int
 	hookRuns         int
+	provider         provider.Provider
+	requiresPlan     bool
 }
 
 func (a *agent) Run(ctx context.Context, sessionID, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {

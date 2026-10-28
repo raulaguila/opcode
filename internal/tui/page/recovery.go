@@ -1,11 +1,11 @@
 package page
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 )
@@ -18,12 +18,12 @@ func (p *chatPage) composerPanel() string {
 		panels = append(panels, view)
 	}
 	if p.recoveryHeight() > 0 {
-		state := "Execução interrompida"
+		state := recoveryTitle(p.recovery.err)
 		if p.recovery.resolved {
-			state = "Execução retomada"
+			state = config.Text("Execução retomada", "Run resumed")
 		}
 		first := state + " · " + panelText(tools.RedactCredentials(p.recovery.err.Error()))
-		panels = append(panels, ansi.Truncate(first, max(1, p.width), "…")+"\n"+ansi.Truncate(" /retry Retomar · /error Detalhes · /settings Configuração", max(1, p.width), "…"))
+		panels = append(panels, ansi.Truncate(first, max(1, p.width), "…")+"\n"+ansi.Truncate(recoveryActions(p.recovery.err), max(1, p.width), "…"))
 	}
 	return strings.Join(panels, "\n")
 }
@@ -55,14 +55,18 @@ func (p *chatPage) recoveryMouse(msg tea.MouseMsg) tea.Cmd {
 	if msg.Y != height-editorHeight+p.workflowHeight()+1 {
 		return nil
 	}
-	// Actions are also available as slash commands and in the command palette.
-	if msg.X < 18 {
-		return p.workspaceCommand("retry", "")
+	actions := recoveryActions(p.recovery.err)
+	commands := []string{"retry", "error", "settings", "context", "models", "changes"}
+	chosen := "error"
+	best := -1
+	for _, command := range commands {
+		pos := strings.Index(actions, "/"+command)
+		if pos >= 0 && pos <= msg.X && pos > best {
+			best = pos
+			chosen = command
+		}
 	}
-	if msg.X < 37 {
-		return p.workspaceCommand("error", "")
-	}
-	return p.workspaceCommand("settings", "")
+	return p.workspaceCommand(chosen, "")
 }
 func (p *chatPage) queueSummary() string {
 	if p.app == nil || p.app.CoderAgent == nil {
@@ -70,7 +74,7 @@ func (p *chatPage) queueSummary() string {
 	}
 	if queue, ok := p.app.CoderAgent.(agent.QueueControl); ok {
 		if n := len(queue.QueuedInstructions(p.session.ID)); n > 0 {
-			return fmt.Sprintf(" · Fila %d · /queue", n)
+			return p.pendingLabel(n)
 		}
 	}
 	return ""
@@ -90,4 +94,34 @@ func (p *chatPage) PrepareSessionDraft(id string) error {
 		return drafts.PrepareSessionDraft(id)
 	}
 	return nil
+}
+
+// Recovery suggestions never retry automatically or discard a draft.
+func recoveryTitle(err error) string {
+	s := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(s, "401") || strings.Contains(s, "403") || strings.Contains(s, "api key") || strings.Contains(s, "unauthorized") || strings.Contains(s, "authentication"):
+		return config.Text("Autenticação necessária", "Authentication required")
+	case strings.Contains(s, "context") || strings.Contains(s, "out of memory") || strings.Contains(s, "memory") || strings.Contains(s, "413"):
+		return config.Text("Limite do modelo atingido", "Model limit reached")
+	case strings.Contains(s, "cancel"):
+		return config.Text("Execução cancelada", "Run cancelled")
+	case strings.Contains(s, "conflict") || strings.Contains(s, "modified externally"):
+		return config.Text("Conflito de arquivo", "File conflict")
+	default:
+		return config.Text("Execução interrompida", "Run interrupted")
+	}
+}
+func recoveryActions(err error) string {
+	title := recoveryTitle(err)
+	switch title {
+	case config.Text("Autenticação necessária", "Authentication required"):
+		return config.Text(" /settings Configurar acesso · /error Detalhes", " /settings Configure access · /error Details")
+	case config.Text("Limite do modelo atingido", "Model limit reached"):
+		return config.Text(" /context Rever contexto · /models Trocar modelo · /error", " /context Review context · /models Change model · /error")
+	case config.Text("Conflito de arquivo", "File conflict"):
+		return config.Text(" /changes Revisar arquivos · /error Detalhes", " /changes Review files · /error Details")
+	default:
+		return config.Text(" /retry Retomar · /error Detalhes · /settings Configuração", " /retry Resume · /error Details · /settings Configuration")
+	}
 }

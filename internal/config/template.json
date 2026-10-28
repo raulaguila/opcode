@@ -1,0 +1,55 @@
+{
+  "$schema": "https://raw.githubusercontent.com/raulaguila/opcode/develop/opcode-schema.json",
+  "schemaVersion": 1,
+  "providerProfiles": {
+    "ollama": {
+      "name": "Ollama local",
+      "backend": "local",
+      "baseURL": "http://127.0.0.1:11434/v1",
+      "api": "ollama",
+      "contextWindow": 16384,
+      "defaultMaxTokens": 2048,
+      "disabled": false
+    },
+    "lmstudio": {
+      "name": "LM Studio local",
+      "backend": "local",
+      "baseURL": "http://127.0.0.1:1234/v1",
+      "api": "chat_completions",
+      "contextWindow": 16384,
+      "defaultMaxTokens": 2048,
+      "disabled": true
+    },
+    "openai": {
+      "name": "OpenAI",
+      "backend": "openai",
+      "baseURL": "https://api.openai.com/v1",
+      "api": "responses",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "disabled": true
+    },
+    "anthropic": {
+      "name": "Anthropic",
+      "backend": "anthropic",
+      "baseURL": "https://api.anthropic.com",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "disabled": true
+    }
+  },
+  "tui": {
+    "theme": "opcode",
+    "sidebar": "auto",
+    "language": "en",
+    "notifications": "off"
+  },
+  "preferences": {
+    "resumeLast": false,
+    "showProcess": true
+  },
+  "runtime": {
+    "mode": "execute"
+  },
+  "security": {
+    "sandbox": "bubblewrap"
+  }
+}

@@ -51,6 +51,8 @@ type modelDialogCmp struct {
 	request                                  uint64
 	cancel                                   context.CancelFunc
 	target                                   config.AgentName
+	probeConfirm, probeRunning               bool
+	setup                                    bool
 }
 
 var modelKeys = struct {
@@ -92,6 +94,8 @@ func (m *modelDialogCmp) Close() {
 	}
 	m.request++ // Discard late results after closing, refreshing or switching providers.
 	m.loading = false
+	m.probeConfirm = false
+	m.probeRunning = false
 }
 func (m *modelDialogCmp) load() tea.Cmd {
 	m.Close()
@@ -99,7 +103,7 @@ func (m *modelDialogCmp) load() tea.Cmd {
 	m.note = "Configured catalog"
 	m.filter()
 	if m.provider == "" {
-		m.note = "Configure a provider in .opcode.json"
+		m.note = "Configure a provider in ~/.opcode/config.json"
 		return nil
 	}
 	fetch := config.ModelCatalog(m.provider)
@@ -117,6 +121,9 @@ func (m *modelDialogCmp) load() tea.Cmd {
 	}
 }
 func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.modelProbeUpdate(msg); handled {
+		return m, cmd
+	}
 	switch msg := msg.(type) {
 	case ModelCatalogLoadedMsg:
 		if msg.request != m.request {
@@ -126,7 +133,7 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancel = nil
 		if msg.err == nil {
 			m.models = msg.models
-			m.note = fmt.Sprintf("Provider catalog · %d models", len(m.models))
+			m.note = fmt.Sprintf(config.Text("Catálogo do provedor · %d modelos", "Provider catalog · %d models"), len(m.models))
 			m.filter()
 		} else if errors.Is(msg.err, models.ErrCatalogUnsupported) {
 			m.note = "Configured catalog · live listing unavailable"
@@ -295,10 +302,13 @@ func (m *modelDialogCmp) contentWidth() int {
 	return max(12, min(68, m.width-8))
 }
 func (m *modelDialogCmp) View() string {
+	if m.probeConfirm || m.probeRunning {
+		return m.probeView()
+	}
 	t := theme.CurrentTheme()
 	width := m.contentWidth()
 	base := styles.BaseStyle().Width(width)
-	line := func(s string) string { return base.Render(ansi.Truncate(s, width, "…")) }
+	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), width, "…")) }
 	provider := string(m.provider)
 	if provider == "" {
 		provider = "No provider"
@@ -311,14 +321,17 @@ func (m *modelDialogCmp) View() string {
 	if m.target != "" && m.target != config.AgentCoder {
 		role = string(m.target)
 	}
-	title := "Select " + role + " model · " + provider
+	title := config.Text("Escolher modelo ", "Select ") + role + config.Text(" · ", " model · ") + provider
+	if m.setup {
+		title = config.Text("Configuração · 2/3 · ", "Setup · 2/3 · ") + title
+	}
 	if m.provider == "" {
 		title = "No provider · Ctrl+P settings"
 	}
 	if len(m.availableProviders) > 1 {
 		title = "‹ " + title + " ›"
 	}
-	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(title, width, "…")), line("Search: " + m.query)}
+	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(interfaceCopy(title), width, "…")), line(config.Text("Buscar: ", "Search: ") + m.query)}
 	note := m.note
 	if m.loading {
 		note = "Loading provider models…"
@@ -349,26 +362,26 @@ func (m *modelDialogCmp) View() string {
 		selected := m.filtered[m.selectedIdx]
 		contextNote := ""
 		if selected.ContextEstimated {
-			contextNote = " (fallback estimate)"
+			contextNote = config.Text(" (estimativa alternativa)", " (fallback estimate)")
 		}
-		lines = append(lines, line(fmt.Sprintf("Context: %d%s · output: %d", selected.ContextWindow, contextNote, selected.DefaultMaxTokens)))
+		lines = append(lines, line(fmt.Sprintf(config.Text("Contexto: %d%s · saída: %d", "Context: %d%s · output: %d"), selected.ContextWindow, contextNote, selected.DefaultMaxTokens)))
 		caps := []string{}
 		if selected.CanReason {
-			caps = append(caps, "reasoning")
+			caps = append(caps, config.Text("raciocínio", "reasoning"))
 		}
 		if selected.SupportsAttachments {
-			caps = append(caps, "attachments")
+			caps = append(caps, config.Text("anexos", "attachments"))
 		}
 		if len(caps) == 0 {
-			caps = append(caps, "none")
+			caps = append(caps, config.Text("nenhuma", "none"))
 		}
 		protocol := selected.API
 		if protocol == "" {
-			protocol = "provider default"
+			protocol = config.Text("padrão do provedor", "provider default")
 		}
-		lines = append(lines, line("API: "+protocol+" · capabilities declared: "+strings.Join(caps, ", ")))
+		lines = append(lines, line("API: "+protocol+config.Text(" · capacidades declaradas: ", " · capabilities declared: ")+strings.Join(caps, ", ")))
 	}
-	lines = append(lines, line("↑↓ select · ←→ provider · Enter choose · Ctrl+F favorite"), line("Ctrl+P settings · Ctrl+A role · Ctrl+R refresh · Esc close"))
+	lines = append(lines, line("↑↓ select · ←→ provider · Enter choose · Ctrl+F favorite"), line("Ctrl+P settings · Ctrl+A role · Ctrl+R catalog · Ctrl+T probe · Esc"))
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 func (m *modelDialogCmp) BindingKeys() []key.Binding { return layout.KeyMapToSlice(modelKeys) }
@@ -422,3 +435,5 @@ func getModelsForProvider(provider models.ModelProvider) []models.Model {
 	return found
 }
 func NewModelDialogCmp() ModelDialog { return &modelDialogCmp{} }
+
+func (m *modelDialogCmp) SetSetup(enabled bool) { m.setup = enabled }

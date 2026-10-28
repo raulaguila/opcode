@@ -11,6 +11,19 @@ revisão/undo/redo, sessões e recuperação, ferramentas avançadas, skills/hoo
 avaliações repetíveis. A implementação deve reutilizar a arquitetura existente,
 preservar permissões e isolamento, e manter a suíte de testes passando.
 
+A segunda evolução adiciona conclusão verificável, diagnóstico sem inferência,
+contexto adaptativo, configurações com origem, interface compacta, diff adaptável,
+índice incremental e exploração limitada. Formatação, worktrees e OAuth MCP
+continuam explícitos e autorizados. Um servidor loopback optativo mantém sessões
+e PTYs vivos entre conexões de clientes autenticados; permissões não são
+persistidas, e encerrar o servidor encerra seus processos.
+
+As novas configurações globais usam `~/.opcode/config.json`; o override de
+projeto é `.opcode/config.json`. Sem arquivo global compatível, a primeira
+inicialização normal cria um template de provedores/preferências, sem rede,
+credenciais ou modelo escolhido. Arquivos antigos continuam sendo usados no
+próprio caminho e nunca são sobrescritos pelo template.
+
 Credenciais vêm de variáveis de ambiente ou configuração privada. Descobrir
 modelos não executa inferência nem baixa pesos. Perguntar/Planejar não recebem
 capacidades mutáveis. Executar mantém aprovação e sandbox. Aprovações não são
@@ -24,3 +37,8 @@ Identidade pública: **Opcode**, módulo `github.com/raulaguila/opcode`, branch
 `develop`. A instalação documentada usa o checkout ou `go install ...@develop`.
 Distribuições e releases só são anunciadas quando publicadas. A licença original
 e a referência de proveniência ao OpenCode original são preservadas.
+
+O fluxo diário inclui `/setup`, `/contract`, `/local-status` e `/worktrees`,
+com configuração offline pela CLI. Resultado parcial é distinto de conclusão.
+A validação de fixtures mede seus critérios declarados, não uma taxa geral de
+qualidade do modelo. Ver [guia diário](docs/daily-workflow.md).

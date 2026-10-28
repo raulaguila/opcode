@@ -170,7 +170,7 @@ func renderAssistantMessage(
 			content = "*Finished without output*"
 		}
 		if isSummary {
-			info = append(info, baseStyle.Width(width-1).Foreground(t.TextMuted()).Render(" (summary)"))
+			info = append(info, baseStyle.Width(width-1).Foreground(t.TextMuted()).Render(config.Text(" (resumo)", " (summary)")))
 		}
 
 		content = renderMessage(content, false, true, width, info...)
@@ -588,7 +588,7 @@ func renderToolMessage(
 			Italic(true).
 			Width(width - 2).
 			Foreground(t.TextMuted()).
-			Render("Waiting for response...")
+			Render(config.Text("Aguardando resposta…", "Waiting for response..."))
 	}
 
 	parts := []string{}

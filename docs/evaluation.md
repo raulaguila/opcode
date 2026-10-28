@@ -72,6 +72,13 @@ falha, mantendo o relatório com os critérios aprovados/reprovados. Falhas de
 configuração, limite de tempo e relatório inválido também são diferenciadas sem
 copiar payloads de provedores. Workspaces temporários são removidos ao final.
 
+Relatórios live também registram `task_status`, necessidade/observação de
+alterações, presença de justificativa sem mudança e nomes limitados/redigidos de
+ferramentas. Esses metadados permitem distinguir trabalho parcial/bloqueado de
+conclusão; não incluem argumentos, texto da justificativa, respostas completas,
+hash de arquivos do usuário ou credenciais. Campos ausentes no modo offline
+não representam resultados executados.
+
 ## Testes
 
 ```sh
@@ -91,3 +98,23 @@ go test -tags=integration ./internal/evaluation \
 O teste não instala modelos. Usa `llama3.1:8b` por padrão e admite
 `OPCODE_LIVE_OLLAMA_MODEL` e `LOCAL_ENDPOINT`. O teste é opt-in; a suíte comum
 não faz inferência nem acessa uma API externa.
+
+## Comparar mudanças e repetir os mesmos critérios
+
+```sh
+opcode evaluate --live --case edit,resume --repeat 2 \
+  --provider-config /caminho/provedor.json --allow-execution \
+  --output /tmp/opcode-repeated.json
+```
+
+`--case` seleciona IDs existentes; não modifica prompts nem critérios. O hash
+continua identificando a suíte completa de origem, e `selected_cases` registra o
+subconjunto. `--repeat` aceita 1–3 execuções live, cada uma com processos e
+workspaces novos; multiplica as requisições e possíveis custos. O relatório
+registra `trial` quando há repetição e duração por caso. O modo offline permanece
+determinístico e só valida uma vez. Compare uma variável por vez — instruções,
+schema ou modelo — e preserve os resultados reprovados como linha de base.
+
+A correção do arquivo não implica checks aprovados: uma fixture que exige apenas
+conteúdo pode passar com a tarefa `partial`. Uma avaliação de conclusão completa
+deve exigir também `task_status: completed` e `check_passed` para seus checks.

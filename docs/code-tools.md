@@ -89,3 +89,35 @@ Prévia e aprovação de alterações com NUL ou UTF-8 inválido usam somente um
 representação binária com tamanho e SHA256. Isso evita que o gerador de diff de
 texto encerre o processo; os snapshots de undo/redo continuam preservando todos
 os bytes originais, inclusive NUL e sequências inválidas.
+
+## Índice incremental e formatação
+
+`search_code_index` recebe `query` (até 512 bytes e 32 termos) e `limit` (padrão
+20, máximo 50). Usa o SQLite já incluído, com FTS5 e ranking BM25. Cada consulta
+atualiza os arquivos alterados, remove entradas apagadas/ignoradas e retorna
+trechos de até 80 linhas/8 KiB. O índice privado fica em
+`data.directory/code-index/<hash-do-workspace>.sqlite`, com arquivo 0600 e
+diretório 0700. Não há serviço externo nem embeddings obrigatórios.
+
+A descoberta exige `rg`, respeita `.gitignore` inclusive fora de repositórios e
+omite caminhos sensíveis, links, dependências, armazenamento e
+`.opcode-worktrees`. Cada varredura tem limite de 10 mil arquivos, 256 KiB por
+arquivo e 20 MiB de texto; exceder um limite aborta a atualização sem substituir
+o índice anterior. O banco tem teto de 32768 páginas SQLite. Credenciais
+conhecidas são redigidas antes da persistência. A recuperação autoriza novamente
+o arquivo e compara seu conteúdo atual com o hash indexado. Snippets continuam
+sendo navegação: não concedem evidência integral para uma edição. Remover o
+diretório `code-index` com o aplicativo fechado descarta somente esse cache.
+
+`format_project` recebe `preset` e `files` explícitos (1–64 arquivos regulares,
+até 2 MiB cada). Os presets `go`, `python` e `javascript`/`typescript`/`json`
+executam, respectivamente, `gofmt -w`, `ruff format` e `prettier --write`.
+O executável precisa estar instalado e acessível no sandbox. A ferramenta não
+usa `npx`, não instala pacotes e não roda automaticamente após editar. Cada
+comando passa pela aprovação normal e pelo mesmo gerenciador de processos,
+saída ao vivo, sandbox e cancelamento de `bash`. Revise o diff e execute
+`run_checks` depois; formatar não significa que testes passaram.
+
+Os outlines continuam estruturais: parser Go e document symbols do servidor
+LSP configurado nas demais linguagens. Um LSP ausente é informado, sem inventar
+declarações a partir de expressões regulares.

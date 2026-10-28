@@ -25,19 +25,41 @@ func preferredExisting(current, legacy string) string {
 	return current
 }
 func ProjectConfigPath(root string) string {
-	return preferredExisting(filepath.Join(root, "."+appName+".json"), filepath.Join(root, "."+legacyAppName+".json"))
+	current := filepath.Join(root, "."+appName, "config.json")
+	for _, path := range []string{current, filepath.Join(root, "."+appName+".json"), filepath.Join(root, "."+legacyAppName+".json")} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			return path
+		}
+	}
+	return current
 }
 func DatabasePath(dataDir string) string {
 	return preferredExisting(filepath.Join(dataDir, appName+".db"), filepath.Join(dataDir, legacyAppName+".db"))
 }
 func defaultDataPath(root string) string {
-	return preferredExisting(filepath.Join(root, "."+appName), filepath.Join(root, "."+legacyAppName))
+	current, legacy := filepath.Join(root, "."+appName), filepath.Join(root, "."+legacyAppName)
+	// A new configuration-only directory must not hide an existing database.
+	for _, directory := range []string{current, legacy} {
+		for _, name := range []string{appName + ".db", legacyAppName + ".db"} {
+			if _, err := os.Lstat(filepath.Join(directory, name)); !os.IsNotExist(err) {
+				return directory
+			}
+		}
+	}
+	return preferredExisting(current, legacy)
 }
 func globalConfigPath() (string, bool) {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "", false
+	}
 	xdg := os.Getenv("XDG_CONFIG_HOME")
 	if xdg == "" {
 		xdg = filepath.Join(home, ".config")
+	}
+	current := filepath.Join(home, "."+appName, "config.json")
+	if _, err := os.Lstat(current); !os.IsNotExist(err) {
+		return current, true
 	}
 	for _, name := range []string{appName, legacyAppName} {
 		for _, path := range []string{filepath.Join(home, "."+name+".json"), filepath.Join(xdg, name, "."+name+".json"), filepath.Join(home, ".config", name, "."+name+".json")} {
@@ -46,7 +68,7 @@ func globalConfigPath() (string, bool) {
 			}
 		}
 	}
-	return filepath.Join(home, "."+appName+".json"), false
+	return current, false
 }
 
 // LookupEnvironmentWith gives the new alias precedence, including an explicitly

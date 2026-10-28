@@ -99,6 +99,8 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 	}
 	wait("Connections and preferences")
 	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	wait("Add connection")
+	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
 	wait("Configure provider")
 	// The endpoint is the fourth field; replace its default without ever entering a key.
 	for range 3 {
@@ -117,7 +119,7 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 	require.NoError(t, <-done)
 	finished = true
 	selected := application.CoderAgent.Model()
-	require.Equal(t, "local", selected.ProviderProfile)
+	require.Equal(t, "ollama", selected.ProviderProfile)
 	require.Equal(t, "ollama", selected.API)
 	require.Equal(t, "llama3.1:8b", selected.APIModel)
 	require.NoError(t, cfg.ValidateStartup())
@@ -127,7 +129,7 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 	var document map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(saved, &document))
 	require.Contains(t, document, "providerProfiles")
-	require.Contains(t, string(saved), "profile.local.llama3.1:8b")
+	require.Contains(t, string(saved), "profile.ollama.llama3.1:8b")
 	require.Contains(t, string(saved), "future")
 }
 func TestSettingsSwitchesAreExclusiveAndCancelPreviousCatalog(t *testing.T) {

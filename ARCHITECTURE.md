@@ -79,9 +79,43 @@ A suíte real dos provedores exige tag de build e opt-in por ambiente; seu relat
 
 Go 1.26 ou posterior. O build continua sendo `go build .`; workflows usam a versão declarada no `go.mod`. A verificação comum é `go test -race ./...` e `go vet ./...`. Testes de sandbox usam dados temporários e indicam quando o ambiente não suporta namespaces. Testes externos de geração são separados e optativos.
 
+`scripts/build-release` gera tar.gz e SHA256 locais com metadados fixos, trimpath,
+CGO desativado e versão explícita. `make release-local` e o workflow de build
+usam esse caminho; geração de artefatos não publica releases. O índice FTS5/BM25
+pertence a um SQLite privado separado, incremental e limitado, sem migração do
+banco principal. A consulta revalida acesso e conteúdo antes de retornar trechos;
+não concede evidência de leitura para edição.
+
+## Servidor local e autenticação MCP
+
+`internal/server` oferece API autenticada somente em loopback. Seu ciclo de vida
+é dono do cancelamento de workers, assinaturas de permissão e sessões anexadas.
+Clientes desconectados não cancelam trabalhos aceitos, e snapshots não executam
+operações. Requests de prompts podem ser deduplicados por ID; resultados usam
+identidade da execução para não sobrescrever uma execução posterior. O encerramento
+revoga permissões e cancela processos. Não há persistência do servidor ou dos PTYs
+após encerramento, nem serviço web multiusuário. `cmd/attach.go` mantém instruções
+em ordem e aprovações/respostas independentes para não bloquear um PTY.
+
+OAuth MCP reutiliza o cliente existente, com PKCE/estado e vínculo de emissor e
+recurso. Credenciais são documentos privados globais separados da configuração;
+uma geração de login impede que um refresh antigo restaure tokens removidos.
+Os transportes de dados e de autenticação recusam redirects. Tokens registrados
+em memória participam da redação de ferramentas e snapshots. As APIs e os limites
+operacionais estão em `docs/server-and-auth.md`.
+
 Consulte `docs/tools.md` para configuração, limites e diferenças entre rede de subprocessos, navegação web e serviços MCP. Consulte `internal/llm/provider/integration/README.md` para testar contas reais dos provedores.
 
 ## Provedores, perfis e primeiro acesso
+
+O caminho global padrão é `~/.opcode/config.json`; overrides de projeto usam
+`.opcode/config.json`. A resolução central em `config/migration.go` mantém os
+JSONs anteriores como fallback, atualizados no próprio caminho. A primeira
+inicialização normal sem arquivo global compatível publica o template embutido
+com arquivo 0600 e pastas novas 0700. Um link atômico impede substituição por
+inicializações concorrentes; nenhuma chave resolvida entra no template.
+Diagnósticos offline e configurações explícitas não o criam. Criar a pasta nova
+apenas para configuração não muda um banco existente na pasta anterior.
 
 `models.DiscoverProviderModels` consulta catálogos HTTP limitados e canceláveis,
 sem mutar o registro. `config.ModelCatalog`/`ProfileModelCatalog` capturam snapshots
@@ -228,3 +262,35 @@ próprio repositório. O script local de release apenas prepara uma tag, sem pus
 A licença original e a proveniência são preservadas. `autoCompact` prepara o
 contexto local da mesma sessão; a UI não dispara resumo remoto ou sessão nova
 por esse limiar.
+
+## Conclusão, calibração e exploração limitada
+
+O worker registra o digest inicial para pedidos explícitos de implementação em
+Executar. `workflow.Store` persiste `requires_changes`, `start_digest` e
+`no_change_reason` no documento JSON existente, sem nova migração. A conclusão
+exige alteração verificável ou justificativa explícita; reparos são limitados a
+duas tentativas, com resultados `partial`/`blocked` preservados no evento final.
+Nenhuma dessas informações constitui uma autorização.
+
+A calibração pertence ao runtime do agente. `provider.ContextWindowController`
+reconstrói uma conexão com janela menor sem realizar chamadas. Somente falhas
+reconhecidas antes de conteúdo/chamadas permitem até dois novos pedidos de
+geração. O histórico e ferramentas já executadas não são repetidos. A pasta de
+dados recebe documento privado limitado com chaves hash e validade de 24 horas;
+falha de leitura/gravação gera aviso e o ajuste permanece possível em memória.
+A interface opcional de recalibração exige agente ocioso.
+
+`explore_code` e o alias legado `agent` usam outro histórico, sem outro worker,
+com lista explícita de ferramentas locais de leitura. Não recebem MCP, comandos,
+escritas, hooks ou agentes aninhados. Limites locais de etapas/tempo/resultados
+somam-se ao orçamento principal; uso do modelo é contabilizado na sessão pai.
+Cancelamento e erros propagam-se pelo mesmo contexto. Não existe serviço extra
+nem dependência adicional para essas capacidades.
+
+A manutenção offline de configuração fica em `internal/config/manage.go`; a
+versão do documento é aditiva. `workflow.Contract` persiste o resultado esperado
+definido pelo usuário, e o runtime filtra suas capacidades na exposição e na
+execução. `plan_arguments.go` mantém o binding plano de Ollama separado da
+validação do Store. `models.InspectOllama` consulta somente metadados. A página
+Git reutiliza ferramentas e permissões existentes; worktrees abrem outro processo
+Opcode, preservando o isolamento dos singletons e retornando à TUI anterior.

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"unicode"
@@ -326,11 +325,8 @@ func configuredFilePath() string {
 	if path := viper.ConfigFileUsed(); path != "" {
 		return path
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".opcode.json")
+	path, _ := globalConfigPath()
+	return path
 }
 
 func requiresAPIKey(backend models.ModelProvider) bool {

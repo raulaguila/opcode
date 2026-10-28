@@ -75,7 +75,7 @@ var helpWidget = ""
 // getHelpWidget returns the help widget with current theme colors
 func getHelpWidget() string {
 	t := theme.CurrentTheme()
-	helpText := "ctrl+? help"
+	helpText := config.Text("ctrl+? ajuda", "ctrl+? help")
 
 	return styles.Padded().
 		Background(t.TextMuted()).
@@ -221,7 +221,7 @@ func (m *statusCmp) projectDiagnostics() string {
 	}
 
 	if len(errorDiagnostics) == 0 && len(warnDiagnostics) == 0 && len(hintDiagnostics) == 0 && len(infoDiagnostics) == 0 {
-		return "No diagnostics"
+		return config.Text("Sem diagnósticos", "No diagnostics")
 	}
 
 	diagnostics := []string{}
@@ -271,21 +271,21 @@ func (m statusCmp) model() string {
 
 	cfg := config.Get()
 
-	coder, ok := cfg.Agents[config.AgentCoder]
-	if !ok {
-		return "Unknown"
+	label := config.Text("Escolher modelo", "Choose model")
+	if cfg != nil {
+		if model, ok := models.SupportedModels[cfg.Agents[config.AgentCoder].Model]; ok && model.Name != "" {
+			label = model.Name
+		}
 	}
-	model := models.SupportedModels[coder.Model]
 
 	return styles.Padded().
 		Background(t.Secondary()).
 		Foreground(t.Background()).
-		Render(model.Name + " ▾")
+		Render(label + " ▾")
 }
 
 func ModelButtonWidth() int {
-	model := models.SupportedModels[config.Get().Agents[config.AgentCoder].Model]
-	return lipgloss.Width(model.Name+" ▾") + 2
+	return lipgloss.Width((statusCmp{}).model())
 }
 
 func NewStatusCmp(lspClients map[string]*lsp.Client) StatusCmp {

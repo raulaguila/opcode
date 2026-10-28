@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"github.com/raulaguila/opcode/internal/config"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -98,11 +99,12 @@ func (q *quitDialogCmp) View() string {
 		noStyle = noStyle.Background(t.Background()).Foreground(t.Primary())
 	}
 
-	yesButton := yesStyle.Padding(0, 1).Render("Yes")
-	noButton := noStyle.Padding(0, 1).Render("No")
+	yesButton := yesStyle.Padding(0, 1).Render(config.Text("Sim", "Yes"))
+	noButton := noStyle.Padding(0, 1).Render(config.Text("Não", "No"))
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Left, yesButton, spacerStyle.Render("  "), noButton)
 
+	question := config.Text("Deseja sair?", question)
 	width := lipgloss.Width(question)
 	remainingWidth := width - lipgloss.Width(buttons)
 	if remainingWidth > 0 {

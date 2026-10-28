@@ -40,6 +40,9 @@ func TestHeadlessPlanModeAndUserQuestionPreserveDraft(t *testing.T) {
 		require.NoError(t, err)
 	}
 	isolateTUIStorage(t)
+	previousLanguage := config.Get().TUI.Language
+	config.Get().TUI.Language = "pt"
+	t.Cleanup(func() { config.Get().TUI.Language = previousLanguage })
 	store := workflow.New(nil, t.TempDir(), workflow.Execute)
 	questions := interaction.NewQuestions()
 	_, err := store.UpdatePlan(context.Background(), "s", "Corrigir e validar", []workflow.Step{{Title: "Investigar", Status: "completed"}, {Title: "Validar", Status: "in_progress"}}, []string{"Teste passa"}, nil)

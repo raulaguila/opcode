@@ -328,9 +328,9 @@ func (f *filepickerCmp) View() string {
 		Render(f.viewport.View())
 	var insertExitText string
 	if f.IsCWDFocused() {
-		insertExitText = "Press esc to exit typing path"
+		insertExitText = config.Text("Esc volta à seleção de arquivos", "Press esc to exit typing path")
 	} else {
-		insertExitText = "Press i to start typing path"
+		insertExitText = config.Text("I permite digitar o caminho", "Press i to start typing path")
 	}
 
 	content := lipgloss.JoinVertical(

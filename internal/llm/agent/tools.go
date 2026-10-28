@@ -39,6 +39,8 @@ func CoderAgentTools(
 	otherTools = append(otherTools, tools.NewProjectTools(lspClients)...)
 	otherTools = append(otherTools, tools.NewArtifactTools()...)
 	otherTools = append(otherTools, tools.NewValidationTools()...)
+	otherTools = append(otherTools, tools.NewProductivityTools(permissions, manager)...)
+	otherTools = append(otherTools, newExploreTool(lspClients, permissions))
 	otherTools = append(otherTools, tools.NewAdvancedNavigationTools(lspClients, permissions)...)
 	otherTools = append(otherTools, tools.NewChecksTool(permissions, manager))
 	otherTools = append(otherTools, tools.NewProcessTools(manager, permissions)...)
@@ -80,6 +82,7 @@ func TaskAgentTools(lspClients map[string]*lsp.Client, services ...permission.Se
 	result = append(result, tools.NewProjectTools(lspClients)...)
 	result = append(result, tools.NewArtifactTools()...)
 	result = append(result, tools.NewValidationTools()...)
+	result = append(result, tools.NewCodeIndexTool())
 	for i, tool := range result {
 		result[i] = tools.SecureTool(tool, permissions)
 	}

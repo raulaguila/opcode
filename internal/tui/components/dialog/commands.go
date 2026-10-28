@@ -4,6 +4,8 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/tui/commands"
 	utilComponents "github.com/raulaguila/opcode/internal/tui/components/util"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -20,6 +22,7 @@ type Command struct {
 }
 
 func (ci Command) Render(selected bool, width int) string {
+	ci.Title, ci.Description = commands.Presentation(ci.ID, ci.Title, ci.Description)
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
@@ -140,7 +143,7 @@ func (c *commandDialogCmp) View() string {
 		Bold(true).
 		Width(maxWidth).
 		Padding(0, 1).
-		Render("Commands")
+		Render(config.Text("Comandos", "Commands"))
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,

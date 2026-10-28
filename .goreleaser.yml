@@ -11,16 +11,17 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
+      - -buildvcs=false
     ldflags:
-      - -s -w -X github.com/raulaguila/opcode/internal/version.Version={{.Version}}
+      - -s -w -buildid= -X github.com/raulaguila/opcode/internal/version.Version={{.Version}}
 archives:
-  - format: tar.gz
-    name_template: >-
-      opcode-
-      {{- if eq .Os "darwin" }}mac-
-      {{- else }}linux-{{end}}
-      {{- if eq .Arch "amd64" }}x86_64
-      {{- else }}{{ .Arch }}{{ end }}
+  - formats: [tar.gz]
+    name_template: "opcode-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
 checksum:
   name_template: checksums.txt
 snapshot:

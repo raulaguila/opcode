@@ -41,6 +41,8 @@ type integrationDialogCmp struct {
 	probe        func(context.Context, config.Integration) ([]string, error)
 	result       []string
 	resultOffset int
+	oauth        OAuthHandler
+	oauthEvents  chan integrationOAuthMsg
 }
 
 func NewIntegrationDialogCmp(probe func(context.Context, config.Integration) ([]string, error), allowSave ...func() error) IntegrationDialog {
@@ -53,7 +55,7 @@ func NewIntegrationDialogCmp(probe func(context.Context, config.Integration) ([]
 func (m *integrationDialogCmp) Open() tea.Cmd {
 	m.Close()
 	m.screen = "list"
-	m.note = "N adds MCP · L adds LSP · Enter edits · LSP changes require restart."
+	m.note = config.Text("N MCP · L LSP · Enter edita · Ctrl+A login · Ctrl+D logout · Ctrl+U status", "N MCP · L LSP · Enter edit · Ctrl+A login · Ctrl+D logout · Ctrl+U status")
 	m.entries = nil
 	m.selected = 0
 	c := config.Get()
@@ -93,7 +95,11 @@ func (m *integrationDialogCmp) edit(candidate config.Integration) tea.Cmd {
 		if s.Type == "" {
 			s.Type = config.MCPStdio
 		}
-		m.setFields([]string{"Name", "Transport (stdio/http/sse)", "Command (stdio)", "Arguments (JSON array)", "URL (http/sse)", "Headers from environment (JSON header:ENV)", "Child environment (JSON target:ENV)", "Disabled (true/false)"}, []string{candidate.Name, string(s.Type), s.Command, encode(s.Args), s.URL, encode(s.HeadersEnv), encode(s.EnvVars), strconv.FormatBool(s.Disabled)})
+		oauth := config.MCPOAuthConfig{}
+		if s.OAuth != nil {
+			oauth = *s.OAuth
+		}
+		m.setFields([]string{"Name", "Transport (stdio/http/sse)", "Command (stdio)", "Arguments (JSON array)", "URL (http/sse)", "Headers from environment (JSON header:ENV)", "Child environment (JSON target:ENV)", "Disabled (true/false)", "OAuth enabled (true/false)", "OAuth client ID (empty: dynamic registration)", "OAuth client secret environment variable", "OAuth scopes (space separated)", "OAuth redirect port (0: automatic)"}, []string{candidate.Name, string(s.Type), s.Command, encode(s.Args), s.URL, encode(s.HeadersEnv), encode(s.EnvVars), strconv.FormatBool(s.Disabled), strconv.FormatBool(s.OAuth != nil), oauth.ClientID, oauth.ClientSecretEnv, strings.Join(oauth.Scopes, " "), strconv.Itoa(oauth.RedirectPort)})
 	} else {
 		s := candidate.LSP
 		m.setFields([]string{"Language/name", "Command", "Arguments (JSON array)", "Disabled (true/false)"}, []string{candidate.Name, s.Command, encode(s.Args), strconv.FormatBool(s.Disabled)})
@@ -128,6 +134,20 @@ func (m *integrationDialogCmp) read() (config.Integration, error) {
 			return c, fmt.Errorf("environment must be a JSON object mapping target to source variable")
 		}
 		c.MCP.Disabled, err = strconv.ParseBool(value(7))
+		if err == nil {
+			enabled, e := strconv.ParseBool(value(8))
+			if e != nil {
+				return c, fmt.Errorf("OAuth enabled must be true or false")
+			}
+			c.MCP.OAuth = nil
+			if enabled {
+				port, e := strconv.Atoi(value(12))
+				if e != nil {
+					return c, fmt.Errorf("OAuth redirect port must be an integer")
+				}
+				c.MCP.OAuth = &config.MCPOAuthConfig{ClientID: value(9), ClientSecretEnv: value(10), Scopes: strings.Fields(value(11)), RedirectPort: port}
+			}
+		}
 	} else {
 		c.LSP.Command = value(1)
 		if json.Unmarshal([]byte(value(2)), &c.LSP.Args) != nil {
@@ -186,6 +206,8 @@ func (m *integrationDialogCmp) saveIntegration() tea.Cmd {
 }
 func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case integrationOAuthMsg:
+		return m, m.updateOAuth(msg)
 	case integrationProbeMsg:
 		if msg.request != m.request {
 			return m, nil
@@ -193,7 +215,7 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.testing = false
 		m.cancel = nil
 		if msg.err != nil {
-			m.note = "Test failed: " + msg.err.Error()
+			m.note = config.Text("Falha no teste: ", "Test failed: ") + msg.err.Error()
 		} else {
 			m.result = msg.lines
 			if len(m.result) > 1024 {
@@ -209,6 +231,10 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		if msg.String() == "esc" {
+			if m.screen == "oauth" {
+				m.Close()
+				return m, m.Open()
+			}
 			if m.testing {
 				m.Close()
 				m.note = "Test cancelled; edits are preserved."
@@ -234,8 +260,23 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.screen == "oauth" {
+			if msg.String() == "up" {
+				m.resultOffset = max(0, m.resultOffset-1)
+			}
+			if msg.String() == "down" {
+				m.resultOffset++
+			}
+			return m, nil
+		}
 		if m.screen == "list" {
 			switch msg.String() {
+			case "ctrl+a":
+				return m, m.oauthAction("login")
+			case "ctrl+d":
+				return m, m.oauthAction("logout")
+			case "ctrl+u":
+				return m, m.oauthAction("status")
 			case "up":
 				if len(m.entries) > 0 {
 					m.selected = (m.selected - 1 + len(m.entries)) % len(m.entries)
@@ -319,6 +360,9 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 func (m *integrationDialogCmp) View() string {
+	if m.screen == "oauth" {
+		return m.oauthView()
+	}
 	t := theme.CurrentTheme()
 	width := m.contentWidth()
 	base := styles.BaseStyle().Width(width)
@@ -329,16 +373,16 @@ func (m *integrationDialogCmp) View() string {
 			}
 			return r
 		}, s)
-		return base.Render(ansi.Truncate(s, width, "…"))
+		return base.Render(ansi.Truncate(interfaceCopy(s), width, "…"))
 	}
 	title := "MCP and language servers"
 	if m.screen == "edit" {
-		title = "Configure " + strings.ToUpper(m.current.Kind)
+		title = config.Text("Configurar ", "Configure ") + strings.ToUpper(m.current.Kind)
 	}
 	if m.screen == "result" {
 		title = "Connection test results"
 	}
-	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(title, width, "…"))}
+	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(interfaceCopy(title), width, "…"))}
 	if m.screen == "list" {
 		rows := m.listRows()
 		start := max(0, m.selected-rows+1)

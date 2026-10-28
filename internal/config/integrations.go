@@ -25,6 +25,7 @@ func ValidateIntegration(candidate Integration) error {
 	switch candidate.Kind {
 	case "mcp":
 		s := candidate.MCP
+		if err := s.ValidateOAuth(); err != nil { return err }
 		if len(s.Args) > 64 || len(s.Env) > 64 || len(s.Headers) > 64 || len(s.HeadersEnv) > 64 || len(s.EnvVars) > 64 {
 			return fmt.Errorf("integration settings exceed 64 entries")
 		}

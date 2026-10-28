@@ -44,6 +44,8 @@ func generateSchema() map[string]any {
 		"properties":  map[string]any{},
 	}
 
+	schema["properties"].(map[string]any)["schemaVersion"] = map[string]any{"type": "integer", "minimum": 0, "maximum": config.SchemaVersion, "description": "Configuration format version; omission preserves legacy compatibility"}
+
 	// Add Data configuration
 	schema["properties"].(map[string]any)["data"] = map[string]any{
 		"type":        "object",
@@ -102,6 +104,10 @@ func generateSchema() map[string]any {
 		"type":        "object",
 		"description": "Terminal User Interface configuration",
 		"properties": map[string]any{
+			"sidebar":       map[string]any{"type": "string", "enum": []string{"auto", "shown", "hidden"}, "default": "auto"},
+			"language":      map[string]any{"type": "string", "enum": []string{"pt", "en"}, "default": "en"},
+			"notifications": map[string]any{"type": "string", "enum": []string{"off", "bell"}, "default": "off"},
+			"keybindings":   map[string]any{"type": "object", "additionalProperties": false, "properties": keybindingSchema()},
 			"theme": map[string]any{
 				"type":        "string",
 				"description": "TUI theme name",
@@ -160,6 +166,12 @@ func generateSchema() map[string]any {
 				"headersEnv": map[string]any{"type": "object", "description": "Header name to environment variable name. Values resolve only in memory.", "additionalProperties": map[string]any{"type": "string"}},
 				"envVars":    map[string]any{"type": "object", "description": "Child environment variable to source environment variable name.", "additionalProperties": map[string]any{"type": "string"}},
 				"disabled":   map[string]any{"type": "boolean", "default": false},
+				"oauth": map[string]any{"type": "object", "description": "Explicit MCP HTTP/SSE OAuth. Tokens are stored separately in a private user auth directory.", "additionalProperties": false, "properties": map[string]any{
+					"clientID":        map[string]any{"type": "string", "maxLength": 2048},
+					"clientSecretEnv": map[string]any{"type": "string", "description": "Environment variable name, never a resolved client secret"},
+					"scopes":          map[string]any{"type": "array", "maxItems": 32, "items": map[string]any{"type": "string", "maxLength": 256}},
+					"redirectPort":    map[string]any{"type": "integer", "minimum": 0, "maximum": 65535, "default": 0},
+				}},
 				"headers": map[string]any{
 					"type":        "object",
 					"description": "HTTP headers for remote MCP servers",
@@ -398,4 +410,12 @@ func generateSchema() map[string]any {
 	}
 
 	return schema
+}
+
+func keybindingSchema() map[string]any {
+	properties := map[string]any{}
+	for name, value := range config.DefaultKeybindings {
+		properties[name] = map[string]any{"type": "string", "pattern": "^(ctrl|alt)\\+[a-z]$", "default": value}
+	}
+	return properties
 }

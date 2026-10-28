@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 
 	"github.com/charmbracelet/lipgloss"
@@ -31,18 +32,15 @@ type SessionClearedMsg struct{}
 type EditorFocusMsg bool
 
 func header(width int) string {
-	return lipgloss.JoinVertical(
-		lipgloss.Top,
-		logo(width),
-		repo(width),
-		"",
-		cwd(width),
-	)
+	return styles.BaseStyle().Bold(true).Render(ansi.Truncate("Opcode · "+filepath.Base(config.WorkingDirectory()), max(1, width), "…"))
 }
 
 func lspsConfigured(width int) string {
 	cfg := config.Get()
-	title := "LSP Configuration"
+	if cfg == nil || len(cfg.LSP) == 0 {
+		return ""
+	}
+	title := config.Text("Servidores de linguagem", "Language servers")
 	title = ansi.Truncate(title, width, "…")
 
 	t := theme.CurrentTheme()

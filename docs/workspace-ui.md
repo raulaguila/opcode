@@ -136,3 +136,84 @@ exigem ainda `--allow-execution`. Ela usa projetos, HOME e bancos temporários,
 sem ativar MCP/LSP/skills/hooks do usuário. O relatório registra critérios
 observáveis; passar um conjunto não demonstra correção semântica geral. Veja
 [avaliações repetíveis](evaluation.md) e [testes reais Ollama](ollama-live-tests.md).
+
+## Preferências e adaptação ao terminal
+
+A conversa tem um cabeçalho compacto com projeto e modo. A lateral usa
+`tui.sidebar`: `auto` aparece a partir de 140 colunas; `shown` mantém a lateral
+quando há pelo menos 110 colunas; `hidden` usa toda a largura. `Alt+B` alterna a
+preferência. O campo cresce com linhas e texto quebrado, até oito linhas, sem
+substituir o rascunho. Anexos mantêm sua própria linha.
+
+Em `/settings`, `P` abre preferências pesquisáveis por categoria, nome ou chave
+JSON. `Ctrl+A` mostra limites e atalhos avançados; `Enter` edita; `Ctrl+S` salva.
+`Ctrl+R` no editor remove a sobrescrita selecionada e revela o valor da camada
+inferior ou o padrão. Configurações já presentes no projeto são alteradas nesse
+arquivo; as demais vão para o arquivo global. O arquivo precisa ser um JSON
+válido, regular, sem links simbólicos e com até 4 MiB; falhas preservam o arquivo.
+
+`Ctrl+E` na busca mostra valores efetivos e origem: padrão, global, projeto ou
+ambiente. Credenciais, cabeçalhos privados e argumentos de processos são
+redigidos. Uma preferência controlada pelo ambiente informa o nome da variável;
+remova essa sobrescrita antes de alterar o valor na interface.
+
+```json
+{
+  "tui": {
+    "sidebar": "auto",
+    "language": "pt",
+    "notifications": "off",
+    "keybindings": {
+      "commands": "alt+k",
+      "terminal": "ctrl+p"
+    }
+  }
+}
+```
+
+Os atalhos configuráveis são `commands`, `models`, `sessions`, `terminal`, `files`,
+`theme` e `sidebar`; aceitam `ctrl+letra` ou `alt+letra` e não podem se repetir.
+Os padrões existentes continuam válidos. O idioma padrão dos controles
+localizados é inglês; `pt` seleciona português. Formulários centrais,
+preferências, permissões, ajuda e recuperação usam essa seleção. Diagnósticos de
+provedores, servidores, ferramentas e algumas mensagens legadas mantêm seu idioma
+original; conteúdo do usuário e do modelo nunca é traduzido automaticamente.
+
+Notificações são optativas: `bell` emite o sinal do terminal ao receber uma
+aprovação ou conclusão enquanto a aplicação está sem foco; `off` é o padrão.
+A entrega depende de o emulador informar mudanças de foco e permitir o sinal.
+Nenhum conteúdo da conversa é enviado ao sistema de notificações.
+
+A barra da tarefa distingue investigação, aprovação, comando, verificação e
+pergunta ao usuário. O resultado pode ser concluído, planejado, parcial ou
+bloqueado. Itens em `/queue` continuam **pendentes** até o agente incorporá-los;
+o aviso de incorporação não transforma a fila em uma segunda execução.
+
+Nas aprovações, `T` alterna diff automático, unificado e lado a lado; `F` alterna
+tela cheia e `[ ]` navega pelos arquivos. A apresentação automática usa diff
+unificado em espaços estreitos. A revisão de uma interação mostra arquivos
+selecionáveis e também aceita `T`. Navegar ou mudar a apresentação nunca aprova
+uma alteração. A opção de lembrar uma aprovação vale apenas para o escopo e
+parâmetros exatos da solicitação naquela sessão.
+
+A recuperação escolhe ações conforme a causa: autenticação oferece configurações;
+limite de modelo oferece contexto/modelos; conflito oferece revisão de arquivos;
+interrupções oferecem retomada e diagnóstico. No painel de contexto, `R` ou
+`/recalibrate` remove o limite aprendido para a conexão/modelo atual, sem executar
+inferência nem repetir ferramentas. É necessário aguardar a execução atual.
+
+## Configuração, contrato e Git integrados
+
+- `/setup`: etapas de conexão, modelo e testes opcionais confirmados.
+- `/contract`: resultado esperado, arquivos, critérios e checks; Tab muda campo,
+  Ctrl+S salva, Esc preserva o rascunho. O painel acompanha terminais pequenos.
+- `/local-status`: contexto alocado, CPU/GPU e memória do modelo no Ollama, via
+  consulta de metadados sem inferência.
+- `/worktrees`: branch e arquivos atuais, diff normal/preparado, recibos e criação
+  protegida de worktree. Abrir outra worktree suspende a TUI atual, inicia uma
+  instância isolada e retorna à conversa original quando ela termina.
+
+As telas de inicialização, saída, tema, conversas, arquivos e comandos receberam
+textos PT/EN. Conteúdo do usuário, mensagens do modelo e erros externos não são
+traduzidos por substituição. O [guia diário](daily-workflow.md) detalha os fluxos
+e seus limites.

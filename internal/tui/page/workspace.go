@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -40,6 +41,7 @@ type AgentOutcomeMsg struct {
 	SessionID string
 	Error     error
 	Done      bool
+	Outcome   string
 }
 type WorkspaceResultMsg struct {
 	session string
@@ -53,7 +55,11 @@ type workspaceAction struct {
 	line                    int
 }
 type workspacePanel struct {
+	fields                  []textinput.Model
+	focus                   int
+	contractKind            string
 	kind, title, body, note string
+	diffMode                string
 	selected                int
 	actions                 []workspaceAction
 	view                    viewport.Model
@@ -125,6 +131,14 @@ func (p *chatPage) workspaceResult(msg WorkspaceResultMsg) tea.Cmd {
 }
 func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 	switch command {
+	case "worktrees":
+		return p.openGitWorkspace()
+	case "setup":
+		return p.openSetup()
+	case "local-status":
+		return p.openLocalStatus()
+	case "contract":
+		return p.openContract()
 	case "settings", "providers":
 		return util.CmdHandler(dialog.OpenProviderDialogMsg{})
 	case "integrations":
@@ -147,6 +161,8 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 		return p.openContext(false)
 	case "compact":
 		return p.openContext(true)
+	case "recalibrate":
+		return p.recalibrateContext()
 	case "skills":
 		return p.openSkills()
 	case "skill":
@@ -242,7 +258,7 @@ func (p *chatPage) openContext(compact bool) tea.Cmd {
 			return "", false, err
 		}
 		total := status.EstimatedInputTokens + status.ReservedOutputTokens + status.SafetyTokens
-		text := fmt.Sprintf("Método: %s\nJanela: %d tokens\nEntrada estimada: %d\nSchemas das ferramentas: %d\nReserva de resposta: %d\nMargem: %d\nTotal previsto: %d\nCabe na janela: %t\nMensagens compactadas: %d\n\nA estimativa inclui instruções, histórico e schemas. O limite do servidor pode ser menor. Compactar altera apenas a preparação do contexto, preservando a conversa salva.", status.Method, status.ContextWindow, status.EstimatedInputTokens, status.ToolSchemaTokens, status.ReservedOutputTokens, status.SafetyTokens, total, status.Fits, status.CompactedMessages)
+		text := fmt.Sprintf("Método: %s\nJanela: %d tokens\nEntrada estimada: %d\nSchemas das ferramentas: %d\nReserva de resposta: %d\nMargem: %d\nTotal previsto: %d\nCabe na janela: %t\nMensagens compactadas: %d\n\nA estimativa inclui instruções, histórico e schemas. R recalibra o limite aprendido. O limite do servidor pode ser menor. Compactar altera apenas a preparação do contexto, preservando a conversa salva.", status.Method, status.ContextWindow, status.EstimatedInputTokens, status.ToolSchemaTokens, status.ReservedOutputTokens, status.SafetyTokens, total, status.Fits, status.CompactedMessages)
 		return text, false, nil
 	})
 }
@@ -355,6 +371,7 @@ func (p *chatPage) showTurn(id string) tea.Cmd {
 		return util.ReportError(err)
 	}
 	var b strings.Builder
+	var files []workspaceAction
 	for _, t := range turns {
 		if t.ID != id {
 			continue
@@ -368,12 +385,14 @@ func (p *chatPage) showTurn(id string) tea.Cmd {
 				after = *c.After
 			}
 			text, _, _ := diff.GenerateDiff(before, after, c.Path)
+			files = append(files, workspaceAction{label: c.Path, kind: "diff-file", path: c.Path})
 			b.WriteString(text)
 			b.WriteByte('\n')
 		}
 	}
 	p.showWorkspace("turn", "Alterações da interação", b.String())
 	p.workspace.turnID = id
+	p.workspace.actions = files
 	return nil
 }
 func (p *chatPage) previewReversal(redo bool) tea.Cmd {
@@ -520,6 +539,21 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 	}
 	item := p.workspace.actions[p.workspace.selected]
 	switch item.kind {
+	case "worktree-open", "worktree-open-confirm", "worktree-create", "worktree-create-confirm", "git-diff", "git-diff-staged", "git-checks":
+		return p.gitChoose(item)
+	case "contract-kind":
+		return p.editContract(item.text)
+	case "setup-providers", "setup-models", "setup-probe", "setup-read", "setup-done", "setup-probe-confirm", "setup-read-confirm", "local-status":
+		return p.setupChoose(item.kind)
+	case "diff-file":
+		rendered := dialog.RenderReviewDiff(p.workspace.body, max(1, p.width-4), p.workspace.diffMode)
+		for i, line := range strings.Split(ansi.Strip(rendered), "\n") {
+			if strings.Contains(line, item.path) && (strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "File:") || strings.HasPrefix(line, "Arquivo:")) {
+				p.workspace.view.SetYOffset(i)
+				break
+			}
+		}
+		return nil
 	case "queue":
 		return p.takeQueue(true)
 	case "skill":
@@ -546,11 +580,26 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 	return nil
 }
 func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
+	if p.workspace.kind == "contract" {
+		return p.contractKey(msg)
+	}
 	if p.workspace.loading && msg.String() != "esc" {
 		p.workspace.view, _ = p.workspace.view.Update(msg)
 		return nil
 	}
 	switch msg.String() {
+	case "t":
+		if p.workspace.kind == "turn" || p.workspace.kind == "review" {
+			switch p.workspace.diffMode {
+			case "unified":
+				p.workspace.diffMode = "split"
+			case "split":
+				p.workspace.diffMode = "auto"
+			default:
+				p.workspace.diffMode = "unified"
+			}
+		}
+		return nil
 	case "esc":
 		p.closeWorkspace()
 		return nil
@@ -579,6 +628,9 @@ func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
 			return p.previewReversal(false)
 		}
 	case "r":
+		if p.workspace.kind == "context" {
+			return p.recalibrateContext()
+		}
 		if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
 			return p.previewReversal(true)
 		}
@@ -597,6 +649,9 @@ func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 func (p *chatPage) workspaceView() string {
+	if p.workspace.kind == "contract" {
+		return ansi.Hardwrap(p.contractView(), max(1, p.width-2), true)
+	}
 	w, h := max(1, p.width-4), max(1, p.height-6)
 	t := theme.CurrentTheme()
 	lines := []string{styles.BaseStyle().Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(safePanel(p.workspace.title), w, "…"))}
@@ -623,14 +678,18 @@ func (p *chatPage) workspaceView() string {
 		help = "Ctrl+Enter aprova · PgUp/PgDn rola · Esc cancela"
 	}
 	if p.workspace.kind == "context" {
-		help = "C compacta · Ctrl+R atualiza · Esc volta"
+		help = "C compacta · R recalibra · Ctrl+R atualiza · Esc volta"
 	}
 	if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
-		help = "Enter detalhes · U desfaz · R refaz · Esc volta"
+		help = "Enter arquivo · T diff · U desfaz · R refaz · Esc volta"
 	}
 	p.workspace.view.Width = w
 	p.workspace.view.Height = max(1, h)
-	p.workspace.view.SetContent(ansi.Hardwrap(safePanel(p.workspace.body), w, true))
+	if p.workspace.kind == "turn" || p.workspace.kind == "review" {
+		p.workspace.view.SetContent(dialog.RenderReviewDiff(p.workspace.body, w, p.workspace.diffMode))
+	} else {
+		p.workspace.view.SetContent(ansi.Hardwrap(safePanel(p.workspace.body), w, true))
+	}
 	lines = append(lines, p.workspace.view.View())
 	if p.workspace.loading {
 		lines = append(lines, "Carregando… · Esc cancela")
@@ -649,7 +708,7 @@ func (p *chatPage) handleWorkspaceMessage(text string, attachments []message.Att
 		return nil, false
 	}
 	switch command {
-	case "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "context", "compact", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
+	case "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
 	default:
 		return nil, false
 	}
@@ -683,6 +742,23 @@ func cloneUserAttachments(items []message.Attachment) []message.Attachment {
 	return result
 }
 func (p *chatPage) workspaceMouse(msg tea.MouseMsg) tea.Cmd {
+	if p.workspace.kind == "contract" {
+		if msg.Button == tea.MouseButtonWheelUp {
+			return p.contractKey(tea.KeyMsg{Type: tea.KeyUp})
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			return p.contractKey(tea.KeyMsg{Type: tea.KeyDown})
+		}
+		count := max(1, min(len(p.workspace.fields), (p.height-7)/2))
+		start := max(0, min(p.workspace.focus-count+1, len(p.workspace.fields)-count))
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.Y >= 2 && msg.Y < 2+count*2 {
+			p.workspace.fields[p.workspace.focus].Blur()
+			p.workspace.focus = start + (msg.Y-2)/2
+			return p.workspace.fields[p.workspace.focus].Focus()
+		}
+		return nil
+	}
+
 	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
 		p.workspace.view, _ = p.workspace.view.Update(msg)
 		return nil
@@ -722,4 +798,20 @@ func safePanel(text string) string {
 		}
 		return r
 	}, text)
+}
+
+func (p *chatPage) recalibrateContext() tea.Cmd {
+	control, ok := p.app.CoderAgent.(agent.ContextCalibrationControl)
+	if !ok {
+		return util.ReportWarn("Este agente não oferece recalibração")
+	}
+	id := p.session.ID
+	p.showWorkspace("context", "Recalibrar contexto", "")
+	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
+		status, err := control.RecalibrateContext(ctx, id)
+		if err != nil {
+			return "", false, err
+		}
+		return fmt.Sprintf("Limite aprendido removido. Janela configurada: %d tokens. O próximo turno usará esse limite; nenhuma ferramenta foi repetida.", status.ContextWindow), false, nil
+	})
 }

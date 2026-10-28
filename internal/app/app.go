@@ -26,10 +26,11 @@ import (
 )
 
 type App struct {
-	Sessions    session.Service
-	Messages    message.Service
-	History     history.Service
-	Permissions permission.Service
+	InitialContract *workflow.Contract
+	Sessions        session.Service
+	Messages        message.Service
+	History         history.Service
+	Permissions     permission.Service
 
 	CoderAgent agent.Service
 	Processes  *tools.ProcessManager
@@ -160,6 +161,11 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 	}
 	logging.Info("Created session for non-interactive run", "session_id", sess.ID)
 
+	if a.InitialContract != nil {
+		if _, err := a.Workflows.SetContract(ctx, sess.ID, a.InitialContract); err != nil {
+			return err
+		}
+	}
 	if autoApprove {
 		a.Permissions.AutoApproveSession(sess.ID)
 	}

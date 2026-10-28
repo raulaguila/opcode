@@ -47,6 +47,7 @@ type AgentEvent struct {
 	SessionID string
 	Progress  string
 	Done      bool
+	Outcome   string // completed, planned, blocked or partial; never permission.
 }
 
 type Service interface {
@@ -279,8 +280,22 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			logging.Warn("Workspace validation unavailable", "error", err)
 		}
 	}
+	if a.workflow != nil && run.mode == workflow.Execute {
+		task, err := a.workflow.Get(ctx, sessionID)
+		if err != nil {
+			return a.err(err)
+		}
+		requires := requiresFileChanges(content) || (resumingRequest(content) && requiresFileChanges(task.Objective))
+		if run.contract != nil {
+			requires = run.contract.Kind == "change"
+		}
+		if _, err := a.workflow.BeginTurn(ctx, sessionID, requires, resumingRequest(content)); err != nil {
+			return a.err(err)
+		}
+	}
 	signatures := make([][32]byte, 0, 10)
 	repairs := 0
+	contextRetries := 0
 	for {
 		if run.steps >= run.limits.MaxSteps {
 			return a.err(fmt.Errorf("agent step limit reached (%d); progress saved", run.limits.MaxSteps))
@@ -298,6 +313,12 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		}
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory, run)
 		if err != nil {
+			// Retry generation only: no tools execute before a complete response.
+			if contextRetries < 2 && len(agentMessage.ToolCalls()) == 0 && agentMessage.Content().String() == "" && agentMessage.ReasoningContent().Thinking == "" && a.adaptContext(run, err) {
+				contextRetries++
+				a.Publish(pubsub.UpdatedEvent, AgentEvent{Type: AgentEventTypeInstructions, SessionID: sessionID, Progress: "Context limit reduced after provider memory/context failure; retrying generation only"})
+				continue
+			}
 			if errors.Is(err, context.Canceled) {
 				agentMessage.AddFinish(message.FinishReasonCanceled)
 				a.messages.Update(context.Background(), agentMessage)
@@ -340,6 +361,11 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			}
 			msgHistory = append(msgHistory, msg)
 			a.prefetchTools(run, instruction.content)
+			if a.workflow != nil && run.mode == workflow.Execute && run.contract == nil && requiresFileChanges(instruction.content) {
+				if _, err := a.workflow.BeginTurn(ctx, sessionID, true); err != nil {
+					return a.err(err)
+				}
+			}
 		}
 		if len(instructions) > 0 {
 			signatures = signatures[:0]
@@ -358,16 +384,30 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			if fingerprintErr != nil && run.mode == workflow.Execute && (task.Changed || len(task.Checks) > 0 || task.Status == "completed") {
 				return a.err(fmt.Errorf("cannot verify current files: %w", fingerprintErr))
 			}
-			problem := ""
+			// Changes with no configured checks are observable partial work, not an
+			// impossible instruction to the model to execute an unknown command.
+			if run.mode == workflow.Execute && task.Changed && len(task.Checks) == 0 && len(checkCommands()) == 0 && (run.contract == nil || len(run.contract.Checks) == 0) && task.Objective == "" && task.Status != "partial" && task.Status != "blocked" {
+				if _, err := a.workflow.FinishWithReason(ctx, sessionID, "partial", "File changes applied; no configured checks are available to verify this revision", "", nil); err != nil {
+					return a.err(err)
+				}
+				task, err = a.workflow.Get(ctx, sessionID)
+				if err != nil {
+					return a.err(err)
+				}
+			}
+			problem := task.CompletionProblem()
+			if run.mode == workflow.Plan && run.requiresPlan && (strings.TrimSpace(task.Objective) == "" || len(task.Steps) == 0) {
+				problem = "A structured saved plan was explicitly requested, but no valid objective and steps were saved. Call update_plan using its advertised argument schema to save objective, 1–24 steps and at least one criterion, then finish_task as planned. If unable to save the plan, mark the task blocked or partial instead of claiming success."
+			}
 			if task.Objective != "" && task.Status == "in_progress" {
 				problem = "An active plan remains unfinished. Update the steps and call finish_task (planned in plan mode, completed or blocked in execute mode)."
 			}
-			if run.mode == workflow.Execute && task.Changed {
+			if run.mode == workflow.Execute && (task.Changed || (run.contract != nil && len(run.contract.Checks) > 0)) {
 				if why := task.ValidationProblem(checkCommands()); why != "" {
 					problem = why
 				}
 			}
-			if problem != "" && task.Status != "blocked" {
+			if problem != "" && task.Status != "blocked" && task.Status != "partial" {
 				if repairs >= 2 {
 					return a.err(fmt.Errorf("task cannot be concluded: %s", problem))
 				}
@@ -378,10 +418,22 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 				}
 				msgHistory = append(msgHistory, correction)
 				run.selected["run_checks"] = true
+				a.runMu.Lock()
+				if ctx.Err() == nil {
+					run.accepting = true
+				}
+				a.runMu.Unlock()
 				continue
 			}
 		}
+		outcome := "completed"
+		if a.workflow != nil {
+			if task, err := a.workflow.Get(ctx, sessionID); err == nil && (task.Status == "blocked" || task.Status == "partial" || task.Status == "planned") {
+				outcome = task.Status
+			}
+		}
 		return AgentEvent{
+			Outcome: outcome,
 			Type:    AgentEventTypeResponse,
 			Message: agentMessage,
 			Done:    true,
@@ -410,7 +462,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	if requestErr != nil {
 		return message.Message{}, nil, requestErr
 	}
-	eventChan := timedProvider(a.provider).StreamResponse(ctx, requestHistory, a.exposedTools(run))
+	eventChan := timedProvider(runProvider(a, run)).StreamResponse(ctx, requestHistory, a.exposedTools(run))
 
 	var err error
 	assistantMsg, err = a.messages.Create(ctx, sessionID, message.CreateMessageParams{
@@ -512,7 +564,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 			// Continue processing
 			var tool tools.BaseTool
 			for _, availableTool := range run.available {
-				if availableTool.Info().Name == toolCall.Name && modeAllowsTool(run.mode, availableTool) && run.selected[toolCall.Name] {
+				if availableTool.Info().Name == toolCall.Name && runAllowsTool(run, availableTool) && run.selected[toolCall.Name] {
 					tool = availableTool
 					break
 				}
@@ -558,7 +610,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 			if hookErr := a.runHooks(ctx, run, "before_tool", toolCall.Name); hookErr != nil {
 				return assistantMsg, nil, hookErr
 			}
-			toolResult, toolErr := tool.Run(ctx, tools.ToolCall{
+			toolResult, toolErr := tool.Run(a.attachExplorationBudget(ctx, run), tools.ToolCall{
 				ID:    toolCall.ID,
 				Name:  toolCall.Name,
 				Input: toolCall.Input,
@@ -949,6 +1001,11 @@ func createAgentProvider(agentName config.AgentName) (provider.Provider, error) 
 
 func createAgentProviderFor(agentName config.AgentName, agentConfig config.Agent, model models.Model) (provider.Provider, error) {
 	model = config.ModelWithProviderDefaults(model)
+	adaptiveWindow := false
+	if learned := learnedContext(model); learned >= 4096 && (model.ContextWindow <= 0 || learned < model.ContextWindow) {
+		model.ContextWindow = learned
+		adaptiveWindow = true
+	}
 
 	providerCfg, err := config.ProviderForModel(model)
 	if err != nil {
@@ -960,6 +1017,9 @@ func createAgentProviderFor(agentName config.AgentName, agentConfig config.Agent
 	maxTokens := model.DefaultMaxTokens
 	if agentConfig.MaxTokens > 0 {
 		maxTokens = min(agentConfig.MaxTokens, model.ContextWindow/2)
+	}
+	if adaptiveWindow && model.ContextWindow > 0 {
+		maxTokens = min(maxTokens, max(int64(512), model.ContextWindow/4))
 	}
 	opts := []provider.ProviderClientOption{
 		provider.WithAPIKey(providerCfg.APIKey),

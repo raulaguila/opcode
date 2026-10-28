@@ -58,6 +58,26 @@ são gravados ao editar a integração. URLs com credenciais, query string ou
 fragmento são rejeitadas. Os campos legados `headers` e `env` continuam válidos,
 mas a interface preserva esses valores privados sem mostrá-los nos novos campos.
 
-Editar uma entrada já presente no projeto salva no mesmo `.opcode.json`;
+Editar uma entrada já presente no projeto salva no mesmo `.opcode/config.json`
+(ou no formato anterior que já estava em uso);
 entradas novas são salvas no arquivo global em uso. A escrita é atômica,
 preserva campos desconhecidos e usa permissão `0600`.
+
+## OAuth MCP explícito
+
+O formulário MCP inclui ativação OAuth, client ID opcional, referência ao segredo
+por variável de ambiente, escopos separados por espaços e porta de retorno
+(`0` escolhe automaticamente). Salve o cadastro antes de autenticar. OAuth é
+aceito em HTTP/SSE; não combine com um cabeçalho Authorization manual.
+
+Na lista de integrações, selecione o MCP e use:
+
+- `Ctrl+A`: iniciar login. Abra a URL mostrada no navegador; `↑↓` rola URLs longas.
+- `Ctrl+U`: consultar o estado da autenticação.
+- `Ctrl+D`: remover a autenticação local.
+- `Esc`: cancelar a espera e voltar preservando a configuração.
+
+Nenhum navegador, login ou conexão é iniciado pela simples abertura da lista.
+O fluxo usa PKCE/estado e retorno local com prazo; tokens ficam no armazenamento
+privado de autenticação, separados do JSON de configurações. A autenticação não
+concede permissão para ferramentas MCP nem restaura aprovações de sessões antigas.

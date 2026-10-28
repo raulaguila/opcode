@@ -131,7 +131,7 @@ func ollamaArgumentsValid(raw json.RawMessage) bool {
 
 func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 	if len(value.Error) > 0 && string(value.Error) != "null" {
-		return nil, fmt.Errorf("Ollama returned an error")
+		return nil, ollamaFailure(value.Error)
 	}
 	if !value.Done {
 		return nil, fmt.Errorf("Ollama response ended without done=true")
@@ -197,7 +197,7 @@ func (o *ollamaClient) readStream(ctx context.Context, reader io.Reader, events 
 			return fmt.Errorf("invalid Ollama stream JSON")
 		}
 		if len(value.Error) > 0 && string(value.Error) != "null" {
-			return fmt.Errorf("Ollama stream returned an error")
+			return ollamaFailure(value.Error)
 		}
 		content.WriteString(value.Message.Content)
 		calls = append(calls, value.Message.ToolCalls...)
@@ -228,4 +228,20 @@ func (o *ollamaClient) readStream(ctx context.Context, reader io.Reader, events 
 		return err
 	}
 	return fmt.Errorf("Ollama stream ended without done=true")
+}
+
+// Retain a safe classification without exposing the provider's raw error body.
+func ollamaFailure(raw json.RawMessage) error {
+	text := strings.ToLower(string(raw))
+	for _, term := range []string{"out of memory", "requires more system memory", "unable to allocate"} {
+		if strings.Contains(text, term) {
+			return fmt.Errorf("Ollama out of memory; reduce context or select a smaller model")
+		}
+	}
+	for _, term := range []string{"context length", "context window", "too many tokens"} {
+		if strings.Contains(text, term) {
+			return fmt.Errorf("Ollama context window exceeded")
+		}
+	}
+	return fmt.Errorf("Ollama returned an error")
 }

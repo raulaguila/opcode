@@ -28,7 +28,7 @@ func TestStartupWithoutProviderGivesConfigurationInstructions(t *testing.T) {
 	require.NoError(t, err, "loading settings alone must not require credentials")
 	err = loaded.ValidateStartup()
 	require.ErrorContains(t, err, "OPENAI_API_KEY")
-	require.ErrorContains(t, err, "~/.opcode.json")
+	require.ErrorContains(t, err, "~/.opcode/config.json")
 	require.ErrorContains(t, err, "agents.coder.model")
 	require.NotContains(t, loaded.Agents, AgentTitle, "do not manufacture an agent with an empty model")
 }

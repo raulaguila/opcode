@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/raulaguila/opcode/internal/diff"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/tui/layout"
@@ -87,6 +87,9 @@ type permissionDialogCmp struct {
 	permission      permission.PermissionRequest
 	windowSize      tea.WindowSizeMsg
 	contentViewPort viewport.Model
+	fullscreen      bool
+	diffMode        string
+	activeDiff      string
 	selectedOption  int // 0: Allow, 1: Allow for session, 2: Deny
 
 	diffCache     map[string]string
@@ -107,7 +110,41 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 		p.markdownCache = make(map[string]string)
 		p.diffCache = make(map[string]string)
+	case tea.MouseMsg:
+		if msg.Button == tea.MouseButtonWheelUp {
+			p.contentViewPort.ScrollUp(3)
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			p.contentViewPort.ScrollDown(3)
+		}
+		return p, nil
 	case tea.KeyMsg:
+		if msg.String() == "f" {
+			p.fullscreen = !p.fullscreen
+			p.SetSize()
+			p.diffCache = map[string]string{}
+			return p, nil
+		}
+		if msg.String() == "t" {
+			switch p.diffMode {
+			case "auto":
+				p.diffMode = "unified"
+			case "unified":
+				p.diffMode = "split"
+			default:
+				p.diffMode = "auto"
+			}
+			p.diffCache = map[string]string{}
+			return p, nil
+		}
+		if msg.String() == "]" || msg.String() == "[" {
+			delta := 1
+			if msg.String() == "[" {
+				delta = -1
+			}
+			p.nextFile(delta)
+			return p, nil
+		}
 		switch {
 		case key.Matches(msg, permissionsKeys.Right) || key.Matches(msg, permissionsKeys.Tab):
 			p.selectedOption = (p.selectedOption + 1) % 3
@@ -173,9 +210,9 @@ func (p *permissionDialogCmp) renderButtons() string {
 		denyStyle = denyStyle.Background(t.Primary()).Foreground(t.Background())
 	}
 
-	allowButton := allowStyle.Padding(0, 1).Render("Allow (a)")
-	allowSessionButton := allowSessionStyle.Padding(0, 1).Render("Allow for session (s)")
-	denyButton := denyStyle.Padding(0, 1).Render("Deny (d)")
+	allowButton := allowStyle.Padding(0, 1).Render(config.Text("Permitir (a)", "Allow (a)"))
+	allowSessionButton := allowSessionStyle.Padding(0, 1).Render(config.Text("Repetir escopo exato (s)", "Remember exact scope (s)"))
+	denyButton := denyStyle.Padding(0, 1).Render(config.Text("Recusar (d)", "Deny (d)"))
 
 	content := lipgloss.JoinHorizontal(
 		lipgloss.Left,
@@ -187,7 +224,10 @@ func (p *permissionDialogCmp) renderButtons() string {
 		spacerStyle.Render("  "),
 	)
 
-	remainingWidth := p.width - lipgloss.Width(content)
+	if lipgloss.Width(content) > max(1, p.width-4) {
+		content = lipgloss.JoinVertical(lipgloss.Left, allowButton, allowSessionButton, denyButton)
+	}
+	remainingWidth := max(1, p.width-4) - lipgloss.Width(content)
 	if remainingWidth > 0 {
 		content = spacerStyle.Render(strings.Repeat(" ", remainingWidth)) + content
 	}
@@ -195,76 +235,8 @@ func (p *permissionDialogCmp) renderButtons() string {
 }
 
 func (p *permissionDialogCmp) renderHeader() string {
-	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
-
-	toolKey := baseStyle.Foreground(t.TextMuted()).Bold(true).Render("Tool")
-	toolValue := baseStyle.
-		Foreground(t.Text()).
-		Width(p.width - lipgloss.Width(toolKey)).
-		Render(fmt.Sprintf(": %s", p.permission.ToolName))
-
-	pathKey := baseStyle.Foreground(t.TextMuted()).Bold(true).Render("Path")
-	pathValue := baseStyle.
-		Foreground(t.Text()).
-		Width(p.width - lipgloss.Width(pathKey)).
-		Render(fmt.Sprintf(": %s", p.permission.Path))
-
-	headerParts := []string{
-		lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			toolKey,
-			toolValue,
-		),
-		baseStyle.Render(strings.Repeat(" ", p.width)),
-		lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			pathKey,
-			pathValue,
-		),
-		baseStyle.Render(strings.Repeat(" ", p.width)),
-	}
-
-	// Add tool-specific header information
-	switch p.permission.ToolName {
-	case tools.BashToolName:
-		headerParts = append(headerParts, baseStyle.Foreground(t.TextMuted()).Width(p.width).Bold(true).Render("Command"))
-	case tools.EditToolName:
-		params := p.permission.Params.(tools.EditPermissionsParams)
-		fileKey := baseStyle.Foreground(t.TextMuted()).Bold(true).Render("File")
-		filePath := baseStyle.
-			Foreground(t.Text()).
-			Width(p.width - lipgloss.Width(fileKey)).
-			Render(fmt.Sprintf(": %s", params.FilePath))
-		headerParts = append(headerParts,
-			lipgloss.JoinHorizontal(
-				lipgloss.Left,
-				fileKey,
-				filePath,
-			),
-			baseStyle.Render(strings.Repeat(" ", p.width)),
-		)
-
-	case tools.WriteToolName:
-		params := p.permission.Params.(tools.WritePermissionsParams)
-		fileKey := baseStyle.Foreground(t.TextMuted()).Bold(true).Render("File")
-		filePath := baseStyle.
-			Foreground(t.Text()).
-			Width(p.width - lipgloss.Width(fileKey)).
-			Render(fmt.Sprintf(": %s", params.FilePath))
-		headerParts = append(headerParts,
-			lipgloss.JoinHorizontal(
-				lipgloss.Left,
-				fileKey,
-				filePath,
-			),
-			baseStyle.Render(strings.Repeat(" ", p.width)),
-		)
-	case tools.FetchToolName:
-		headerParts = append(headerParts, baseStyle.Foreground(t.TextMuted()).Width(p.width).Bold(true).Render("URL"))
-	}
-
-	return lipgloss.NewStyle().Background(t.Background()).Render(lipgloss.JoinVertical(lipgloss.Left, headerParts...))
+	lines := []string{config.Text("Ferramenta: ", "Tool: ") + p.permission.ToolName, config.Text("Escopo: ", "Scope: ") + p.permission.Path}
+	return styles.BaseStyle().Width(max(1, p.width-4)).Render(strings.Join(lines, "\n"))
 }
 
 func (p *permissionDialogCmp) renderBashContent() string {
@@ -292,37 +264,21 @@ func (p *permissionDialogCmp) renderBashContent() string {
 
 func (p *permissionDialogCmp) renderEditContent() string {
 	if pr, ok := p.permission.Params.(tools.EditPermissionsParams); ok {
-		diff := p.GetOrSetDiff(p.permission.ID, func() (string, error) {
-			return diff.FormatDiff(pr.Diff, diff.WithTotalWidth(p.contentViewPort.Width))
-		})
-
-		p.contentViewPort.SetContent(diff)
-		return p.styleViewport()
+		return p.diffContent(pr.Diff)
 	}
 	return ""
 }
 
 func (p *permissionDialogCmp) renderPatchContent() string {
 	if pr, ok := p.permission.Params.(tools.EditPermissionsParams); ok {
-		diff := p.GetOrSetDiff(p.permission.ID, func() (string, error) {
-			return diff.FormatDiff(pr.Diff, diff.WithTotalWidth(p.contentViewPort.Width))
-		})
-
-		p.contentViewPort.SetContent(diff)
-		return p.styleViewport()
+		return p.diffContent(pr.Diff)
 	}
 	return ""
 }
 
 func (p *permissionDialogCmp) renderWriteContent() string {
 	if pr, ok := p.permission.Params.(tools.WritePermissionsParams); ok {
-		// Use the cache for diff rendering
-		diff := p.GetOrSetDiff(p.permission.ID, func() (string, error) {
-			return diff.FormatDiff(pr.Diff, diff.WithTotalWidth(p.contentViewPort.Width))
-		})
-
-		p.contentViewPort.SetContent(diff)
-		return p.styleViewport()
+		return p.diffContent(pr.Diff)
 	}
 	return ""
 }
@@ -391,15 +347,15 @@ func (p *permissionDialogCmp) render() string {
 		Bold(true).
 		Width(p.width - 4).
 		Foreground(t.Primary()).
-		Render("Permission Required")
+		Render(config.Text("Aprovação necessária", "Permission required"))
 	// Render header
 	headerContent := p.renderHeader()
 	// Render buttons
 	buttons := p.renderButtons()
 
 	// Calculate content height dynamically based on window size
-	p.contentViewPort.Height = p.height - lipgloss.Height(headerContent) - lipgloss.Height(buttons) - 2 - lipgloss.Height(title)
-	p.contentViewPort.Width = p.width - 4
+	p.contentViewPort.Height = max(1, p.height-lipgloss.Height(headerContent)-lipgloss.Height(buttons)-5-lipgloss.Height(title))
+	p.contentViewPort.Width = max(1, p.width-4)
 
 	// Render content based on tool type
 	var contentFinal string
@@ -425,7 +381,8 @@ func (p *permissionDialogCmp) render() string {
 		headerContent,
 		contentFinal,
 		buttons,
-		baseStyle.Render(strings.Repeat(" ", p.width-4)),
+		styles.BaseStyle().Width(max(1, p.width-4)).Render(config.Text("T diff · F tela cheia · [ ] arquivo", "T diff · F full screen · [ ] file")),
+		baseStyle.Render(strings.Repeat(" ", max(0, p.width-4))),
 	)
 
 	return baseStyle.
@@ -445,35 +402,34 @@ func (p *permissionDialogCmp) View() string {
 }
 
 func (p *permissionDialogCmp) BindingKeys() []key.Binding {
-	return layout.KeyMapToSlice(permissionsKeys)
+	return append(layout.KeyMapToSlice(permissionsKeys), key.NewBinding(key.WithKeys("t"), key.WithHelp("t", config.Text("alternar diff", "toggle diff"))), key.NewBinding(key.WithKeys("f"), key.WithHelp("f", config.Text("tela cheia", "full screen"))), key.NewBinding(key.WithKeys("[", "]"), key.WithHelp("[ ]", config.Text("arquivo anterior/próximo", "previous/next file"))))
 }
 
 func (p *permissionDialogCmp) SetSize() tea.Cmd {
 	if p.permission.ID == "" {
 		return nil
 	}
-	switch p.permission.ToolName {
-	case tools.BashToolName:
-		p.width = int(float64(p.windowSize.Width) * 0.4)
-		p.height = int(float64(p.windowSize.Height) * 0.3)
-	case tools.EditToolName:
-		p.width = int(float64(p.windowSize.Width) * 0.8)
-		p.height = int(float64(p.windowSize.Height) * 0.8)
-	case tools.WriteToolName:
-		p.width = int(float64(p.windowSize.Width) * 0.8)
-		p.height = int(float64(p.windowSize.Height) * 0.8)
-	case tools.FetchToolName:
-		p.width = int(float64(p.windowSize.Width) * 0.4)
-		p.height = int(float64(p.windowSize.Height) * 0.3)
-	default:
-		p.width = int(float64(p.windowSize.Width) * 0.7)
-		p.height = int(float64(p.windowSize.Height) * 0.5)
+	w, h := p.windowSize.Width, p.windowSize.Height
+	if w == 0 {
+		w = 100
+	}
+	if h == 0 {
+		h = 30
+	}
+	p.width = max(10, min(w-4, 120))
+	p.height = max(10, h-4)
+	if p.fullscreen {
+		p.width = max(10, w-4)
+		p.height = max(10, h-4)
 	}
 	return nil
 }
 
 func (p *permissionDialogCmp) SetPermissions(permission permission.PermissionRequest) tea.Cmd {
 	p.permission = permission
+	p.contentViewPort.GotoTop()
+	p.diffCache = map[string]string{}
+	p.markdownCache = map[string]string{}
 	return p.SetSize()
 }
 
@@ -515,6 +471,7 @@ func NewPermissionDialogCmp() PermissionDialogCmp {
 
 	return &permissionDialogCmp{
 		contentViewPort: contentViewport,
+		diffMode:        "auto",
 		selectedOption:  0, // Default to "Allow"
 		diffCache:       make(map[string]string),
 		markdownCache:   make(map[string]string),

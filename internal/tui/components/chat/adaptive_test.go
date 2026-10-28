@@ -14,14 +14,27 @@ import (
 
 func TestComposerGrowsForWrappedAndMultilineDraftsWithoutChangingText(t *testing.T) {
 	m := &editorCmp{textarea: CreateTextArea(nil)}
-	require.Equal(t, 2, m.DesiredHeight(80, 30))
+	require.Equal(t, 4, m.DesiredHeight(80, 30), "reserve three writing rows plus the border")
 	text := strings.Repeat("long message ", 40)
 	m.textarea.SetValue(text)
-	require.Greater(t, m.DesiredHeight(40, 30), 2)
+	require.Greater(t, m.DesiredHeight(40, 30), 4)
 	require.LessOrEqual(t, m.DesiredHeight(40, 30), 9)
 	require.Equal(t, text, m.textarea.Value())
 	m.textarea.SetValue("one\ntwo\nthree")
 	require.Equal(t, 4, m.DesiredHeight(80, 30))
+	m.textarea.SetValue("one\ntwo\nthree\nfour")
+	require.Equal(t, 5, m.DesiredHeight(80, 30))
+}
+
+func TestComposerKeepsWritingSpaceWhenEmptyOrAttachedAndAdaptsToShortTerminal(t *testing.T) {
+	m := &editorCmp{textarea: CreateTextArea(nil)}
+	m.SetSize(80, m.DesiredHeight(80, 24)-1)
+	require.Equal(t, 3, m.textarea.Height())
+	require.Equal(t, 3, lipgloss.Height(m.View()))
+	m.attachments = []message.Attachment{{FileName: "note.txt"}}
+	m.SetSize(80, m.DesiredHeight(80, 24)-1)
+	require.Equal(t, 3, m.textarea.Height(), "attachment rows must not consume the minimum writing area")
+	require.Equal(t, 3, m.DesiredHeight(80, 9), "a short terminal can reduce the minimum to preserve chat space")
 }
 
 func TestComposerAttachmentRowsStayInsideAllocatedHeight(t *testing.T) {

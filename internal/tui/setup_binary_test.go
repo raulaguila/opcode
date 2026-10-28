@@ -139,6 +139,21 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	wait("Select main model")
 	require.NotContains(t, snapshot(), "Setup · 2/3", "normal model picker must leave the setup presentation behind")
 	closeDialog("Select main model")
+	frame := strings.Split(snapshot(), "\n")
+	if path := os.Getenv("OPCODE_UI_SNAPSHOT"); path != "" {
+		require.NoError(t, os.WriteFile(path, []byte(snapshot()), 0600))
+	}
+	promptRow, footerRow := -1, -1
+	for row, line := range frame {
+		if strings.TrimSpace(line) == ">" {
+			promptRow = row
+		}
+		if strings.Contains(line, "ctrl+? help") {
+			footerRow = row
+		}
+	}
+	require.NotEqual(t, -1, promptRow, "chat composer must be visible")
+	require.GreaterOrEqual(t, footerRow-promptRow, 3, "empty composer must retain three writing rows")
 	send("/contract\r")
 	wait("Expected outcome")
 	send("\r")

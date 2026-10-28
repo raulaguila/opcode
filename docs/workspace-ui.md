@@ -142,8 +142,10 @@ observáveis; passar um conjunto não demonstra correção semântica geral. Vej
 A conversa tem um cabeçalho compacto com projeto e modo. A lateral usa
 `tui.sidebar`: `auto` aparece a partir de 140 colunas; `shown` mantém a lateral
 quando há pelo menos 110 colunas; `hidden` usa toda a largura. `Alt+B` alterna a
-preferência. O campo cresce com linhas e texto quebrado, até oito linhas, sem
-substituir o rascunho. Anexos mantêm sua própria linha.
+preferência. O campo reserva três linhas para digitação e cresce com linhas e
+texto quebrado, até oito linhas quando há espaço, sem substituir o rascunho.
+Anexos mantêm sua própria linha. Em terminais baixos, a altura é reduzida para
+preservar o espaço da conversa.
 
 Em `/settings`, `P` abre preferências pesquisáveis por categoria, nome ou chave
 JSON. `Ctrl+A` mostra limites e atalhos avançados; `Enter` edita; `Ctrl+S` salva.

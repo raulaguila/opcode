@@ -464,7 +464,7 @@ func (m *editorCmp) DesiredHeight(width, available int) int {
 	for _, line := range strings.Split(m.textarea.Value(), "\n") {
 		rows += max(1, (ansi.StringWidth(line)+width-1)/width)
 	}
-	rows = min(8, rows)
+	rows = min(8, max(3, rows))
 	if len(m.attachments) > 0 {
 		rows += m.attachmentRows(width)
 	}

@@ -52,6 +52,7 @@ type editorCmp struct {
 
 type EditorKeyMaps struct {
 	Send       key.Binding
+	NewLine    key.Binding
 	OpenEditor key.Binding
 }
 
@@ -67,6 +68,10 @@ type DeleteAttachmentKeyMaps struct {
 }
 
 var editorMaps = EditorKeyMaps{
+	NewLine: key.NewBinding(
+		key.WithKeys("shift+enter", "alt+enter", "ctrl+j"),
+		key.WithHelp("shift+enter / alt+enter", "nova linha / new line"),
+	),
 	Send: key.NewBinding(
 		key.WithKeys("enter", "ctrl+s"),
 		key.WithHelp("enter", "enviar / send"),
@@ -294,7 +299,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.promptHistoryKey(msg) {
 			return m, nil
 		}
-		if msg.String() == "alt+enter" || msg.String() == "shift+enter" || msg.Type == tea.KeyCtrlJ {
+		if key.Matches(msg, editorMaps.NewLine) || msg.Type == tea.KeyCtrlJ {
 			m.textarea.InsertString("\n")
 			return m, nil
 		}

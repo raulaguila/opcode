@@ -357,7 +357,7 @@ func (m *messagesCmp) working() string {
 }
 
 func (m *messagesCmp) help() string {
-	text := config.Text("Enter envia · \\ + Enter nova linha · / comandos · @ arquivos", "Enter sends · \\ + Enter new line · / commands · @ files")
+	text := config.Text("Enter envia · Shift+Enter/Alt+Enter nova linha · / comandos · @ arquivos", "Enter sends · Shift+Enter/Alt+Enter new line · / commands · @ files")
 	if m.app.CoderAgent.IsBusy() {
 		text = config.Text("Esc cancela · Enter envia instrução · ", "Esc cancels · Enter sends instructions · ") + config.Shortcut("terminal") + " terminal"
 	}

@@ -29,6 +29,28 @@ execução é recusado; o formulário permanece para você tentar depois.
 
 ## Conversa, processo e terminal
 
+`Enter` envia a mensagem. `Shift+Enter` insere uma nova linha em terminais que
+informam as teclas modificadoras; o Opcode negocia esse suporte ao iniciar e
+restaura o modo do terminal ao sair. `Alt+Enter` e `Ctrl+J` também inserem linhas,
+e a combinação legada `\` seguida de `Enter` continua disponível.
+
+Se o terminal enviar `Shift+Enter` como um `Enter` comum, use `Alt+Enter`. No
+terminal integrado do VS Code, você também pode adicionar manualmente esta
+entrada ao `keybindings.json`, conforme os
+[atalhos de envio de sequências](https://code.visualstudio.com/docs/terminal/advanced#_custom-sequence-keyboard-shortcuts):
+
+```json
+{
+  "key": "shift+enter",
+  "command": "workbench.action.terminal.sendSequence",
+  "args": { "text": "\u001b\r" },
+  "when": "terminalFocus"
+}
+```
+
+Esse ajuste do VS Code vale para seus terminais em foco. O Opcode não altera
+atalhos globais do editor automaticamente.
+
 Cada interação agrupa a pergunta, o processo e a resposta final. Clique no
 cabeçalho do processo para expandir/recolher. `Ctrl+B` ou `/process` alterna o
 processo da última interação; a preferência `showProcess` define o estado inicial.

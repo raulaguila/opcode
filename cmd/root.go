@@ -186,11 +186,15 @@ to assist developers in writing, debugging, and understanding code directly from
 		// Interactive mode
 		// Set up the TUI
 		zone.NewGlobal()
+		keyboard := tui.NewKeyboard(os.Stdout)
+		defer keyboard.Close()
 		program := tea.NewProgram(
 			tui.New(app, initialSessions...),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 			tea.WithReportFocus(),
+			tea.WithFilter(keyboard.Filter),
+			tea.WithOutput(keyboard),
 		)
 
 		// Setup the subscriptions, this will send services events to the TUI

@@ -3,6 +3,7 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty"
 	"github.com/hinshun/vt10x"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -55,15 +57,43 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	defer command.Process.Kill()
 	screen := vt10x.New(vt10x.WithSize(80, 24), vt10x.WithWriter(terminal))
 	var mu sync.Mutex
+	var rawOutput bytes.Buffer
 	readDone := make(chan struct{})
 	go func() {
 		defer close(readDone)
 		buffer := make([]byte, 8192)
+		// vt10x predates Kitty keyboard controls and treats every CSI-u as
+		// cursor restore. Consume only those mode controls in the test display;
+		// retain the complete raw stream for the negotiation/cleanup assertions.
+		controls := []string{ansi.RequestKittyKeyboard, ansi.PushKittyKeyboard(1), ansi.PopKittyKeyboard(1)}
+		var pending []byte
 		for {
 			n, err := terminal.Read(buffer)
 			if n > 0 {
 				mu.Lock()
-				screen.Write(buffer[:n])
+				rawOutput.Write(buffer[:n])
+				var display []byte
+				for _, b := range buffer[:n] {
+					pending = append(pending, b)
+					for len(pending) > 0 {
+						prefix := false
+						for _, control := range controls {
+							if strings.HasPrefix(control, string(pending)) {
+								prefix = true
+								if control == string(pending) {
+									pending = nil
+								}
+								break
+							}
+						}
+						if prefix {
+							break
+						}
+						display = append(display, pending[0])
+						pending = pending[1:]
+					}
+				}
+				screen.Write(display)
 				mu.Unlock()
 			}
 			if err != nil {
@@ -135,7 +165,9 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	}
 	require.True(t, foundLocal)
 	closeDialog("Setup · 3/3")
-	send("\x0f")
+	// Acknowledge enhanced-key support, then exercise an encoded Ctrl+O.
+	send("\x1b[?0u")
+	send("\x1b[111;5u")
 	wait("Select main model")
 	require.NotContains(t, snapshot(), "Setup · 2/3", "normal model picker must leave the setup presentation behind")
 	closeDialog("Select main model")
@@ -169,12 +201,33 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	send("\r")
 	wait("Git diff")
 	closeDialog("Git diff")
-	send("\x03")
+	send("first line\x1b[13;2usecond line\x1b\rthird line\nfourth line")
+	wait("fourth line")
+	lines := strings.Split(snapshot(), "\n")
+	previous := -1
+	for _, text := range []string{"first line", "second line", "third line", "fourth line"} {
+		row := -1
+		for index, line := range lines {
+			if strings.Contains(line, text) {
+				row = index
+				break
+			}
+		}
+		require.Greater(t, row, previous, "newline shortcut must keep %q on its own row:\n%s", text, strings.Join(lines, "\n"))
+		previous = row
+	}
+	send("\x1b[99;5u")
 	wait("Are you sure you want to quit?")
 	send("y")
 	require.NoError(t, command.Wait())
 	terminal.Close()
 	<-readDone
+	require.Contains(t, rawOutput.String(), ansi.RequestKittyKeyboard)
+	require.Contains(t, rawOutput.String(), ansi.PushKittyKeyboard(1))
+	pop := strings.LastIndex(rawOutput.String(), ansi.PopKittyKeyboard(1))
+	exitAlt := strings.LastIndex(rawOutput.String(), "\x1b[?1049l")
+	require.GreaterOrEqual(t, pop, 0, "keyboard mode must be restored")
+	require.Greater(t, exitAlt, pop, "restore keys before leaving the alternate screen")
 	data, err := os.ReadFile(filepath.Join(home, ".opcode", "config.json"))
 	require.NoError(t, err)
 	var configuration map[string]json.RawMessage
@@ -182,5 +235,5 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	require.Contains(t, string(configuration["agents"]), "llama3.1:8b")
 	require.Contains(t, string(configuration["security"]), "bubblewrap")
 	require.NotContains(t, string(data), `"apiKey":`)
-	t.Log("Fresh template, provider/model setup, explicit contract, Ollama allocation and Git diff passed in a real 80x24 PTY without inference")
+	t.Log("Setup, Ollama metadata, Git diff, multiline shortcuts and keyboard restoration passed in a real 80x24 PTY without inference")
 }

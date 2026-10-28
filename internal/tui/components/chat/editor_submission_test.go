@@ -4,9 +4,29 @@ import (
 	"errors"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNewlineShortcutsPreserveDraftAndEnterStillSubmits(t *testing.T) {
+	for _, key := range []tea.KeyMsg{{Type: tea.KeyCtrlJ}, {Type: tea.KeyEnter, Alt: true}} {
+		t.Run(key.String(), func(t *testing.T) {
+			m := slashEditor()
+			enterText(m, "first line")
+			require.Nil(t, editorKey(m, key))
+			enterText(m, "second line")
+			require.Equal(t, "first line\nsecond line", m.textarea.Value())
+			require.False(t, m.submitting)
+			require.NotNil(t, editorKey(m, tea.KeyMsg{Type: tea.KeyEnter}))
+			require.True(t, m.submitting)
+		})
+	}
+	m := slashEditor()
+	enterText(m, "legacy\\")
+	require.Nil(t, editorKey(m, tea.KeyMsg{Type: tea.KeyEnter}))
+	require.Equal(t, "legacy\n", m.textarea.Value())
+}
 
 func TestEditorPreservesDraftUntilSubmissionIsAccepted(t *testing.T) {
 	m := NewEditorCmp(&app.App{}).(*editorCmp)

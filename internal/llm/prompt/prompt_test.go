@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,4 +90,33 @@ func TestLegacyGuidanceCaseVariantRemainsReadableAfterRename(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "OpenCode.md"), []byte("LegacyGuidanceMarker: preserve local decisions"), 0600))
 	text := processContextPaths(root, []string{"opencode.md", "OpenCode.md", "OPENCODE.md"})
 	require.Contains(t, text, "LegacyGuidanceMarker")
+}
+
+func TestInitialProjectOverviewDoesNotEmbedRecursiveTree(t *testing.T) {
+	root := t.TempDir()
+	_, err := config.Load(root, false)
+	require.NoError(t, err)
+	for i := range 600 {
+		path := filepath.Join(root, "internal", fmt.Sprintf("package_%03d", i), "implementation.go")
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
+		require.NoError(t, os.WriteFile(path, []byte("package example\n"), 0600))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("Project overview"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".env"), []byte("PRIVATE_VALUE"), 0600))
+	text := CoderPrompt(models.ProviderLocal)
+	require.Contains(t, text, "README.md")
+	require.NotContains(t, text, "internal/")
+	require.NotContains(t, text, "implementation.go", "nested paths belong in on-demand tool results")
+	require.NotContains(t, text, ".env\n")
+	require.NotContains(t, text, "PRIVATE_VALUE")
+	require.Less(t, len(text), 8000, "initial prompt must not grow with nested file count")
+	before := getEnvironmentInfo()
+	for i := range 100 {
+		require.NoError(t, os.WriteFile(filepath.Join(root, fmt.Sprintf("root_%03d.txt", i)), nil, 0600))
+	}
+	text = getEnvironmentInfo()
+	require.Equal(t, before, text, "root and nested file counts must not grow the system prompt")
+	require.Contains(t, text, "List files on demand")
+	require.Contains(t, text, "get_project_map")
+	require.Contains(t, text, "search_code_index")
 }

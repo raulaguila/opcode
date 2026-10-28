@@ -48,6 +48,15 @@ Pedidos de comandos disponibilizam `bash`; ferramentas de processos são
 antecipadas quando há pedido de trabalho em segundo plano ou referência explícita
 a essas ferramentas. O carregamento vale por uma execução; não concede permissões.
 
+O prompt de sistema não embute a árvore de arquivos do diretório atual. Listagens
+entram por ferramentas, quando necessárias. `get_project_map` oferece `offset`,
+`limit`, `next_offset` e `more`; pode ser carregado por `request_tools`.
+`search_code_index` mantém um índice local SQLite/FTS5 e retorna resultados
+classificados, sem enviar o índice inteiro ao provedor. O índice atual atualiza
+os trechos alterados por hash, mas ainda relê os arquivos durante a busca. A
+`ls` mantém um limite de 1.000 entradas sem paginação; para continuar uma
+exploração, prefira o mapa paginado ou refine o caminho/padrão de busca.
+
 Perguntas que mencionam o projeto/repositório recebem leituras iniciais reais de
 até quatro arquivos existentes: README, manifesto, ponto de entrada conhecido e
 AGENTS.md. Cada leitura usa `view` com suas proteções, fica no histórico e contém

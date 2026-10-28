@@ -1,7 +1,6 @@
 package prompt
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
-	"github.com/raulaguila/opcode/internal/llm/tools"
 )
 
 func CoderPrompt(provider models.ModelProvider) string {
@@ -184,10 +182,6 @@ func getEnvironmentInfo() string {
 	isGit := isGitRepo(cwd)
 	platform := runtime.GOOS
 	date := time.Now().Format("1/2/2006")
-	ls := tools.NewLsTool()
-	r, _ := ls.Run(context.Background(), tools.ToolCall{
-		Input: `{"path":"."}`,
-	})
 	return fmt.Sprintf(`Here is useful information about the environment you are running in:
 <env>
 Working directory: %s
@@ -195,10 +189,8 @@ Is directory a git repo: %s
 Platform: %s
 Today's date: %s
 </env>
-<project>
-%s
-</project>
-		`, cwd, boolToYesNo(isGit), platform, date, r.Content)
+List files on demand with ls or glob. Use request_tools to load get_project_map for a paginated map or search_code_index for ranked code search. Retrieve only relevant pages and read current source before making claims or edits.
+		`, cwd, boolToYesNo(isGit), platform, date)
 }
 
 func isGitRepo(dir string) bool {

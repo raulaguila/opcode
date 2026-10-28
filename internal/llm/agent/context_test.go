@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/raulaguila/opcode/internal/llm/prompt"
 	"github.com/raulaguila/opcode/internal/permission"
 	"os"
@@ -188,11 +189,24 @@ func TestFindingHashesBecomeStaleWithoutGrantingReadEvidence(t *testing.T) {
 	require.True(t, denied.IsError)
 }
 func TestLocalSixteenKContextFitsInitialProgressiveTools(t *testing.T) {
-	a, _, _, _ := runtimeAgent(t, workflow.Execute)
+	a, _, _, root := runtimeAgent(t, workflow.Execute)
+	for i := range 600 {
+		path := filepath.Join(root, "internal", fmt.Sprintf("package_%03d", i), "implementation.go")
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
+		require.NoError(t, os.WriteFile(path, []byte("package example\n"), 0600))
+	}
+	a.systemMessage = prompt.CoderPrompt(models.ProviderLocal)
 	a.tools = []tools.BaseTool{tools.SecureTool(tools.NewViewTool(nil), nil), tools.SecureTool(tools.NewLsTool(), nil), tools.SecureTool(tools.NewGlobTool(), nil), tools.SecureTool(tools.NewGrepTool(), nil)}
 	run := &generationRun{}
 	require.NoError(t, a.configureRun(run, "llama"))
 	history := []message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "O que pode me falar desse projeto?"}}}}
+	for i := range 3 {
+		id := fmt.Sprintf("bootstrap-%d", i)
+		history = append(history,
+			message.Message{Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: id, Name: "view", Input: `{"file_path":"README.md","limit":80}`, Finished: true}}},
+			message.Message{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: id, Content: strings.Repeat("Project source evidence.\n", 96)}}},
+		)
+	}
 	history, err := a.requestHistory(context.Background(), "llama", history, run)
 	require.NoError(t, err)
 	status := estimateContext(models.Model{Provider: models.ProviderLocal, ContextWindow: 16384, DefaultMaxTokens: 2048}, prompt.CoderPrompt(models.ProviderLocal), history, a.exposedTools(run), 2048)
@@ -201,6 +215,10 @@ func TestLocalSixteenKContextFitsInitialProgressiveTools(t *testing.T) {
 	model := models.Model{ID: "local.llama3.1:8b", Provider: models.ProviderLocal, ProviderProfile: "fixture", API: "ollama", APIModel: "llama3.1:8b", ContextWindow: 16384, DefaultMaxTokens: 2048}
 	actual, err := provider.NewProvider(models.ProviderLocal, provider.WithModel(model), provider.WithBaseURL("http://127.0.0.1:11434/v1"), provider.WithSystemMessage(prompt.CoderPrompt(models.ProviderLocal)), provider.WithMaxTokens(2048))
 	require.NoError(t, err)
+	run.provider = actual
+	prepared, err := a.budgetRequest("llama", history, run)
+	require.NoError(t, err, "first request must fit with the real system prompt, schemas and initial file reads")
+	require.Equal(t, history, prepared, "current evidence and user instructions remain intact")
 	actualStatus, err := a.estimateProviderContext(actual, history, a.exposedTools(run))
 	require.NoError(t, err)
 	require.True(t, actualStatus.Fits, "actual serialized Llama payload: %+v", actualStatus)

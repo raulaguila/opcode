@@ -25,6 +25,36 @@ Limites manuais e a redução após uma falha real de memória continuam válido
 Os testes históricos abaixo usam 16.384 tokens deliberadamente para testar
 qualidade e ferramentas sob esse orçamento; eles não definem o limite da aplicação.
 
+## Regressão: repositórios grandes com janela de 16k
+
+A falha da primeira pergunta foi reproduzida em uma cópia deste repositório,
+com janela manual de 16.384: a estimativa de entrada de 15.956, mais 2.048 de
+saída e 819 de margem, bloqueava a chamada antes do Ollama. O prompt de sistema
+incluía uma listagem recursiva de até 1.000 entradas, além das leituras iniciais.
+Essa listagem automática foi retirada; a exploração ocorre pelas ferramentas.
+Os limites manuais, a margem e a preservação das instruções continuam ativos.
+
+`TestLiveOllamaLargeRepositoryFitsSixteenKContext` cobre o binário de produção
+no modo execute, com 600 arquivos em subdiretórios, leituras iniciais, saída de
+2.048 tokens e janela manual de 16k. Exige resposta contendo fatos do README,
+alocação de 16.384 no servidor e preservação dos arquivos e da configuração do
+modelo. Não usa aprovação automática nem altera a configuração do usuário.
+
+Na validação de 28/10/2026, passaram o contexto automático de 131.072 e o caso
+com 600 arquivos em 16k. Em uma cópia deste repositório, a requisição principal
+caiu de 30.862 para 16.792 bytes, mantendo 12 ferramentas e 5.177 bytes de
+resultados de leitura. O Ollama reportou 2.878 tokens de entrada e concluiu a
+resposta com janela de 16.384, sem erro de contexto. Esses números descrevem
+esse fluxo, não o consumo de todas as perguntas ou repositórios.
+
+```sh
+OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \
+  OPCODE_EVAL_BINARY=/tmp/opcode-context-capacity \
+  go test -tags=integration ./internal/evaluation \
+    -run '^TestLiveOllamaLargeRepositoryFitsSixteenKContext$' \
+    -count=1 -v -timeout=280s
+```
+
 ## Atualização de 28/10/2026: respostas sobre o projeto
 
 O caminho nativo do Ollama agora pode ser selecionado com `api: "ollama"` na definição do modelo local. O contexto é enviado por requisição (`options.num_ctx`), junto com o limite de saída e temperatura zero. O servidor recebe `truncate: false`: um contexto insuficiente deve causar erro em vez de descartar silenciosamente instruções. A implementação segue o protocolo de [chat do Ollama](https://docs.ollama.com/api/chat) e seu [streaming NDJSON](https://docs.ollama.com/api/streaming), sem SDK adicional.

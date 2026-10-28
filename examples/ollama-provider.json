@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/raulaguila/opcode/refs/heads/develop/opcode-schema.json",
+  "providers": {
+    "local": {
+      "baseURL": "http://127.0.0.1:11434/v1",
+      "api": "ollama",
+      "contextWindow": 16384,
+      "defaultMaxTokens": 2048
+    }
+  }
+}

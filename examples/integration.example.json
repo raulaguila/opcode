@@ -1,0 +1,18 @@
+{
+  "timeoutSeconds": 180,
+  "providers": {
+    "openai": {"enabled": false, "model": "", "apiKeyEnv": "OPENAI_API_KEY", "maxTokens": 512},
+    "openai-responses": {"enabled": false, "model": "", "apiKeyEnv": "OPENAI_API_KEY", "canReason": true, "maxTokens": 4096},
+    "anthropic": {"enabled": false, "model": "", "apiKeyEnv": "ANTHROPIC_API_KEY", "maxTokens": 512},
+    "gemini": {"enabled": false, "model": "", "apiKeyEnv": "GEMINI_API_KEY", "maxTokens": 4096},
+    "groq": {"enabled": false, "model": "", "apiKeyEnv": "GROQ_API_KEY", "maxTokens": 512},
+    "openrouter": {"enabled": false, "model": "", "apiKeyEnv": "OPENROUTER_API_KEY", "maxTokens": 512},
+    "xai": {"enabled": false, "model": "", "apiKeyEnv": "XAI_API_KEY", "maxTokens": 4096},
+    "local": {"enabled": false, "model": "", "endpoint": "http://localhost:11434/v1", "maxTokens": 512},
+    "azure": {"enabled": false, "model": "", "apiKeyEnv": "AZURE_OPENAI_API_KEY", "endpoint": "", "apiVersion": "v1", "maxTokens": 512},
+    "azure-responses": {"enabled": false, "model": "", "apiKeyEnv": "AZURE_OPENAI_API_KEY", "endpoint": "", "apiVersion": "v1", "canReason": true, "maxTokens": 4096},
+    "vertexai": {"enabled": false, "model": "", "project": "", "location": "global", "maxTokens": 4096},
+    "bedrock": {"enabled": false, "model": "", "region": "us-east-1", "maxTokens": 512},
+    "copilot": {"enabled": false, "model": "", "apiKeyEnv": "GITHUB_TOKEN", "maxTokens": 512}
+  }
+}

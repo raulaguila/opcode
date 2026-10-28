@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "overview", "mode": "ask",
+      "files": {"README.md":"# IgarapeWatch\nAplicativo Go que recebe sensores por MQTT e guarda medições em SQLite.\n", "main.go":"package main\nfunc main() {}\n", "go.mod":"module example.test/igarapewatch\n\ngo 1.26\n"},
+      "prompts": ["Explique em português o projeto atual usando os arquivos reais. Cite o nome, MQTT, SQLite e o arquivo consultado."],
+      "criteria": [{"kind":"response_contains","value":"IgarapeWatch"},{"kind":"response_contains","value":"MQTT"},{"kind":"response_contains","value":"SQLite"},{"kind":"tool_called","value":"view"}]
+    },
+    {
+      "id": "localize", "mode": "ask",
+      "files": {"README.md":"# CounterLab\nOperações aritméticas estão em counter.py.\n","counter.py":"def add(a, b):\n    return a - b\n"},
+      "prompts": ["Localize no projeto a causa de add(2, 3) retornar -1. Leia counter.py e explique a operação errada, sem editar arquivos."],
+      "criteria": [{"kind":"response_contains","value":"counter.py"},{"kind":"response_contains","value":"add"},{"kind":"file_contains","path":"counter.py","value":"return a - b"},{"kind":"tool_called","value":"view"}]
+    },
+    {
+      "id": "edit", "mode": "execute",
+      "files": {"README.md":"# CounterLab\nCorrija apenas o operador de add em counter.py.\n","counter.py":"def add(a, b):\n    return a - b\n"},
+      "prompts": ["Leia counter.py e corrija add para somar seus argumentos, usando return a + b. Altere somente esse arquivo. Não é necessário executar comandos."],
+      "criteria": [{"kind":"file_contains","path":"counter.py","value":"return a + b"},{"kind":"file_not_contains","path":"counter.py","value":"return a - b"}]
+    },
+    {
+      "id": "validate", "mode": "execute",
+      "files": {"README.md":"# AnswerLab\nanswer.txt deve conter exatamente 42.\n","answer.txt":"42\n"},
+      "checks": {"answer":"test \"$(cat answer.txt)\" = 42"},
+      "prompts": ["Valide o projeto executando a verificação configurada answer com run_checks, não use bash diretamente. Em seguida informe o resultado verdadeiro. Não altere arquivos."],
+      "criteria": [{"kind":"tool_called","value":"run_checks"},{"kind":"check_passed","value":"answer"},{"kind":"file_contains","path":"answer.txt","value":"42"}]
+    },
+    {
+      "id": "error", "mode": "ask",
+      "files": {"README.md":"# ErrorLab\nO arquivo missing.go não existe neste projeto.\n","main.go":"package main\nfunc main() {}\n"},
+      "prompts": ["Tente ler missing.go usando view. Se a ferramenta informar que não existe, diga isso explicitamente e mencione missing.go. Não invente código nem crie arquivo."],
+      "criteria": [{"kind":"response_contains","value":"missing.go"},{"kind":"response_contains","value":"não"},{"kind":"tool_called","value":"view"},{"kind":"file_contains","path":"main.go","value":"func main() {}"}]
+    },
+    {
+      "id": "resume", "mode": "plan",
+      "files": {"README.md":"# ResumeLab\nIdentificador de continuidade: igarape-42.\n"},
+      "prompts": ["Leia README.md. Use update_plan para salvar objetivo 'Revisar igarape-42', uma etapa pendente de inspeção e critério de leitura, sem checks. Finalize como planned, sem modificar arquivos.", "Retome a tarefa salva: consulte get_task e diga em português qual objetivo foi salvo, incluindo igarape-42. Preserve o plano e finalize como planned."],
+      "criteria": [{"kind":"response_contains","value":"igarape-42"},{"kind":"tool_called","value":"get_task"},{"kind":"task_status","value":"planned"}]
+    }
+  ]
+}

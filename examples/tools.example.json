@@ -1,0 +1,15 @@
+{
+  "security": {
+    "sandbox": "bubblewrap",
+    "allowNetwork": false,
+    "allowPrivateNetwork": false,
+    "envAllow": [],
+    "readOnlyPaths": [],
+    "denyPaths": ["*.p12", "*.pfx"]
+  },
+  "checks": {
+    "unit": {"command": "go test ./...", "timeout": 120000},
+    "race": {"command": "go test -race ./...", "timeout": 180000},
+    "vet": {"command": "go vet ./...", "timeout": 120000}
+  }
+}

@@ -1,0 +1,230 @@
+# Arquitetura das integrações e ferramentas deste fork
+
+Este documento descreve os limites alterados na modernização. A visão geral do restante do aplicativo permanece no README.
+
+## Limites e dependências
+
+O agente consome a interface `provider.Provider`. Adaptadores privados convertem mensagens, ferramentas e streams de cada protocolo; `apiTransport` concentra HTTP e reenvios. Os SDKs de geração foram removidos. Bibliotecas de autenticação/assinatura de nuvem e a biblioteca MCP permanecem.
+
+Modelos locais podem selecionar `api: "ollama"` para usar `/api/chat` com NDJSON e contexto aplicado por requisição. O adaptador traduz a função interna `final_answer` em conteúdo de resposta, rejeita respostas misturadas com operações e mantém todas as ferramentas reais no caminho normal de autorização. O protocolo local compatível com OpenAI permanece disponível.
+
+As fábricas de ferramentas dos agentes aplicam `tools.SecureTool` a cada entrada. A política de acesso é propagada pelo contexto e usa o serviço de permissões. O agente de pesquisa recebe somente ferramentas de leitura. O executor `tools/shell` é usado por comandos, inspeção Git, verificações, processos, LSP e MCP stdio. Configurações de segurança vêm da configuração global do usuário; opções do repositório não podem enfraquecê-las.
+
+A leitura e a gravação de arquivos usam raízes `os.Root`. A instalação de edições pertence a `tools/transaction.go`, com staging, revalidação e restauração após falhas de execução. A persistência de mensagens e histórico continua em SQLite, sem migração de schema para o estado opaco de continuação dos provedores.
+
+A navegação LSP utiliza os clientes existentes. Alterações no registro de clientes passam por `lsp.SetClient`/`DeleteClient`, e consumidores de ferramentas usam snapshots protegidos. As gravações do protocolo são serializadas e chamadas aguardam resposta com cancelamento.
+
+O aplicativo é dono de um `ProcessManager` compartilhado por shell, verificações,
+processos e painel de terminal. A interface consulta snapshots limitados; não
+consome nem remove a saída que as ferramentas recebem. PTYs usam `creack/pty` e
+uma tela VT limitada de `hinshun/vt10x`, sem suas sequências de controle chegarem
+ao terminal externo. São duas dependências focadas, sem novos serviços. Ferramentas que recebem esse
+manager apenas o emprestam: fechar um agente para trocar conexão não o encerra.
+`App.Shutdown` encerra os processos compartilhados; fábricas independentes
+atribuem um único dono ao manager que criam.
+
+`agent.Submit` usa um único worker por sessão. Instruções durante uma geração
+ficam em uma fila limitada, aplicada em limites entre operações. O worker é o
+único escritor das mensagens, mantendo chamadas/resultados de ferramentas antes
+da próxima mensagem do usuário. Os canais de conclusão são bufferizados para
+que a interface não precise drená-los para liberar o worker.
+
+O worker mantém o modo e o catálogo de ferramentas por execução. Perguntar e
+Planejar usam listas explícitas de capacidades; o executor recusa ferramentas
+ocultas ou proibidas, independentemente das instruções do modelo. Contexto inicial
+usa as ferramentas protegidas de leitura e gera chamadas/resultados reais.
+
+`workflow.Store` guarda plano, modo, revisão e recibos de verificações na tabela
+aditiva `agent_workflows`, pertencente à sessão e à raiz do workspace. Não guarda
+permissões. Commits de arquivos notificam a invalidação; hashes limitados do
+workspace detectam mudanças externas. Recibos vinculam checks ao hash do comando
+configurado e à revisão atual. A migração pode ser revertida sem remover o
+histórico da conversa.
+
+`interaction.Questions` pertence ao aplicativo e mantém no máximo uma pergunta
+pendente por sessão. A TUI consulta snapshots, recebe uma escolha/texto real e
+devolve o resultado pelo protocolo de ferramentas. Cancelamento libera a espera;
+respostas não alteram o serviço de permissões.
+
+O editor mantém o filtro, a seleção e o fechamento das sugestões de comandos
+`/`; a página posiciona o menu acima do campo e entrega suas teclas antes do
+cancelamento da sessão. A seleção usa o mesmo envio/ACK dos comandos digitados.
+Falhas locais e recusa da fila preservam o rascunho. O menu não aparece no PTY
+nem captura a entrada destinada a perguntas ao usuário.
+
+Limites de etapas, duração e resultados pertencem ao worker. Um wrapper da
+interface Provider limita a primeira resposta e o silêncio entre eventos, sem
+contar a execução local das ferramentas. Não há reenvio por timeout. Falhas
+reparam chamadas incompletas no histórico e preservam instruções já aceitas,
+exceto no cancelamento explícito. Veja `docs/agent-runtime.md` para configuração,
+exclusões da impressão de arquivos e limites de garantia.
+
+## Contratos e falhas
+
+Resultados de ferramentas preservam `ToolResponse`, `IsError` e metadados JSON. Comandos retornam exit code, timeout, cancelamento, truncamento e timestamps. Inspeção Git e navegação LSP retornam estruturas limitadas. Processos têm identificadores e propriedade por sessão, prazo de expiração e encerramento no cancelamento da sessão ou do aplicativo.
+
+Permissões de arquivos têm escopo de caminho resolvido; as de navegação externa usam origem de rede. Sem aprovação, acesso sensível/externo e operações mutáveis falham. Uma sessão autoaprovada é uma exceção explícita do usuário, não uma mudança no isolamento do processo.
+
+Bubblewrap é o isolamento padrão no Linux. Ausência do binário ou recusa de namespaces causa falha; execução sem sandbox exige opção global explícita. Chamadas de geração aos provedores continuam no processo do aplicativo e não dependem da liberação de rede dos comandos.
+
+Edições não fornecem transação distribuída entre SQLite e filesystem nem garantia de commit conjunto após falha de energia. Backups que não possam ser restaurados são mantidos e a falha é exposta. Estado em memória de processos não sobrevive ao encerramento do aplicativo.
+
+## Observabilidade e credenciais
+
+A captura de comandos e processos é limitada em memória. A fronteira das ferramentas remove valores conhecidos de credenciais de conteúdo, metadados e erros, preservando causas de erro para checagem de permissão. Isso não substitui controle de acesso a arquivos nem identifica segredos arbitrários escritos no código. O ambiente dos subprocessos é mínimo, com inclusões explícitas por configuração global. Payloads completos de mensagens LSP não são registrados pelo transporte.
+
+A suíte real dos provedores exige tag de build e opt-in por ambiente; seu relatório omite credenciais, cabeçalhos e corpos. Não há métricas ou objetivos de latência/custo adicionais definidos por esta mudança.
+
+## Entrega e verificação
+
+Go 1.26 ou posterior. O build continua sendo `go build .`; workflows usam a versão declarada no `go.mod`. A verificação comum é `go test -race ./...` e `go vet ./...`. Testes de sandbox usam dados temporários e indicam quando o ambiente não suporta namespaces. Testes externos de geração são separados e optativos.
+
+Consulte `docs/tools.md` para configuração, limites e diferenças entre rede de subprocessos, navegação web e serviços MCP. Consulte `internal/llm/provider/integration/README.md` para testar contas reais dos provedores.
+
+## Provedores, perfis e primeiro acesso
+
+`models.DiscoverProviderModels` consulta catálogos HTTP limitados e canceláveis,
+sem mutar o registro. `config.ModelCatalog`/`ProfileModelCatalog` capturam snapshots
+no chamador e preservam definições explícitas. Perfis distinguem ID, nome e
+backend; `Model.ProviderProfile` seleciona a conexão enquanto `Model.Provider`
+continua selecionando o adaptador. `ProviderForModel` fornece credenciais e
+endpoint da mesma conexão usada para a descoberta. `LOCAL_ENDPOINT` sobrescreve
+somente a conexão local legada. Variáveis de ambiente não são serializadas.
+
+A TUI consulta no abrir/atualizar, filtra localmente e descarta respostas atrasadas.
+Cliques no modelo do rodapé e `Ctrl+O` abrem o mesmo seletor. Favoritos/recentes e
+funções coder/task/title/summarizer persistem no JSON. Modelos sem contexto
+informado identificam seu limite conservador como estimativa. Metadados
+persistidos permitem reconhecer uma escolha mesmo sem catálogo disponível.
+
+`app.configurableCoder` mantém identidade de serviço e broker estáveis antes do
+primeiro modelo. `App.ConfigureCoderAgent` só troca o delegate ocioso, encerra o
+anterior e mantém um único encaminhador de eventos. Pedidos sem setup retornam
+um erro explícito; endpoint ou credenciais alterados sem reconstrução bem-sucedida
+não continuam usando o cliente anterior. O primeiro acesso interativo abre o
+cadastro; `--prompt` exige configuração válida antecipadamente.
+
+Os formulários guardam rascunhos e referências a variáveis. Testes de provedores
+consultam somente catálogos. Testes MCP/LSP exigem aprovação antes de iniciar o
+cliente, usam escopo efêmero revogado no final, prazo de 8 s após aprovação e
+fecham o cliente. Não instalam ferramentas nem chamam uma operação MCP. Salvar
+LSP aplica no próximo início; MCP consulta o cadastro atual em cada chamada.
+Escritas JSON preservam campos desconhecidos, usam temp privado e rename
+atômico; alterações de settings são recusadas durante a execução do agente.
+Veja `docs/model-selection.md` e `docs/integrations-settings.md`.
+
+## Contexto preventivo e extensões explícitas
+
+O pacote `internal/llm/agent` estima o payload completo antes da rede: prompt de
+sistema efetivo, histórico/anexos/continuação, schemas e reserva de saída, com
+margem de segurança. É uma heurística documentada, não o tokenizer do provedor.
+Compactação local preserva todas as instruções do usuário, pares de ferramentas,
+pedido atual e estado opaco; abrevia apenas corpos antigos. Se ainda não couber,
+recusa antes de abrir o stream. Títulos e resumos também têm orçamento.
+`ContextControl` e `QueueControl` são capacidades opcionais; editar a fila retira
+atomicamente o item sob o lock do worker e volta pelo Submit/ACK normal.
+
+Conversas recuperadas e findings com SHA256 são dados históricos, sem evidência
+atual de leitura nem autorização. Findings privados usam `internal/localstate`,
+separados por workspace/sessão, com limites de 32 registros e 128 KiB; cada fonte
+é lida com a política de acesso existente e limite de 16 MiB. Alterações nas
+fontes são marcadas como stale. O agente registra apenas metadados de operações
+nos logs, sem despejar seus payloads.
+
+`internal/extensions` lê somente diretórios de skills explicitamente configurados
+no JSON global (até 64 skills de 16 KiB). `ExtensionControl.InvokeSkill` aceita
+invocação explícita do usuário via Submit, sem ferramenta equivalente para o
+modelo. Hooks globais before/after-tool reutilizam bash, aprovação e sandbox,
+sem interpolar texto do modelo; são bloqueados em Ask/Plan e limitados a 16
+execuções de até 30s por turno. Falha ou recusa interrompe o turno, não concede
+permissões nem reverte efeitos de comandos. Contratos e exemplos estão em
+`docs/context-and-extensions.md`.
+
+
+## Avaliações reproduzíveis
+
+`internal/evaluation` e `opcode evaluate` validam offline seis fixtures com
+contratos limitados; resultados não executados são null, sem nota de modelo.
+`--live --provider-config` usa um subprocesso real por caso com HOME/workspace/DB
+privados, descartados no final. Execute exige opt-in adicional e grants únicos
+somente dentro da fixture; sandbox, bloqueio de rede e credenciais continuam
+protegidos. Relatórios contêm resultados por critério, identificação do modelo e
+contagem de chamadas, sem respostas/payloads. O contrato e o teste Ollama opt-in
+estão em `docs/evaluation.md`.
+
+
+## Workspace da interface e estado local
+
+O catálogo `internal/tui/commands` alimenta sugestões `/` e a paleta. A página de
+chat mantém painéis de fila, contexto, alterações, skills, permissões, ações de
+resposta e recuperação. Operações assíncronas têm sequência/sessão de origem;
+fechar ou trocar de conversa cancela a operação e descarta resultados atrasados.
+Autorizações aparecem acima do painel que as solicitou. Os controles estão em
+`docs/workspace-ui.md`.
+
+O transcript agrupa mensagens por turno, com processo recolhível separado da
+resposta. Atualizações preservam a posição de leitura e indicam novas mensagens;
+o usuário volta ao final explicitamente. Ações copiam texto/código ou abrem uma
+prévia protegida de arquivo, sem criar evidência de leitura para o agente.
+Rascunhos e histórico de entrada são preservados por conversa; a recuperação
+reenvia uma instrução pelo Submit/ACK normal, sem autoaprovar operações.
+
+`session.Catalog` persiste arquivamento e última conversa em documento privado
+limitado, separado por raiz do workspace. O editor guarda texto e anexos em
+`composer-drafts.json`, inclusive o rascunho anterior à primeira sessão, e não
+efetiva troca/saída se a persistência falhar. Limites: 64 rascunhos, 64 KiB de
+texto/16 MiB de anexos por entrada e documento de 64 MiB. Conversas e mensagens
+continuam em SQLite; exportações Markdown são dados históricos redigidos, sem
+autoridade sobre ferramentas ou permissões. `internal/localstate` centraliza
+limites, validação de arquivos, locks e gravação atômica dos documentos locais.
+
+## Revisão e undo/redo de arquivos
+
+Commits bem-sucedidos das ferramentas notificam um observador com conteúdo
+anterior/posterior e identificador do turno. `review.Store` guarda snapshots
+privados por workspace/sessão. Falhar ao registrar causa rollback da edição.
+A interface mostra diffs e recibos de verificações, e prepara uma reversão antes
+de solicitar aprovação por arquivo. Antes de aplicar, compara o conteúdo atual
+com o esperado; alterações externas ou fora de ordem causam conflito.
+
+Aplicar undo/redo reutiliza a transação protegida de arquivos e invalida os
+recibos de verificações. Aprovação não elimina a revalidação de conteúdo. Os
+locks de revisão não ficam retidos enquanto o usuário decide a permissão.
+Arquivos, estado de revisão e SQLite não formam uma transação distribuída nem
+uma garantia contra falha de energia. Comandos, serviços externos e modificações
+manuais não são desfeitos por esse recurso.
+
+## Ferramentas de código, artefatos e MCP sob demanda
+
+`get_project_map`, outline e leitura de símbolos reutilizam a política de acesso;
+leituras parciais não autorizam edição integral. Hierarquia, rename e substituição
+LSP usam os clientes existentes, limites de resposta e transações com diffs.
+`discover_checks` apenas sugere comandos; somente uma verificação executada para
+a revisão/digest atuais produz recibo válido.
+
+Saídas extensas podem gerar artefatos privados, redigidos e vinculados à sessão,
+com cotas por página, arquivo, sessão e armazenamento total. O identificador
+opaco permite consultar informação, páginas e ocorrências sem repetir comandos.
+Artefatos continuam sendo snapshots históricos, sujeitos ao truncamento anterior
+do buffer de processo; não concedem permissões nem evidência de leitura atual.
+
+MCP registra despachantes nativos, sem iniciar processos ou rede na abertura.
+`list_mcp_tools` consulta uma página de schemas após aprovação;
+`call_mcp_tool` executa somente em Executar, também após aprovação. Nomes externos
+não podem imitar uma capacidade nativa para mudar sua classificação. Recursos
+MCP são páginas/textos não confiáveis, limitados e sujeitos à política de leitura.
+Cada chamada captura o cadastro e fecha seu cliente; não há cache de credenciais
+ou conexões antigas após uma edição. Uma chamada aprovada em andamento conserva
+seu snapshot até concluir ou ser cancelada. Veja `docs/code-tools.md` para cotas.
+
+
+## Identidade e publicação
+
+O módulo público é `github.com/raulaguila/opcode`, com binário `opcode` e branch
+`develop`. README e scripts instalam o código desta origem, sem presumir pacotes
+Homebrew/AUR ou releases já existentes. O workflow de build usa permissões de
+leitura; uma tag explícita `v*` dispara testes, vet e GoReleaser com o token do
+próprio repositório. O script local de release apenas prepara uma tag, sem push.
+A licença original e a proveniência são preservadas. `autoCompact` prepara o
+contexto local da mesma sessão; a UI não dispara resumo remoto ou sessão nova
+por esse limiar.

@@ -1,0 +1,34 @@
+version: 2
+project_name: opcode
+builds:
+  - binary: opcode
+    main: ./main.go
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/raulaguila/opcode/internal/version.Version={{.Version}}
+archives:
+  - format: tar.gz
+    name_template: >-
+      opcode-
+      {{- if eq .Os "darwin" }}mac-
+      {{- else }}linux-{{end}}
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+checksum:
+  name_template: checksums.txt
+snapshot:
+  name_template: "0.0.0-{{ .Timestamp }}"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"

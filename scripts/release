@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Prepare one explicit local release tag. Publishing is a separate git push.
+set -euo pipefail
+
+if [[ ${1:-} == --help || ${1:-} == -h ]]; then
+  printf '%s\n' 'Usage: ./scripts/release vMAJOR.MINOR.PATCH' 'Runs checks and creates one local annotated tag; does not push or publish.'
+  exit 0
+fi
+if [[ $# != 1 || ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  printf '%s\n' 'Provide one explicit release tag, for example v0.1.0.' >&2
+  exit 2
+fi
+opcode_version=$1
+if [[ $(git branch --show-current) != develop ]]; then
+  printf '%s\n' 'Prepare releases from develop.' >&2
+  exit 1
+fi
+if [[ -n $(git status --porcelain) ]]; then
+  printf '%s\n' 'Commit or stash local changes before preparing a release.' >&2
+  exit 1
+fi
+if git rev-parse --verify --quiet "refs/tags/$opcode_version" >/dev/null; then
+  printf '%s\n' 'This tag already exists.' >&2
+  exit 1
+fi
+go test -race ./...
+go vet ./...
+git tag -a "$opcode_version" -m "Opcode $opcode_version"
+printf '%s\n' "Created local tag $opcode_version." "To publish through GitHub Actions: git push origin tag $opcode_version"

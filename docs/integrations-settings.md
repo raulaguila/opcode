@@ -1,0 +1,63 @@
+# Integrações na interface
+
+Abra **Settings** e pressione `I` para ver servidores MCP e de linguagem. `N`
+adiciona MCP, `L` adiciona LSP e `Enter` edita a seleção. Os campos de argumentos
+usam um array JSON, por exemplo `["--stdio"]`; não é necessário escapar um
+comando shell inteiro. `Tab` alterna campos, `Ctrl+S` salva e `Esc` volta.
+
+`Ctrl+T` testa o candidato do formulário, sem salvá-lo. O aplicativo solicita
+permissão antes de iniciar o executável ou conectar ao MCP. O teste usa o mesmo
+isolamento e ambiente filtrado do runtime; depois da aprovação, tem limite de
+8 segundos e fecha seu cliente. `Esc` cancela mantendo o formulário. A aprovação
+pertence a um escopo temporário e é revogada ao encerrar o teste.
+
+O resultado MCP mostra uma página limitada de nomes das ferramentas e recursos;
+LSP mostra as capacidades declaradas pelo servidor. Um servidor pode oferecer
+mais entradas que a página mostrada. O teste não chama ferramentas MCP nem altera
+arquivos. Inicializar um servidor pode executar seu processo configurado, por
+isso continua sujeito à permissão e ao sandbox.
+
+Salvar configurações não inicia automaticamente uma integração nova. As chamadas
+MCP seguintes consultam o cadastro atualizado: `list_mcp_tools` enumera os
+schemas sob aprovação e `call_mcp_tool` chama somente uma ferramenta descoberta.
+Reinicie o aplicativo para aplicar alterações aos servidores LSP ativos.
+O cadastro permite desativar uma integração sem apagar sua configuração.
+Servidores LSP desativados não são iniciados.
+
+## Credenciais por ambiente
+
+Para MCP HTTP/SSE, cada entrada de `headersEnv` aponta para uma variável contendo
+o valor completo do cabeçalho. Para stdio, `envVars` mapeia o nome recebido pelo
+processo filho para a variável de origem do ambiente:
+
+```json
+{
+  "mcpServers": {
+    "documentacao": {
+      "type": "http",
+      "url": "https://mcp.example/mcp",
+      "headersEnv": {"Authorization": "MCP_AUTHORIZATION"}
+    },
+    "servidor-local": {
+      "type": "stdio",
+      "command": "meu-servidor-mcp",
+      "args": ["--stdio"],
+      "envVars": {"SERVICE_API_KEY": "MINHA_CHAVE_SERVICO"},
+      "disabled": true
+    }
+  },
+  "lsp": {
+    "go": {"command": "gopls", "args": [], "disabled": false}
+  }
+}
+```
+
+Defina `MCP_AUTHORIZATION` com o valor completo esperado, como `Bearer …`, fora
+do arquivo. As referências são resolvidas em cópias em memória; seus valores não
+são gravados ao editar a integração. URLs com credenciais, query string ou
+fragmento são rejeitadas. Os campos legados `headers` e `env` continuam válidos,
+mas a interface preserva esses valores privados sem mostrá-los nos novos campos.
+
+Editar uma entrada já presente no projeto salva no mesmo `.opcode.json`;
+entradas novas são salvas no arquivo global em uso. A escrita é atômica,
+preserva campos desconhecidos e usa permissão `0600`.

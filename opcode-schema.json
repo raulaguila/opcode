@@ -1,0 +1,746 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "agent": {
+      "description": "Agent configuration",
+      "properties": {
+        "maxTokens": {
+          "description": "Maximum tokens for the agent",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "model": {
+          "description": "Model ID for the agent",
+          "type": "string"
+        },
+        "reasoningEffort": {
+          "description": "Reasoning effort for models that support it (OpenAI, Anthropic)",
+          "enum": [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Configuration schema for the Opcode application",
+  "properties": {
+    "agents": {
+      "additionalProperties": {
+        "description": "Agent configuration",
+        "properties": {
+          "maxTokens": {
+            "description": "Maximum tokens for the agent",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "model": {
+            "description": "Model ID for the agent",
+            "type": "string"
+          },
+          "reasoningEffort": {
+            "description": "Reasoning effort for models that support it (OpenAI, Anthropic)",
+            "enum": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "model"
+        ],
+        "type": "object"
+      },
+      "description": "Agent configurations",
+      "properties": {
+        "coder": {
+          "$ref": "#/definitions/agent"
+        },
+        "task": {
+          "$ref": "#/definitions/agent"
+        },
+        "title": {
+          "$ref": "#/definitions/agent"
+        }
+      },
+      "type": "object"
+    },
+    "checks": {
+      "additionalProperties": {
+        "properties": {
+          "command": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "timeout": {
+            "default": 60000,
+            "maximum": 600000,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "type": "object"
+      },
+      "description": "Named verification commands; every execution still requires command permission.",
+      "type": "object"
+    },
+    "contextPaths": {
+      "default": [
+        ".github/copilot-instructions.md",
+        ".cursorrules",
+        ".cursor/rules/",
+        "CLAUDE.md",
+        "CLAUDE.local.md",
+        "opcode.md",
+        "opcode.local.md",
+        "Opcode.md",
+        "Opcode.local.md",
+        "OPCODE.md",
+        "OPCODE.local.md"
+      ],
+      "description": "Context paths for the application",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "data": {
+      "description": "Storage configuration",
+      "properties": {
+        "directory": {
+          "default": ".opcode",
+          "description": "Directory where application data is stored",
+          "type": "string"
+        }
+      },
+      "required": [
+        "directory"
+      ],
+      "type": "object"
+    },
+    "debug": {
+      "default": false,
+      "description": "Enable debug mode",
+      "type": "boolean"
+    },
+    "debugLSP": {
+      "default": false,
+      "description": "Enable LSP debug mode",
+      "type": "boolean"
+    },
+    "extensions": {
+      "description": "Trusted user-global configuration only. Repository configuration cannot enable skills or hooks.",
+      "properties": {
+        "hooks": {
+          "items": {
+            "properties": {
+              "command": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              "event": {
+                "enum": [
+                  "before_tool",
+                  "after_tool"
+                ],
+                "type": "string"
+              },
+              "timeout_seconds": {
+                "maximum": 30,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tool": {
+                "maxLength": 100,
+                "type": "string"
+              }
+            },
+            "required": [
+              "event",
+              "command"
+            ],
+            "type": "object"
+          },
+          "maxItems": 16,
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "description": "Absolute skill directory.",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "lsp": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "stdio"
+                ]
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "sse",
+                  "http"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "url"
+            ]
+          }
+        ],
+        "description": "LSP configuration for a language",
+        "properties": {
+          "args": {
+            "description": "Command arguments for the LSP server",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "command": {
+            "description": "Command to execute for the LSP server",
+            "type": "string"
+          },
+          "disabled": {
+            "default": false,
+            "description": "Whether the LSP is disabled",
+            "type": "boolean"
+          },
+          "options": {
+            "description": "Additional options for the LSP server",
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "description": "Language Server Protocol configurations",
+      "type": "object"
+    },
+    "mcpServers": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "stdio"
+                ]
+              }
+            },
+            "required": [
+              "command"
+            ]
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "sse",
+                  "http"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "url"
+            ]
+          }
+        ],
+        "description": "MCP server configuration",
+        "properties": {
+          "args": {
+            "description": "Command arguments for the MCP server",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "command": {
+            "description": "Command to execute for the MCP server",
+            "type": "string"
+          },
+          "disabled": {
+            "default": false,
+            "type": "boolean"
+          },
+          "env": {
+            "description": "Environment variables for the MCP server",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "envVars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Child environment variable to source environment variable name.",
+            "type": "object"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP headers for remote MCP servers",
+            "type": "object"
+          },
+          "headersEnv": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Header name to environment variable name. Values resolve only in memory.",
+            "type": "object"
+          },
+          "type": {
+            "default": "stdio",
+            "description": "Type of MCP server",
+            "enum": [
+              "stdio",
+              "sse",
+              "http"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "URL for SSE or Streamable HTTP MCP servers",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "description": "Model Control Protocol server configurations",
+      "type": "object"
+    },
+    "models": {
+      "additionalProperties": {
+        "properties": {
+          "api": {
+            "enum": [
+              "chat_completions",
+              "responses",
+              "ollama"
+            ],
+            "type": "string"
+          },
+          "api_model": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "can_reason": {
+            "type": "boolean"
+          },
+          "context_estimated": {
+            "description": "Context is a conservative fallback rather than server or explicit model metadata.",
+            "type": "boolean"
+          },
+          "context_window": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "cost_per_1m_in": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "cost_per_1m_in_cached": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "cost_per_1m_out": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "cost_per_1m_out_cached": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "default_max_tokens": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "provider_profile": {
+            "description": "Optional named provider connection; backend must match provider.",
+            "type": "string"
+          },
+          "supports_attachments": {
+            "type": "boolean"
+          },
+          "thinking_mode": {
+            "enum": [
+              "enabled",
+              "adaptive"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "api_model",
+          "context_window"
+        ],
+        "type": "object"
+      },
+      "description": "Additional model definitions or explicit overrides of built-in models",
+      "type": "object"
+    },
+    "preferences": {
+      "properties": {
+        "favoriteModels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "recentModels": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "resumeLast": {
+          "default": false,
+          "type": "boolean"
+        },
+        "showProcess": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "providerProfiles": {
+      "additionalProperties": {
+        "properties": {
+          "api": {
+            "description": "Default transport for discovered models. ollama is available only for local.",
+            "enum": [
+              "",
+              "chat_completions",
+              "responses",
+              "ollama"
+            ],
+            "type": "string"
+          },
+          "apiKey": {
+            "description": "API key for the provider",
+            "type": "string"
+          },
+          "apiKeyEnv": {
+            "description": "Environment variable containing the API key. Only the variable name is saved.",
+            "type": "string"
+          },
+          "backend": {
+            "description": "Protocol/backend, independent of the user-chosen profile ID.",
+            "enum": [
+              "local",
+              "copilot",
+              "xai",
+              "anthropic",
+              "openai",
+              "gemini",
+              "groq",
+              "openrouter",
+              "bedrock",
+              "azure",
+              "vertexai"
+            ],
+            "type": "string"
+          },
+          "baseURL": {
+            "description": "API base URL for local, OpenAI, Anthropic, Gemini, Groq, OpenRouter or xAI. Used for discovery and inference. LOCAL_ENDPOINT overrides local.",
+            "type": "string"
+          },
+          "contextWindow": {
+            "description": "Default context limit for discovered models; zero keeps server/catalog metadata.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "defaultMaxTokens": {
+            "description": "Default output limit for discovered models; zero keeps server/catalog metadata.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "disabled": {
+            "default": false,
+            "description": "Whether the provider is disabled",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 128,
+            "type": "string"
+          }
+        },
+        "required": [
+          "backend"
+        ],
+        "type": "object"
+      },
+      "description": "Named connections: multiple endpoints may use the same backend.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9_-]{1,64}$"
+      },
+      "type": "object"
+    },
+    "providers": {
+      "additionalProperties": {
+        "description": "Provider configuration",
+        "properties": {
+          "api": {
+            "description": "Default transport for discovered models. ollama is available only for local.",
+            "enum": [
+              "",
+              "chat_completions",
+              "responses",
+              "ollama"
+            ],
+            "type": "string"
+          },
+          "apiKey": {
+            "description": "API key for the provider",
+            "type": "string"
+          },
+          "apiKeyEnv": {
+            "description": "Environment variable containing the API key. Only the variable name is saved.",
+            "type": "string"
+          },
+          "baseURL": {
+            "description": "API base URL for local, OpenAI, Anthropic, Gemini, Groq, OpenRouter or xAI. Used for discovery and inference. LOCAL_ENDPOINT overrides local.",
+            "type": "string"
+          },
+          "contextWindow": {
+            "description": "Default context limit for discovered models; zero keeps server/catalog metadata.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "defaultMaxTokens": {
+            "description": "Default output limit for discovered models; zero keeps server/catalog metadata.",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "disabled": {
+            "default": false,
+            "description": "Whether the provider is disabled",
+            "type": "boolean"
+          },
+          "provider": {
+            "description": "Provider type",
+            "enum": [
+              "local",
+              "copilot",
+              "xai",
+              "anthropic",
+              "openai",
+              "gemini",
+              "groq",
+              "openrouter",
+              "bedrock",
+              "azure",
+              "vertexai"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "description": "LLM provider configurations",
+      "type": "object"
+    },
+    "runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "firstTokenTimeout": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 1800,
+              "minimum": 1
+            }
+          ],
+          "default": 300,
+          "description": "Zero uses the default. Durations are seconds; toolBudget counts bytes of tool content and metadata.",
+          "type": "integer"
+        },
+        "idleTimeout": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 600,
+              "minimum": 1
+            }
+          ],
+          "default": 90,
+          "description": "Zero uses the default. Durations are seconds; toolBudget counts bytes of tool content and metadata.",
+          "type": "integer"
+        },
+        "maxSeconds": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 7200,
+              "minimum": 1
+            }
+          ],
+          "default": 1800,
+          "description": "Zero uses the default. Durations are seconds; toolBudget counts bytes of tool content and metadata.",
+          "type": "integer"
+        },
+        "maxSteps": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 200,
+              "minimum": 1
+            }
+          ],
+          "default": 32,
+          "description": "Zero uses the default. Durations are seconds; toolBudget counts bytes of tool content and metadata.",
+          "type": "integer"
+        },
+        "mode": {
+          "default": "execute",
+          "enum": [
+            "ask",
+            "plan",
+            "execute"
+          ],
+          "type": "string"
+        },
+        "toolBudget": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 1048576,
+              "minimum": 4096
+            }
+          ],
+          "default": 96000,
+          "description": "Zero uses the default. Durations are seconds; toolBudget counts bytes of tool content and metadata.",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "security": {
+      "description": "Execution policy from user-global configuration only; repository configuration cannot override it.",
+      "properties": {
+        "allowNetwork": {
+          "default": false,
+          "type": "boolean"
+        },
+        "allowPrivateNetwork": {
+          "default": false,
+          "type": "boolean"
+        },
+        "denyPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "envAllow": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "readOnlyPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sandbox": {
+          "default": "bubblewrap",
+          "enum": [
+            "bubblewrap",
+            "none"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "tui": {
+      "description": "Terminal User Interface configuration",
+      "properties": {
+        "theme": {
+          "default": "opcode",
+          "description": "TUI theme name",
+          "enum": [
+            "opcode",
+            "catppuccin",
+            "dracula",
+            "flexoki",
+            "gruvbox",
+            "monokai",
+            "onedark",
+            "tokyonight",
+            "tron"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "wd": {
+      "description": "Working directory for the application",
+      "type": "string"
+    }
+  },
+  "title": "Opcode Configuration",
+  "type": "object"
+}

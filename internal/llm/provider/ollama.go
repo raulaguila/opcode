@@ -1,0 +1,231 @@
+package provider
+
+import (
+	"bufio"
+	"cmp"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/google/uuid"
+	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/message"
+)
+
+type ollamaClient struct {
+	*httpProvider
+	opts providerClientOptions
+}
+
+const ollamaFinalAnswer = "final_answer"
+
+func newOllamaClient(opts providerClientOptions, endpoint string) *ollamaClient {
+	c := &ollamaClient{opts: opts}
+	transport := newAPITransport(strings.TrimSuffix(endpoint, "/v1"))
+	if opts.apiKey != "" {
+		transport.headers.Set("Authorization", "Bearer "+opts.apiKey)
+	}
+	c.httpProvider = &httpProvider{transport: transport, protocol: c}
+	return c
+}
+
+func (o *ollamaClient) convertMessages(history []message.Message) ([]object, error) {
+	result := []object{{"role": "system", "content": o.opts.systemMessage}}
+	names := map[string]string{}
+	for _, msg := range history {
+		item := object{"role": msg.Role, "content": msg.Content().String()}
+		switch msg.Role {
+		case message.User:
+			var images []string
+			for _, image := range msg.BinaryContent() {
+				images = append(images, image.String(models.ProviderLocal))
+			}
+			if len(images) > 0 {
+				item["images"] = images
+			}
+		case message.Assistant:
+			if thinking := msg.ReasoningContent().String(); thinking != "" {
+				item["thinking"] = thinking
+			}
+			var calls []object
+			for _, call := range msg.ToolCalls() {
+				if !ollamaArgumentsValid(json.RawMessage(call.Input)) {
+					return nil, fmt.Errorf("invalid Ollama tool arguments in history")
+				}
+				names[call.ID] = call.Name
+				calls = append(calls, object{"id": call.ID, "type": "function", "function": object{"name": call.Name, "arguments": json.RawMessage(call.Input)}})
+			}
+			if len(calls) > 0 {
+				item["tool_calls"] = calls
+			}
+		case message.Tool:
+			for _, value := range msg.ToolResults() {
+				result = append(result, object{"role": "tool", "tool_call_id": value.ToolCallID, "tool_name": cmp.Or(value.Name, names[value.ToolCallID]), "content": value.Content})
+			}
+			continue
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
+func (o *ollamaClient) request(history []message.Message, definitions []tools.BaseTool, stream bool) (string, any, error) {
+	messages, err := o.convertMessages(history)
+	if err != nil {
+		return "", nil, err
+	}
+	params := object{"model": o.opts.model.APIModel, "messages": messages, "stream": stream, "truncate": false,
+		"options": object{"num_ctx": cmp.Or(o.opts.model.ContextWindow, 16384), "num_predict": cmp.Or(o.opts.maxTokens, 2048), "temperature": 0}}
+	if o.opts.model.CanReason {
+		params["think"] = true
+	}
+	var functions []object
+	for _, tool := range definitions {
+		info := tool.Info()
+		if info.Name == ollamaFinalAnswer {
+			return "", nil, fmt.Errorf("Ollama tool name final_answer is reserved for replies")
+		}
+		functions = append(functions, object{"type": "function", "function": object{"name": info.Name, "description": info.Description, "parameters": toolSchema(tool)}})
+	}
+	if len(functions) > 0 {
+		// Some Ollama templates request a function for every trailing user
+		// message. Give them a way to answer without inventing a shell action.
+		functions = append(functions, object{"type": "function", "function": object{
+			"name": ollamaFinalAnswer, "description": "Reply to the user with your final answer after gathering needed facts or completing the requested work. This only sends your answer; it does not execute a command. Use this when no further tool operation is needed.",
+			"parameters": object{"type": "object", "properties": object{"answer": object{"type": "string", "description": "The final answer in the user's language."}}, "required": []string{"answer"}},
+		}})
+		messages[0]["content"] = o.opts.systemMessage + "\nWhen the required facts or work are complete, call final_answer with your answer text to finish the turn. In particular, a request to reply or acknowledge something uses final_answer, never bash echo/printf or another operation."
+		params["tools"] = functions
+	}
+	return "/api/chat", params, nil
+}
+
+type ollamaCall struct {
+	ID       string `json:"id"`
+	Function struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	} `json:"function"`
+}
+
+type ollamaResponse struct {
+	Message struct {
+		Content   string       `json:"content"`
+		Thinking  string       `json:"thinking"`
+		ToolCalls []ollamaCall `json:"tool_calls"`
+	} `json:"message"`
+	Done            bool            `json:"done"`
+	DoneReason      string          `json:"done_reason"`
+	PromptEvalCount int64           `json:"prompt_eval_count"`
+	EvalCount       int64           `json:"eval_count"`
+	Error           json.RawMessage `json:"error"`
+}
+
+func ollamaArgumentsValid(raw json.RawMessage) bool {
+	text := strings.TrimSpace(string(raw))
+	return strings.HasPrefix(text, "{") && json.Valid(raw)
+}
+
+func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
+	if len(value.Error) > 0 && string(value.Error) != "null" {
+		return nil, fmt.Errorf("Ollama returned an error")
+	}
+	if !value.Done {
+		return nil, fmt.Errorf("Ollama response ended without done=true")
+	}
+	response := &ProviderResponse{Content: value.Message.Content, FinishReason: message.FinishReasonEndTurn,
+		Usage: TokenUsage{InputTokens: value.PromptEvalCount, OutputTokens: value.EvalCount}}
+	if value.DoneReason == "length" {
+		response.FinishReason = message.FinishReasonMaxTokens
+	} else if value.DoneReason != "" && value.DoneReason != "stop" {
+		return nil, fmt.Errorf("Ollama returned an unexpected completion reason")
+	}
+	for _, call := range value.Message.ToolCalls {
+		if response.FinishReason == message.FinishReasonMaxTokens || call.Function.Name == "" || !ollamaArgumentsValid(call.Function.Arguments) {
+			return nil, fmt.Errorf("Ollama returned an incomplete tool call")
+		}
+		if call.Function.Name == ollamaFinalAnswer {
+			var args struct {
+				Answer string `json:"answer"`
+			}
+			if len(value.Message.ToolCalls) != 1 || json.Unmarshal(call.Function.Arguments, &args) != nil || strings.TrimSpace(args.Answer) == "" {
+				return nil, fmt.Errorf("invalid Ollama final answer or mixed answer and tool calls")
+			}
+			response.Content += args.Answer
+			return response, nil
+		}
+		response.ToolCalls = append(response.ToolCalls, message.ToolCall{ID: cmp.Or(call.ID, uuid.NewString()), Name: call.Function.Name,
+			Input: string(call.Function.Arguments), Type: "function", Finished: true})
+	}
+	if len(response.ToolCalls) > 0 {
+		response.FinishReason = message.FinishReasonToolUse
+	}
+	return response, nil
+}
+
+func (o *ollamaClient) decodeResponse(raw json.RawMessage) (*ProviderResponse, error) {
+	var value ollamaResponse
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, err
+	}
+	return ollamaResult(value)
+}
+
+func (o *ollamaClient) readStream(ctx context.Context, reader io.Reader, events chan<- ProviderEvent) error {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 4096), maxProviderBytes)
+	var content strings.Builder
+	var calls []ollamaCall
+	total := 0
+	for scanner.Scan() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		raw := scanner.Bytes()
+		total += len(raw)
+		if total > maxProviderBytes {
+			return fmt.Errorf("Ollama stream exceeds maximum size")
+		}
+		if len(strings.TrimSpace(string(raw))) == 0 {
+			continue
+		}
+		var value ollamaResponse
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return fmt.Errorf("invalid Ollama stream JSON")
+		}
+		if len(value.Error) > 0 && string(value.Error) != "null" {
+			return fmt.Errorf("Ollama stream returned an error")
+		}
+		content.WriteString(value.Message.Content)
+		calls = append(calls, value.Message.ToolCalls...)
+		for _, event := range []ProviderEvent{{Type: EventContentDelta, Content: value.Message.Content}, {Type: EventThinkingDelta, Content: value.Message.Thinking, Thinking: value.Message.Thinking}} {
+			if event.Content != "" && !publishEvent(ctx, events, event) {
+				return ctx.Err()
+			}
+		}
+		if value.Done {
+			value.Message.Content = content.String()
+			value.Message.ToolCalls = calls
+			response, err := ollamaResult(value)
+			if err != nil {
+				return err
+			}
+			if answer := strings.TrimPrefix(response.Content, value.Message.Content); answer != "" {
+				if !publishEvent(ctx, events, ProviderEvent{Type: EventContentDelta, Content: answer}) {
+					return ctx.Err()
+				}
+			}
+			if !publishEvent(ctx, events, ProviderEvent{Type: EventComplete, Response: response}) {
+				return ctx.Err()
+			}
+			return nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return fmt.Errorf("Ollama stream ended without done=true")
+}

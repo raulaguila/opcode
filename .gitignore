@@ -1,0 +1,78 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.log
+
+# Binary output directory
+/bin/
+/dist/
+
+# Local environment variables
+.env
+.env.*
+!.env.example
+!.env.sample
+
+.opcode/
+.opencode/
+
+# Local user configuration; public templates use *.example.json under examples/
+.opcode.json
+.opencode.json
+
+# Local orchestration state
+.bridge/
+
+opcode
+opcode.md
+
+# Private provider integration credentials (template under examples/ is public)
+integration.json
+integration.local.json
+.opcode-integration.json
+.opencode-integration.json
+
+# Private runtime databases and sidecars
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Legacy executable output and generated local guidance
+opencode
+opencode.md

@@ -1,0 +1,138 @@
+# Trabalhar pela interface
+
+Digite `/` no começo do campo para ver os comandos. Use `↑`/`↓` para escolher,
+`Tab` para completar, `Enter` para executar e `Esc` para fechar as sugestões.
+`Ctrl+K` abre a paleta. Os painéis mantêm o rascunho enquanto você consulta o
+processo, contexto e arquivos; `Esc` volta à conversa.
+
+## Provedores, modelos e integrações
+
+| Ação | Controle |
+| --- | --- |
+| Cadastrar/editar conexão e preferências | `/settings` ou `/providers` |
+| Escolher modelo | Clique no modelo do rodapé, `Ctrl+O` ou `/models` |
+| Trocar conexão no seletor | `←`/`→` ou metades do título |
+| Buscar, marcar favorito, atualizar catálogo | Digitar, `Ctrl+F`, `Ctrl+R` |
+| Escolher função principal ou auxiliar | `Ctrl+A`: coder, task, title, summarizer |
+| MCP e servidores de linguagem | `/integrations` ou `I` em Settings |
+| Testar/salvar formulário | `Ctrl+T` / `Ctrl+S`; `Tab` alterna campos |
+
+Sem um modelo, a primeira abertura mostra Settings. Salvar uma conexão leva ao
+seletor. Credenciais usam referências a variáveis de ambiente, sem exibir seus
+valores. Provedores/perfis e preferências são salvos para a próxima abertura;
+MCP usa os ajustes na chamada seguinte, enquanto servidores LSP ativos exigem
+reinício. Testes MCP/LSP pedem aprovação, têm prazo e encerram o cliente.
+
+Os detalhes e exemplos de JSON estão em [provedores e modelos](model-selection.md)
+e [integrações MCP/LSP](integrations-settings.md). Salvar ajustes durante uma
+execução é recusado; o formulário permanece para você tentar depois.
+
+## Conversa, processo e terminal
+
+Cada interação agrupa a pergunta, o processo e a resposta final. Clique no
+cabeçalho do processo para expandir/recolher. `Ctrl+B` ou `/process` alterna o
+processo da última interação; a preferência `showProcess` define o estado inicial.
+Ao rolar para cima, novas mensagens não puxam a leitura para o fim. Use
+`Ctrl+End`, `/latest` ou o indicador de novas mensagens para acompanhar o final.
+
+`Ctrl+Y` ou `/actions` abre ações da última resposta: copiar texto, copiar blocos
+de código, selecionar texto e abrir arquivos citados quando encontrados. A
+prévia de arquivo usa as permissões normais e não conta como leitura do agente
+para permitir uma edição. Se a área de transferência estiver indisponível,
+use a opção de selecionar texto.
+
+O terminal mantém os controles existentes: `Ctrl+P` abre/fecha o painel,
+`Ctrl+N` cria um PTY, `Alt+←`/`Alt+→` alterna processos e `Ctrl+X` encerra o processo
+selecionado. Enquanto o PTY tem foco, suas teclas vão ao processo filho. Iniciar
+comandos continua exigindo o modo Executar, permissão e sandbox.
+
+## Instruções enquanto o agente trabalha
+
+Você pode enviar outra instrução durante uma execução. Ela entra na próxima
+fronteira entre operações; chamadas e resultados de ferramentas permanecem
+ordenados. `/queue` mostra os itens ainda pendentes:
+
+- `↑`/`↓` seleciona, `Enter` retira um item para editar e `Delete` remove.
+- A edição só substitui um rascunho vazio; envie ou limpe seu rascunho antes.
+- Se o agente já consumiu o item, a ação avisa sem duplicá-lo.
+- Reenviar passa pelo fluxo normal de envio e confirmação. A fila comporta até
+  oito instruções e 1 MiB de conteúdo.
+
+## Contexto e modos
+
+`/context` mostra janela, entrada estimada, schemas, reserva de resposta e margem.
+No painel, `C` solicita compactação e `Ctrl+R` atualiza. `/compact` abre diretamente
+a compactação. A conversa salva é preservada; a preparação das próximas
+requisições abrevia apenas conteúdos antigos permitidos. A contagem é uma
+estimativa conservadora, não uma medição pelo tokenizer do modelo. Se o pedido
+continuar grande demais, o agente recusa antes da rede.
+
+`/mode ask`, `/mode plan` e `/mode execute` escolhem Perguntar, Planejar e Executar.
+Os dois primeiros não recebem ferramentas de escrita ou comandos. `/plan`,
+`/task` e `/resume` mostram ou retomam o plano persistente, sem restaurar
+aprovações antigas. A troca de modo/modelo é recusada enquanto há execução.
+
+## Alterações, verificações e permissões
+
+`/changes` ou `/checks` mostra interações com alterações e os recibos de validação.
+`Enter` abre os diffs de uma interação. `U` prepara o undo da última interação
+aplicável e `R` prepara o redo; `/undo` e `/redo` abrem a mesma prévia.
+
+Revise a prévia e use `Ctrl+Enter` (`Ctrl+J` em terminais que não distinguem a
+combinação) para **solicitar** as aprovações dos diffs por arquivo. Cada aprovação
+segue o diálogo normal de permissões. `Esc` cancela a prévia/espera. Conteúdo
+alterado externamente gera conflito em vez de sobrescrever silenciosamente.
+Após aplicar, execute novamente as verificações: os recibos anteriores são
+invalidados. O recurso reverte edições de arquivos das ferramentas; não reverte
+comandos, processos, serviços externos ou alterações manuais.
+
+`/permissions` mostra autorizações lembradas. `R` revoga autorizações e pedidos
+pendentes; não desfaz arquivos. Descobrir checks não os executa nem registra
+sucesso. Veja [ferramentas e validações](code-tools.md).
+
+## Gerenciar conversas e recuperar falhas
+
+`/sessions` abre a busca por título/ID. No seletor:
+
+| Controle | Ação |
+| --- | --- |
+| Digitar, `↑`/`↓`, `Enter` | Buscar e abrir uma conversa |
+| `Ctrl+R` | Renomear; `Enter` confirma, `Esc` cancela |
+| `Ctrl+A` | Arquivar/desarquivar a seleção |
+| `Ctrl+H` | Mostrar/ocultar arquivadas |
+| `Ctrl+E` | Exportar a seleção em Markdown |
+
+`/export` exporta a conversa atual em `data.directory/exports`. A exportação
+contém o processo como histórico, redige credenciais conhecidas e não concede
+permissões. Settings permite retomar a última conversa usada, quando ela não estiver
+arquivada. Rascunhos
+são separados por conversa; `↑`/`↓` percorre o histórico de entrada e preserva o
+rascunho original e seus anexos ao voltar.
+
+Uma execução interrompida deixa ações junto ao campo: `/error` abre detalhes,
+`/settings` permite corrigir a conexão e `/retry` reenvia o último pedido com
+instrução para conferir o estado atual antes de continuar. Não é um reenvio
+automático nem uma garantia de evitar todo efeito repetido: permissões,
+verificações e inspeção do estado continuam necessárias. O plano e os arquivos
+já alterados permanecem disponíveis para revisão.
+
+## Skills, hooks e avaliações
+
+`/skills` lista as skills dos diretórios cadastrados no JSON global. `Enter`
+prepara `/skill NOME` no rascunho; acrescente os argumentos e envie para invocar.
+Skills não se ativam por decisão do modelo e não concedem permissões. Hooks
+`before_tool`/`after_tool` são opt-in no mesmo JSON, executam somente em Executar
+e usam os limites, aprovação e sandbox normais. Veja [contexto e extensões](context-and-extensions.md).
+
+O comando abaixo valida offline o contrato das fixtures e gera um relatório:
+
+```sh
+go run . evaluate --output /tmp/opcode-fixtures.json
+```
+
+Esse modo não executa um agente e não mede a qualidade de um modelo. A avaliação
+real exige `--live --provider-config /caminho/provedor.json`; cenários de execução
+exigem ainda `--allow-execution`. Ela usa projetos, HOME e bancos temporários,
+sem ativar MCP/LSP/skills/hooks do usuário. O relatório registra critérios
+observáveis; passar um conjunto não demonstra correção semântica geral. Veja
+[avaliações repetíveis](evaluation.md) e [testes reais Ollama](ollama-live-tests.md).

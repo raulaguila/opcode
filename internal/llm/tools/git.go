@@ -1,0 +1,163 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
+)
+
+type gitTool struct{ name string }
+
+func NewGitTools() []BaseTool {
+	return []BaseTool{&gitTool{"git_status"}, &gitTool{"git_diff"}, &gitTool{"git_log"}}
+}
+func (g *gitTool) Info() ToolInfo {
+	return ToolInfo{Name: g.name, Description: "Read-only Git inspection. Never stages, commits, resets, cleans or modifies user changes. Diff excludes credential paths. Results are bounded.", Parameters: map[string]any{"path": map[string]any{"type": "string", "description": "Optional workspace-relative path filter"}, "staged": map[string]any{"type": "boolean"}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 100}}}
+}
+func quoteArg(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
+func commandString(args []string) string {
+	parts := make([]string, len(args))
+	for i, arg := range args {
+		parts[i] = quoteArg(arg)
+	}
+	return strings.Join(parts, " ")
+}
+func gitOutput(ctx context.Context, args ...string) (string, bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	all := []string{"git", "--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.pager=cat", "-c", "core.worktree=" + config.WorkingDirectory()}
+	all = append(all, args...)
+	cmd, err := shell.GitCommand(ctx, config.WorkingDirectory(), commandString(all))
+	if err != nil {
+		return "", false, err
+	}
+	out, stderr := &shell.Buffer{Limit: 128 << 10}, &shell.Buffer{Limit: 4096}
+	cmd.Stdout = out
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return "", false, fmt.Errorf("Git inspection failed (repository unavailable, timeout, sandbox or Git error)")
+	}
+	text, truncated := out.Snapshot()
+	return text, truncated, nil
+}
+func (g *gitTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
+	var input struct {
+		Path   string
+		Staged bool
+		Limit  int
+	}
+	if json.Unmarshal([]byte(call.Input), &input) != nil {
+		return NewTextErrorResponse("invalid Git parameters"), nil
+	}
+	path := "."
+	if input.Path != "" {
+		abs := absolutePath(input.Path)
+		if !inside(config.WorkingDirectory(), abs) || shell.SensitivePath(abs) {
+			return NewTextErrorResponse("Git path must stay within the workspace and exclude credential files"), nil
+		}
+		path, _ = filepath.Rel(config.WorkingDirectory(), abs)
+	}
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	limit = min(limit, 100)
+	switch g.name {
+	case "git_status":
+		raw, truncated, err := gitOutput(ctx, "status", "--porcelain=v1", "-z", "--untracked-files=normal", "--", path)
+		if err != nil {
+			return ToolResponse{}, err
+		}
+		if truncated {
+			return NewTextErrorResponse("Git status exceeds output limit; select a narrower path"), nil
+		}
+		type status struct {
+			Status   string `json:"status"`
+			Path     string `json:"path"`
+			Original string `json:"original_path,omitempty"`
+		}
+		entries := []status{}
+		fields := strings.Split(raw, "\x00")
+		for i := 0; i < len(fields); i++ {
+			field := fields[i]
+			if len(field) < 3 {
+				continue
+			}
+			entry := status{Status: field[:2], Path: field[3:]}
+			if strings.ContainsAny(entry.Status, "RC") && i+1 < len(fields) {
+				i++
+				entry.Original = fields[i]
+			}
+			if len(entries) == limit {
+				truncated = true
+				break
+			}
+			entries = append(entries, entry)
+		}
+		return jsonToolResult(map[string]any{"entries": entries, "truncated": truncated}), nil
+	case "git_diff":
+		args := []string{"diff", "--no-ext-diff", "--no-textconv"}
+		if input.Staged {
+			args = append(args, "--cached")
+		}
+		names, cut, err := gitOutput(ctx, append(append([]string{}, args...), "--name-only", "-z", "--", path)...)
+		if err != nil {
+			return ToolResponse{}, err
+		}
+		if cut {
+			return NewTextErrorResponse("too many changed paths; choose a narrower path"), nil
+		}
+		paths := []string{}
+		for _, name := range strings.Split(names, "\x00") {
+			if name != "" && !shell.SensitivePath(absolutePath(name)) {
+				if _, err := authorizeFile(ctx, name, "read"); err != nil {
+					continue
+				}
+				paths = append(paths, name)
+			}
+		}
+		if len(paths) == 0 {
+			return jsonToolResult(map[string]any{"diff": "", "truncated": false}), nil
+		}
+		truncated := len(paths) > limit
+		if truncated {
+			paths = paths[:limit]
+		}
+		args = append(args, "--unified=3", "--")
+		args = append(args, paths...)
+		raw, cut, err := gitOutput(ctx, args...)
+		if err != nil {
+			return ToolResponse{}, err
+		}
+		return jsonToolResult(map[string]any{"diff": raw, "truncated": truncated || cut}), nil
+	case "git_log":
+		raw, cut, err := gitOutput(ctx, "log", "-n", strconv.Itoa(limit), "--format=%h%x00%ct%x00%s%x00", "--", path)
+		if err != nil {
+			return ToolResponse{}, err
+		}
+		if cut {
+			return NewTextErrorResponse("Git log exceeds output limit; reduce limit"), nil
+		}
+		entries := []map[string]string{}
+		fields := strings.Split(raw, "\x00")
+		for i := 0; i+2 < len(fields); i += 3 {
+			entries = append(entries, map[string]string{"commit": strings.TrimSpace(fields[i]), "timestamp": fields[i+1], "subject": fields[i+2]})
+		}
+		return jsonToolResult(map[string]any{"entries": entries, "truncated": cut}), nil
+	}
+	return NewTextErrorResponse("unsupported Git operation"), nil
+}
+func jsonToolResult(value any) ToolResponse {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return NewTextErrorResponse("cannot encode tool result")
+	}
+	return NewTextResponse(string(raw))
+}

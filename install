@@ -1,0 +1,20 @@
+#!/bin/sh
+# Install Opcode from source; no release assets or shell profiles are assumed.
+set -eu
+
+case ${1:-} in
+  --help|-h)
+    printf '%s\n' 'Usage: sh ./install' 'Builds github.com/raulaguila/opcode@develop with Go 1.26+.' 'VERSION may select another published Go module version.'
+    exit 0 ;;
+  '') ;;
+  *) printf '%s\n' 'Unknown option. Use --help.' >&2; exit 2 ;;
+esac
+
+if ! command -v go >/dev/null 2>&1; then
+  printf '%s\n' 'Go 1.26 or newer is required. Install Go, then run: go install github.com/raulaguila/opcode@develop' >&2
+  exit 1
+fi
+
+opcode_version=${VERSION:-develop}
+printf '%s\n' "Building Opcode from source at $opcode_version. The binary uses your GOBIN or GOPATH/bin."
+exec go install "github.com/raulaguila/opcode@${opcode_version}"

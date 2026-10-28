@@ -36,6 +36,9 @@ to assist developers in writing, debugging, and understanding code directly from
   # Run with debug logging
   opcode -d
 
+  # Back up and reset global configuration, then start
+  opcode --reset
+
   # Run with debug logging in a specific directory
   opcode -d -c /path/to/project
 
@@ -93,6 +96,16 @@ to assist developers in writing, debugging, and understanding code directly from
 		}
 		// Runtime setup errors should explain the problem without flag usage.
 		cmd.SilenceUsage = true
+		if reset, _ := cmd.Flags().GetBool("reset"); reset {
+			path, backup, err := config.ResetGlobalConfig()
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "Global configuration reset: %s\n", path)
+			if backup != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Private backup: %s\n", backup)
+			}
+		}
 		loadedConfig, err := config.Load(cwd, debug)
 		if err != nil {
 			return err
@@ -374,6 +387,7 @@ func init() {
 	rootCmd.Flags().StringArray("check", nil, "Required configured check (repeatable)")
 	rootCmd.Flags().BoolP("version", "v", false, "Version")
 	rootCmd.Flags().BoolP("debug", "d", false, "Debug")
+	rootCmd.Flags().Bool("reset", false, "Back up and reset global configuration before starting (preserves project data)")
 	rootCmd.Flags().StringP("cwd", "c", "", "Current working directory")
 	rootCmd.Flags().StringP("prompt", "p", "", "Prompt to run in non-interactive mode")
 

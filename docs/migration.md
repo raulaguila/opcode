@@ -41,6 +41,21 @@ Diagnósticos offline e execuções com configuração fornecida explicitamente 
 criam o arquivo canônico nem adotam configurações antigas. Se um arquivo existente estiver inválido, o erro é apresentado
 e seu conteúdo permanece intacto.
 
+Além da configuração ativa, inicializações normais garantem a existência de
+`~/opcode/config.example.json`. É uma referência independente: não recebe
+credenciais ou configurações do usuário e não participa da precedência. Um
+arquivo existente não é substituído; se for apagado, será recriado.
+
+O reset é explícito: `opcode --reset` salva uma cópia exata do global selecionado
+em `~/.opcode/config-backups/`, inclusive quando o JSON estiver inválido, e
+recria `~/.opcode/config.json` usando o template embutido antes de iniciar a
+aplicação. Um global legado permanece intacto e fica inativo depois do reset.
+A cópia tem permissão 0600; falhas ao salvar o backup impedem a substituição.
+Diretórios e links simbólicos não são aceitos como arquivos de configuração,
+nem são seguidos nos caminhos de escrita. O reset não remove dados, JSONs do
+projeto nem variáveis de ambiente. Para rollback, encerre a aplicação e restaure
+o backup no caminho canônico. Encerre outras instâncias antes do reset.
+
 Para adotar o novo caminho manualmente, encerre a aplicação e mova o JSON global
 para `~/.opcode/config.json`, ou o JSON do projeto para `.opcode/config.json`.
 Não sobrescreva um destino existente: compare e combine os campos antes.

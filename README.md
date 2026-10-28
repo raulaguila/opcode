@@ -45,6 +45,24 @@ referenciadas por variáveis de ambiente. Criar o arquivo não consulta provedor
 não executa inferência e não baixa modelos. Arquivos existentes não são
 sobrescritos. `doctor` continua sendo uma leitura sem criar o template.
 
+Toda inicialização normal também garante um exemplo separado em
+`~/opcode/config.example.json`, com provedores e referências a variáveis de
+ambiente, sem copiar suas credenciais. Se você apagar esse exemplo, ele será
+recriado na próxima abertura; arquivos existentes são preservados.
+
+Para recomeçar a configuração global e abrir a aplicação:
+
+```sh
+opcode --reset
+```
+
+O reset salva antes uma cópia exata em `~/.opcode/config-backups/`, informa o
+caminho no terminal e recria `~/.opcode/config.json` com os padrões. Também
+recupera um JSON inválido. Encerre outras instâncias antes de usar. Configurações
+do projeto e variáveis de ambiente continuam valendo; conversas e dados não são
+apagados. Sem modelo configurado nessas outras fontes, a configuração guiada
+será aberta.
+
 Sem modelo configurado, a abertura interativa inicia a configuração guiada. `N` cadastra
 uma conexão com um preset; `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha então o modelo
 pelo seletor. A última etapa mostra o JSON salvo e oferece testes opcionais com

@@ -208,3 +208,72 @@ func TestTemplateFailureDoesNotWriteThroughSymlinkOrOverwriteMalformedConfig(t *
 	require.NoError(t, err)
 	require.Equal(t, `{"broken":`, string(data))
 }
+
+func TestEveryStartupRestoresReferenceExampleWithoutCopyingUserSettings(t *testing.T) {
+	isolateMigrationConfig(t)
+	home, project := os.Getenv("HOME"), t.TempDir()
+	active := filepath.Join(home, ".opcode", "config.json")
+	example := filepath.Join(home, "opcode", "config.example.json")
+	original := `{"future":"private-reference-fixture","runtime":{"mode":"plan"}}`
+	writeMigrationJSON(t, active, original)
+	_, err := LoadOffline(project)
+	require.NoError(t, err)
+	_, err = os.Stat(example)
+	require.True(t, os.IsNotExist(err), "offline commands do not create examples")
+	for i := 0; i < 2; i++ {
+		cfg = nil
+		viper.Reset()
+		_, err := Load(project, false)
+		require.NoError(t, err)
+		raw, err := os.ReadFile(example)
+		require.NoError(t, err)
+		require.Equal(t, defaultConfigTemplate, raw)
+		require.NotContains(t, string(raw), "private-reference-fixture")
+		info, err := os.Stat(example)
+		require.NoError(t, err)
+		require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+		raw, err = os.ReadFile(active)
+		require.NoError(t, err)
+		require.Equal(t, original, string(raw))
+		require.NoError(t, os.Remove(example))
+	}
+	writeMigrationJSON(t, example, `{"my":"notes"}`)
+	cfg = nil
+	viper.Reset()
+	_, err = Load(project, false)
+	require.NoError(t, err)
+	raw, err := os.ReadFile(example)
+	require.NoError(t, err)
+	require.Equal(t, `{"my":"notes"}`, string(raw), "an edited reference is never replaced")
+}
+
+func TestInvalidActiveConfigStillGetsReferenceExample(t *testing.T) {
+	isolateMigrationConfig(t)
+	home := os.Getenv("HOME")
+	writeMigrationJSON(t, filepath.Join(home, ".opcode", "config.json"), `{"invalid":`)
+	_, err := Load(t.TempDir(), false)
+	require.Error(t, err)
+	raw, err := os.ReadFile(filepath.Join(home, "opcode", "config.example.json"))
+	require.NoError(t, err)
+	require.Equal(t, defaultConfigTemplate, raw)
+}
+
+func TestReferenceTemplateRejectsSymlinks(t *testing.T) {
+	for _, parent := range []bool{false, true} {
+		t.Run(fmt.Sprint(parent), func(t *testing.T) {
+			isolateMigrationConfig(t)
+			directory := filepath.Join(os.Getenv("HOME"), "opcode")
+			outside := t.TempDir()
+			if parent {
+				require.NoError(t, os.Symlink(outside, directory))
+			} else {
+				require.NoError(t, os.Mkdir(directory, 0700))
+				require.NoError(t, os.Symlink(filepath.Join(outside, "absent.json"), filepath.Join(directory, "config.example.json")))
+			}
+			require.Error(t, ensureReferenceTemplate())
+			entries, err := os.ReadDir(outside)
+			require.NoError(t, err)
+			require.Empty(t, entries)
+		})
+	}
+}

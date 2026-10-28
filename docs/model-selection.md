@@ -9,6 +9,12 @@ está em [`internal/config/template.json`](../internal/config/template.json), co
 Ollama, LM Studio e exemplos remotos desativados, sem credenciais ou modelo escolhido.
 Reinicie o aplicativo depois de editar os provedores no JSON.
 
+Uma cópia de referência também é criada em `~/opcode/config.example.json` a cada
+inicialização normal em que estiver ausente. Esse arquivo não é carregado e não
+recebe suas credenciais; use seus campos como guia ao editar a configuração
+ativa. `opcode --reset` faz backup da configuração global, restaura os padrões e
+inicia o aplicativo. Veja [reset e recuperação](daily-workflow.md#primeiro-acesso).
+
 Para Ollama, não é necessário cadastrar manualmente cada modelo:
 
 ```json

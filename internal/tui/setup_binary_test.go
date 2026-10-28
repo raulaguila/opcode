@@ -27,6 +27,15 @@ import (
 // inherited credentials. Only the local Ollama catalog/status endpoints are
 // requested; no generation or model downloads are part of this test.
 func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
+	testBinaryFirstRun(t, false)
+}
+
+func TestLiveBinaryResetConfigurationAndWorkspace(t *testing.T) {
+	testBinaryFirstRun(t, true)
+}
+
+func testBinaryFirstRun(t *testing.T, reset bool) {
+	t.Helper()
 	if os.Getenv("OPCODE_LIVE_TESTS") != "1" || os.Getenv("OPCODE_LIVE_OLLAMA") != "1" {
 		t.Skip("requires explicit local acceptance-test opt-in")
 	}
@@ -40,6 +49,13 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	workspace := filepath.Join(root, "workspace")
 	require.NoError(t, os.MkdirAll(home, 0700))
 	require.NoError(t, os.MkdirAll(workspace, 0700))
+	args := []string{"--cwd", workspace}
+	original := []byte(`{"private":"binary-reset-secret","invalid":`)
+	if reset {
+		require.NoError(t, os.MkdirAll(filepath.Join(home, ".opcode"), 0700))
+		require.NoError(t, os.WriteFile(filepath.Join(home, ".opcode", "config.json"), original, 0600))
+		args = append(args, "--reset")
+	}
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "README.md"), []byte("# LocalAcceptance\nA disposable UI acceptance project.\n"), 0600))
 	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", "README.md"}, {"-c", "user.name=Acceptance", "-c", "user.email=acceptance@example.invalid", "commit", "-qm", "initial"}} {
 		git := exec.Command("git", append([]string{"-C", workspace}, args...)...)
@@ -49,7 +65,7 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, binary, "--cwd", workspace)
+	command := exec.CommandContext(ctx, binary, args...)
 	command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "SHELL=/bin/bash", "LANG=C.UTF-8", "TERM=xterm-256color"}
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
 	require.NoError(t, err)
@@ -150,6 +166,11 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	// the user's configuration as an apparently manual limit.
 	configJSON, err := os.ReadFile(filepath.Join(home, ".opcode", "config.json"))
 	require.NoError(t, err)
+	example, err := os.ReadFile(filepath.Join(home, "opcode", "config.example.json"))
+	require.NoError(t, err)
+	require.True(t, json.Valid(example))
+	require.Contains(t, string(example), `"apiKeyEnv"`)
+	require.NotContains(t, string(example), "binary-reset-secret")
 	var saved struct {
 		Models map[string]models.Model `json:"models"`
 	}
@@ -235,5 +256,13 @@ func TestLiveBinaryFirstRunContractAndWorkspace(t *testing.T) {
 	require.Contains(t, string(configuration["agents"]), "llama3.1:8b")
 	require.Contains(t, string(configuration["security"]), "bubblewrap")
 	require.NotContains(t, string(data), `"apiKey":`)
+	if reset {
+		backups, err := filepath.Glob(filepath.Join(home, ".opcode", "config-backups", "*"))
+		require.NoError(t, err)
+		require.Len(t, backups, 1)
+		backup, err := os.ReadFile(backups[0])
+		require.NoError(t, err)
+		require.Equal(t, original, backup)
+	}
 	t.Log("Setup, Ollama metadata, Git diff, multiline shortcuts and keyboard restoration passed in a real 80x24 PTY without inference")
 }

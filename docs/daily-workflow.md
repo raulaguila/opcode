@@ -8,6 +8,21 @@ se nenhuma configuração global existir. Não sobrescreve o destino nem baixa m
 `.opcode/config.json`; os formatos anteriores continuam funcionando no próprio
 caminho. `doctor` e os comandos de leitura de configuração não criam o template.
 
+A cada abertura normal, `~/opcode/config.example.json` é criado se estiver
+ausente, como referência independente da configuração ativa. Ele contém apenas
+exemplos, sem copiar seus ajustes ou suas chaves; alterações que você fizer nele
+são preservadas. Para aplicar uma opção, edite `~/.opcode/config.json` ou use
+`/settings` — o arquivo de exemplo não é carregado pelo aplicativo.
+
+`opcode --reset` guarda o JSON global anterior em `~/.opcode/config-backups/`,
+recria a configuração ativa com os padrões e inicia a aplicação. Funciona mesmo
+com JSON inválido. O caminho do backup é informado no terminal; para desfazer,
+feche a aplicação e restaure essa cópia em `~/.opcode/config.json`. O backup pode
+conter credenciais e tem permissão 0600. Encerre outras instâncias antes do reset.
+Configurações de projeto e variáveis de ambiente continuam se aplicando;
+histórico, bancos e arquivos de trabalho são preservados. `--help` e `--version`
+não fazem o reset, mesmo quando combinados com a flag.
+
 Sem modelo, a interface abre a etapa 1: editar ou adicionar uma conexão. `N`
 oferece presets; `Ctrl+T` consulta metadados e `Ctrl+S` salva. A etapa 2 lista os
 modelos do provedor para seleção. A etapa 3 mostra o modelo, o caminho do JSON e

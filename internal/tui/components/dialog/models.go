@@ -48,12 +48,14 @@ type modelDialogCmp struct {
 	query, note                              string
 	search                                   textinput.Model
 	loading                                  bool
+	catalogFailed                            bool
 	request                                  uint64
 	cancel                                   context.CancelFunc
 	target                                   config.AgentName
 	probeConfirm, probeRunning               bool
 	setup                                    bool
 	catalogProvider                          models.ModelProvider
+	refreshSelection                         models.ModelID
 	metadataCancel                           context.CancelFunc
 	metadataRequest                          uint64
 	metadataFor, metadataNote                string
@@ -76,7 +78,7 @@ var modelKeys = struct {
 func (m *modelDialogCmp) Init() tea.Cmd { return nil }
 func (m *modelDialogCmp) Open() tea.Cmd {
 	m.Close()
-	m.catalogProvider = ""
+	m.catalogProvider, m.refreshSelection = "", ""
 	m.details = false
 	m.reasoningOpen = false
 	cfg := config.Get()
@@ -118,10 +120,14 @@ func (m *modelDialogCmp) Close() {
 func (m *modelDialogCmp) load() tea.Cmd {
 	m.Close()
 	m.search.Focus()
-	if m.provider == "" || m.catalogProvider != m.provider {
-		m.models = getModelsForProvider(m.provider)
-		m.catalogProvider = m.provider
+	if m.catalogProvider != m.provider {
+		m.refreshSelection = ""
+	} else if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
+		m.refreshSelection = m.filtered[m.selectedIdx].ID
 	}
+	m.catalogProvider = m.provider
+	m.models = nil
+	m.catalogFailed = false
 	m.note = config.Text("Catálogo disponível", "Available catalog")
 	m.filter()
 	if m.provider == "" {
@@ -175,10 +181,22 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.models = msg.models
 			m.note = fmt.Sprintf(config.Text("Catálogo do provedor · %d modelos", "Provider catalog · %d models"), len(m.models))
 			m.filter()
+			for i, model := range m.filtered {
+				if model.ID == m.refreshSelection {
+					m.selectedIdx = i
+					m.keepVisible()
+					break
+				}
+			}
 		} else if errors.Is(msg.err, models.ErrCatalogUnsupported) {
+			m.models = getModelsForProvider(m.provider)
+			m.filter()
 			m.note = config.Text("Catálogo configurado · consulta indisponível", "Configured catalog · live listing unavailable")
 		} else {
-			m.note = config.Text("Falha ao atualizar; catálogo anterior preservado. Ctrl+R tenta novamente.", "Refresh failed; previous catalog preserved. Ctrl+R retries.")
+			m.catalogFailed = true
+			m.models = nil
+			m.filter()
+			m.note = config.Text("Falha ao consultar provedor · Ctrl+R tenta novamente · Ctrl+P conexões", "Provider query failed · Ctrl+R retries · Ctrl+P connections")
 		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height

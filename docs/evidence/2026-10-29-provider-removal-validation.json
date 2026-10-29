@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-29",
+  "source_base": "312a70b",
+  "source_revision": "Accompanying commit",
+  "scope": "Empty failed provider catalogs and confirmed deletion of unused provider connections",
+  "binary_sha256": "ce532ed39d52cd2a79dbe0e7f79eb153f4dc6eabcb1dce1fa347fa5fe78b63fc",
+  "checks": {
+    "go_test_race_all": "passed: go test -race -p 2 ./...",
+    "go_vet_all": "passed",
+    "go_vet_integration_tui": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "catalog": {
+    "loading": "displayed models cleared immediately on switch and refresh",
+    "failure": "selected provider remains in title; list stays empty; explicit failure message and retry action",
+    "success": "same-provider highlight restored only after successful response; active model unchanged by navigation",
+    "unsupported_listing": "explicit configured-catalog mode remains for backends without a listing API",
+    "stale_results": "request IDs and cancellation still prevent older responses from replacing the current provider"
+  },
+  "deletion": {
+    "entry": "D/Delete or visible Delete action in connection list",
+    "confirmation": "Cancel selected initially; explicit Delete selection required; Esc cancels",
+    "in_use_guard": "agents in runtime and both loaded file layers must use another connection before deletion",
+    "busy_guard": "existing save guard preserved",
+    "layers": "removes named profile and model definitions from global and current project layers, preventing shadowed profile resurrection",
+    "legacy": "empty disabled marker replaces entire legacy entry including unknown child fields; suppresses env recreation and is hidden from list",
+    "secrets": "saved credentials removed only from active connection definitions; no environment secret copied to disk",
+    "file_safety": "private atomic replacement per file; rollback on later write failure; runtime changes only after all writes succeed",
+    "rollback_test": "passed as non-root with second directory made read-only; both files preserved byte-for-byte"
+  },
+  "live": {
+    "status": "passed",
+    "provider": "local Ollama plus independent loopback catalog fixture",
+    "model": "llama3.1:8b",
+    "sandbox": "bubblewrap",
+    "main_flow_seconds": 20.77,
+    "suite_seconds": 23.904,
+    "coverage": [
+      "provider switching with xterm/CSI-u arrows and Tab",
+      "HTTP 503 catalog failure clears displayed models",
+      "retry restores the same provider catalog",
+      "delete cancellation preserves provider",
+      "confirmed deletion removes provider from connection list",
+      "conversation continues with active Ollama connection",
+      "real model question and answer",
+      "separate LSP approval",
+      "one exact Bash approval",
+      "live command output",
+      "PTY input and queued instruction",
+      "composer resizing and compact themes"
+    ],
+    "real_remote_api_used": false,
+    "source_fixtures_unchanged": true
+  },
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_changed": false,
+    "model_quality_evaluation_criteria_changed": false,
+    "dependencies_added": false,
+    "real_user_configuration_modified": false
+  },
+  "development_findings": [
+    "Updated the old UI test that expected retained models after refresh failure to match the explicitly requested empty-list behavior; successful refresh still preserves highlight",
+    "PTY caught normalized display text in delete confirmation; fixed to retain the original connection name while stripping controls",
+    "PTY fixture waited for mode label before editor submission acknowledgement; strengthened wait to require cleared command draft before next prompt",
+    "Details of a blocked deletion remain accessible through Ctrl+D on compact terminals"
+  ],
+  "limits": [
+    "Deletion of a connection still referenced by an agent is refused with the affected roles listed",
+    "Only loaded global and current project files are edited; other projects and backup files are not scanned",
+    "Each configuration file is atomic individually; multiple-file rollback is attempted on errors, not a filesystem-wide transaction",
+    "Catalog failure fixture uses loopback HTTP 503; live inference uses local Ollama without real external credentials"
+  ]
+}

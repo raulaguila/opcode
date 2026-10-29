@@ -94,9 +94,13 @@ quando você escolhe um modelo.
 
 A interface continua respondendo durante a consulta. Fechar, atualizar ou trocar
 de provedor cancela a consulta anterior e descarta respostas atrasadas. Uma lista
-vazia é exibida sem erro. Se a consulta falhar, o seletor avisa e mantém a lista
-configurada como alternativa. A troca é recusada enquanto o agente trabalha;
-aguarde terminar ou cancele a execução antes de tentar novamente.
+vazia é exibida sem erro. A troca de provedor e a atualização limpam a lista
+imediatamente. Se a consulta falhar, o título continua no provedor escolhido,
+a lista permanece vazia e aparece uma mensagem de falha; `Ctrl+R` tenta novamente.
+Modelos de outro provedor ou de uma consulta anterior não são usados nessa falha.
+Provedores sem API de catálogo exibem o catálogo configurado, identificado como tal.
+A mudança do modelo ativo é recusada enquanto o agente trabalha; aguarde terminar
+ou cancele a execução antes de tentar novamente.
 
 A escolha altera o agente `coder`. As configurações dos agentes auxiliares
 permanecem independentes. O ID e a referência do modelo são salvos para reconhecê-lo na próxima
@@ -345,3 +349,28 @@ o segredo resolvido. Escolher **Chave direta** grava apenas a chave digitada e r
 a referência anterior. **Sem autenticação** remove ambos os campos. Trocar a opção
 não apaga o rascunho dos campos escondidos; só a opção escolhida é aplicada ao salvar.
 Não coloque uma configuração com chave literal no controle de versão.
+
+
+## Excluir uma conexão
+
+Em `/settings` → lista de conexões, destaque o provedor e pressione `D` ou `Delete`
+(também pode clicar em **Excluir**). A confirmação começa em **Cancelar**; escolha
+**Excluir** com `←`/`→` ou `Tab` e pressione `Enter`. `Esc` cancela sem alterar o arquivo.
+
+A exclusão remove credenciais locais e definições de modelos daquela conexão nas
+camadas global e do projeto atual em que estiverem presentes. Campos desconhecidos
+fora da conexão excluída e outras conexões são preservados. Arquivos são substituídos individualmente de
+forma atômica; se uma escrita posterior falhar, a operação tenta restaurar os
+arquivos anteriores antes de retornar o erro. A configuração em memória só muda
+após todas as escritas terem sucesso.
+
+Conexões em uso por `coder`, `task`, `title` ou `summarizer` não podem ser excluídas.
+O aviso identifica as funções; escolha modelos de outra conexão para elas no
+seletor (`Ctrl+A` alterna a função) e tente novamente. Essa proteção também verifica
+referências salvas nas duas camadas. A exclusão fica bloqueada durante uma execução.
+Conversas e histórico de mensagens não são apagados.
+
+Backends legados em `providers` mantêm apenas um marcador `disabled: true`, sem
+chave, URL ou outros dados, para impedir recriação automática por variável de
+ambiente. Esse marcador não aparece na lista de conexões. Perfis nomeados em
+`providerProfiles` são removidos do JSON.

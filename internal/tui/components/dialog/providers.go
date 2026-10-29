@@ -31,6 +31,7 @@ type CloseProviderDialogMsg struct{}
 type ProviderSettingsSavedMsg struct {
 	ProviderChanged bool
 	Disabled        bool
+	Deleted         bool
 }
 type providerTestMsg struct {
 	request uint64
@@ -68,6 +69,8 @@ type providerDialogCmp struct {
 	settingsFilter                 textinput.Model
 	advanced                       bool
 	settingPath                    string
+	deleting                       providerRow
+	deleteSelected                 bool
 }
 
 func NewProviderDialogCmp(allowSave ...func() error) ProviderDialog {
@@ -91,7 +94,10 @@ func (m *providerDialogCmp) Open() tea.Cmd {
 	for id := range c.ProviderProfiles {
 		m.rows = append(m.rows, providerRow{id: id})
 	}
-	for id := range c.Providers {
+	for id, p := range c.Providers {
+		if p == (config.Provider{Disabled: true}) {
+			continue // Removed legacy backend marker; suppress environment recreation.
+		}
 		m.rows = append(m.rows, providerRow{id: string(id), legacy: true})
 	}
 	slices.SortFunc(m.rows, func(a, b providerRow) int {
@@ -300,6 +306,9 @@ func (m *providerDialogCmp) save() tea.Cmd {
 	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Disabled: disabled})
 }
 func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.deleteUpdate(msg); handled {
+		return m, cmd
+	}
 	if m.noteUpdate(msg) {
 		return m, nil
 	}
@@ -322,6 +331,9 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 	case tea.MouseMsg:
 		if m.screen == "list" {
+			if clickedLabel(m.View(), config.Text("[Excluir]", "[Delete]"), msg) {
+				return m, m.startDelete()
+			}
 			if clickedLabel(m.View(), config.Text("[Preferências]", "[Preferences]"), msg) {
 				return m, m.settings()
 			}
@@ -399,6 +411,8 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.screen == "list" {
 			switch msg.String() {
+			case "d", "delete":
+				return m, m.startDelete()
 			case "up":
 				if len(m.rows) > 0 {
 					m.selected = (m.selected - 1 + len(m.rows)) % len(m.rows)
@@ -487,6 +501,9 @@ func (m *providerDialogCmp) View() string {
 	if m.noteFull {
 		return m.noteView()
 	}
+	if m.screen == "delete-provider" {
+		return m.deleteView()
+	}
 	if m.screen == "settings" || m.screen == "setting" || m.screen == "effective" || m.screen == "presets" {
 		return m.experienceView()
 	}
@@ -532,7 +549,7 @@ func (m *providerDialogCmp) View() string {
 			}
 			lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+label, width, "…")))
 		}
-		lines = append(lines, line(config.Text("N Adicionar · Enter Editar · Esc", "N Add · Enter Edit · Esc")))
+		lines = append(lines, line(config.Text("N Adicionar · Enter Editar · [Excluir] D · Esc", "N Add · Enter Edit · [Delete] D · Esc")))
 		lines = append(lines, line(config.Text("[Preferências] P · [Integrações] I", "[Preferences] P · [Integrations] I")))
 	} else {
 		// Keep the focused field visible on small terminals; labels remain attached.

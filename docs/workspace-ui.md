@@ -36,6 +36,7 @@ quando exigem atenção. O campo mantém três linhas iniciais.
 | Ação | Controle |
 | --- | --- |
 | Cadastrar/editar conexão e preferências | `/settings` ou `/providers` |
+| Excluir conexão sem modelos em uso | `D`/`Delete` na lista, com confirmação |
 | Escolher modelo | Clique no modelo do rodapé, `Ctrl+O` ou `/models` |
 | Trocar conexão no seletor | `Alt+←`/`Alt+→`, `Shift+Tab`/`Tab` ou metades do título |
 | Buscar, marcar favorito, atualizar catálogo | Digitar, `Ctrl+F`, `Ctrl+R` |
@@ -54,6 +55,8 @@ O formulário básico mostra nome, URL, autenticação e **Conexão ativa**; `Ct
 backend, protocolo e limites. Nas APIs compatíveis, o formulário básico também
 mostra **TLS inseguro**, desligado por padrão, com aviso ao habilitar. MCP usa os ajustes na chamada seguinte, enquanto servidores LSP ativos exigem
 reinício. Testes MCP/LSP pedem aprovação, têm prazo e encerram o cliente.
+Trocar o provedor limpa a lista imediatamente. Se o catálogo falhar, a lista fica
+vazia com uma mensagem de falha; `Ctrl+R` tenta novamente e `Tab` navega para outra conexão.
 Salvar a configuração, consultar o catálogo e testar uma chamada de ferramenta
 são resultados diferentes. O catálogo não certifica a qualidade do modelo.
 

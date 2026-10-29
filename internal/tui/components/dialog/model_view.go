@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -101,6 +102,7 @@ func (m *modelDialogCmp) modelTitle() string {
 		title = config.Text("Configuração 2/3 · ", "Setup 2/3 · ") + title
 	}
 	if len(m.availableProviders) > 1 {
+		title += fmt.Sprintf(" [%d/%d]", slices.Index(m.availableProviders, m.provider)+1, len(m.availableProviders))
 		title = "‹ " + title + " ›"
 	}
 	return title
@@ -258,6 +260,8 @@ func (m *modelDialogCmp) catalogView() string {
 		empty := config.Text("Nenhum modelo encontrado", "No models found")
 		if m.loading {
 			empty = config.Text("Aguarde o catálogo…", "Waiting for catalog…")
+		} else if m.catalogFailed {
+			empty = config.Text("Lista vazia: consulta falhou", "Empty list: query failed")
 		}
 		rows = append(rows, line(empty))
 	}
@@ -281,7 +285,7 @@ func (m *modelDialogCmp) catalogView() string {
 		hint = config.Text("↑↓ · Enter · Esc · Ctrl+D", "↑↓ · Enter · Esc · Ctrl+D")
 	}
 	if len(m.filtered) == 0 && !m.loading {
-		hint = config.Text("Ctrl+R atualiza · Esc volta", "Ctrl+R refresh · Esc back")
+		hint = config.Text("Tab provedor · Ctrl+R atualiza · Esc volta", "Tab provider · Ctrl+R refresh · Esc back")
 	}
 	rows = append(rows, line(hint))
 	if m.details && g.height >= 18 {

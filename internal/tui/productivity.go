@@ -83,6 +83,10 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 	case dialog.ProviderSettingsSavedMsg:
 		a.providerDialog.Close()
 		a.showProviderDialog = false
+		if msg.Deleted {
+			a.showProviderDialog = true
+			return tea.Batch(a.providerDialog.Open(), util.ReportInfo(config.Text("Conexão excluída", "Connection deleted"))), true
+		}
 		if msg.ProviderChanged && msg.Disabled {
 			a.showProviderDialog = true
 			return tea.Batch(a.providerDialog.Open(), util.ReportInfo(config.Text("Conexão salva como desativada. Ative-a para escolher um modelo.", "Connection saved as disabled. Enable it to choose a model."))), true

@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -80,7 +81,13 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	}
 	// A second loopback connection has a distinct catalog, so navigation must
 	// replace the model list rather than merely changing the provider title.
+	var catalogAvailable atomic.Bool
+	catalogAvailable.Store(true)
 	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !catalogAvailable.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		if r.URL.Path != "/v1/models" {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -149,6 +156,22 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 			return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
 		})
 	}
+	h.send("\t")
+	h.wait("catalog before outage", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") })
+	catalogAvailable.Store(false)
+	h.send("\x12") // Ctrl+R refresh against a failing provider.
+	h.wait("failed provider stays selected with empty list", 10*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "Provider query failed") && strings.Contains(frame, "Empty list: query failed") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+	})
+	catalogAvailable.Store(true)
+	h.send("\x12")
+	h.wait("provider retry recovers catalog", 10*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && !strings.Contains(frame, "query failed")
+	})
+	h.send("\x1b[Z")
+	h.wait("return to Ollama after outage", 10*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog")
+	})
 	for i := 0; i < 16; i++ {
 		h.send("\x1b[B")
 	}
@@ -169,6 +192,30 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	})
 	require.Contains(t, h.frame(), "draft-01 ação 漢字", "modal search must not consume the conversation draft")
 	h.clearDraft()
+	h.paste("/settings")
+	h.send("\r")
+	h.wait("connection list before deletion", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
+	})
+	h.send("d")
+	h.wait("delete connection confirmation", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Delete connection?") && strings.Contains(frame, "Navigation fixture")
+	})
+	h.send("\r") // Confirmation defaults to Cancel.
+	h.wait("cancel preserves connection", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
+	})
+	h.send("d")
+	h.wait("second delete confirmation", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Delete connection?") })
+	h.send("\x1b[C\r") // Explicitly select Delete, then confirm.
+	h.wait("deleted connection disappears", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Connections and preferences") && !strings.Contains(frame, "Navigation fixture")
+	})
+	h.send("\x1b")
+	h.wait("connection list dismissed", 5*time.Second, func(frame string) bool {
+		return !strings.Contains(frame, "Connections and preferences") && ptyUIHasFooter(frame)
+	})
+	t.Log("PTY failed catalog is empty, retry recovers, delete defaults to Cancel and explicit deletion removes connection")
 	h.clickMode()
 	h.wait("mode chooser", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "Work mode") || strings.Contains(frame, "Modo de trabalho")
@@ -331,7 +378,11 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 
 	h.paste("/mode execute")
 	h.send("\r")
-	h.wait("execute mode", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Execute") })
+	h.wait("execute mode and acknowledged command submission", 5*time.Second, func(frame string) bool {
+		// The workflow mode update precedes the editor submission receipt. Do
+		// not append the next prompt to a draft still awaiting that receipt.
+		return strings.HasPrefix(strings.TrimSpace(ptyUIFooter(frame)), "Execute") && !strings.Contains(frame, "/mode execute")
+	})
 	h.paste(`Call bash with these arguments: {"command":"bash interactive.sh","pty":true,"timeout":120000}. Wait for the actual tool result. The human will provide terminal input. Do not execute any other command.`)
 	h.send("\r")
 	h.wait("explicit permission dialog", 120*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })

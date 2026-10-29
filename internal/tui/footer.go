@@ -24,7 +24,7 @@ func (a *appModel) footerClick(x int) tea.Cmd {
 	switch action := a.status.ActionAt(x, a.footerState()); action {
 	case "models":
 		a.showModelDialog = true
-		return a.modelDialog.Open()
+		return a.openModelCatalog("", false)
 	case "mode", "commands":
 		if action == "mode" {
 			return a.openModeChooser()

@@ -1,0 +1,776 @@
+{
+  "requested_conditions": {
+    "api_model": "llama3.1:8b",
+    "protocol": "ollama",
+    "context_window": 16384,
+    "output_reserve": 2048,
+    "temperature": 0
+  },
+  "manifest_sha256": "b99e3f53b9b1bf5643993fbe31b09fd87746831d89309c2d21a385f3eedbbea8",
+  "experiment": "nine-final-full-llama31-native",
+  "repeats": 2,
+  "selected_cases": [
+    "overview",
+    "localize",
+    "edit",
+    "validate",
+    "error",
+    "resume"
+  ],
+  "version": 1,
+  "mode": "live_provider",
+  "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+  "cases": [
+    {
+      "criteria_sha256": "cee4efb2ac8bb4e6e4977e85a59208ddab08b6dfd7a44b96ca543f6ef187b203",
+      "phase_metrics": {
+        "context_ms": 63,
+        "provider_ms": 8230,
+        "tools_ms": 0,
+        "first_token_ms": 6141,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 0,
+        "repairs": 1
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 1224,
+        "history": 1824,
+        "instructions": 1371,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 3286
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 3962,
+      "output_tokens": 300,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 10513,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "432a51d4e22acfd8c2b7e52b736a76d7e99597e6341c598e3033a9eb4b05fbb8",
+      "phase_metrics": {
+        "context_ms": 30,
+        "provider_ms": 5975,
+        "tools_ms": 0,
+        "first_token_ms": 4062,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 0,
+        "repairs": 1
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 427,
+        "history": 1560,
+        "instructions": 1507,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 3615
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 3674,
+      "output_tokens": 211,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 8191,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "efa906d1e67cb0b7139327f233503e62d196764be0b43ba288b1ba891d871bc8",
+      "phase_metrics": {
+        "context_ms": 21,
+        "provider_ms": 5553,
+        "tools_ms": 15,
+        "first_token_ms": 5493,
+        "first_token_samples": 3,
+        "provider_calls": 3,
+        "tool_calls": 2,
+        "repairs": 0
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 881,
+        "history": 914,
+        "instructions": 1493,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 5746
+      },
+      "tool_failures": {
+        "edit:current_read_required": 1
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 5388,
+      "output_tokens": 135,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 7649,
+      "id": "edit",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "partial",
+      "requires_changes": true,
+      "changes_verified": true,
+      "tool_names": [
+        "edit",
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "1478b0ec498f12adf4c1cb19196273640879fe51f6fcc3cd4fb84c893857c72d",
+      "phase_metrics": {
+        "context_ms": 30,
+        "provider_ms": 1499,
+        "tools_ms": 35,
+        "first_token_ms": 946,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 1,
+        "repairs": 0
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 731,
+        "history": 853,
+        "instructions": 1504,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 4474
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 2026,
+      "output_tokens": 46,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 3905,
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "4f61add74361a3f51da0086a33092ff48be153c4f6e85c9b3284c13f86fb5b52",
+      "phase_metrics": {
+        "context_ms": 24,
+        "provider_ms": 2300,
+        "tools_ms": 0,
+        "first_token_ms": 2025,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 1,
+        "repairs": 0
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 219,
+        "history": 675,
+        "instructions": 1592,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 3715
+      },
+      "tool_failures": {
+        "view:missing_resource": 1
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 3259,
+      "output_tokens": 32,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 4472,
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "734a51352ad9434866b2559d342d1ae916c0e276e0c310b03018d9d7089e34fe",
+      "phase_metrics": {
+        "context_ms": 32,
+        "provider_ms": 8849,
+        "tools_ms": 2,
+        "first_token_ms": 6903,
+        "first_token_samples": 4,
+        "provider_calls": 4,
+        "tool_calls": 4,
+        "repairs": 0
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; calibrated against provider usage with 20% margin, remains an estimate; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 594,
+        "history": 691,
+        "instructions": 706,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 1997
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 8741,
+      "output_tokens": 245,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 11059,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "planned",
+      "tool_names": [
+        "finish_task",
+        "get_task",
+        "update_plan",
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "cee4efb2ac8bb4e6e4977e85a59208ddab08b6dfd7a44b96ca543f6ef187b203",
+      "phase_metrics": {
+        "context_ms": 61,
+        "provider_ms": 6144,
+        "tools_ms": 0,
+        "first_token_ms": 4049,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 0,
+        "repairs": 1
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 1224,
+        "history": 1824,
+        "instructions": 1371,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 3286
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 3962,
+      "output_tokens": 216,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 8083,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "432a51d4e22acfd8c2b7e52b736a76d7e99597e6341c598e3033a9eb4b05fbb8",
+      "phase_metrics": {
+        "context_ms": 33,
+        "provider_ms": 6822,
+        "tools_ms": 0,
+        "first_token_ms": 5544,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 0,
+        "repairs": 1
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 428,
+        "history": 1495,
+        "instructions": 1508,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 3614
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 3644,
+      "output_tokens": 255,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 8846,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "efa906d1e67cb0b7139327f233503e62d196764be0b43ba288b1ba891d871bc8",
+      "phase_metrics": {
+        "context_ms": 21,
+        "provider_ms": 11314,
+        "tools_ms": 10,
+        "first_token_ms": 10509,
+        "first_token_samples": 3,
+        "provider_calls": 4,
+        "tool_calls": 2,
+        "repairs": 1
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 1028,
+        "history": 1251,
+        "instructions": 1483,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 5706
+      },
+      "tool_failures": {
+        "edit:current_read_required": 1,
+        "write:current_read_required": 1
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 7950,
+      "output_tokens": 308,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 13213,
+      "id": "edit",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "partial",
+      "requires_changes": true,
+      "changes_verified": true,
+      "tool_names": [
+        "edit",
+        "view",
+        "write"
+      ]
+    },
+    {
+      "criteria_sha256": "1478b0ec498f12adf4c1cb19196273640879fe51f6fcc3cd4fb84c893857c72d",
+      "phase_metrics": {
+        "context_ms": 31,
+        "provider_ms": 2428,
+        "tools_ms": 43,
+        "first_token_ms": 1730,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 1,
+        "repairs": 0
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 731,
+        "history": 853,
+        "instructions": 1504,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 4474
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 2030,
+      "output_tokens": 53,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 4596,
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "4f61add74361a3f51da0086a33092ff48be153c4f6e85c9b3284c13f86fb5b52",
+      "phase_metrics": {
+        "context_ms": 37,
+        "provider_ms": 2422,
+        "tools_ms": 0,
+        "first_token_ms": 2138,
+        "first_token_samples": 2,
+        "provider_calls": 2,
+        "tool_calls": 1,
+        "repairs": 0
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 219,
+        "history": 675,
+        "instructions": 1592,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 3715
+      },
+      "tool_failures": {
+        "view:missing_resource": 1
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 3259,
+      "output_tokens": 32,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 4298,
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "criteria_sha256": "734a51352ad9434866b2559d342d1ae916c0e276e0c310b03018d9d7089e34fe",
+      "phase_metrics": {
+        "context_ms": 28,
+        "provider_ms": 8698,
+        "tools_ms": 1,
+        "first_token_ms": 6979,
+        "first_token_samples": 4,
+        "provider_calls": 4,
+        "tool_calls": 4,
+        "repairs": 0
+      },
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "prompt_version": "opcode-2026-10-v5",
+      "prompt_profile": "reduced",
+      "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; calibrated against provider usage with 20% margin, remains an estimate; component shares are planning estimates, total budget is enforced",
+      "context_components": {
+        "evidence": 586,
+        "history": 687,
+        "instructions": 703,
+        "output": 2048,
+        "safety": 819,
+        "schemas": 1987
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "context_window": 16384,
+      "input_tokens": 8686,
+      "output_tokens": 226,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 10548,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "planned",
+      "tool_names": [
+        "finish_task",
+        "get_task",
+        "update_plan",
+        "view"
+      ]
+    }
+  ],
+  "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+}

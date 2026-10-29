@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "date": "2026-10-29",
+  "platform": "linux/amd64",
+  "binary_sha256": "0b2473340a37eb11a5f1a42615d0a32caaa65eed39180d83485b020db32fa885",
+  "scope": "Nine requested recommendations; existing permissions, source citation guard and evaluation criteria preserved",
+  "checks": [
+    {
+      "command": "go test -race -p 1 ./... -count=1",
+      "status": "passed",
+      "note": "All packages; unchanged parser deadline. An earlier concurrent-package run hit the C++ fixture deadline under host load. No test was skipped or deadline increased."
+    },
+    {
+      "command": "go vet ./...",
+      "status": "passed"
+    },
+    {
+      "command": "CGO_ENABLED=0 go build",
+      "status": "passed"
+    },
+    {
+      "command": "go run ./scripts/language-docs -check",
+      "status": "passed",
+      "registered_parser_profiles": 42
+    },
+    {
+      "command": "go run ./scripts/platform-smoke -binary <final binary>",
+      "status": "passed",
+      "note": "Isolated HOME; help/version/config and first/second startup. No inference or real vault."
+    },
+    {
+      "command": "go test -race ./internal/tui/components/dialog -run ^Test(Settings|VaultProvider) -count=1",
+      "status": "passed"
+    },
+    {
+      "command": "go test -tags=integration ./internal/tui -run ^(TestLiveOllamaPTYUI|TestPTYStreamingSpeedBeforeCompletion|TestPTYTranscriptSearchAndKeyboardSelection)$ -count=1 -v",
+      "status": "passed",
+      "model": "llama3.1:8b",
+      "real_ollama_pty_seconds": 34.68,
+      "suite_seconds": 47.443,
+      "coverage": [
+        "permission approval and denial",
+        "native Ollama project evidence",
+        "live command output",
+        "PTY user input",
+        "queued instruction",
+        "catalog failure/retry/deletion",
+        "model/provider edit return",
+        "composer Unicode/paste/resize",
+        "keyboard search/selection/OSC52 copy",
+        "stream samples before completion across dark/light/NO_COLOR"
+      ]
+    },
+    {
+      "command": "go test -race ./internal/llm/tools -run ^TestWebSearch -count=1",
+      "status": "passed",
+      "note": "Controlled HTTP only: opt-in, deny, private IP block, known credential block, redirect reapproval, cancellation, body/result/text/query bounds."
+    },
+    {
+      "command": "evaluate experiment <shared full manifest> --live --allow-execution",
+      "status": "completed_with_unavailable_observations",
+      "opcode_passed_cases": 12,
+      "codaro_passed_cases": 7,
+      "codaro_failed_cases": 3,
+      "codaro_unavailable_cases": 2,
+      "crush_unavailable_cases": 12,
+      "rankable": false,
+      "comparable_conditions": false,
+      "criteria_changed": false,
+      "reruns_to_improve_score": 0,
+      "report": "2026-10-29-nine-comparison.json"
+    }
+  ],
+  "limits": [
+    "Native vault business logic tested through injected backends; no personal OS vault accessed.",
+    "macOS/Windows binaries cross-compiled locally; native execution requires their CI runners.",
+    "Windows PTY remains explicitly unavailable; non-Linux default sandbox refuses command execution.",
+    "Public search availability is not proven by controlled HTTP tests.",
+    "Fixed application order, cache state and different policies prevent causal performance or general superiority claims."
+  ]
+}

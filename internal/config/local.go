@@ -43,6 +43,12 @@ func configureLocalProvider(discovery ...bool) error {
 	if !needsDiscovery || len(discovery) > 0 && !discovery[0] {
 		return nil
 	}
+	if local.APIKeyRef != "" {
+		local, err = resolveProvider(models.ProviderLocal, local)
+		if err != nil {
+			return err
+		}
+	}
 	found, err := models.DiscoverLocalModels(httpclient.WithInsecureTLS(context.Background(), baseURL, local.TLSInsecure), baseURL, local.APIKey)
 	if err != nil {
 		return fmt.Errorf("local provider: %w", err)

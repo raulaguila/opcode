@@ -194,6 +194,16 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 		return cmd
 	case "queue":
 		return p.openQueue()
+	case "search":
+		if navigation, ok := p.transcript.(chat.TranscriptNavigation); ok {
+			navigation.StartSearch(value)
+		}
+		return nil
+	case "select":
+		if navigation, ok := p.transcript.(chat.TranscriptNavigation); ok {
+			navigation.ToggleKeyboardSelection()
+		}
+		return nil
 	case "runtime":
 		return p.openRuntime()
 	case "index":
@@ -817,7 +827,7 @@ func (p *chatPage) handleWorkspaceMessage(text string, attachments []message.Att
 		return nil, false
 	}
 	switch command {
-	case "cancel", "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "runtime", "index", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
+	case "cancel", "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "search", "select", "queue", "runtime", "index", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
 	default:
 		return nil, false
 	}

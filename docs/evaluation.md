@@ -211,6 +211,94 @@ aceita um rótulo ASCII de até 64 caracteres para comparar execuções observad
 não muda o system prompt. Alterar contexto também muda o perfil e precisa ser
 declarado como diferença, em vez de atribuir o resultado apenas ao prompt.
 
+### Um único manifesto para todos os aplicativos
+
+`evaluate experiment` valida um plano sem fazer inferência por padrão. Com
+`--live`, executa os aplicativos em sequência, com o mesmo conjunto imutável de
+casos, repetições e condições solicitadas. Cada caso continua usando um processo
+e workspace descartáveis. O JSON original do provedor não é modificado.
+
+```sh
+# Obtenha o hash do conjunto escolhido, sem inferência:
+opcode evaluate --cases suite.json --output fixture-contract.json
+# Copie suite_sha256 desse relatório para o manifesto.
+opcode evaluate experiment experiment.json
+# A pasta ainda não pode existir. Execute é autorizado separadamente:
+opcode evaluate experiment experiment.json --live --allow-execution \
+  --output-dir ./comparison-run-01
+```
+
+Exemplo de `experiment.json` (caminhos relativos ao manifesto):
+
+```json
+{
+  "version": 1,
+  "name": "local-common-01",
+  "suite": "suite.json",
+  "suite_sha256": "SUBSTITUA_PELO_HASH_DO_RELATORIO_DE_FIXTURES",
+  "provider_config": "provider.json",
+  "conditions": {
+    "api_model": "llama3.1:8b",
+    "protocol": "ollama",
+    "context_window": 16384,
+    "output_reserve": 2048,
+    "temperature": 0
+  },
+  "repeats": 2,
+  "cases": ["overview", "localize", "error"],
+  "applications": [
+    {"name": "opcode"},
+    {"name": "codaro", "adapter": "codaro-adapter.json"},
+    {"name": "crush", "adapter": "crush-adapter.json"}
+  ]
+}
+```
+
+São 2–3 aplicativos distintos, 1–3 repetições, IDs explícitos e únicos e hash
+exato do arquivo da suíte. O modelo da API e o protocolo precisam corresponder
+ao modelo `coder` explicitamente definido no JSON de provedor. Contexto e reserva
+são aplicados na cópia isolada; papéis auxiliares usam o mesmo modelo para não
+introduzir outro provedor por herança. A temperatura aceita somente `0` neste
+contrato, pois outros valores não são controlados pelos adapters atuais. Isso é
+uma condição solicitada: não transforma uma métrica ausente em observação.
+
+O runner grava `opcode.json`, `codaro.json`, `crush.json` conforme os aplicativos
+selecionados, além de `experiment.json`, em uma pasta nova 0700, com arquivos
+0600. Não sobrescreve um experimento anterior. Manifesto e critérios completos
+recebem hashes; os relatórios não incluem o conteúdo da configuração nem chaves.
+Executável de adapter ausente gera casos `unavailable`, sem chamar um modelo.
+Falhas e resultados parciais permanecem nos arquivos de cada aplicação.
+A configuração validada é congelada em uma cópia temporária privada e removida
+ao terminar; mudanças no arquivo original não alteram casos posteriores.
+O resumo é salvo antes de iniciar e após cada aplicativo, inclusive se houver
+cancelamento. Diretórios de saída com ancestrais simbólicos são recusados antes
+de executar os aplicativos. No Unix, o cancelamento encerra também os processos
+filhos do grupo do worker/adapter; a espera por pipes tem prazo limitado.
+
+`comparable_conditions` indica igualdade das condições observadas disponíveis.
+`rankable` exige também identidade completa dos critérios, temperatura observada,
+contexto e saída efetivos informados pelo adapter e critérios disponíveis para
+todos os casos. Valores solicitados não substituem observações ausentes:
+`conditions_unavailable` identifica esses campos. Uma falha observada continua falha;
+indisponibilidade não é convertida em sucesso. Duplicatas de caso/trial e trials
+ausentes são recusados. As diferenças identificam aplicativo, caso, trial e
+campo: por exemplo, `codaro case validate trial 1: temperature differs`.
+Os valores exibidos nesses diagnósticos são limitados e têm credenciais conhecidas
+redigidas; a comparação continua usando os valores originais e os mesmos hashes.
+O comando de experimento retorna erro após salvar os relatórios se não puderem
+ser classificados ou houver critérios reprovados.
+
+No relatório comparativo de 29/10, o caso `validate` do Codaro estava indisponível
+e sem temperatura observada nos dois trials; o Opcode registrou zero. Esse era
+o motivo concreto do antigo diagnóstico genérico de condições diferentes.
+O manifesto não elimina essa limitação do aplicativo nem muda seus critérios.
+Selecione explicitamente um subconjunto comum, ou mantenha a indisponibilidade.
+
+O adapter aceita `chat_completions` como nome do protocolo OpenAI compatível,
+sem alterar sua identidade no relatório; continua recusando uma conversão
+silenciosa de Ollama nativo para outro protocolo. O driver Crush atual mantém
+as limitações já descritas e não fabrica sampling ou recibos ausentes.
+
 ### Recuperação com fontes concorrentes
 
 O benchmark direto de ranking independe do agente e não gera chat:

@@ -59,6 +59,11 @@ reparam chamadas incompletas no histórico e preservam instruções já aceitas,
 exceto no cancelamento explícito. Veja `docs/agent-runtime.md` para configuração,
 exclusões da impressão de arquivos e limites de garantia.
 
+O inventário estático `RegisteredLanguageSupport` é compartilhado pela ferramenta
+de suporte e pelo gerador `scripts/language-docs`; fixtures de declarações/chunks
+cobrem cada perfil e um teste de drift mantém a matriz Markdown atualizada. O
+gerador não consulta configuração, PATH, fontes ou servidores instalados.
+
 ## Contratos e falhas
 
 Resultados de ferramentas preservam `ToolResponse`, `IsError` e metadados JSON. Comandos retornam exit code, timeout, cancelamento, truncamento e timestamps. Inspeção Git e navegação LSP retornam estruturas limitadas. Processos têm identificadores e propriedade por sessão, prazo de expiração e encerramento no cancelamento da sessão ou do aplicativo.
@@ -75,13 +80,24 @@ A captura de comandos e processos é limitada em memória. A fronteira das ferra
 
 A suíte real dos provedores exige tag de build e opt-in por ambiente; seu relatório omite credenciais, cabeçalhos e corpos. Não há métricas ou objetivos de latência/custo adicionais definidos por esta mudança.
 
+Credenciais de provedores podem usar referências opcionais ao cofre nativo via
+`go-keyring`. A lista e o diagnóstico offline permanecem em metadados; operações
+autenticadas resolvem somente a conexão usada. A TUI prepara a entrada no cofre
+fora do loop, aguarda o resultado nativo e persiste metadados no dono da configuração.
+Falhas removem apenas a entrada nova; não há fallback para chave literal. O backend
+injetável separa testes do cofre real. Limites e recuperação: [cofre nativo](docs/native-vault.md).
+
 ## Entrega e verificação
 
 Go 1.26 ou posterior. O build continua sendo `go build .`; workflows usam a versão declarada no `go.mod`. A verificação comum é `go test -race ./...` e `go vet ./...`. Testes de sandbox usam dados temporários e indicam quando o ambiente não suporta namespaces. Testes externos de geração são separados e optativos.
 
-`scripts/build-release` gera tar.gz e SHA256 locais com metadados fixos, trimpath,
+`scripts/build-release` gera tar.gz (Linux/macOS), ZIP (Windows) e SHA256 locais com metadados fixos, trimpath,
 CGO desativado e versão explícita. `make release-local` e o workflow de build
-usam esse caminho; geração de artefatos não publica releases. O índice FTS5/BM25
+usam esse caminho; geração de artefatos não publica releases. O CI preserva a
+suíte completa Linux e acrescenta smoke nativo limitado de CLI/config/render/permissões
+em Linux/macOS/Windows, com cofre falso e startup sem inferência. O runner
+`scripts/platform-smoke` isola ambiente e verifica preservação no segundo startup;
+Windows continua recusando PTY, e sandbox de comandos continua Linux/Bubblewrap. O índice FTS5/BM25
 pertence a um SQLite privado separado, incremental e limitado, sem migração do
 banco principal. A consulta revalida acesso e conteúdo antes de retornar trechos;
 não concede evidência de leitura para edição.

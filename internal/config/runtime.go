@@ -4,6 +4,7 @@ import "fmt"
 
 // RuntimeConfig bounds one agent turn, including queued instructions.
 type RuntimeConfig struct {
+	WebSearch         bool   `json:"webSearch,omitempty"`
 	Mode              string `json:"mode,omitempty"`
 	MaxSteps          int    `json:"maxSteps,omitempty"`
 	MaxSeconds        int    `json:"maxSeconds,omitempty"`

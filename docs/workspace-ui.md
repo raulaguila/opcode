@@ -47,7 +47,10 @@ quando exigem atenção. O campo mantém três linhas iniciais.
 | Testar/salvar formulário | `Ctrl+T` / `Ctrl+S`; `Tab` alterna campos |
 
 Sem um modelo, a primeira abertura mostra Settings. Salvar uma conexão ativa leva ao
-seletor. Conexões desativadas aparecem identificadas na lista e continuam
+catálogo dessa conexão, mesmo quando outro provedor era o ativo. `Ctrl+P` no
+seletor edita a conexão visível; `Esc` volta à lista de conexões e outro `Esc`
+retorna ao catálogo com busca e função preservadas. Edições não salvas podem ser
+retomadas com `R` na lista. Conexões desativadas aparecem identificadas na lista e continuam
 desativadas ao salvar; `Ctrl+G` salva e ativa explicitamente. Autenticação permite chave direta mascarada, referência a variável de ambiente
 ou nenhuma chave. A chave direta é gravada no JSON local com permissão `0600`;
 a referência de ambiente não grava o segredo resolvido. Provedores/perfis e preferências são salvos para a próxima abertura;
@@ -64,7 +67,10 @@ Sem filtro, o catálogo coloca primeiro o modelo atual daquela função, seguido
 dos favoritos, recentes e demais modelos. Os rótulos aparecem quando há largura;
 os indicadores do atual/favorito/recente permanecem. Uma busca usa a relevância
 do texto. A seleção destacada só vira o modelo ativo após confirmar. Contexto e origem
-aparecem no modo básico, junto do suporte a ferramentas informado pelo provedor
+aparecem no modo básico. A capacidade anunciada no catálogo é separada do limite
+efetivo do modelo principal em uso; a alocação informada pelo servidor recebe seu
+próprio rótulo. Outros modelos mostram que o limite efetivo ficará disponível
+após ativá-los. Esses dados não alteram a configuração. Também aparece o suporte a ferramentas informado pelo provedor
 (ou “não informado”). O Opcode consulta metadados, sem deduzir capacidades pelo
 nome e sem executar inferência para preencher esses campos.
 
@@ -131,6 +137,16 @@ com a edição do rascunho, sem mover a conversa.
 
 Clique simples na resposta não abre menus. Arraste o botão esquerdo para destacar
 um trecho, inclusive entre linhas. Selecionar não copia automaticamente.
+`Alt+S` inicia a seleção pelo teclado na área visível: setas movem o cursor,
+`Shift+setas` amplia o trecho e `Home`/`End` e `PgUp`/`PgDn` navegam pelas linhas.
+`/select` oferece a mesma entrada pela paleta. `Alt+F` ou `/search texto` busca
+na conversa renderizada; `Enter`/`↓` avança, `↑` volta e `Esc` devolve o foco ao
+rascunho intacto. A busca é literal, ignora maiúsculas e não envia texto ao modelo.
+Ela consulta até 10 mil linhas/2 MiB e mostra até 200 ocorrências; um aviso indica
+quando há esse limite. Processos recolhidos ficam fora da busca. `Alt+S` em uma
+ocorrência inicia a seleção naquele ponto. Os atalhos não interceptam um PTY,
+pergunta ou modal ativo. Se `Alt+F`/`Alt+S` já estiver atribuído a um atalho global
+personalizado, ele mantém a prioridade; use `/search` ou `/select` nesse caso.
 `Ctrl+C` copia somente o trecho destacado e mantém o destaque; `Esc` limpa a
 seleção antes de cancelar uma tarefa. Sem seleção, os atalhos normais continuam
 valendo. No PTY, `Ctrl+C` continua interrompendo o processo filho. Durante uma

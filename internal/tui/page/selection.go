@@ -13,6 +13,9 @@ func (p *chatPage) SelectionKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, false
 	}
 	selection, ok := p.transcript.(chat.SelectionControl)
+	if navigation, ok := p.transcript.(chat.TranscriptNavigation); ok && navigation.TranscriptKey(msg) {
+		return nil, true
+	}
 	if !ok {
 		return nil, false
 	}

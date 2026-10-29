@@ -1,0 +1,400 @@
+{
+  "requested_conditions": {
+    "api_model": "llama3.1:8b",
+    "protocol": "ollama",
+    "context_window": 16384,
+    "output_reserve": 2048,
+    "temperature": 0
+  },
+  "manifest_sha256": "b99e3f53b9b1bf5643993fbe31b09fd87746831d89309c2d21a385f3eedbbea8",
+  "experiment": "nine-final-full-llama31-native",
+  "repeats": 2,
+  "selected_cases": [
+    "overview",
+    "localize",
+    "edit",
+    "validate",
+    "error",
+    "resume"
+  ],
+  "version": 1,
+  "mode": "live_provider",
+  "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+  "cases": [
+    {
+      "criteria_sha256": "cee4efb2ac8bb4e6e4977e85a59208ddab08b6dfd7a44b96ca543f6ef187b203",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 1,
+      "duration_ms": 116,
+      "id": "overview",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "432a51d4e22acfd8c2b7e52b736a76d7e99597e6341c598e3033a9eb4b05fbb8",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 1,
+      "duration_ms": 120,
+      "id": "localize",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "efa906d1e67cb0b7139327f233503e62d196764be0b43ba288b1ba891d871bc8",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 1,
+      "duration_ms": 126,
+      "id": "edit",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": null
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "1478b0ec498f12adf4c1cb19196273640879fe51f6fcc3cd4fb84c893857c72d",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 1,
+      "duration_ms": 106,
+      "id": "validate",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "check_passed",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "4f61add74361a3f51da0086a33092ff48be153c4f6e85c9b3284c13f86fb5b52",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 1,
+      "duration_ms": 82,
+      "id": "error",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "734a51352ad9434866b2559d342d1ae916c0e276e0c310b03018d9d7089e34fe",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 1,
+      "duration_ms": 84,
+      "id": "resume",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "task_status",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "cee4efb2ac8bb4e6e4977e85a59208ddab08b6dfd7a44b96ca543f6ef187b203",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 2,
+      "duration_ms": 102,
+      "id": "overview",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "432a51d4e22acfd8c2b7e52b736a76d7e99597e6341c598e3033a9eb4b05fbb8",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 2,
+      "duration_ms": 93,
+      "id": "localize",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "efa906d1e67cb0b7139327f233503e62d196764be0b43ba288b1ba891d871bc8",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 2,
+      "duration_ms": 84,
+      "id": "edit",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": null
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "1478b0ec498f12adf4c1cb19196273640879fe51f6fcc3cd4fb84c893857c72d",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 2,
+      "duration_ms": 80,
+      "id": "validate",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "check_passed",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "4f61add74361a3f51da0086a33092ff48be153c4f6e85c9b3284c13f86fb5b52",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 2,
+      "duration_ms": 73,
+      "id": "error",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "criteria_sha256": "734a51352ad9434866b2559d342d1ae916c0e276e0c310b03018d9d7089e34fe",
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "crush",
+      "context_window": 16384,
+      "trial": 2,
+      "duration_ms": 87,
+      "id": "resume",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": null
+        },
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "task_status",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    }
+  ],
+  "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+}

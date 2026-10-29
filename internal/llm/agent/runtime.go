@@ -79,6 +79,8 @@ func (t briefTool) Info() tools.ToolInfo {
 
 func readOnlyTool(name string) bool {
 	switch name {
+	case tools.WebSearchToolName:
+		return true // Actual requests still require explicit network permission.
 	case "view", "ls", "glob", "grep", "symbols", "definition", "references", "diagnostics", "git_status", "git_diff", "git_log", "fetch", "sourcegraph", "get_task", "ask_user_question", "ask_user_questions", "get_tools_catalog", "request_tools", "get_context_status", "compact_context", "explore_code", "recalibrate_context", "search_conversation", "read_conversation", "save_finding", "list_findings", "get_skills_catalog", "get_project_map", "get_file_outline", "read_symbol", "get_artifact_info", "read_artifact", "search_artifact", "discover_checks", "get_validation_report", "lsp_call_hierarchy", "list_mcp_resources", "read_mcp_resource", "list_mcp_tools", "search_code_index", "get_language_support", "read_lines", "get_runtime_info", "search_findings":
 		return true
 	}

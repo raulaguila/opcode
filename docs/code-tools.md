@@ -11,8 +11,8 @@ renomear ou substituir símbolos só está disponível em Executar.
   fontes; lê até 12 arquivos pequenos para declarações, pacotes e dependências
   declaradas em Go, package.json, pyproject.toml e Cargo.toml. Não resolve um
   grafo transitivo nem transforma imports em referências semânticas.
-- `get_file_outline`: Go padrão; parsers locais para Python, JS, TS, TSX, Rust,
-  Java, C, C++ e C#. Outras linguagens usam LSP configurado. Retorna hash, nomes
+- `get_file_outline`: parsers locais descritos no [inventário gerado](language-support.md),
+  incluindo o parser padrão Go. Outras linguagens usam LSP configurado. Retorna hash, nomes
   qualificados, tipos e linhas; `expected_hash` detecta fonte alterada.
 - `read_symbol`: nome exato do outline, offset/limit e `expected_hash` opcional.
 - `read_lines`: páginas UTF-8 de até 8 KiB/200 linhas (padrão 4 KiB/100), offset
@@ -112,8 +112,8 @@ e prévia (até 240 bytes), com orçamento de aproximadamente 8 KiB para a respo
 Leia o código atual com `view`/`read_symbol` antes de concluir ou editar. O índice
 é uma ferramenta inicial do agente, respeitando os modos e permissões.
 
-Go usa seu parser nativo. Nove gramáticas locais puras Go acrescentam as
-linguagens descritas acima. Chunks acompanham declarações/escopos, nomes
+Go usa seu parser nativo. As demais gramáticas locais estão no
+[inventário gerado do runtime](language-support.md). Chunks acompanham declarações/escopos, nomes
 qualificados e assinatura do pai quando disponível. Janelas textuais continuam
 complementando declarações e atendem fontes incompletas/não suportadas. A identificação de extensões
 não comprova disponibilidade de parser ou LSP: resultados `kind: "text"` são
@@ -155,7 +155,11 @@ saída ao vivo, sandbox e cancelamento de `bash`. Revise o diff e execute
 
 Outlines locais são sintáticos; referências resolvidas continuam sendo responsabilidade do LSP. Texto/grep nunca é apresentado como resolução de símbolos.
 
-## Comparação multilíngue com o Codaro — 28/10/2026
+## Comparação multilíngue com o Codaro — snapshot de 28/10/2026
+
+Esta tabela registra a execução histórica daquela etapa. A lista atual do Opcode
+é o [inventário gerado](language-support.md), com teste de drift; os números
+históricos abaixo não representam seu runtime atual.
 
 Comparação com o checkout local em `~/Documents/GitHub/codaro`, incluindo execução
 dos 36 casos `test_symbols_are_searchable_and_read_from_current_source`.

@@ -192,6 +192,9 @@ func (m *messagesCmp) renderTurns() {
 	}
 	content := base.Width(m.width).Render(strings.Join(rendered, "\n"))
 	m.transcriptLines = strings.Split(content, "\n")
+	if m.find.open {
+		m.updateSearch()
+	}
 	m.viewport.SetContent(content)
 }
 func (m *messagesCmp) toggleProcess(id string) {

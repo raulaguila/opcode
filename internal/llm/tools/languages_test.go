@@ -82,9 +82,11 @@ func TestLocalLanguageDeclarations(t *testing.T) {
 			require.True(t, found, "structural declaration must reach index chunks: %s", strings.Join(names, ","))
 		})
 	}
-	require.Len(t, covered, len(localParsers)+1, "each registered grammar must have a declaration and index-chunk fixture")
-	for language := range localParsers {
-		require.True(t, covered[language], "missing grammar fixture: %s", language)
+	registered := RegisteredLanguageSupport()
+	require.Len(t, covered, len(registered), "each registered grammar must have a declaration and index-chunk fixture")
+	for _, entry := range registered {
+		require.True(t, covered[entry.Language], "missing grammar fixture: %s", entry.Language)
+		require.True(t, entry.ParserFixture)
 	}
 }
 

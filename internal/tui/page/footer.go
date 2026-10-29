@@ -35,10 +35,10 @@ func (p *chatPage) FooterState() util.FooterState {
 					state.AwaitingModel = metrics.StreamOutputBytes == 0
 					state.SpeedLive = !state.AwaitingModel
 					state.SpeedEstimated = true
-					// A byte heuristic is independent of transport chunk sizes. Wait
-					// briefly to avoid a spike at the first chunk; no tokenizer claim.
-					if metrics.StreamDurationNS >= int64(250*time.Millisecond) {
-						state.TokensPerSecond = float64(metrics.StreamOutputBytes) / 4 * 1e9 / float64(metrics.StreamDurationNS)
+					// The initial burst can contain server-buffered data. Measure
+					// only subsequent output between real sample timestamps.
+					if metrics.StreamSamples >= 2 && metrics.StreamSampleDurationNS >= int64(250*time.Millisecond) {
+						state.TokensPerSecond = metrics.StreamSampleTokens * 1e9 / float64(metrics.StreamSampleDurationNS)
 					}
 				} else if !state.Busy && metrics.LastModel == model.ID && metrics.LastOutputTokens > 0 && metrics.LastOutputDurationNS > 0 {
 					state.TokensPerSecond = float64(metrics.LastOutputTokens) * 1e9 / float64(metrics.LastOutputDurationNS)

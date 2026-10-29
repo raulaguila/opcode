@@ -75,14 +75,16 @@ func TestFooterShowsCurrentStreamWithoutReusingPreviousSpeed(t *testing.T) {
 	require.True(t, state.AwaitingModel)
 	require.Zero(t, state.TokensPerSecond)
 	probe.metrics.StreamOutputBytes, probe.metrics.StreamDurationNS = 80, 2_000_000_000
+	require.Zero(t, p.FooterState().TokensPerSecond, "a lone buffered burst cannot establish generation speed")
+	probe.metrics.StreamSamples, probe.metrics.StreamSampleTokens, probe.metrics.StreamSampleDurationNS = 2, 20, 2_000_000_000
 	state = p.FooterState()
 	require.False(t, state.AwaitingModel)
 	require.True(t, state.SpeedLive)
 	require.True(t, state.SpeedEstimated)
 	require.Equal(t, 10.0, state.TokensPerSecond)
-	probe.metrics.StreamDurationNS = 1
+	probe.metrics.StreamSampleDurationNS = 1
 	require.Zero(t, p.FooterState().TokensPerSecond, "suppress first-packet spike")
-	probe.metrics.StreamDurationNS = 2_000_000_000
+	probe.metrics.StreamSampleDurationNS = 2_000_000_000
 	cfg.Agents[config.AgentCoder] = config.Agent{Model: models.GPT4o}
 	require.Zero(t, p.FooterState().TokensPerSecond, "stream speed cannot leak across models")
 	cfg.Agents[config.AgentCoder] = config.Agent{Model: models.GPT41}

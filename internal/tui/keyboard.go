@@ -164,6 +164,21 @@ func enhancedKey(raw string) (tea.Msg, bool) {
 	}
 	key := tea.KeyMsg{Alt: bits&2 != 0}
 	switch n {
+	case 57352, 57353, 57356, 57357:
+		choices := map[int][]tea.KeyType{
+			57352: {tea.KeyUp, tea.KeyShiftUp, tea.KeyCtrlUp, tea.KeyCtrlShiftUp},
+			57353: {tea.KeyDown, tea.KeyShiftDown, tea.KeyCtrlDown, tea.KeyCtrlShiftDown},
+			57356: {tea.KeyHome, tea.KeyShiftHome, tea.KeyCtrlHome, tea.KeyCtrlShiftHome},
+			57357: {tea.KeyEnd, tea.KeyShiftEnd, tea.KeyCtrlEnd, tea.KeyCtrlShiftEnd},
+		}
+		index := 0
+		if bits&1 != 0 {
+			index++
+		}
+		if bits&4 != 0 {
+			index += 2
+		}
+		key.Type = choices[n][index]
 	case 57350, 57351: // CSI-u left/right functional keys.
 		types := []tea.KeyType{tea.KeyLeft, tea.KeyShiftLeft, tea.KeyCtrlLeft, tea.KeyCtrlShiftLeft}
 		if n == 57351 {

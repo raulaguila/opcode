@@ -15,11 +15,13 @@ import (
 // Comparison never mixes unavailable criteria or metrics into a success rate.
 // Conditions concern the experiment, not equivalence of application policies.
 type Comparison struct {
-	Version     int          `json:"version"`
-	Comparable  bool         `json:"comparable_conditions"`
-	Differences []string     `json:"differences"`
-	Runs        []RunSummary `json:"runs"`
-	Notice      string       `json:"notice"`
+	Rankable           bool         `json:"rankable"`
+	RankingUnavailable []string     `json:"ranking_unavailable"`
+	Version            int          `json:"version"`
+	Comparable         bool         `json:"comparable_conditions"`
+	Differences        []string     `json:"differences"`
+	Runs               []RunSummary `json:"runs"`
+	Notice             string       `json:"notice"`
 }
 type RunSummary struct {
 	PhaseMetrics        *agent.PhaseMetrics `json:"phase_metrics"`
@@ -48,7 +50,7 @@ type RunSummary struct {
 }
 
 func Compare(paths []string) (Comparison, error) {
-	result := Comparison{Version: 1, Comparable: true, Differences: []string{}, Notice: "Same fixture hash, case/trial/criteria, requested model, protocol, effective context and output reserve are required. Applications retain different prompts/tools/policies. Missing metrics are null; unavailable criteria are not passed. This does not establish general superiority or causal prompt improvements."}
+	result := Comparison{Version: 1, Comparable: true, Rankable: true, Differences: []string{}, RankingUnavailable: []string{}, Notice: "Same fixture hash, case/trial/criteria, requested model, protocol, effective context and output reserve are required. Applications retain different prompts/tools/policies. Missing metrics are null; unavailable criteria are not passed. Rankable concerns only complete declared observations, not general superiority or causal prompt improvements."}
 	if len(paths) < 2 || len(paths) > 12 {
 		return result, fmt.Errorf("compare requires 2–12 live JSON reports")
 	}
@@ -62,15 +64,17 @@ func Compare(paths []string) (Comparison, error) {
 		if json.Unmarshal(raw, &report) != nil || report.Version != 1 || report.Mode != "live_provider" || len(report.Cases) == 0 || len(report.Cases) > 96 || len(report.SuiteSHA256) != 64 {
 			return result, fmt.Errorf("comparison report %d must be a bounded live report", index+1)
 		}
+		if err := validateComparisonCases(report); err != nil {
+			return result, fmt.Errorf("comparison report %d: %w", index+1, err)
+		}
+		result.Differences = append(result.Differences, requestedDifferences(report)...)
 		if index == 0 {
 			baseline = report
 		} else {
 			if report.SuiteSHA256 != baseline.SuiteSHA256 {
 				result.Differences = append(result.Differences, "fixture suite hash differs")
 			}
-			if fingerprintConditions(report) != fingerprintConditions(baseline) {
-				result.Differences = append(result.Differences, "case/trial/criteria, model, protocol, effective context, output reserve or sampling temperature differs")
-			}
+			result.Differences = append(result.Differences, conditionDifferences(baseline, report)...)
 		}
 		summary := RunSummary{Experiment: tools.RedactCredentials(report.Experiment), PromptVersions: []string{}, PromptProfiles: []string{}}
 		input, output, recall, mrr := int64(0), int64(0), 0., 0.
@@ -78,6 +82,19 @@ func Compare(paths []string) (Comparison, error) {
 		toolCalls, allToolCalls := 0, true
 		phases, allPhases := agent.PhaseMetrics{}, true
 		for _, c := range report.Cases {
+			label := caseLabel(c)
+			for _, field := range c.ConditionsUnavailable {
+				result.RankingUnavailable = append(result.RankingUnavailable, label+": effective "+field+" unavailable; requested value is not an observation")
+			}
+			if c.Temperature == nil {
+				result.RankingUnavailable = append(result.RankingUnavailable, label+": sampling temperature unavailable")
+			}
+			if c.CriteriaSHA256 == "" {
+				result.RankingUnavailable = append(result.RankingUnavailable, label+": full criterion identity unavailable in legacy report")
+			}
+			if c.Status == "unavailable" {
+				result.RankingUnavailable = append(result.RankingUnavailable, label+": application/case unavailable")
+			}
 			if c.PhaseMetrics == nil {
 				allPhases = false
 			} else {
@@ -111,8 +128,14 @@ func Compare(paths []string) (Comparison, error) {
 				summary.OutputReserves = append(summary.OutputReserves, c.OutputReserve)
 			}
 			if c.Application == "opcode" {
+				if toolCalls > math.MaxInt-c.ToolCalls {
+					return result, fmt.Errorf("comparison tool metrics overflow")
+				}
 				toolCalls += c.ToolCalls
 			} else if c.ReportedToolCalls != nil {
+				if toolCalls > math.MaxInt-*c.ReportedToolCalls {
+					return result, fmt.Errorf("comparison tool metrics overflow")
+				}
 				toolCalls += *c.ReportedToolCalls
 			} else {
 				allToolCalls = false
@@ -129,6 +152,7 @@ func Compare(paths []string) (Comparison, error) {
 			}
 			for _, criterion := range c.Criteria {
 				if criterion.Passed == nil {
+					result.RankingUnavailable = append(result.RankingUnavailable, comparisonDiagnostic("%s: criterion %s unavailable", label, criterion.Kind))
 					summary.UnavailableCriteria++
 				} else {
 					summary.ObservedCriteria++
@@ -137,15 +161,24 @@ func Compare(paths []string) (Comparison, error) {
 					}
 				}
 			}
+			if summary.DurationMS > math.MaxInt64-c.DurationMS {
+				return result, fmt.Errorf("comparison duration metrics overflow")
+			}
 			summary.DurationMS += c.DurationMS
 			if c.InputTokens == nil {
 				allInput = false
 			} else {
+				if input > math.MaxInt64-*c.InputTokens {
+					return result, fmt.Errorf("comparison input metrics overflow")
+				}
 				input += *c.InputTokens
 			}
 			if c.OutputTokens == nil {
 				allOutput = false
 			} else {
+				if output > math.MaxInt64-*c.OutputTokens {
+					return result, fmt.Errorf("comparison output metrics overflow")
+				}
 				output += *c.OutputTokens
 			}
 			if c.RetrievalRecall == nil || c.RetrievalMRR == nil {
@@ -190,6 +223,9 @@ func Compare(paths []string) (Comparison, error) {
 	}
 	result.Differences = unique
 	result.Comparable = len(result.Differences) == 0
+	sort.Strings(result.RankingUnavailable)
+	result.RankingUnavailable = slices.Compact(result.RankingUnavailable)
+	result.Rankable = result.Comparable && len(result.RankingUnavailable) == 0
 	return result, nil
 }
 

@@ -44,6 +44,7 @@ type messagesCmp struct {
 	lastWorking     bool
 	transcriptLines []string
 	selection       textSelection
+	find            transcriptFind
 }
 type renderFinishedMsg struct{ sessionID string }
 
@@ -93,6 +94,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case SessionClearedMsg:
+		m.find = transcriptFind{}
 		m.selection = textSelection{}
 		m.transcriptLines = nil
 		m.session = session.Session{}
@@ -113,6 +115,9 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 		return m, nil
 	case tea.KeyMsg:
+		if m.TranscriptKey(msg) {
+			return m, nil
+		}
 		if msg.String() == "alt+end" {
 			m.ClearSelection()
 			m.unread = false
@@ -204,7 +209,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if needsRerender {
 			// Keep following only while the reader is at the bottom. Streaming
 			// updates must not interrupt someone reading earlier messages.
-			follow := !m.selection.engaged() && (m.viewport.AtBottom() || (msg.Type == pubsub.CreatedEvent &&
+			follow := !m.selection.engaged() && !m.find.open && (m.viewport.AtBottom() || (msg.Type == pubsub.CreatedEvent &&
 				msg.Payload.SessionID == m.session.ID && msg.Payload.Role == message.User))
 			m.renderView()
 			if follow {
@@ -217,7 +222,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if len(m.messages) > 0 && m.lastWorking != m.IsAgentWorking() {
-		offset, follow := m.viewport.YOffset, m.viewport.AtBottom() && !m.selection.engaged()
+		offset, follow := m.viewport.YOffset, m.viewport.AtBottom() && !m.selection.engaged() && !m.find.open
 		m.renderView()
 		if follow {
 			m.viewport.GotoBottom()
@@ -256,7 +261,9 @@ func (m *messagesCmp) View() string {
 	} else if len(m.messages) == 0 {
 		content = m.initialScreen()
 	}
-	if m.unread {
+	if m.find.open || m.selection.keyboard {
+		content = lipgloss.JoinVertical(lipgloss.Left, content, m.navigationHint())
+	} else if m.unread {
 		content = lipgloss.JoinVertical(lipgloss.Left, content, m.working())
 	}
 	return styles.BaseStyle().Width(m.width).Height(max(0, m.height)).MaxHeight(max(0, m.height)).Render(content)
@@ -305,6 +312,7 @@ func (m *messagesCmp) SetSession(session session.Session) tea.Cmd {
 	}
 	m.selection = textSelection{}
 	m.session = session
+	m.find = transcriptFind{}
 	messages, err := m.app.Messages.List(context.Background(), session.ID)
 	if err != nil {
 		return util.ReportError(err)

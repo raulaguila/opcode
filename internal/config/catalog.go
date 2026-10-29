@@ -13,7 +13,7 @@ import (
 
 func configureProviders() error {
 	for id, p := range cfg.Providers {
-		resolved, err := resolveProvider(id, p)
+		resolved, err := resolveProviderWithVault(id, p, false)
 		if err != nil {
 			return fmt.Errorf("provider %s: %w", id, err)
 		}
@@ -23,7 +23,7 @@ func configureProviders() error {
 		if err := validateProfileID(id); err != nil {
 			return err
 		}
-		resolved, err := resolveProvider(profile.Backend, profile.Provider)
+		resolved, err := resolveProviderWithVault(profile.Backend, profile.Provider, false)
 		if err != nil {
 			return fmt.Errorf("provider profile %s: %w", id, err)
 		}
@@ -34,6 +34,13 @@ func configureProviders() error {
 }
 
 func resolveProvider(backend models.ModelProvider, p Provider) (Provider, error) {
+	return resolveProviderWithVault(backend, p, true)
+}
+
+func resolveProviderWithVault(backend models.ModelProvider, p Provider, resolveVault bool) (Provider, error) {
+	if err := validateVaultReference(p); err != nil {
+		return Provider{}, err
+	}
 	if p.Disabled {
 		return p, nil
 	}
@@ -61,6 +68,16 @@ func resolveProvider(backend models.ModelProvider, p Provider) (Provider, error)
 			if models.CatalogEndpoint(backend) == "" {
 				return Provider{}, fmt.Errorf("backend uses its platform-specific endpoint settings")
 			}
+		}
+	}
+	if p.APIKeyRef != "" {
+		p.APIKey = "" // A reference never falls back to a literal or environment key.
+		if resolveVault {
+			secret, err := readVaultCredential(p.APIKeyRef)
+			if err != nil {
+				return Provider{}, err
+			}
+			p.APIKey = secret
 		}
 	}
 	if p.APIKeyEnv != "" {
@@ -111,8 +128,16 @@ func modelCatalog(id models.ModelProvider, profile string, p Provider) func(cont
 		p.API = selected.API
 	}
 	return func(ctx context.Context) ([]models.Model, error) {
+		p := p // Credential resolution is private to this invocation.
 		if p.Disabled {
 			return nil, fmt.Errorf("provider disabled")
+		}
+		if p.APIKeyRef != "" && p.APIKey == "" {
+			var err error
+			p, err = resolveProvider(id, p)
+			if err != nil {
+				return nil, err
+			}
 		}
 		found, err := models.DiscoverProviderModels(httpclient.WithInsecureTLS(ctx, p.BaseURL, p.TLSInsecure), id, p.BaseURL, p.APIKey)
 		if err != nil {
@@ -191,7 +216,7 @@ func ModelWithProviderDefaults(model models.Model) models.Model {
 	if configured, explicit := cfg.Models[model.ID]; explicit && !configured.UsesAutomaticContext() {
 		return model
 	}
-	p, err := ProviderForModel(model)
+	p, err := providerForModelMetadata(model)
 	if err != nil {
 		return model
 	}

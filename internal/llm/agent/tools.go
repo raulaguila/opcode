@@ -49,6 +49,7 @@ func CoderAgentTools(
 			bash,
 			tools.NewEditTool(lspClients, permissions, history),
 			tools.NewFetchTool(permissions),
+			tools.NewWebSearchTool(permissions),
 			tools.NewGlobTool(),
 			tools.NewGrepTool(),
 			tools.NewLsTool(),

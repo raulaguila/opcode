@@ -237,7 +237,7 @@ Detalhes: [ciclo do agente](docs/agent-runtime.md),
 ## Testes e avaliações
 
 ```sh
-go test -race ./...
+go test -race -p 1 ./...
 go vet ./...
 go build .
 go run . evaluate --output /tmp/opcode-fixtures.json
@@ -254,11 +254,13 @@ Consulte [avaliações repetíveis](docs/evaluation.md),
 [testes das APIs dos provedores](internal/llm/provider/integration/README.md).
 A suíte comum não requer credenciais nem executa inferência paga. Os resultados
 observados com `llama3.1:8b`, incluindo os critérios reprovados, estão no
-[registro de validação](docs/validation.md).
+[registro de validação](docs/validation.md). A
+[nova comparação com Codaro e Crush](docs/comparison-2026-10-29.md) registra também
+condições ausentes e limites dos adapters.
 
 ## Recuperação e controle do contexto
 
-Há 42 perfis de linguagens com extração local, listagem e leitura com páginas verificadas,
+O [inventário gerado de linguagens](docs/language-support.md) registra os perfis de extração local, listagem e leitura com páginas verificadas,
 índice incremental e memória de projeto. `/index` controla o índice; `/runtime`
 mostra um diagnóstico sem credenciais; `/context` mostra origem e orçamento.
 Embeddings locais são opcionais. Veja [guia de recuperação](docs/retrieval-runtime.md)
@@ -275,6 +277,14 @@ cobertura determinística dos menus.
 O [guia de perguntas e evidências](docs/question-and-evidence-recovery.md)
 explica a recuperação de opções malformadas, a busca por assunto, as citações
 em todos os modos e o reaproveitamento de fontes revalidadas.
+
+A [navegação da conversa](docs/workspace-ui.md) inclui busca local e seleção por
+teclado, mantendo o rascunho. [Cofre nativo opcional](docs/native-vault.md) guarda
+credenciais por referência; chave direta e ambiente continuam disponíveis.
+A [busca web opcional](docs/tools.md#busca-web-opcional) começa desativada e
+mantém a aprovação de rede. Para comparações, use o
+[manifesto compartilhado](docs/evaluation.md), que identifica condições ausentes
+ou diferentes antes de permitir um ranking.
 
 ## Proveniência e licença
 

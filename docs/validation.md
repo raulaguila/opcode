@@ -494,3 +494,23 @@ Veja o [guia de comportamento](question-and-evidence-recovery.md), o
 [relatório original](evidence/2026-10-29-question-recovery-original.json), o
 [conjunto adicional](evidence/2026-10-29-question-recovery-generic.json) e o
 [registro consolidado com limitações](evidence/2026-10-29-question-recovery-validation.json).
+
+## Nove melhorias — 29/10/2026
+
+A suíte completa `go test -race -p 1 ./... -count=1`, vet, build sem CGO, smoke
+Linux e teste de drift do inventário passaram. A execução sequencial mantém os
+orçamentos de parsing; uma tentativa anterior concorrente atingiu o timeout da
+fixture C++, sem alteração de prazo, critérios ou skips para aprovar. O fluxo
+PTY final com Ollama `llama3.1:8b` passou, incluindo terminal, aprovações, entrada,
+instrução durante execução, modelos, busca e seleção.
+
+A comparação completa executou os seis casos duas vezes por aplicativo, sem
+rerun: Opcode 12 aprovados; Codaro 7 aprovados/3 reprovados/2 indisponíveis;
+Crush 12 indisponíveis no adapter. O gate estrito recusou ranking e condições
+completamente comparáveis. Isso não declara falha do Crush nem superioridade
+geral. Ver [comparação e limites](comparison-2026-10-29.md) e
+[evidência de validação](evidence/2026-10-29-nine-validation.json).
+
+O cofre foi testado com backend injetado, inclusive quit e rollback assíncrono;
+nenhum cofre pessoal foi acessado. Compilação cruzada Windows/macOS e ZIP foram
+verificados; a execução nativa desses sistemas pertence aos jobs de CI.

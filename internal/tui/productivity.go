@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/localstate"
@@ -77,6 +78,14 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		a.showCommandDialog = false
 		a.showProviderDialog = true
 		cmd := a.providerDialog.Open()
+		a.providerReturnToModels = msg.ReturnToModels
+		if msg.Provider != "" {
+			if d, ok := a.providerDialog.(interface {
+				OpenForProvider(models.ModelProvider) tea.Cmd
+			}); ok {
+				cmd = d.OpenForProvider(msg.Provider)
+			}
+		}
 		a.setupActive = msg.Setup
 		if msg.Setup {
 			if d, ok := a.providerDialog.(interface{ Setup() }); ok {
@@ -87,6 +96,11 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 	case dialog.CloseProviderDialogMsg:
 		a.providerDialog.Close()
 		a.showProviderDialog = false
+		if a.providerReturnToModels {
+			a.providerReturnToModels = false
+			a.showModelDialog = true
+			return a.openModelCatalog("", true), true
+		}
 		return nil, true
 	case dialog.UserPreferencesChangedMsg:
 		if p, ok := a.pages[page.ChatPage]; ok {
@@ -98,6 +112,7 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 	case dialog.ProviderSettingsSavedMsg:
 		a.providerDialog.Close()
 		a.showProviderDialog = false
+		a.providerReturnToModels = false
 		if msg.Deleted {
 			a.showProviderDialog = true
 			return tea.Batch(a.providerDialog.Open(), util.ReportInfo(config.Text("Conexão excluída", "Connection deleted"))), true
@@ -115,7 +130,7 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 			if d, ok := a.modelDialog.(interface{ SetSetup(bool) }); ok {
 				d.SetSetup(a.setupActive)
 			}
-			return tea.Batch(a.modelDialog.Open(), func() tea.Msg {
+			return tea.Batch(a.openModelCatalog(msg.Provider, false), func() tea.Msg {
 				if err != nil {
 					return util.InfoMsg{Type: util.InfoTypeWarn, Msg: tools.RedactCredentials(err.Error())}
 				}
@@ -150,7 +165,7 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		a.showInitDialog = false
 		a.showModelDialog = true
 		a.showCommandDialog = false
-		return a.modelDialog.Open(), true
+		return a.openModelCatalog("", false), true
 	case page.OpenSessionsMsg:
 		a.closeSettings()
 		a.showCommandDialog = false
@@ -175,6 +190,42 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 	}
 	return nil, false
 }
+
+// The dialog receives only an in-memory snapshot. View never performs model
+// discovery, usage estimation, credential resolution or a network request.
+func (a *appModel) openModelCatalog(destination models.ModelProvider, resume bool) tea.Cmd {
+	if snapshot, ok := a.modelDialog.(interface {
+		SetActiveContext(models.ModelID, int64, string)
+	}); ok {
+		var id models.ModelID
+		var window int64
+		var source string
+		if a.app != nil && a.app.CoderAgent != nil {
+			if control, ok := a.app.CoderAgent.(agent.UsageControl); ok {
+				if usage, err := control.Usage(context.Background(), a.selectedSession.ID); err == nil {
+					id, window, source = usage.ActiveModel, usage.ActiveContextWindow, usage.ActiveContextSource
+				}
+			} else {
+				model := a.app.CoderAgent.Model()
+				id, window, source = model.ID, model.ContextWindow, model.ContextSource
+			}
+		}
+		snapshot.SetActiveContext(id, window, source)
+	}
+	if resume {
+		if d, ok := a.modelDialog.(interface{ Resume() tea.Cmd }); ok {
+			return d.Resume()
+		}
+	}
+	if destination != "" {
+		if d, ok := a.modelDialog.(interface {
+			OpenForProvider(models.ModelProvider) tea.Cmd
+		}); ok {
+			return d.OpenForProvider(destination)
+		}
+	}
+	return a.modelDialog.Open()
+}
 func (a *appModel) closeSettings() {
 	if a.providerDialog != nil {
 		a.providerDialog.Close()
@@ -184,6 +235,7 @@ func (a *appModel) closeSettings() {
 	}
 	a.showProviderDialog = false
 	a.showIntegrationDialog = false
+	a.providerReturnToModels = false
 }
 func (a *appModel) openSessions() tea.Cmd {
 	items, err := a.app.Sessions.List(context.Background())

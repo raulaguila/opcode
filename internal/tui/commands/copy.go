@@ -6,6 +6,8 @@ import (
 )
 
 var english = map[string][2]string{
+	"search":  {"Find in conversation", "Find text and navigate messages · Alt+F"},
+	"select":  {"Select text", "Select transcript text with the keyboard · Alt+S"},
 	"cancel":  {"Stop activity", "Request cancellation while preserving progress"},
 	"index":   {"Project index", "Status, update, rebuild, pause or clear derived index"},
 	"runtime": {"Runtime diagnostic", "Model, protocol, context, tools and index; credentials omitted"},

@@ -57,7 +57,10 @@ def connection(config, conditions):
     reserve = conditions.get("output_reserve")
     if not isinstance(reserve, int) or reserve < 1:
         raise ValueError("comparison requires an explicit output reserve")
-    return endpoint, api_model, protocol, key, reserve
+    # This alias denotes the same /chat/completions wire protocol, not a switch
+    # from native Ollama. Keep the requested protocol unchanged in observations.
+    adapter_protocol = "openai" if protocol == "chat_completions" else protocol
+    return endpoint, api_model, adapter_protocol, key, reserve
 
 
 def unknown(conditions, reason):

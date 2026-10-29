@@ -1,0 +1,221 @@
+{
+  "rankable": false,
+  "ranking_unavailable": [
+    "codaro case validate trial 1: application/case unavailable",
+    "codaro case validate trial 1: criterion check_passed unavailable",
+    "codaro case validate trial 1: criterion file_contains unavailable",
+    "codaro case validate trial 1: criterion tool_called unavailable",
+    "codaro case validate trial 1: sampling temperature unavailable",
+    "codaro case validate trial 2: application/case unavailable",
+    "codaro case validate trial 2: criterion check_passed unavailable",
+    "codaro case validate trial 2: criterion file_contains unavailable",
+    "codaro case validate trial 2: criterion tool_called unavailable",
+    "codaro case validate trial 2: sampling temperature unavailable",
+    "crush case edit trial 1: application/case unavailable",
+    "crush case edit trial 1: criterion file_contains unavailable",
+    "crush case edit trial 1: criterion file_not_contains unavailable",
+    "crush case edit trial 1: sampling temperature unavailable",
+    "crush case edit trial 2: application/case unavailable",
+    "crush case edit trial 2: criterion file_contains unavailable",
+    "crush case edit trial 2: criterion file_not_contains unavailable",
+    "crush case edit trial 2: sampling temperature unavailable",
+    "crush case error trial 1: application/case unavailable",
+    "crush case error trial 1: criterion file_contains unavailable",
+    "crush case error trial 1: criterion response_contains unavailable",
+    "crush case error trial 1: criterion tool_called unavailable",
+    "crush case error trial 1: sampling temperature unavailable",
+    "crush case error trial 2: application/case unavailable",
+    "crush case error trial 2: criterion file_contains unavailable",
+    "crush case error trial 2: criterion response_contains unavailable",
+    "crush case error trial 2: criterion tool_called unavailable",
+    "crush case error trial 2: sampling temperature unavailable",
+    "crush case localize trial 1: application/case unavailable",
+    "crush case localize trial 1: criterion file_contains unavailable",
+    "crush case localize trial 1: criterion response_contains unavailable",
+    "crush case localize trial 1: criterion tool_called unavailable",
+    "crush case localize trial 1: sampling temperature unavailable",
+    "crush case localize trial 2: application/case unavailable",
+    "crush case localize trial 2: criterion file_contains unavailable",
+    "crush case localize trial 2: criterion response_contains unavailable",
+    "crush case localize trial 2: criterion tool_called unavailable",
+    "crush case localize trial 2: sampling temperature unavailable",
+    "crush case overview trial 1: application/case unavailable",
+    "crush case overview trial 1: criterion response_contains unavailable",
+    "crush case overview trial 1: criterion tool_called unavailable",
+    "crush case overview trial 1: sampling temperature unavailable",
+    "crush case overview trial 2: application/case unavailable",
+    "crush case overview trial 2: criterion response_contains unavailable",
+    "crush case overview trial 2: criterion tool_called unavailable",
+    "crush case overview trial 2: sampling temperature unavailable",
+    "crush case resume trial 1: application/case unavailable",
+    "crush case resume trial 1: criterion response_contains unavailable",
+    "crush case resume trial 1: criterion task_status unavailable",
+    "crush case resume trial 1: criterion tool_called unavailable",
+    "crush case resume trial 1: sampling temperature unavailable",
+    "crush case resume trial 2: application/case unavailable",
+    "crush case resume trial 2: criterion response_contains unavailable",
+    "crush case resume trial 2: criterion task_status unavailable",
+    "crush case resume trial 2: criterion tool_called unavailable",
+    "crush case resume trial 2: sampling temperature unavailable",
+    "crush case validate trial 1: application/case unavailable",
+    "crush case validate trial 1: criterion check_passed unavailable",
+    "crush case validate trial 1: criterion file_contains unavailable",
+    "crush case validate trial 1: criterion tool_called unavailable",
+    "crush case validate trial 1: sampling temperature unavailable",
+    "crush case validate trial 2: application/case unavailable",
+    "crush case validate trial 2: criterion check_passed unavailable",
+    "crush case validate trial 2: criterion file_contains unavailable",
+    "crush case validate trial 2: criterion tool_called unavailable",
+    "crush case validate trial 2: sampling temperature unavailable"
+  ],
+  "version": 1,
+  "comparable_conditions": false,
+  "differences": [
+    "codaro case validate trial 1: temperature differs (baseline \"0\", observed \"null\")",
+    "codaro case validate trial 1: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "codaro case validate trial 2: temperature differs (baseline \"0\", observed \"null\")",
+    "codaro case validate trial 2: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case edit trial 1: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case edit trial 1: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case edit trial 2: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case edit trial 2: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case error trial 1: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case error trial 1: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case error trial 2: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case error trial 2: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case localize trial 1: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case localize trial 1: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case localize trial 2: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case localize trial 2: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case overview trial 1: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case overview trial 1: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case overview trial 2: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case overview trial 2: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case resume trial 1: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case resume trial 1: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case resume trial 2: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case resume trial 2: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case validate trial 1: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case validate trial 1: temperature differs from manifest (requested \"0\", observed \"null\")",
+    "crush case validate trial 2: temperature differs (baseline \"0\", observed \"null\")",
+    "crush case validate trial 2: temperature differs from manifest (requested \"0\", observed \"null\")"
+  ],
+  "runs": [
+    {
+      "phase_metrics": {
+        "context_ms": 411,
+        "provider_ms": 70234,
+        "tools_ms": 106,
+        "first_token_ms": 56519,
+        "first_token_samples": 30,
+        "provider_calls": 31,
+        "tool_calls": 16,
+        "repairs": 5
+      },
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029201118-6e3fcbd3ae24+dirty",
+      "experiment": "nine-final-full-llama31-native",
+      "passed_cases": 12,
+      "failed_cases": 0,
+      "unavailable_cases": 0,
+      "observed_criteria": 40,
+      "passed_criteria": 40,
+      "unavailable_criteria": 0,
+      "duration_ms": 95373,
+      "input_tokens": 56581,
+      "output_tokens": 2059,
+      "retrieval_recall": null,
+      "retrieval_mrr": null,
+      "prompt_versions": [
+        "opcode-2026-10-v5"
+      ],
+      "prompt_profiles": [
+        "reduced"
+      ],
+      "api_models": [
+        "llama3.1:8b"
+      ],
+      "protocols": [
+        "ollama"
+      ],
+      "context_windows": [
+        16384
+      ],
+      "output_reserves": [
+        2048
+      ],
+      "temperatures": [
+        0
+      ],
+      "tool_calls": 29
+    },
+    {
+      "phase_metrics": null,
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "experiment": "nine-final-full-llama31-native",
+      "passed_cases": 7,
+      "failed_cases": 3,
+      "unavailable_cases": 2,
+      "observed_criteria": 34,
+      "passed_criteria": 29,
+      "unavailable_criteria": 6,
+      "duration_ms": 116458,
+      "input_tokens": null,
+      "output_tokens": null,
+      "retrieval_recall": null,
+      "retrieval_mrr": null,
+      "prompt_versions": [],
+      "prompt_profiles": [],
+      "api_models": [
+        "llama3.1:8b"
+      ],
+      "protocols": [
+        "ollama"
+      ],
+      "context_windows": [
+        16384
+      ],
+      "output_reserves": [
+        2048
+      ],
+      "temperatures": [
+        0
+      ],
+      "tool_calls": null
+    },
+    {
+      "phase_metrics": null,
+      "application": "crush",
+      "experiment": "nine-final-full-llama31-native",
+      "passed_cases": 0,
+      "failed_cases": 0,
+      "unavailable_cases": 12,
+      "observed_criteria": 0,
+      "passed_criteria": 0,
+      "unavailable_criteria": 40,
+      "duration_ms": 1153,
+      "input_tokens": null,
+      "output_tokens": null,
+      "retrieval_recall": null,
+      "retrieval_mrr": null,
+      "prompt_versions": [],
+      "prompt_profiles": [],
+      "api_models": [
+        "llama3.1:8b"
+      ],
+      "protocols": [
+        "ollama"
+      ],
+      "context_windows": [
+        16384
+      ],
+      "output_reserves": [
+        2048
+      ],
+      "temperatures": null,
+      "tool_calls": null
+    }
+  ],
+  "notice": "Same fixture hash, case/trial/criteria, requested model, protocol, effective context and output reserve are required. Applications retain different prompts/tools/policies. Missing metrics are null; unavailable criteria are not passed. Rankable concerns only complete declared observations, not general superiority or causal prompt improvements."
+}

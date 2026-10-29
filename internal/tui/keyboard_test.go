@@ -65,6 +65,10 @@ func TestEnhancedKeyboardUsesRealBubbleTeaDecoder(t *testing.T) {
 func TestEnhancedProviderArrowsUseRealDecoder(t *testing.T) {
 	for _, tc := range []struct{ input, want string }{
 		{"\x1b[57350;3u", "alt+left"},
+		{"\x1b[57352;2u", "shift+up"},
+		{"\x1b[57353;2u", "shift+down"},
+		{"\x1b[57356;2u", "shift+home"},
+		{"\x1b[57357;6u", "ctrl+shift+end"},
 		{"\x1b[57351;3u", "alt+right"},
 		{"\x1b[57350;1u", "left"},
 		{"\x1b[57351;2u", "shift+right"},

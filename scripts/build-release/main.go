@@ -3,6 +3,7 @@ package main
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
@@ -27,10 +28,14 @@ func main() {
 func run() error {
 	version := flag.String("version", "dev", "Version embedded in the binary")
 	output := flag.String("output", "dist/local", "Output directory")
-	targets := flag.String("targets", "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64", "Comma-separated OS/architecture pairs")
+	targets := flag.String("targets", "linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64", "Comma-separated OS/architecture pairs")
 	flag.Parse()
 	if !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$`).MatchString(*version) {
 		return fmt.Errorf("invalid release version")
+	}
+	selected, err := releaseTargets(*targets)
+	if err != nil {
+		return err
 	}
 	if err := os.MkdirAll(*output, 0755); err != nil {
 		return err
@@ -41,14 +46,15 @@ func run() error {
 	}
 	defer os.RemoveAll(staging)
 	checksums := []string{}
-	seen := map[string]bool{}
-	for _, target := range strings.Split(*targets, ",") {
+	for _, target := range selected {
 		parts := strings.Split(target, "/")
-		if len(parts) != 2 || (parts[0] != "linux" && parts[0] != "darwin") || (parts[1] != "amd64" && parts[1] != "arm64") || seen[target] {
-			return fmt.Errorf("unsupported or duplicate target %q", target)
+		binaryName := "opcode"
+		format := ".tar.gz"
+		if parts[0] == "windows" {
+			binaryName += ".exe"
+			format = ".zip"
 		}
-		seen[target] = true
-		binary := filepath.Join(staging, "opcode")
+		binary := filepath.Join(staging, binaryName)
 		command := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w -buildid= -X github.com/raulaguila/opcode/internal/version.Version="+*version, "-o", binary, ".")
 		env := []string{}
 		for _, entry := range os.Environ() {
@@ -65,10 +71,16 @@ func run() error {
 		if err := command.Run(); err != nil {
 			return fmt.Errorf("build %s: %w", target, err)
 		}
-		name := "opcode-" + *version + "-" + parts[0] + "-" + parts[1] + ".tar.gz"
+		name := "opcode-" + *version + "-" + parts[0] + "-" + parts[1] + format
 		path := filepath.Join(staging, name)
-		if err := archive(path, binary); err != nil {
-			return err
+		var archiveErr error
+		if parts[0] == "windows" {
+			archiveErr = archiveZIP(path, binary)
+		} else {
+			archiveErr = archive(path, binary)
+		}
+		if archiveErr != nil {
+			return archiveErr
 		}
 		file, err := os.Open(path)
 		if err != nil {
@@ -129,6 +141,54 @@ func archive(path, binary string) error {
 		return err
 	}
 	if err := gz.Close(); err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+func releaseTargets(value string) ([]string, error) {
+	targets := strings.Split(value, ",")
+	seen := map[string]bool{}
+	for _, target := range targets {
+		parts := strings.Split(target, "/")
+		if len(parts) != 2 || (parts[0] != "linux" && parts[0] != "darwin" && parts[0] != "windows") || (parts[1] != "amd64" && parts[1] != "arm64") || seen[target] {
+			return nil, fmt.Errorf("unsupported or duplicate target %q", target)
+		}
+		seen[target] = true
+	}
+	return targets, nil
+}
+func archiveZIP(path, binary string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	writer := zip.NewWriter(file)
+	for _, entry := range []struct {
+		name, path string
+		mode       os.FileMode
+	}{{"opcode.exe", binary, 0755}, {"LICENSE", "LICENSE", 0644}, {"README.md", "README.md", 0644}} {
+		input, err := os.Open(entry.path)
+		if err != nil {
+			return err
+		}
+		header := &zip.FileHeader{Name: entry.name, Method: zip.Deflate}
+		header.SetModTime(time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC))
+		header.SetMode(entry.mode)
+		output, err := writer.CreateHeader(header)
+		if err == nil {
+			_, err = io.Copy(output, input)
+		}
+		closeErr := input.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	if err := writer.Close(); err != nil {
 		return err
 	}
 	return file.Close()

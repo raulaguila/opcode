@@ -24,6 +24,8 @@ var Builtins = []Command{
 	{ID: "models", Title: "Escolher modelo", Description: "Catálogo, favoritos e detalhes"},
 	{ID: "integrations", Title: "Integrações", Description: "Cadastrar/testar MCP ou LSP"},
 	{ID: "sessions", Title: "Conversas", Description: "Buscar, renomear, arquivar e exportar"},
+	{ID: "search", Title: "Buscar na conversa", Description: "Buscar texto e navegar nas mensagens · Alt+F"},
+	{ID: "select", Title: "Selecionar texto", Description: "Selecionar mensagens pelo teclado · Alt+S"},
 	{ID: "queue", Title: "Instruções pendentes", Description: "Editar ou remover mensagens da fila"},
 	{ID: "runtime", Title: "Diagnóstico da execução", Description: "Modelo, protocolo, contexto, ferramentas e índice; sem credenciais"},
 	{ID: "index", Title: "Índice do projeto", Description: "Estado, atualizar, reconstruir, pausar ou limpar o índice"},

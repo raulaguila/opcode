@@ -11,6 +11,6 @@ build:
 
 # Archives/checksums only; no tags, pushes or publication.
 VERSION ?= dev
-TARGETS ?= linux/amd64,linux/arm64,darwin/amd64,darwin/arm64
+TARGETS ?= linux/amd64,linux/arm64,darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
 release-local:
 	go run ./scripts/build-release -version '$(VERSION)' -targets '$(TARGETS)'

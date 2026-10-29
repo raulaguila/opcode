@@ -74,6 +74,13 @@ class DriverTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 adapter.connection(config, job["conditions"])
 
+    def test_chat_completions_alias_keeps_the_requested_wire_identity(self):
+        with fixture() as (job, config):
+            config["models"]["local.test"]["api"] = "chat_completions"
+            job["conditions"]["protocol"] = "chat_completions"
+            self.assertEqual("openai", adapter.connection(config, job["conditions"])[2])
+            self.assertEqual("chat_completions", job["conditions"]["protocol"])
+
     def test_crush_never_enables_execute_or_substitutes_protocol(self):
         with fixture() as (job, config):
             self.assertIn("different wire protocol", adapter.crush(job, config, None)["unavailable"])

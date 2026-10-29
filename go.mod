@@ -34,6 +34,7 @@ require (
 	github.com/spf13/viper v1.20.0
 	github.com/stretchr/testify v1.12.1
 	github.com/tiktoken-go/tokenizer v0.10.0
+	github.com/zalando/go-keyring v0.2.8
 )
 
 require github.com/dlclark/regexp2/v2 v2.5.1 // indirect
@@ -66,10 +67,12 @@ require (
 	github.com/charmbracelet/colorprofile v0.2.3-0.20250311203215-f60798e515dc // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13-0.20250311204145-2c3ea96c31dd // indirect
 	github.com/charmbracelet/x/term v0.2.1
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/disintegration/imaging v1.6.2
 	github.com/dlclark/regexp2 v1.11.4 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.11 // indirect

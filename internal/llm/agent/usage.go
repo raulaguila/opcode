@@ -27,20 +27,25 @@ type PhaseMetrics struct {
 
 type UsageMetrics struct {
 	PhaseMetrics
-	ActiveModel          models.ModelID `json:"active_model,omitempty"`
-	ActiveContextWindow  int64          `json:"active_context_window,omitempty"`
-	ActiveContextSource  string         `json:"active_context_source,omitempty"`
-	StreamModel          models.ModelID `json:"stream_model,omitempty"`
-	StreamActive         bool           `json:"stream_active,omitempty"`
-	StreamOutputBytes    int64          `json:"stream_output_bytes,omitempty"`
-	StreamDurationNS     int64          `json:"stream_duration_ns,omitempty"`
-	LastModel            models.ModelID `json:"last_model,omitempty"`
-	LastOutputTokens     int64          `json:"last_output_tokens,omitempty"`
-	LastOutputDurationNS int64          `json:"last_output_duration_ns,omitempty"`
-	LastDurationSource   string         `json:"last_duration_source,omitempty"`
-	ContextTokens        int64          `json:"context_tokens,omitempty"`
-	ContextWindow        int64          `json:"context_window,omitempty"`
-	ContextEstimated     bool           `json:"context_estimated,omitempty"`
+	Performance            *PerformanceMetrics `json:"performance,omitempty"`
+	ActiveModel            models.ModelID      `json:"active_model,omitempty"`
+	ActiveContextWindow    int64               `json:"active_context_window,omitempty"`
+	ActiveContextSource    string              `json:"active_context_source,omitempty"`
+	StreamModel            models.ModelID      `json:"stream_model,omitempty"`
+	StreamActive           bool                `json:"stream_active,omitempty"`
+	StreamOutputBytes      int64               `json:"stream_output_bytes,omitempty"`
+	StreamDurationNS       int64               `json:"stream_duration_ns,omitempty"`
+	StreamSamples          int                 `json:"stream_samples,omitempty"`
+	StreamSampleTokens     float64             `json:"stream_sample_tokens,omitempty"`
+	StreamSampleDurationNS int64               `json:"stream_sample_duration_ns,omitempty"`
+	StreamCountSource      string              `json:"stream_count_source,omitempty"`
+	LastModel              models.ModelID      `json:"last_model,omitempty"`
+	LastOutputTokens       int64               `json:"last_output_tokens,omitempty"`
+	LastOutputDurationNS   int64               `json:"last_output_duration_ns,omitempty"`
+	LastDurationSource     string              `json:"last_duration_source,omitempty"`
+	ContextTokens          int64               `json:"context_tokens,omitempty"`
+	ContextWindow          int64               `json:"context_window,omitempty"`
+	ContextEstimated       bool                `json:"context_estimated,omitempty"`
 
 	InputTokens       int64 `json:"input_tokens"`
 	OutputTokens      int64 `json:"output_tokens"`
@@ -66,10 +71,18 @@ func (a *agent) Usage(ctx context.Context, id string) (UsageMetrics, error) {
 	a.contextMu.Lock()
 	defer a.contextMu.Unlock()
 	m := a.usageMetrics[id]
+	if performance := a.performance[id]; performance != nil {
+		snapshot := performance.snapshot()
+		m.Performance = &snapshot
+	}
 	m.ActiveModel, m.ActiveContextWindow, m.ActiveContextSource = active.ID, active.ContextWindow, active.ContextSource
 	if stream := a.streamUsages[id]; stream != nil {
 		m.StreamModel, m.StreamActive = stream.model, true
 		m.StreamOutputBytes = stream.outputBytes
+		m.StreamSamples, m.StreamSampleTokens, m.StreamCountSource = stream.samples, stream.tokens, stream.source
+		if stream.samples >= 2 && !stream.lastSample.IsZero() {
+			m.StreamSampleDurationNS = max(int64(0), stream.lastSample.Sub(stream.firstOutput).Nanoseconds())
+		}
 		if !stream.firstOutput.IsZero() {
 			m.StreamDurationNS = time.Since(stream.firstOutput).Nanoseconds()
 		}
@@ -130,6 +143,7 @@ func (a *agent) observePhase(id, phase string, elapsed time.Duration) {
 		m.ToolsMS += ms
 		m.ToolCalls++
 	case "first_token":
+		a.observeFirstTokenLocked(id, elapsed)
 		m.FirstTokenMS += ms
 		m.FirstTokenSamples++
 	case "repair":

@@ -49,6 +49,8 @@ type CriterionResult struct {
 	Passed *bool  `json:"passed"`
 }
 type CaseResult struct {
+	ConditionsUnavailable []string            `json:"conditions_unavailable,omitempty"`
+	CriteriaSHA256        string              `json:"criteria_sha256,omitempty"`
 	PhaseMetrics          *agent.PhaseMetrics `json:"phase_metrics,omitempty"`
 	Temperature           *float64            `json:"temperature"`
 	APIModel              string              `json:"api_model,omitempty"`
@@ -88,16 +90,20 @@ type CaseResult struct {
 	LocalToolNames        []string            `json:"local_tool_names,omitempty"`
 }
 type Report struct {
-	Experiment    string       `json:"experiment,omitempty"`
-	Repeats       int          `json:"repeats,omitempty"`
-	SelectedCases []string     `json:"selected_cases,omitempty"`
-	Version       int          `json:"version"`
-	Mode          string       `json:"mode"`
-	SuiteSHA256   string       `json:"suite_sha256"`
-	Cases         []CaseResult `json:"cases"`
-	Notice        string       `json:"notice"`
+	RequestedConditions *SharedConditions `json:"requested_conditions,omitempty"`
+	ManifestSHA256      string            `json:"manifest_sha256,omitempty"`
+	Experiment          string            `json:"experiment,omitempty"`
+	Repeats             int               `json:"repeats,omitempty"`
+	SelectedCases       []string          `json:"selected_cases,omitempty"`
+	Version             int               `json:"version"`
+	Mode                string            `json:"mode"`
+	SuiteSHA256         string            `json:"suite_sha256"`
+	Cases               []CaseResult      `json:"cases"`
+	Notice              string            `json:"notice"`
 }
 type Options struct {
+	Shared         *SharedConditions
+	ManifestSHA256 string
 	Experiment     string
 	Adapter        *Adapter
 	ContextWindow  int64
@@ -294,7 +300,10 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 		suite.Cases = cases
 	}
 	hash := sha256.Sum256(raw)
-	report := Report{Repeats: repeats, SelectedCases: options.CaseIDs, Version: 1, Mode: "offline_fixture_validation", SuiteSHA256: hex.EncodeToString(hash[:]), Notice: "Offline only validates fixture contracts and safe preparation. Null criteria were not run; this is not an agent quality score."}
+	report := Report{RequestedConditions: options.Shared, ManifestSHA256: options.ManifestSHA256, Repeats: repeats, Version: 1, Mode: "offline_fixture_validation", SuiteSHA256: hex.EncodeToString(hash[:]), Notice: "Offline only validates fixture contracts and safe preparation. Null criteria were not run; this is not an agent quality score."}
+	for _, c := range suite.Cases {
+		report.SelectedCases = append(report.SelectedCases, c.ID)
+	}
 	report.Experiment = options.Experiment
 	if options.Adapter != nil && (!options.Live || options.ContextWindow < 4096) {
 		return report, fmt.Errorf("external adapters require --live and --context-window >=4096 for comparable conditions")
@@ -350,6 +359,18 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 					result.Trial = trial
 				}
 			}
+			result.CriteriaSHA256 = criterionDigest(c.Criteria)
+			if len(result.Criteria) == 0 {
+				for _, criterion := range c.Criteria {
+					result.Criteria = append(result.Criteria, CriterionResult{Kind: criterion.Kind, Path: criterion.Path})
+				}
+			}
+			if options.Live && result.Application == "" {
+				result.Application = "opcode"
+				if options.Adapter != nil {
+					result.Application = options.Adapter.Name
+				}
+			}
 			report.Cases = append(report.Cases, result)
 		}
 	}
@@ -378,7 +399,7 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 		return CaseResult{}, fmt.Errorf("provider configuration must explicitly select agents.coder.model")
 	}
 	for _, role := range []string{"title", "summarizer", "task"} {
-		if agentDefinitions[role] == nil {
+		if agentDefinitions[role] == nil || options.Shared != nil {
 			agentDefinitions[role] = agentDefinitions["coder"]
 		}
 	}
@@ -396,8 +417,16 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 		}
 		for _, definition := range definitions {
 			definition["context_window"] = options.ContextWindow
+			if options.Shared != nil {
+				definition["default_max_tokens"] = options.Shared.OutputReserve
+			}
 		}
 		isolated["models"] = definitions
+	}
+	if options.Shared != nil {
+		for _, definition := range agentDefinitions {
+			definition["maxTokens"] = options.Shared.OutputReserve
+		}
 	}
 	isolated["data"] = map[string]any{"directory": filepath.Join(base, "state")}
 	isolated["security"] = map[string]any{"sandbox": "bubblewrap"}
@@ -439,6 +468,9 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 	if options.ContextWindow > 0 && conditions.OutputReserve > options.ContextWindow/2 {
 		conditions.OutputReserve = options.ContextWindow / 2
 	}
+	if options.Shared != nil {
+		conditions.OutputReserve = options.Shared.OutputReserve
+	}
 	if conditions.Protocol == "" {
 		var connections map[string]struct {
 			API string `json:"api"`
@@ -461,6 +493,7 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 	childCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout(c)+15)*time.Second)
 	defer cancel()
 	command := exec.CommandContext(childCtx, options.Executable, "evaluate-worker", "--job", jobPath)
+	configureEvaluationProcess(command)
 	command.Dir = workspace
 	allowedEnv := map[string]bool{}
 	for _, key := range []string{"providers", "providerProfiles"} {

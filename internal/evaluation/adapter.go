@@ -102,6 +102,7 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 		return CaseResult{}, err
 	}
 	cmd := exec.CommandContext(ctx, a.Command, a.Args...)
+	configureEvaluationProcess(cmd)
 	cmd.Dir = workspace
 	cmd.Env = environment
 	cmd.Stdin = strings.NewReader(string(raw))
@@ -198,6 +199,12 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 	result.Protocol = observed.Conditions.Protocol
 	result.OutputReserve = observed.Conditions.OutputReserve
 	result.ContextWindow = observed.Conditions.ContextWindow
+	if observed.EffectiveContextWindow == nil {
+		result.ConditionsUnavailable = append(result.ConditionsUnavailable, "context_window")
+	}
+	if observed.EffectiveOutputReserve == nil {
+		result.ConditionsUnavailable = append(result.ConditionsUnavailable, "output_reserve")
+	}
 	if observed.EffectiveContextWindow != nil {
 		result.ContextWindow = *observed.EffectiveContextWindow
 	}

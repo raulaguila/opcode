@@ -164,6 +164,22 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 		if contextNote != "" {
 			context += " (" + contextNote + ")"
 		}
+		if !selected.ContextEstimated && selected.ContextSource != "ollama:loaded" && selected.ContextSource != "lmstudio:loaded" && selected.ContextSource != "ollama:parameter" && selected.ContextSource != "configuration" {
+			context += config.Text(" · anunciado", " · advertised")
+		}
+	}
+	effective := config.Text("Efetivo: disponível após ativar", "Effective: available after activation")
+	if selected.ID == m.activeContextModel && m.target == config.AgentCoder {
+		effective = config.Text("Efetivo: ainda não informado", "Effective: not reported yet")
+		if m.activeContextWindow > 0 {
+			effective = fmt.Sprintf(config.Text("Efetivo: %s", "Effective: %s"), tokenLabel(m.activeContextWindow))
+			if selected.ContextWindow > 0 && m.activeContextWindow != selected.ContextWindow {
+				effective += config.Text(" · limite em uso", " · current request limit")
+			}
+			if m.activeContextSource == "ollama:loaded" || m.activeContextSource == "lmstudio:loaded" {
+				effective += config.Text(" · alocado no servidor", " · server allocation")
+			}
+		}
 	}
 	tools := config.Text("Ferramentas: não informado", "Tools: not reported")
 	if selected.SupportsTools != nil {
@@ -175,11 +191,11 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 	}
 	if !m.details {
 		if m.height > 0 && m.height < 18 {
-			return []string{context}
+			return []string{context, effective}
 		}
-		return []string{context, tools}
+		return []string{context, effective, tools}
 	}
-	rows := []string{"ID: " + selected.APIModel, context, tools}
+	rows := []string{"ID: " + selected.APIModel, context, effective, tools}
 	if m.height > 0 && m.height < 18 {
 		return rows
 	}
@@ -280,12 +296,12 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	position += config.Text(" · ✓ atual", " · ✓ current")
 	rows = append(rows, line(position))
-	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+F ★ · Ctrl+D · Esc", "Enter choose · Tab provider · Ctrl+F ★ · Ctrl+D · Esc")
+	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P edita · Ctrl+D · Esc", "Enter choose · Tab provider · Ctrl+P edit · Ctrl+D · Esc")
 	if g.width < 48 {
 		hint = config.Text("↑↓ · Enter · Esc · Ctrl+D", "↑↓ · Enter · Esc · Ctrl+D")
 	}
 	if len(m.filtered) == 0 && !m.loading {
-		hint = config.Text("Tab provedor · Ctrl+R atualiza · Esc volta", "Tab provider · Ctrl+R refresh · Esc back")
+		hint = config.Text("Tab provedor · Ctrl+R tenta · Ctrl+P edita · Esc", "Tab provider · Ctrl+R retry · Ctrl+P edit · Esc")
 	}
 	rows = append(rows, line(hint))
 	if m.details && g.height >= 18 {

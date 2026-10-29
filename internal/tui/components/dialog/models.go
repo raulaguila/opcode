@@ -61,6 +61,9 @@ type modelDialogCmp struct {
 	metadataFor, metadataNote                string
 	selecting                                bool
 	details                                  bool
+	activeContextModel                       models.ModelID
+	activeContextWindow                      int64
+	activeContextSource                      string
 }
 
 var modelKeys = struct {
@@ -77,6 +80,12 @@ var modelKeys = struct {
 
 func (m *modelDialogCmp) Init() tea.Cmd { return nil }
 func (m *modelDialogCmp) Open() tea.Cmd {
+	return m.OpenForProvider("")
+}
+
+// OpenForProvider starts at a saved connection rather than the previous active
+// model. Catalog work remains asynchronous and is cancelled on navigation.
+func (m *modelDialogCmp) OpenForProvider(destination models.ModelProvider) tea.Cmd {
 	m.Close()
 	m.catalogProvider, m.refreshSelection = "", ""
 	m.details = false
@@ -88,6 +97,9 @@ func (m *modelDialogCmp) Open() tea.Cmd {
 	if selected.ProviderProfile != "" {
 		m.provider = models.ModelProvider("profile:" + selected.ProviderProfile)
 	}
+	if destination != "" {
+		m.provider = destination
+	}
 	m.target = config.AgentCoder
 	if !slices.Contains(m.availableProviders, m.provider) {
 		m.provider = ""
@@ -98,6 +110,20 @@ func (m *modelDialogCmp) Open() tea.Cmd {
 	m.query = ""
 	m.search.SetValue("")
 	return m.load()
+}
+
+// Resume refreshes the same catalog after editing its connection and keeps the
+// role, query and highlighted model when they still exist.
+func (m *modelDialogCmp) Resume() tea.Cmd {
+	m.availableProviders = getEnabledProviders(config.Get())
+	if !slices.Contains(m.availableProviders, m.provider) {
+		return m.Open()
+	}
+	return m.load()
+}
+
+func (m *modelDialogCmp) SetActiveContext(id models.ModelID, window int64, source string) {
+	m.activeContextModel, m.activeContextWindow, m.activeContextSource = id, window, source
 }
 func (m *modelDialogCmp) Close() {
 	m.search.Blur()
@@ -223,7 +249,7 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.switchProvider(1)
 		case msg.String() == "ctrl+p":
 			m.Close()
-			return m, util.CmdHandler(OpenProviderDialogMsg{})
+			return m, util.CmdHandler(OpenProviderDialogMsg{Provider: m.provider, ReturnToModels: true})
 		case msg.String() == "ctrl+f":
 			if len(m.filtered) > 0 {
 				if err := config.ToggleFavoriteModel(m.filtered[m.selectedIdx].ID); err != nil {

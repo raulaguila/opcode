@@ -16,7 +16,7 @@ func fieldOptions(label string) []string {
 	}
 	switch {
 	case label == "Authentication":
-		return []string{"none", "api_key", "environment"}
+		return []string{"none", "api_key", "environment", "vault"}
 	case strings.HasPrefix(label, "Backend ("):
 		return []string{"local", "openai", "anthropic", "gemini", "groq", "openrouter", "xai"}
 	case strings.HasPrefix(label, "API ("):
@@ -38,7 +38,7 @@ func settingOptions(path string) []string {
 		return []string{"off", "bell", "auto", "native", "osc"}
 	case "runtime.mode":
 		return []string{"ask", "plan", "execute"}
-	case "preferences.resumeLast", "preferences.showProcess":
+	case "preferences.resumeLast", "preferences.showProcess", "runtime.webSearch":
 		return []string{"false", "true"}
 	}
 	return nil
@@ -75,6 +75,8 @@ func choiceView(field textinput.Model, options []string) string {
 		v = config.Text("Sem autenticação", "No authentication")
 	case "api_key":
 		v = config.Text("Chave direta", "Direct API key")
+	case "vault":
+		v = config.Text("Cofre do sistema", "System credential vault")
 	case "environment":
 		v = config.Text("Variável de ambiente", "Environment variable")
 	case "true":

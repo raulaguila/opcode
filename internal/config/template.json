@@ -46,6 +46,7 @@
     "showProcess": false
   },
   "runtime": {
+    "webSearch": false,
     "mode": "execute"
   },
   "security": {

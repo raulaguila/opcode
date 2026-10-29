@@ -108,6 +108,7 @@ func init() {
 	}}
 	compare.Flags().StringVar(&comparisonOutput, "output", "", "Write private JSON comparison")
 	evaluate.AddCommand(compare)
+	evaluate.AddCommand(newExperimentCommand())
 	evaluate.AddCommand(newRetrievalCommand())
 	var job string
 	worker := &cobra.Command{Use: "evaluate-worker", Hidden: true, Args: cobra.NoArgs, RunE: func(command *cobra.Command, _ []string) error {
@@ -123,6 +124,44 @@ func init() {
 	}}
 	rankingWorker.Flags().StringVar(&rankingJob, "job", "", "Internal bounded ranking evaluation job")
 	rootCmd.AddCommand(rankingWorker)
+}
+
+func newExperimentCommand() *cobra.Command {
+	var output string
+	var live, execution bool
+	command := &cobra.Command{Use: "experiment MANIFEST", Short: "Plan or explicitly execute one shared experiment across applications", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
+		command.SilenceUsage = true
+		experiment, err := evaluation.LoadExperiment(args[0])
+		if err != nil {
+			return err
+		}
+		binary, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		report, err := experiment.Run(command.Context(), binary, output, live, execution)
+		if err != nil {
+			return err
+		}
+		raw, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(command.OutOrStdout(), string(raw))
+		if live && (report.Comparison == nil || !report.Comparison.Rankable) {
+			return fmt.Errorf("experiment cannot be ranked: missing, unavailable or mismatched observations; inspect saved reports")
+		}
+		for _, app := range report.Applications {
+			if live && app.Status != "completed" {
+				return fmt.Errorf("one or more application criteria failed; reports preserved")
+			}
+		}
+		return nil
+	}}
+	command.Flags().BoolVar(&live, "live", false, "Explicitly execute real providers; otherwise only validate and print a plan")
+	command.Flags().BoolVar(&execution, "allow-execution", false, "Allow execution fixtures under their existing sandbox/approval restrictions")
+	command.Flags().StringVar(&output, "output-dir", "", "New directory for live reports; never overwrite prior evidence")
+	return command
 }
 
 func newRetrievalCommand() *cobra.Command {

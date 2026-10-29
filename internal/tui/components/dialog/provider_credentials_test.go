@@ -83,7 +83,8 @@ func TestProviderCredentialModeSwitchNeverCopiesEnvironmentSecret(t *testing.T) 
 	m.fields[m.focus].Blur()
 	m.focus = providerAuthField
 	m.fields[m.focus].Focus()
-	// environment -> none -> api_key uses the real typed selector.
+	// environment -> vault -> none -> api_key uses the real typed selector.
+	m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	m.Update(tea.KeyMsg{Type: tea.KeyRight})
 	require.Equal(t, "api_key", m.fields[providerAuthField].Value())
@@ -132,7 +133,7 @@ func TestProviderCredentialModesFitCompactTerminalsAndKeepDraftOnEscape(t *testi
 			m.fields[providerKeyField].SetValue("fake-private-unsaved-key")
 			m.fields[4].SetValue("UI_VARIABLE")
 			m.fields[9].SetValue("true")
-			for _, mode := range []string{"none", "api_key", "environment"} {
+			for _, mode := range []string{"none", "api_key", "environment", "vault"} {
 				m.fields[providerAuthField].SetValue(mode)
 				for _, advanced := range []bool{false, true} {
 					m.advanced = advanced

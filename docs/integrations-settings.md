@@ -24,6 +24,9 @@ Reinicie o aplicativo para aplicar alterações aos servidores LSP ativos.
 O cadastro permite desativar uma integração sem apagar sua configuração.
 Servidores LSP desativados não são iniciados.
 
+Para chaves de provedores, o formulário também oferece [cofre nativo opcional](native-vault.md),
+chave direta e variável de ambiente. O cofre não altera as permissões das ferramentas.
+
 ## Credenciais por ambiente
 
 Para MCP HTTP/SSE, cada entrada de `headersEnv` aponta para uma variável contendo

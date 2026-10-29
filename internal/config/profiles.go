@@ -66,6 +66,18 @@ func ProviderForProfile(id string) (models.ModelProvider, Provider, error) {
 	return profile.Backend, profile.Provider, nil
 }
 func ProviderForModel(model models.Model) (Provider, error) {
+	p, err := providerForModelMetadata(model)
+	if err != nil {
+		return Provider{}, err
+	}
+	if p.APIKeyRef != "" && p.APIKey == "" {
+		return resolveProvider(model.Provider, p)
+	}
+	return p, nil
+}
+
+// Metadata inspection never unlocks a native vault.
+func providerForModelMetadata(model models.Model) (Provider, error) {
 	if cfg == nil {
 		return Provider{}, fmt.Errorf("config not loaded")
 	}
@@ -85,6 +97,7 @@ func ProviderForModel(model models.Model) (Provider, error) {
 	}
 	return p, nil
 }
+
 func ProfileModelCatalog(id string) func(context.Context) ([]models.Model, error) {
 	backend, p, err := ProviderForProfile(id)
 	if err != nil {
@@ -144,24 +157,33 @@ func PreviewProviderProfile(id string, profile ProviderProfile) (ProviderProfile
 	return profile, nil
 }
 func TestProviderProfile(id string, profile ProviderProfile) func(context.Context) ([]models.Model, error) {
-	resolved, err := PreviewProviderProfile(id, profile)
-	if err != nil {
-		return func(context.Context) ([]models.Model, error) { return nil, err }
-	}
 	return func(ctx context.Context) ([]models.Model, error) {
+		resolved, err := PreviewProviderProfile(id, profile)
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		return models.DiscoverProviderModels(httpclient.WithInsecureTLS(ctx, resolved.BaseURL, resolved.TLSInsecure), resolved.Backend, resolved.BaseURL, resolved.APIKey)
 	}
 }
 func SaveProviderProfile(id string, profile ProviderProfile) error {
+	if cfg == nil {
+		return fmt.Errorf("config not loaded")
+	}
 	resolved, err := PreviewProviderProfile(id, profile)
 	if err != nil {
 		return err
 	}
 	raw := profile
-	if raw.APIKeyEnv != "" {
+	if raw.APIKeyEnv != "" || raw.APIKeyRef != "" {
 		raw.APIKey = ""
 	}
-	err = updateProfileFile(id, func(file *Config) {
+	return persistProviderProfile(id, raw, resolved)
+}
+func persistProviderProfile(id string, raw, resolved ProviderProfile) error {
+	err := updateProfileFile(id, func(file *Config) {
 		if file.ProviderProfiles == nil {
 			file.ProviderProfiles = map[string]ProviderProfile{}
 		}
@@ -236,13 +258,20 @@ func uniqueModels(input []models.ModelID, limit int) []models.ModelID {
 
 // SaveProvider edits an existing legacy connection without migrating its IDs.
 func SaveProvider(backend models.ModelProvider, raw Provider) error {
+	if cfg == nil {
+		return fmt.Errorf("config not loaded")
+	}
 	resolved, err := resolveProvider(backend, raw)
 	if err != nil {
 		return err
 	}
-	if raw.APIKeyEnv != "" {
+	if raw.APIKeyEnv != "" || raw.APIKeyRef != "" {
 		raw.APIKey = ""
 	}
+	return persistProvider(backend, raw, resolved)
+}
+func persistProvider(backend models.ModelProvider, raw, resolved Provider) error {
+	var err error
 	update := func(file *Config) {
 		if file.Providers == nil {
 			file.Providers = map[models.ModelProvider]Provider{}
@@ -297,14 +326,14 @@ func StoredProviderKey(id string, legacy bool) string {
 		}
 		if legacy {
 			if p, ok := file.Providers[models.ModelProvider(id)]; ok {
-				if p.APIKeyEnv != "" {
+				if p.APIKeyEnv != "" || p.APIKeyRef != "" {
 					return ""
 				}
 				return p.APIKey
 			}
 		} else {
 			if p, ok := file.ProviderProfiles[id]; ok {
-				if p.APIKeyEnv != "" {
+				if p.APIKeyEnv != "" || p.APIKeyRef != "" {
 					return ""
 				}
 				return p.APIKey

@@ -67,16 +67,15 @@ curtas de navegação; `view`, `read_lines` ou `read_symbol` estabelecem leitura
 `file_hash` é SHA256 da fonte inteira. `read_lines` deve reenviá-lo em
 `expected_hash` e usar os próximos offset/column, também em linhas longas.
 
-Go usa parser padrão. As gramáticas locais selecionadas cobrem Python, JS, TS,
-TSX, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, SQL, Bash, Lua, Dart, Vue,
-Svelte, HCL/Terraform, YAML, TOML, JSON, HTML, CSS, Scala, Elixir, Erlang, Haskell,
-OCaml, R, Julia, Perl, PowerShell, Clojure, F#, Fortran, Zig, Solidity, Protocol
-Buffers e GraphQL: 42 perfis de sintaxe, contando
-TSX e formatos de configuração separadamente. Cada perfil tem fixture de
-declaração e chunk de índice; isso não certifica toda a sintaxe de uma linguagem.
+A [matriz gerada de linguagens](language-support.md) é a fonte da lista atual,
+com distinção entre sintaxe, fixtures e suporte semântico por LSP.
+
+Go usa parser padrão; os demais perfis usam gramáticas locais selecionadas,
+listadas na matriz gerada. Cada perfil tem fixture de declaração e chunk de
+índice; isso não certifica toda a sintaxe de uma linguagem.
 Os parsers já pertencem à dependência Go existente, sem instalação de runtimes.
-As 16 adições têm fixtures de declaração, intervalo exato de linhas e chunk de
-índice. Formas genéricas como chamadas Elixir, listas Clojure e funções anônimas R
+As fixtures adicionais cobrem declarações, intervalos exatos de linhas e chunks
+de índice. Formas genéricas como chamadas Elixir, listas Clojure e funções anônimas R
 não são tratadas como declarações. Isso não equivale a cobertura de todos os
 dialetos ou resolução semântica; por exemplo, funções R são reconhecidas em
 atribuições diretas a identificadores, e os bindings de OCaml/F# são navegação
@@ -142,3 +141,37 @@ sanitizado. Compare recall/MRR nas suas fixtures antes de adotar: a implementaç
 não presume ganho com qualquer modelo.
 
 A API segue [Ollama /api/embed](https://github.com/ollama/ollama/blob/main/docs/api.md).
+
+## Diagnósticos de preparação e latência
+
+`/runtime` inclui `usage.performance`: chamadas de preparação, chamadas de `view`
+sem reutilização (inclusive falhas), fontes reutilizadas após revalidação, bytes projetados e títulos locais
+sem inferência. A reutilização mantém os controles de permissão e a verificação
+de integridade; não autoriza aproveitar uma citação obsoleta. A revalidação ainda
+pode ler/calcular o hash do arquivo; esses contadores não medem operações de disco.
+
+O tempo até o primeiro conteúdo usa uma janela das últimas 64 tentativas por
+sessão, com última amostra e percentis p50/p95 por posto mais próximo. Inclui
+espera de transporte/provedor e não mede apenas inferência. Reparos e chamadas
+continuam nas métricas cumulativas existentes. Nenhum texto das fontes é
+armazenado nos diagnósticos.
+
+Quando conversa e título usam o mesmo modelo local, o título é obtido da primeira
+mensagem (até 72 caracteres), sem disputar outra inferência com a resposta. Um
+modelo de título selecionado separadamente mantém a geração pelo provedor.
+
+## Velocidade de geração
+
+A estimativa ao vivo exige dois fragmentos não vazios e pelo menos 250 ms entre
+as amostras. O primeiro bloco é excluído: ele pode conter saída acumulada pelo
+servidor. O intervalo usa os instantes dos fragmentos, não as atualizações da
+tela. Um único bloco mantém “Gerando” sem inventar tok/s.
+
+Modelos OpenAI reconhecidos pelo tokenizador já instalado usam contagem local
+compatível, ainda marcada como estimativa. A contagem guarda no máximo 16 KiB
+transitórios, não persistidos, e roda no máximo quatro vezes por segundo. Ao
+atingir o limite ou falhar, usa bytes/4. Nomes parecidos em provedores locais não
+ativam esse tokenizador. A origem aparece em `usage.stream_count_source`.
+
+A medição final informada pelo provedor continua tendo prioridade. Servidores
+que entregam tudo ao final não oferecem amostras para uma velocidade ao vivo.

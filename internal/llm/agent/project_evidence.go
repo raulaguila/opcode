@@ -153,6 +153,7 @@ func (a *agent) bootstrapCall(ctx context.Context, session string, tool tools.Ba
 		response.Metadata = ""
 	}
 	run.toolBytes += len(response.Metadata)
+	a.observePreparation(session, name, reused, len(response.Content)+len(response.Metadata))
 	a.finishMessage(ctx, &assistant, message.FinishReasonToolUse)
 	result, err := a.messages.Create(ctx, session, message.CreateMessageParams{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Name: name, Content: response.Content, Metadata: response.Metadata, IsError: response.IsError}}})
 	if err != nil {

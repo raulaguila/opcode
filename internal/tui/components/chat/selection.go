@@ -22,6 +22,7 @@ type textPoint struct{ x, row int }
 type textSelection struct {
 	anchor, focus   textPoint
 	dragging, moved bool
+	keyboard        bool
 }
 
 func (s textSelection) engaged() bool          { return s.dragging || s.moved }
@@ -85,6 +86,12 @@ func selectionCells(line string, left, right int) (int, int) {
 
 func (m *messagesCmp) selectedCells(row int, line string) (int, int) {
 	if !m.selection.moved {
+		if m.find.open && len(m.find.matches) > 0 {
+			hit := m.find.matches[m.find.selected]
+			if row == hit.row {
+				return selectionCells(line, hit.left, hit.right)
+			}
+		}
 		return 0, 0
 	}
 	a, b := m.selection.anchor, m.selection.focus
@@ -122,7 +129,7 @@ func (m *messagesCmp) SelectedText() string {
 }
 
 func (m *messagesCmp) highlightSelection(content string) string {
-	if !m.selection.moved {
+	if !m.selection.moved && !(m.find.open && len(m.find.matches) > 0) {
 		return content
 	}
 	lines := strings.Split(content, "\n")

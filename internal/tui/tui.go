@@ -126,13 +126,14 @@ type appModel struct {
 	commandDialog     dialog.CommandDialog
 	commands          []dialog.Command
 
-	showModelDialog       bool
-	modelDialog           dialog.ModelDialog
-	setupActive           bool
-	showProviderDialog    bool
-	providerDialog        dialog.ProviderDialog
-	showIntegrationDialog bool
-	integrationDialog     dialog.IntegrationDialog
+	showModelDialog        bool
+	modelDialog            dialog.ModelDialog
+	setupActive            bool
+	showProviderDialog     bool
+	providerReturnToModels bool
+	providerDialog         dialog.ProviderDialog
+	showIntegrationDialog  bool
+	integrationDialog      dialog.IntegrationDialog
 
 	showInitDialog bool
 	initDialog     dialog.InitDialogCmp
@@ -442,6 +443,10 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		return a, a.moveToPage(msg.ID)
 
 	case dialog.ConfirmQuitMsg:
+		if a.pendingProviderNativeOperation() {
+			a.showQuit = false
+			return a, nativeOperationQuitNotice()
+		}
 		if current, ok := a.pages[page.ChatPage].(interface{ PersistDraft() error }); ok {
 			if err := current.PersistDraft(); err != nil {
 				return a, util.ReportError(err)
@@ -744,6 +749,10 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		switch {
 
 		case key.Matches(msg, keys.Quit):
+			if a.pendingProviderNativeOperation() {
+				a.showQuit = false
+				return a, nativeOperationQuitNotice()
+			}
 			a.showQuit = !a.showQuit
 			if a.showHelp {
 				a.showHelp = false
@@ -790,7 +799,7 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			}
 			if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog {
 				a.showModelDialog = true
-				return a, a.modelDialog.Open()
+				return a, a.openModelCatalog("", false)
 			}
 			return a, nil
 		case msg.String() == config.Shortcut("theme"):
@@ -952,6 +961,15 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 	a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(msg)
 	cmds = append(cmds, cmd)
 	return a, tea.Batch(cmds...)
+}
+
+func (a appModel) pendingProviderNativeOperation() bool {
+	pending, ok := a.providerDialog.(interface{ PendingNativeOperation() bool })
+	return ok && pending.PendingNativeOperation()
+}
+
+func nativeOperationQuitNotice() tea.Cmd {
+	return util.ReportInfo(config.Text("Aguarde a operação do cofre do sistema terminar antes de sair. Ela não pode ser cancelada.", "Wait for the system vault operation to finish before quitting. It cannot be cancelled."))
 }
 
 // RegisterCommand adds a command to the command dialog

@@ -13,6 +13,7 @@ func TestComparisonAggregatesOnlyCompletePhaseObservations(t *testing.T) {
 	phase := &agent.PhaseMetrics{ProviderMS: 20, FirstTokenMS: 5, FirstTokenSamples: 1, ProviderCalls: 1, ToolsMS: 3, ToolCalls: 1}
 	c := CaseResult{ID: "one", Application: "opcode", APIModel: "m", Protocol: "ollama", ContextWindow: 16384, OutputReserve: 2048, Status: "passed", Criteria: []CriterionResult{{Kind: "response_contains", Passed: &yes}}, PhaseMetrics: phase}
 	a := Report{Version: 1, Mode: "live_provider", SuiteSHA256: "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24", Cases: []CaseResult{c, c}}
+	a.Cases[0].Trial, a.Cases[1].Trial = 1, 2
 	b := a
 	b.Cases = append([]CaseResult(nil), a.Cases...)
 	for i := range b.Cases {

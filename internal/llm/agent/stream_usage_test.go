@@ -7,10 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"
+	"github.com/tiktoken-go/tokenizer"
 )
 
 func TestStreamUsageCountsOutputNotPacketsOrDuplicatedThinking(t *testing.T) {
@@ -55,6 +57,59 @@ func TestStreamUsageCountsOutputNotPacketsOrDuplicatedThinking(t *testing.T) {
 	m, err = a.Usage(context.Background(), "whole")
 	require.NoError(t, err)
 	require.False(t, m.StreamActive)
+}
+
+func TestStreamSamplesExcludeFirstBurstAndUseEventTimes(t *testing.T) {
+	a := &agent{}
+	s := a.startStreamUsage("s", "local")
+	start := time.Now()
+	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: strings.Repeat("x", 800)}, start)
+	u, err := a.Usage(context.Background(), "s")
+	require.NoError(t, err)
+	require.Equal(t, 1, u.StreamSamples)
+	require.Zero(t, u.StreamSampleTokens)
+	require.Zero(t, u.StreamSampleDurationNS)
+	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: "12345678"}, start.Add(time.Second))
+	u, err = a.Usage(context.Background(), "s")
+	require.NoError(t, err)
+	require.Equal(t, 2.0, u.StreamSampleTokens)
+	require.EqualValues(t, time.Second, u.StreamSampleDurationNS)
+	require.Equal(t, "bytes/4 estimate", u.StreamCountSource)
+	// Polling the UI cannot age a sample or manufacture additional tokens.
+	v, err := a.Usage(context.Background(), "s")
+	require.NoError(t, err)
+	require.Equal(t, u.StreamSampleDurationNS, v.StreamSampleDurationNS)
+	require.Equal(t, u.StreamSampleTokens, v.StreamSampleTokens)
+}
+
+func TestStreamCompatibleTokenizerIsBoundedAndNotInferredForLocalModels(t *testing.T) {
+	a := &agent{}
+	start := time.Now()
+	local := a.startStreamUsage("local", "local.gpt", models.Model{Provider: models.ProviderLocal, APIModel: "gpt-4o"})
+	require.Nil(t, local.codec)
+	s := a.startStreamUsage("s", "openai.gpt", models.Model{Provider: models.ProviderOpenAI, APIModel: "gpt-4o"})
+	require.NotNil(t, s.codec)
+	first, second := "Olá mundo. ", "Ação e código são exemplos. "
+	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: first}, start)
+	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: second}, start.Add(time.Second))
+	counter, err := tokenizer.ForModel("gpt-4o")
+	require.NoError(t, err)
+	initial, err := counter.Count(first)
+	require.NoError(t, err)
+	total, err := counter.Count(first + second)
+	require.NoError(t, err)
+	u, err := a.Usage(context.Background(), "s")
+	require.NoError(t, err)
+	require.Equal(t, float64(total-initial), u.StreamSampleTokens)
+	require.Contains(t, u.StreamCountSource, "compatible")
+	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: strings.Repeat("x", streamTokenizerLimit)}, start.Add(2*time.Second))
+	require.Nil(t, s.codec)
+	require.Empty(t, s.text)
+	u, err = a.Usage(context.Background(), "s")
+	require.NoError(t, err)
+	require.Equal(t, "bytes/4 estimate", u.StreamCountSource)
+	a.finishStreamUsage("s", s)
+	require.Empty(t, s.text)
 }
 
 type usageStreamProvider struct {

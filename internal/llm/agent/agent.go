@@ -91,6 +91,7 @@ type agent struct {
 	tokenObservations map[string]tokenObservation
 	usageMetrics      map[string]UsageMetrics
 	streamUsages      map[string]*streamUsage
+	performance       map[string]*performanceState
 }
 
 func NewAgent(
@@ -197,20 +198,40 @@ func (a *agent) generateTitle(ctx context.Context, sessionID string, content str
 	if content == "" {
 		return nil
 	}
-	if a.titleProvider == nil {
+	a.runMu.Lock()
+	titleProvider := a.titleProvider
+	mainModel := models.Model{}
+	if a.provider != nil {
+		mainModel = a.provider.Model()
+	}
+	a.runMu.Unlock()
+	if titleProvider == nil {
 		return nil
 	}
 	session, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return err
 	}
+	// Avoid queueing a second inference on the same local model merely to name
+	// the conversation. A separately selected title model keeps its old behavior.
+	if mainModel.Provider == models.ProviderLocal && mainModel.ID != "" && titleProvider.Model().ID == mainModel.ID {
+		session.Title = localConversationTitle(content)
+		if session.Title == "" {
+			return nil
+		}
+		_, err := a.sessions.Save(ctx, session)
+		if err == nil {
+			a.observeLocalTitle(sessionID)
+		}
+		return err
+	}
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
 	parts := []message.ContentPart{message.TextContent{Text: content}}
-	titleHistory, err := auxiliaryBudget(config.AgentTitle, a.titleProvider, []message.Message{{Role: message.User, Parts: parts}})
+	titleHistory, err := auxiliaryBudget(config.AgentTitle, titleProvider, []message.Message{{Role: message.User, Parts: parts}})
 	if err != nil {
 		return err
 	}
-	response, err := timedProvider(a.titleProvider).SendMessages(ctx, titleHistory, nil)
+	response, err := timedProvider(titleProvider).SendMessages(ctx, titleHistory, nil)
 	if err != nil {
 		return err
 	}
@@ -581,7 +602,8 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	providerStarted := time.Now()
 	stopProvider := a.startPhase(sessionID, "provider")
 	defer stopProvider()
-	streamUsage := a.startStreamUsage(sessionID, runProvider(a, run).Model().ID)
+	streamModel := runProvider(a, run).Model()
+	streamUsage := a.startStreamUsage(sessionID, streamModel.ID, streamModel)
 	defer a.finishStreamUsage(sessionID, streamUsage)
 	eventChan := timedProvider(runProvider(a, run)).StreamResponse(ctx, requestHistory, a.exposedTools(run))
 

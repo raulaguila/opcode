@@ -122,11 +122,18 @@ func runPTYStreamingSpeedBeforeCompletion(t *testing.T, env ...string) {
 	})
 	releaseFirst()
 	liveRate := regexp.MustCompile(`~[0-9]+(?:\.[0-9]+)? tok/s`)
+	h.wait("first generated data received", 5*time.Second, func(frame string) bool {
+		return strings.Contains(ptyUIFooter(frame), "Generating") && !liveRate.MatchString(ptyUIFooter(frame))
+	})
+	firstSeen := time.Now()
+	h.wait("one buffered burst has no invented rate", 5*time.Second, func(frame string) bool {
+		return time.Since(firstSeen) >= 350*time.Millisecond && strings.Contains(ptyUIFooter(frame), "Generating") && !liveRate.MatchString(ptyUIFooter(frame))
+	})
+	releaseSecond()
 	h.wait("estimated speed before provider completion", 10*time.Second, func(frame string) bool {
 		return liveRate.MatchString(ptyUIFooter(frame)) && !ptyUIIdleFooter(frame)
 	})
 	require.False(t, finalSent.Load(), "speed must be visible before the server sends completion")
-	releaseSecond()
 	h.wait("more output with a live estimate", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "Streaming output while") && liveRate.MatchString(ptyUIFooter(frame))
 	})

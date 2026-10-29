@@ -87,3 +87,8 @@ navegação de volta, contexto começa pelo resumo e sessões mostram recência 
 prévia humana. Código e tabelas usam a largura disponível sem alargar os blocos
 de prosa da mesma resposta. Temas claro/escuro e NO_COLOR mantêm marcadores de
 seleção visíveis. Ver os limites e evidências em docs/evidence.
+
+Os diagnósticos avançados registram preparação, reutilização de fontes e latência
+até o primeiro conteúdo sem guardar os textos. Conversas com o mesmo modelo local
+para título e resposta recebem um título curto da primeira mensagem, evitando uma
+inferência auxiliar. O usuário pode selecionar um modelo separado para títulos.

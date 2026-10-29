@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,6 +19,42 @@ func reportFile(t *testing.T, report Report) string {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, raw, 0600))
 	return path
+}
+
+func TestComparisonDiagnosticsRedactRegisteredCredentialsWithoutHidingDifferences(t *testing.T) {
+	const first = "opaque-fixture-comparison-private-first"
+	const second = "opaque-fixture-comparison-private-second\\with\"quote"
+	config.RegisterRuntimeCredentials(t.Name(), first, second)
+	t.Cleanup(func() { config.RegisterRuntimeCredentials(t.Name()) })
+	yes, zero := true, 0.0
+	c := CaseResult{ID: "one", Application: "opcode", APIModel: first, Protocol: "ollama", ContextWindow: 16384, OutputReserve: 2048, Temperature: &zero, CriteriaSHA256: strings.Repeat("a", 64), Status: "passed", Criteria: []CriterionResult{{Kind: "file_contains", Path: first, Passed: &yes}}}
+	a := Report{Version: 1, Mode: "live_provider", SuiteSHA256: strings.Repeat("a", 64), Cases: []CaseResult{c}}
+	b := a
+	b.Cases = append([]CaseResult(nil), a.Cases...)
+	b.Cases[0].Application, b.Cases[0].APIModel = "codaro", second
+	b.Cases[0].Criteria = []CriterionResult{{Kind: "file_contains", Path: second, Passed: &yes}}
+	b.RequestedConditions = &SharedConditions{APIModel: first, Protocol: "ollama", ContextWindow: 16384, OutputReserve: 2048, Temperature: &zero}
+	r, err := Compare([]string{reportFile(t, a), reportFile(t, b)})
+	require.NoError(t, err)
+	require.False(t, r.Comparable, "redacted display values must never participate in equality")
+	raw, err := json.Marshal(r)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), first)
+	require.NotContains(t, string(raw), second)
+	for _, secret := range []string{first, second} {
+		encoded, err := json.Marshal(secret)
+		require.NoError(t, err)
+		require.NotContains(t, string(raw), string(encoded[1:len(encoded)-1]))
+	}
+	require.Contains(t, strings.Join(r.Differences, "\n"), "api_model differs")
+	require.Contains(t, strings.Join(r.Differences, "\n"), "criteria differs")
+	require.Contains(t, strings.Join(r.Differences, "\n"), "differs from manifest")
+	// Imported malformed cases must not leak their identifiers through errors.
+	b.Cases[0].ID = second
+	b.Cases = append(b.Cases, b.Cases[0])
+	_, err = Compare([]string{reportFile(t, a), reportFile(t, b)})
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), second)
 }
 
 func TestComparisonPreservesUnavailableCriteriaAndRefusesDifferentConditions(t *testing.T) {

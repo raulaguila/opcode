@@ -60,6 +60,7 @@ type Provider struct {
 	TLSInsecure      bool   `json:"tlsInsecure,omitempty"`
 	APIKey           string `json:"apiKey"`
 	APIKeyEnv        string `json:"apiKeyEnv,omitempty"`
+	APIKeyRef        string `json:"apiKeyRef,omitempty"`
 	Disabled         bool   `json:"disabled"`
 	BaseURL          string `json:"baseURL,omitempty"` // OpenAI-compatible local API endpoint
 	API              string `json:"api,omitempty"`
@@ -692,7 +693,7 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 	providerCfg, providerExists := cfg.Providers[provider]
 	if model.ProviderProfile != "" {
 		var err error
-		providerCfg, err = ProviderForModel(model)
+		providerCfg, err = providerForModelMetadata(model)
 		if err != nil {
 			return fmt.Errorf("agent %s: %w", name, err)
 		}
@@ -721,7 +722,7 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			}
 			logging.Info("added provider from environment", "provider", provider)
 		}
-	} else if providerCfg.Disabled || (providerCfg.APIKey == "" && requiresAPIKey(provider)) {
+	} else if providerCfg.Disabled || (providerCfg.APIKey == "" && providerCfg.APIKeyRef == "" && requiresAPIKey(provider)) {
 		// Provider is disabled or has no API key
 		logging.Warn("provider is disabled or has no API key, reverting to default",
 			"agent", name,
@@ -848,7 +849,7 @@ func Validate() error {
 
 	// Validate providers
 	for provider, providerCfg := range cfg.Providers {
-		if providerCfg.APIKey == "" && !providerCfg.Disabled && requiresAPIKey(provider) {
+		if providerCfg.APIKey == "" && providerCfg.APIKeyRef == "" && !providerCfg.Disabled && requiresAPIKey(provider) {
 			fmt.Printf("provider has no API key, marking as disabled %s", provider)
 			logging.Warn("provider has no API key, marking as disabled", "provider", provider)
 			providerCfg.Disabled = true

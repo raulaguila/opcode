@@ -93,9 +93,11 @@ func InspectLanguageSupport(ctx context.Context, detectProject bool) (LanguageSu
 	if err := ctx.Err(); err != nil {
 		return report, err
 	}
-	languages := map[string]int{"go": 0}
-	for name := range localParsers {
-		languages[name] = 0
+	languages := map[string]int{}
+	registered := map[string]LanguageSupportEntry{}
+	for _, entry := range RegisteredLanguageSupport() {
+		languages[entry.Language] = 0
+		registered[entry.Language] = entry
 	}
 	if detectProject {
 		root := config.WorkingDirectory()
@@ -123,7 +125,7 @@ func InspectLanguageSupport(ctx context.Context, detectProject bool) (LanguageSu
 	for _, name := range names {
 		entry := LanguageSupportEntry{Language: name, Recognition: name != "text", LocalParser: name == "go" || localParsers[name] != nil,
 			SemanticReferences: "configured LSP only", ConfiguredServers: []LanguageServerState{}, ConfiguredChecks: []string{}, SuggestedServers: []LanguageServerSuggestion{}, ProjectFiles: languages[name]}
-		entry.ParserFixture = entry.LocalParser
+		entry.ParserFixture = registered[name].ParserFixture
 		if cfg != nil {
 			for key, server := range cfg.LSP {
 				types := server.FileTypes
@@ -194,11 +196,10 @@ func (*languageSupportTool) Run(ctx context.Context, call ToolCall) (ToolRespons
 		if p.Language != "" {
 			return NewTextErrorResponse("summary returns paged profile names; use the full inventory for language filtering"), nil
 		}
-		names := []string{"go"}
-		for name := range localParsers {
-			names = append(names, name)
+		names := []string{}
+		for _, entry := range RegisteredLanguageSupport() {
+			names = append(names, entry.Language)
 		}
-		sort.Strings(names)
 		limit := p.Limit
 		if limit == 0 {
 			limit = 10
@@ -225,6 +226,6 @@ func (*languageSupportTool) Run(ctx context.Context, call ToolCall) (ToolRespons
 	}
 	start := min(p.Offset, len(items))
 	end := min(start+min(limit, 20), len(items))
-	return jsonToolResult(map[string]any{"profile_count": 1 + len(localParsers), "languages": items[start:end], "total": len(items), "next_offset": end, "more": end < len(items), "project_inspected": report.ProjectInspected, "files_inspected": report.FilesInspected, "truncated": report.Truncated, "note": report.Note,
+	return jsonToolResult(map[string]any{"profile_count": len(RegisteredLanguageSupport()), "languages": items[start:end], "total": len(items), "next_offset": end, "more": end < len(items), "project_inspected": report.ProjectInspected, "files_inspected": report.FilesInspected, "truncated": report.Truncated, "note": report.Note,
 		"other_languages": "text search and optional configured LSP", "parser": fmt.Sprintf("Go standard parser and %d selected pure Go gotreesitter grammars", len(localParsers))}), nil
 }

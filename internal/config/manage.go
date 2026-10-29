@@ -57,7 +57,15 @@ func ValidateDocument(path string) error {
 	if c.Security.Sandbox != "" && c.Security.Sandbox != "none" && c.Security.Sandbox != "bubblewrap" {
 		return fmt.Errorf("configuration %s: security.sandbox must be bubblewrap or none", path)
 	}
+	for _, p := range c.Providers {
+		if err := validateVaultDocument(p); err != nil {
+			return fmt.Errorf("configuration %s: %w", path, err)
+		}
+	}
 	for id, p := range c.ProviderProfiles {
+		if err := validateVaultDocument(p.Provider); err != nil {
+			return fmt.Errorf("configuration %s: %w", path, err)
+		}
 		prefix := "providerProfiles." + id
 		if validateProfileID(id) != nil {
 			return fmt.Errorf("configuration %s: providerProfiles contains an invalid profile ID", path)
@@ -177,7 +185,7 @@ func RedactedDocument() map[string]any {
 			parts := strings.Split(path, ".")
 			if len(parts) == 3 {
 				switch parts[2] {
-				case "backend", "disabled", "api", "apiKeyEnv", "contextWindow", "maxTokens", "defaultMaxTokens":
+				case "backend", "disabled", "api", "apiKeyEnv", "apiKeyRef", "contextWindow", "maxTokens", "defaultMaxTokens":
 					allowed = true
 				}
 			}

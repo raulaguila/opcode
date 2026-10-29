@@ -26,13 +26,42 @@ const (
 	providerKeyField  = 11
 )
 
-type OpenProviderDialogMsg struct{ Setup bool }
+type OpenProviderDialogMsg struct {
+	Setup          bool
+	Provider       models.ModelProvider
+	ReturnToModels bool
+}
 type CloseProviderDialogMsg struct{}
 type ProviderSettingsSavedMsg struct {
 	ProviderChanged bool
+	Provider        models.ModelProvider
 	Disabled        bool
 	Deleted         bool
 }
+
+// OpenForProvider edits the exact connection whose catalog is visible. It does
+// not resolve credentials, probe a server or change the selected model.
+func (m *providerDialogCmp) OpenForProvider(provider models.ModelProvider) tea.Cmd {
+	m.Open()
+	id, profile := strings.CutPrefix(string(provider), "profile:")
+	for i, row := range m.rows {
+		if row.id == id && row.legacy != profile {
+			m.selected = i
+			return m.edit(&row)
+		}
+	}
+	return nil
+}
+
+type providerVaultRollbackMsg struct{ err error }
+
+type providerVaultSaveMsg struct {
+	id       string
+	profile  config.ProviderProfile
+	prepared *config.PreparedVaultCredential
+	err      error
+}
+
 type providerTestMsg struct {
 	request uint64
 	count   int
@@ -60,6 +89,9 @@ type providerDialogCmp struct {
 	originalID                     string
 	legacy                         bool
 	originalKey                    string
+	originalKeyRef                 string
+	saving                         bool
+	prepareVault                   func(string, string) (*config.PreparedVaultCredential, error)
 	note                           string
 	noteFull                       bool
 	noteOffset                     int
@@ -74,14 +106,22 @@ type providerDialogCmp struct {
 }
 
 func NewProviderDialogCmp(allowSave ...func() error) ProviderDialog {
-	m := &providerDialogCmp{}
+	m := &providerDialogCmp{prepareVault: config.PrepareVaultCredential}
 	if len(allowSave) > 0 {
 		m.allowSave = allowSave[0]
 	}
 	return m
 }
 func (m *providerDialogCmp) Init() tea.Cmd { return nil }
+
+// PendingNativeOperation is queried by the app before quitting. Native vault
+// writes cannot be cancelled; their result must commit or roll back first.
+func (m *providerDialogCmp) PendingNativeOperation() bool { return m.saving }
+
 func (m *providerDialogCmp) Open() tea.Cmd {
+	if m.saving {
+		return nil
+	}
 	m.Close()
 	m.screen = "list"
 	m.note = "Configure a connection once; choose its model with Ctrl+O."
@@ -112,6 +152,9 @@ func (m *providerDialogCmp) Open() tea.Cmd {
 	return nil
 }
 func (m *providerDialogCmp) Close() {
+	if m.saving {
+		return
+	}
 	m.noteFull = false
 	m.noteOffset = 0
 	if m.cancel != nil {
@@ -145,6 +188,7 @@ func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 	m.legacy = false
 	m.originalID = ""
 	m.originalKey = ""
+	m.originalKeyRef = ""
 	id := "local"
 	profile := config.ProviderProfile{Name: "Local Ollama", Backend: models.ProviderLocal, Provider: config.Provider{BaseURL: "http://127.0.0.1:11434/v1", API: "ollama", ContextWindow: 0, DefaultMaxTokens: 2048}}
 	if row != nil {
@@ -156,13 +200,16 @@ func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 		} else {
 			profile = config.Get().ProviderProfiles[id]
 		}
+		m.originalKeyRef = profile.APIKeyRef
 		m.originalKey = config.StoredProviderKey(id, m.legacy)
-		if profile.APIKeyEnv == "" && m.originalKey == "" {
+		if profile.APIKeyRef == "" && profile.APIKeyEnv == "" && m.originalKey == "" {
 			profile.APIKeyEnv = config.ProviderEnvironmentName(profile.Backend)
 		}
 	}
 	auth := "none"
-	if profile.APIKeyEnv != "" {
+	if profile.APIKeyRef != "" {
+		auth = "vault"
+	} else if profile.APIKeyEnv != "" {
 		auth = "environment"
 	} else if m.originalKey != "" || (profile.Backend != "" && profile.Backend != models.ProviderLocal) {
 		auth = "api_key"
@@ -222,6 +269,11 @@ func (m *providerDialogCmp) readProfile() (string, config.ProviderProfile, error
 		if p.APIKey == "" && !p.Disabled {
 			return "", p, errors.New(config.Text("Informe a chave da API ou escolha outra autenticação", "Enter the API key or choose another authentication method"))
 		}
+	case "vault":
+		p.APIKeyRef = m.originalKeyRef
+		if p.APIKeyRef == "" && value(providerKeyField) == "" {
+			return "", p, errors.New(config.Text("Informe a chave para o cofre nativo", "Enter the API key for the native vault"))
+		}
 	case "environment":
 		p.APIKeyEnv = value(4)
 		if p.APIKeyEnv == "" && !p.Disabled {
@@ -239,6 +291,9 @@ func (m *providerDialogCmp) test() tea.Cmd {
 		m.note = err.Error()
 		return nil
 	}
+	if m.fields[providerAuthField].Value() == "vault" && m.fields[providerKeyField].Value() != "" {
+		p.APIKeyRef, p.APIKey = "", strings.TrimSpace(m.fields[providerKeyField].Value())
+	}
 	m.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
@@ -252,6 +307,9 @@ func (m *providerDialogCmp) test() tea.Cmd {
 	}
 }
 func (m *providerDialogCmp) save() tea.Cmd {
+	if m.saving {
+		return nil
+	}
 	if m.allowSave != nil {
 		if err := m.allowSave(); err != nil {
 			m.note = err.Error()
@@ -260,12 +318,27 @@ func (m *providerDialogCmp) save() tea.Cmd {
 	}
 	var err error
 	disabled := false
+	var destination models.ModelProvider
 	if m.screen == "provider" {
 		var id string
 		var p config.ProviderProfile
 		id, p, err = m.readProfile()
+		destination = models.ModelProvider("profile:" + id)
+		if m.legacy {
+			destination = p.Backend
+		}
 		disabled = p.Disabled
 		if err == nil {
+			if m.fields[providerAuthField].Value() == "vault" {
+				m.Close()
+				m.saving = true
+				secret := strings.TrimSpace(m.fields[providerKeyField].Value())
+				prepare := m.prepareVault
+				return func() tea.Msg {
+					prepared, err := prepare(p.APIKeyRef, secret)
+					return providerVaultSaveMsg{id: id, profile: p, prepared: prepared, err: err}
+				}
+			}
 			if m.legacy {
 				err = config.SaveProvider(p.Backend, p.Provider)
 			} else {
@@ -303,9 +376,58 @@ func (m *providerDialogCmp) save() tea.Cmd {
 	}
 	changed := m.screen == "provider"
 	m.Close()
-	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Disabled: disabled})
+	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Provider: destination, Disabled: disabled})
 }
 func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if result, ok := msg.(providerVaultRollbackMsg); ok {
+		m.saving = false
+		m.note = result.err.Error()
+		return m, nil
+	}
+	if result, ok := msg.(providerVaultSaveMsg); ok {
+		if !m.saving {
+			if result.prepared == nil {
+				return m, nil
+			}
+			m.saving = true
+			return m, rollbackVaultCommand(result.prepared, errors.New("stale vault save discarded; previous configuration preserved"))
+		}
+		err := result.err
+		if err == nil && result.prepared == nil {
+			err = errors.New("native credential was not prepared")
+		}
+		if err == nil && m.allowSave != nil {
+			err = m.allowSave()
+		}
+		destination := models.ModelProvider("profile:" + result.id)
+		if err == nil {
+			if m.legacy {
+				destination = result.profile.Backend
+				err = result.prepared.CommitProvider(result.profile.Backend, result.profile.Provider)
+			} else {
+				err = result.prepared.CommitProviderProfile(result.id, result.profile)
+			}
+		}
+		if err != nil {
+			if result.prepared != nil {
+				return m, rollbackVaultCommand(result.prepared, err)
+			}
+			m.saving = false
+			m.note = err.Error()
+			return m, nil
+		}
+		m.saving = false
+		m.Close()
+		return m, util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: true, Provider: destination, Disabled: result.profile.Disabled})
+	}
+
+	if m.saving {
+		if size, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width, m.height = size.Width, size.Height
+		}
+		return m, nil // Native store operations cannot be cancelled; await completion.
+	}
+
 	if cmd, handled := m.deleteUpdate(msg); handled {
 		return m, cmd
 	}
@@ -560,6 +682,9 @@ func (m *providerDialogCmp) View() string {
 				m.fields[3].Placeholder = "https://server.example/v1"
 			}
 			m.fields[providerKeyField].Placeholder = config.Text("Cole sua chave da API", "Paste your API key")
+			if m.fields[providerAuthField].Value() == "vault" && m.originalKeyRef != "" {
+				m.fields[providerKeyField].Placeholder = config.Text("Vazio mantém a chave no cofre", "Blank keeps the existing vault key")
+			}
 		}
 		count := m.formRows()
 		indices := m.fieldIndices()
@@ -585,6 +710,12 @@ func (m *providerDialogCmp) View() string {
 	note := m.note
 	if note == "" && m.screen == "provider" && m.fields[providerAuthField].Value() == "api_key" {
 		note = config.Text("Ao salvar: chave no JSON local, sem criptografia.", "On save: key in local JSON, unencrypted.")
+	}
+	if note == "" && m.screen == "provider" && m.fields[providerAuthField].Value() == "vault" {
+		note = config.Text("Chave no cofre do SO; apenas referência no JSON.", "Key in the OS vault; only a reference in JSON.")
+	}
+	if m.saving {
+		note = config.Text("Salvando no cofre… aguarde o SO; não é cancelável.", "Saving to vault… wait for the OS; cannot cancel.")
 	}
 	if m.testing {
 		note = "Testing connection… Esc cancels."
@@ -630,7 +761,7 @@ func (m *providerDialogCmp) fieldIndices() []int {
 			indices = []int{0, 1, 2, 3, providerAuthField}
 		}
 		switch m.fields[providerAuthField].Value() {
-		case "api_key":
+		case "api_key", "vault":
 			indices = append(indices, providerKeyField)
 		case "environment":
 			indices = append(indices, 4)
@@ -665,4 +796,10 @@ func (m *providerDialogCmp) dirty() bool {
 		}
 	}
 	return false
+}
+
+// Metadata is committed on the UI owner; all native rollback runs in a command.
+// Keep saving true until its message arrives, including failure to clean up.
+func rollbackVaultCommand(prepared *config.PreparedVaultCredential, cause error) tea.Cmd {
+	return func() tea.Msg { return providerVaultRollbackMsg{err: errors.Join(cause, prepared.Rollback())} }
 }

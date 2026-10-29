@@ -212,3 +212,43 @@ Existing permissions, citation/completion validation, declared evaluation criter
 - Theme personalization uses validated literal color data, explicit save, reversible preview, and existing private config paths. Shared-client work must preserve one execution owner and per-request authorization; never share permission approval silently across independent agent processes.
 
 Validation: focused regressions, go test -race ./..., go vet, CGO-disabled build, PTY Ollama acceptance. Comparative benchmarks use unchanged criteria, isolated fixtures, identical requested model/context/reserves; report unavailable applications explicitly. No inferred superiority.
+
+## Evolução de 29/10 — comparação, navegação e entrega
+
+### Implementation scope
+
+Status: accepted
+
+Scope: the user's instruction to implement the nine recommendations, in order,
+then validate, commit/push and produce a new Codaro/Crush comparison.
+
+1. Comparison: a shared, explicit experiment manifest binds fixtures, criteria,
+   model/protocol/context/output/sampling/repetitions across applications. Missing
+   observations stay unavailable; mismatched or incomplete runs cannot rank.
+2. Small models: expose useful latency/request/repair measurements and avoid
+   redundant source preparation without weakening fresh-source/citation checks.
+3. Chat: keyboard text selection and bounded conversation search with navigation
+   preserve the composer, modal precedence and PTY Ctrl+C.
+4. Connections: consolidate existing provider/catalog/model navigation and show
+   advertised versus effective context; basic and advanced controls stay distinct.
+5. Generation rate: estimate between output samples, excluding the initial burst;
+   use a compatible local tokenizer only when available, otherwise label estimates.
+6. Credentials: optional native vault references; explicit direct/env choices
+   remain. Vault failure preserves prior configuration; no implicit plaintext
+   fallback, credential output or test access to a real user's vault.
+7. Languages: runtime inventory is the source for the current documentation;
+   distinguish registered syntax, exercised parser, LSP and installed toolchains.
+8. Delivery: native Linux/macOS/Windows CI and reproducible terminal smoke paths;
+   unavailable OS/terminal checks are documented, not presented as local passes.
+9. Web search: optional bounded tool, explicit network permission, normal address/
+   redirect protections and untrusted results; no implicit tool approval.
+
+Shared invariants: preserve permission scopes, sandbox, citation receipt/hash
+validation, user configuration and completed side effects. Reuse current runtime,
+registry, messages, config and HTTP policy. No paid inference or model downloads.
+No general performance/quality ranking without comparable measured evidence.
+
+Acceptance: focused regressions for each item; full race/vet/build checks; real
+Ollama/PTY user flow and controlled UI coverage; updated docs/evidence; clean
+commit pushed without force to raulaguila/opcode develop. The final comparison
+identifies observed, untested and unavailable capabilities separately.

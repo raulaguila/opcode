@@ -213,3 +213,30 @@ Para `read_lines`, hashes/snapshots, linguagens locais, índice administrável,
 embeddings e inicialização lazy de LSP, veja [Índice e recuperação](retrieval-runtime.md).
 `patch preview:true` produz uma proposta com hashes/preview_id; aplicar conserva
 aprovação, proteção contra conflitos e recibo da transação.
+
+## Busca web opcional
+
+`web_search` começa desativada. Em Settings → Preferências → Avançado, ative
+**Busca web / Web search**, ou configure `"runtime": {"webSearch": true}` no JSON.
+O toggle não concede aprovação: cada destino HTTP continua sujeito ao controle
+de rede, inclusive redirects. A ferramenta usa o DuckDuckGo HTML, sem chave, e
+não consulta as páginas encontradas automaticamente. O serviço pode limitar,
+bloquear bots ou mudar seu formato; isso gera um erro explícito, sem resultados
+inventados nem fallback silencioso.
+
+O modelo pode carregar o schema com `request_tools` e chamar, por exemplo:
+
+```json
+{"query": "Go official documentation", "limit": 5}
+```
+
+São no máximo 10 resultados, query de 512 bytes, resposta HTTP de 1 MiB e prazo
+de 20 segundos; títulos/snippets e URLs têm limites próprios. Envie apenas
+consultas públicas. As proteções de IP privado/metadata, credenciais e redirects
+são as de `fetch`; ativar a busca não altera permissões, sandbox ou TLS.
+
+Snippets são dados externos não confiáveis. Links não equivalem a páginas lidas
+ou fatos verificados e não satisfazem os recibos de leitura do repositório. A
+validação existente de citações locais continua obrigatória. Use `fetch` para
+consultar uma fonte necessária, com a aprovação normal. Não há pesquisa web
+automática na preparação das perguntas sobre o projeto.

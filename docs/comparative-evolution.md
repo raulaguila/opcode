@@ -58,7 +58,9 @@ continuam valendo. Não há geração, carregamento de pesos ou download.
 
 ## Linguagens e configuração assistida
 
-São 26 perfis locais, incluindo Vue/Svelte com scripts JS/TS e linhas originais.
+Os perfis locais atuais estão no [inventário gerado do runtime](language-support.md),
+com fixtures de declarações/índice e teste de drift. Vue/Svelte usam scripts JS/TS
+e linhas originais. A contagem de perfis não comprova suporte semântico.
 Veja a [matriz de linguagens e limites](retrieval-runtime.md). O índice invalida
 os chunks da política anterior mesmo quando o arquivo não mudou.
 
@@ -76,3 +78,6 @@ Perfis/versões de prompt são observados; o rótulo de experimento não muda pr
 nem demonstra causalidade. Drivers externos têm limites e capacidades explícitos.
 Uma aplicação ausente ou um critério não observável não recebe aprovação.
 Veja [comandos, condições e adapters](evaluation.md).
+
+A [comparação de 29/10 após as nove melhorias](comparison-2026-10-29.md) registra
+novos controles, métodos e limites de observação.

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/httpclient"
 )
 
 type catalogMetadataKey struct{}
@@ -28,7 +30,7 @@ func InspectLocalModelMetadata(ctx context.Context, endpoint, key, id string) (M
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	found := []localModel{{ID: id}}
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: httpclient.Transport(ctx, http.DefaultTransport), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	enrichOllamaContexts(ctx, client, endpoint, key, found, nil)
 	if err := ctx.Err(); err != nil {
 		return Model{}, err

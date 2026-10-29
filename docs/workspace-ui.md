@@ -50,7 +50,8 @@ seletor. Conexões desativadas aparecem identificadas na lista e continuam
 desativadas ao salvar; `Ctrl+G` salva e ativa explicitamente. Credenciais usam referências a variáveis de ambiente, sem exibir seus
 valores. Provedores/perfis e preferências são salvos para a próxima abertura;
 O formulário básico mostra nome, URL, variável da chave e **Conexão ativa**; `Ctrl+A` revela ID,
-backend, protocolo e limites. MCP usa os ajustes na chamada seguinte, enquanto servidores LSP ativos exigem
+backend, protocolo e limites. Nas APIs compatíveis, o formulário básico também
+mostra **TLS inseguro**, desligado por padrão, com aviso ao habilitar. MCP usa os ajustes na chamada seguinte, enquanto servidores LSP ativos exigem
 reinício. Testes MCP/LSP pedem aprovação, têm prazo e encerram o cliente.
 Salvar a configuração, consultar o catálogo e testar uma chamada de ferramenta
 são resultados diferentes. O catálogo não certifica a qualidade do modelo.
@@ -424,3 +425,27 @@ A validação inclui testes de componentes, roteamento pelo aplicativo e PTY com
 Ollama em temas claro, escuro e NO_COLOR. A matriz não certifica todos os terminais
 ou tecnologias assistivas. As evidências estão em
 [evidência dos menus](evidence/2026-10-29-menu-ui-validation.json).
+
+
+## Contexto e velocidade no rodapé
+
+À esquerda do modelo, a barra mostra, por exemplo,
+`~8k/32k ctx · 24.5 tok/s`. Clique na informação de contexto para abrir `/context`.
+O denominador é a janela efetiva do pedido quando disponível; antes disso, usa o
+limite configurado/conhecido do modelo. Não é uma indicação de memória livre.
+`k` representa 1024 tokens, como no seletor de modelos.
+
+O numerador representa a entrada do último pedido: sem `~`, veio do uso informado
+pelo provedor; com `~`, é a estimativa do orçamento. Não soma uma conversa inteira
+sem considerar a recuperação e a compactação. `—` indica dado ainda indisponível.
+A renderização usa dados em memória e não consulta o provedor a cada quadro.
+
+A velocidade é a média da última chamada concluída do modelo atual na sessão,
+não uma taxa instantânea durante a geração. No Ollama, usa `eval_count` dividido
+por `eval_duration`. Quando falta duração do provedor, `~` identifica a média
+observada pelo cliente, incluindo espera pelo primeiro token e transporte, sem
+o tempo posterior de ferramentas ou aprovações. Tokens de saída podem incluir
+argumentos de chamadas de ferramentas; não representam apenas palavras visíveis.
+Sem contagem/duração válidas, ao trocar de modelo/sessão ou durante trabalho,
+a taxa aparece como `—`. Em terminais estreitos, primeiro a velocidade e depois
+o contexto são ocultados para preservar os controles. O input mantém sua altura.

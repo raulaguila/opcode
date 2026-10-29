@@ -22,6 +22,7 @@ var ErrContextLimit = errors.New("context budget exceeded")
 // ContextStatus is an estimate, not a provider tokenizer measurement. Raw
 // payloads are never stored in status or written to logs.
 type ContextStatus struct {
+	measuredForRequest   bool
 	uncalibratedInput    int64
 	ContextSource        string           `json:"context_source"`
 	ActualInputTokens    int64            `json:"actual_input_tokens,omitempty"`

@@ -57,6 +57,7 @@ type Agent struct {
 
 // Provider defines configuration for an LLM provider.
 type Provider struct {
+	TLSInsecure      bool   `json:"tlsInsecure,omitempty"`
 	APIKey           string `json:"apiKey"`
 	APIKeyEnv        string `json:"apiKeyEnv,omitempty"`
 	Disabled         bool   `json:"disabled"`

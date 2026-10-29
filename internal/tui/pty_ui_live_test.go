@@ -251,6 +251,10 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	})
 	require.NotContains(t, h.frame(), "Application validation:", "internal repairs must stay in process details")
 	h.wait("no loading remnants", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Loading conversation") })
+	h.wait("context and measured provider speed in footer", 5*time.Second, func(frame string) bool {
+		footer := ptyUIFooter(frame)
+		return strings.Contains(footer, "/16k ctx") && strings.Contains(footer, "tok/s") && !strings.Contains(footer, "— tok/s")
+	})
 	require.NotContains(t, h.rawOutput(), "UI_LSP_SECRET_SENTINEL", "child stderr must never corrupt the terminal")
 	h.assertComposer()
 	initialHistory := ptyUIMessages(conn)

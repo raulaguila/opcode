@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/httpclient"
 )
 
 // OllamaRuntime is observed allocation, not a promise about free GPU memory.
@@ -45,7 +47,7 @@ func InspectOllama(ctx context.Context, endpoint, key string) ([]OllamaRuntime, 
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
-	client := http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := http.Client{Transport: httpclient.Transport(ctx, http.DefaultTransport), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("Ollama status unavailable")

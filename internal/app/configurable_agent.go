@@ -223,6 +223,15 @@ func (p *configurableCoder) ContextStatus(ctx context.Context, id string) (agent
 	}
 	return agent.ContextStatus{}, errSetupRequired
 }
+
+func (p *configurableCoder) Usage(ctx context.Context, id string) (agent.UsageMetrics, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if c, ok := p.delegate.(agent.UsageControl); ok {
+		return c.Usage(ctx, id)
+	}
+	return agent.UsageMetrics{}, errSetupRequired
+}
 func (p *configurableCoder) CompactContext(ctx context.Context, id string) (agent.ContextStatus, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

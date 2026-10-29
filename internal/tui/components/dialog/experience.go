@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -103,7 +104,16 @@ func (m *providerDialogCmp) experienceUpdate(msg tea.Msg) (tea.Cmd, bool) {
 				}
 				p := config.ProviderPresets[m.selected]
 				cmd := m.edit(nil)
-				m.fields[0].SetValue(p.ID)
+				id := p.ID
+				for n := 2; ; n++ {
+					_, profileExists := config.Get().ProviderProfiles[id]
+					_, legacyExists := config.Get().Providers[models.ModelProvider(id)]
+					if !profileExists && !legacyExists {
+						break
+					}
+					id = fmt.Sprintf("%s-%d", p.ID, n)
+				}
+				m.fields[0].SetValue(id)
 				m.fields[1].SetValue(p.Profile.Name)
 				m.fields[2].SetValue(string(p.Profile.Backend))
 				m.fields[3].SetValue(p.Profile.BaseURL)

@@ -682,6 +682,11 @@
           "name": {
             "maxLength": 128,
             "type": "string"
+          },
+          "tlsInsecure": {
+            "default": false,
+            "description": "Disable certificate and server identity verification only for this explicit HTTPS local/openai OpenAI-compatible connection. Applies to discovery and inference; never follows redirects.",
+            "type": "boolean"
           }
         },
         "required": [
@@ -752,6 +757,11 @@
               "vertexai"
             ],
             "type": "string"
+          },
+          "tlsInsecure": {
+            "default": false,
+            "description": "Disable certificate and server identity verification only for this explicit HTTPS local/openai OpenAI-compatible connection. Applies to discovery and inference; never follows redirects.",
+            "type": "boolean"
           }
         },
         "type": "object"

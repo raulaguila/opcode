@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/raulaguila/opcode/internal/httpclient"
 )
 
 const (
@@ -47,7 +49,7 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: httpclient.Transport(ctx, http.DefaultTransport), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	var found []localModel
 	compatibleCatalog := false
 	// Keep LM Studio's loaded-context metadata when its richer API is available.

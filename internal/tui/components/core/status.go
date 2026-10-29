@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -114,9 +115,58 @@ func (m statusCmp) widths() (left, center, right int) {
 	center = width - left - right
 	return
 }
+
+func compactTokens(n int64) string {
+	if n >= 1024*1024 {
+		return fmt.Sprintf("%.1fM", float64(n)/(1024*1024))
+	}
+	if n >= 1024 {
+		if n%1024 == 0 {
+			return fmt.Sprintf("%dk", n/1024)
+		}
+		return fmt.Sprintf("%.1fk", float64(n)/1024)
+	}
+	return fmt.Sprint(n)
+}
+func (m statusCmp) metrics(state util.FooterState) string {
+	if m.width < 72 || state.ContextWindow <= 0 {
+		return ""
+	}
+	used := "—"
+	if state.ContextKnown {
+		used = compactTokens(state.ContextTokens)
+		if state.ContextEstimated {
+			used = "~" + used
+		}
+	}
+	text := used + "/" + compactTokens(state.ContextWindow) + " ctx"
+	if m.width >= 110 {
+		rate := "—"
+		if !state.Busy && state.TokensPerSecond > 0 && !math.IsNaN(state.TokensPerSecond) && !math.IsInf(state.TokensPerSecond, 0) {
+			rate = fmt.Sprintf("%.1f", state.TokensPerSecond)
+			if state.TokensPerSecond > 9999 {
+				rate = fmt.Sprintf("%.3g", state.TokensPerSecond)
+			}
+			if state.SpeedEstimated {
+				rate = "~" + rate
+			}
+		}
+		text += " · " + rate + " tok/s"
+	}
+	return text
+}
+func (m statusCmp) metricWidths(state util.FooterState) (lw, cw, mw, rw int) {
+	lw, cw, rw = m.widths()
+	mw = min(max(0, cw-12), ansi.StringWidth(m.metrics(state))+2)
+	if m.metrics(state) == "" {
+		mw = 0
+	}
+	cw -= mw
+	return
+}
 func (m statusCmp) ViewFor(state util.FooterState) string {
 	left, center, right := m.labels(state)
-	lw, cw, rw := m.widths()
+	lw, cw, mw, rw := m.metricWidths(state)
 	t := theme.CurrentTheme()
 	segment := func(text string, width int, accent, alignRight bool) string {
 		if width == 0 {
@@ -142,22 +192,25 @@ func (m statusCmp) ViewFor(state util.FooterState) string {
 		}
 		middle = styles.BaseStyle().Foreground(color).Background(t.BackgroundSecondary()).Width(cw).MaxWidth(cw).Render(ansi.Truncate(" "+center, cw, "…"))
 	}
-	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, segment(right, rw, true, true))
+	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, segment(m.metrics(state), mw, false, true), segment(right, rw, true, true))
 	if m.width > 0 {
 		view += styles.BaseStyle().Background(t.BackgroundSecondary()).Render(" ")
 	}
 	return view
 }
 func (m statusCmp) ActionAt(x int, state util.FooterState) string {
-	lw, cw, rw := m.widths()
-	if x < 0 || x >= lw+cw+rw {
+	lw, cw, mw, rw := m.metricWidths(state)
+	if x < 0 || x >= lw+cw+mw+rw {
 		return ""
 	}
 	if x < lw {
 		return "mode"
 	}
-	if x >= lw+cw {
+	if x >= lw+cw+mw {
 		return "models"
+	}
+	if x >= lw+cw {
+		return "context"
 	}
 	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
 		// Only open known panels. A hint can never execute a tool or retry work.

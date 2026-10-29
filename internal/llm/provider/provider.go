@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -33,6 +34,8 @@ const (
 )
 
 type TokenUsage struct {
+	OutputDurationNS    int64
+	DurationSource      string
 	InputTokens         int64
 	OutputTokens        int64
 	CacheCreationTokens int64
@@ -65,6 +68,7 @@ type Provider interface {
 }
 
 type providerClientOptions struct {
+	tlsInsecure     bool
 	apiKey          string
 	baseURL         string
 	model           models.Model
@@ -81,6 +85,10 @@ type providerClientOptions struct {
 
 type ProviderClientOption func(*providerClientOptions)
 
+func WithTLSInsecure(enabled bool) ProviderClientOption {
+	return func(o *providerClientOptions) { o.tlsInsecure = enabled }
+}
+
 type providerClient interface {
 	send(ctx context.Context, messages []message.Message, tools []tools.BaseTool) (*ProviderResponse, error)
 	stream(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent
@@ -95,6 +103,12 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 	clientOptions := providerClientOptions{}
 	for _, o := range opts {
 		o(&clientOptions)
+	}
+	if clientOptions.tlsInsecure {
+		u, err := url.Parse(clientOptions.baseURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || (providerName != models.ProviderLocal && providerName != models.ProviderOpenAI) || (clientOptions.model.API != "" && clientOptions.model.API != "chat_completions" && clientOptions.model.API != "responses") {
+			return nil, fmt.Errorf("insecure TLS requires an explicit HTTPS OpenAI-compatible connection")
+		}
 	}
 	if clientOptions.baseURL != "" {
 		clientOptions.openaiOptions = append(clientOptions.openaiOptions, WithOpenAIBaseURL(clientOptions.baseURL))

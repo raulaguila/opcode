@@ -490,4 +490,5 @@ var ProviderPresets = []ProviderPreset{
 	{"anthropic", ProviderProfile{Name: "Anthropic", Backend: models.ProviderAnthropic, Provider: Provider{APIKeyEnv: "ANTHROPIC_API_KEY"}}},
 	{"gemini", ProviderProfile{Name: "Gemini", Backend: models.ProviderGemini, Provider: Provider{APIKeyEnv: "GEMINI_API_KEY"}}},
 	{"openrouter", ProviderProfile{Name: "OpenRouter", Backend: models.ProviderOpenRouter, Provider: Provider{APIKeyEnv: "OPENROUTER_API_KEY"}}},
+	{"openai-compatible", ProviderProfile{Name: "OpenAI compatible", Backend: models.ProviderLocal, Provider: Provider{API: "chat_completions"}}},
 }

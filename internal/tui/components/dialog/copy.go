@@ -8,6 +8,9 @@ import (
 // Translate only application-owned copy. User text, provider errors and model
 // output are never run through a replacement pass.
 func interfaceCopy(english string) string {
+	if english == "TLS insecure" {
+		return config.Text("TLS inseguro", english)
+	}
 	if strings.HasPrefix(english, "› ") {
 		return "› " + interfaceCopy(strings.TrimPrefix(english, "› "))
 	}

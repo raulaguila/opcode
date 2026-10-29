@@ -44,6 +44,7 @@ func (a *agent) observeInputUsage(session string, m models.Model, u provider.Tok
 	obs.Actual = actual
 	a.tokenObservations[key] = obs
 	status.ActualInputTokens = actual
+	status.measuredForRequest = true
 	status.CalibrationSamples = obs.Samples
 	a.contextStatuses[session] = status
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/raulaguila/opcode/internal/httpclient"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/spf13/viper"
 )
@@ -148,7 +149,7 @@ func TestProviderProfile(id string, profile ProviderProfile) func(context.Contex
 		return func(context.Context) ([]models.Model, error) { return nil, err }
 	}
 	return func(ctx context.Context) ([]models.Model, error) {
-		return models.DiscoverProviderModels(ctx, resolved.Backend, resolved.BaseURL, resolved.APIKey)
+		return models.DiscoverProviderModels(httpclient.WithInsecureTLS(ctx, resolved.BaseURL, resolved.TLSInsecure), resolved.Backend, resolved.BaseURL, resolved.APIKey)
 	}
 }
 func SaveProviderProfile(id string, profile ProviderProfile) error {

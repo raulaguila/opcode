@@ -149,7 +149,7 @@ func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 			profile.APIKeyEnv = config.ProviderEnvironmentName(profile.Backend)
 		}
 	}
-	m.setFields([]string{"Profile ID", "Name", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API base URL", "API key environment variable", "API (empty/chat_completions/responses/ollama)", "Context window (0 uses catalog)", "Default output tokens (0 uses catalog)", "Connection active (true/false)"}, []string{id, profile.Name, string(profile.Backend), profile.BaseURL, profile.APIKeyEnv, profile.API, strconv.FormatInt(profile.ContextWindow, 10), strconv.FormatInt(profile.DefaultMaxTokens, 10), strconv.FormatBool(!profile.Disabled)})
+	m.setFields([]string{"Profile ID", "Name", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API base URL", "API key environment variable", "API (empty/chat_completions/responses/ollama)", "Context window (0 uses catalog)", "Default output tokens (0 uses catalog)", "Connection active (true/false)", "TLS insecure (true/false)"}, []string{id, profile.Name, string(profile.Backend), profile.BaseURL, profile.APIKeyEnv, profile.API, strconv.FormatInt(profile.ContextWindow, 10), strconv.FormatInt(profile.DefaultMaxTokens, 10), strconv.FormatBool(!profile.Disabled), strconv.FormatBool(profile.TLSInsecure)})
 	m.advanced = false
 	m.fields[0].Blur()
 	m.focus = 1
@@ -188,6 +188,10 @@ func (m *providerDialogCmp) readProfile() (string, config.ProviderProfile, error
 	p.Disabled = !active
 	if err != nil {
 		return "", p, fmt.Errorf("connection active must be true or false")
+	}
+	p.TLSInsecure, err = strconv.ParseBool(value(9))
+	if err != nil {
+		return "", p, fmt.Errorf("TLS insecure must be true or false")
 	}
 	return id, p, nil
 }
@@ -500,6 +504,16 @@ func (m *providerDialogCmp) View() string {
 		lines = append(lines, line(config.Text("[Preferências] P · [Integrações] I", "[Preferences] P · [Integrations] I")))
 	} else {
 		// Keep the focused field visible on small terminals; labels remain attached.
+		if m.screen == "provider" {
+			m.fields[3].Placeholder = config.Text("Padrão do provedor", "Provider default")
+			m.fields[4].Placeholder = config.Text("Nome da variável com a chave", "Variable holding the API key")
+			if m.fields[2].Value() == "local" {
+				m.fields[3].Placeholder = "https://server.example/v1"
+				m.fields[4].Placeholder = config.Text("Opcional: nome da variável", "Optional: variable name")
+			} else if m.originalKey != "" {
+				m.fields[4].Placeholder = config.Text("Chave já configurada", "API key already configured")
+			}
+		}
 		count := m.formRows()
 		indices := m.fieldIndices()
 		start := max(0, slices.Index(indices, m.focus)-count+1)
@@ -528,6 +542,9 @@ func (m *providerDialogCmp) View() string {
 	if m.screen == "provider" && m.dirty() {
 		lines = append(lines, line(config.Text("Alterações não salvas", "Unsaved changes")))
 	}
+	if m.screen == "provider" && len(m.fields) > 9 && m.fields[9].Value() == "true" {
+		lines = append(lines, line(config.Text("TLS sem validação: certificado e identidade não verificados.", "Insecure TLS: certificate and server identity are not verified.")))
+	}
 	lines = append(lines, m.noteLines(note)...)
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
@@ -545,7 +562,11 @@ func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {
 		return m.fieldCount()
 	}
-	return max(1, min(m.fieldCount(), (m.height-10)/2))
+	available := m.height - 10
+	if m.screen == "provider" && len(m.fields) > 9 && m.fields[9].Value() == "true" {
+		available--
+	}
+	return max(1, min(m.fieldCount(), available/2))
 }
 
 func (m *providerDialogCmp) fieldCount() int {
@@ -554,6 +575,9 @@ func (m *providerDialogCmp) fieldCount() int {
 
 func (m *providerDialogCmp) fieldIndices() []int {
 	if m.screen == "provider" && !m.advanced {
+		if len(m.fields) > 9 && (m.fields[5].Value() == "chat_completions" || m.fields[5].Value() == "responses" || m.fields[9].Value() == "true") {
+			return []int{1, 3, 4, 9, 8}
+		}
 		return []int{1, 3, 4, 8}
 	}
 	indices := make([]int, len(m.fields))

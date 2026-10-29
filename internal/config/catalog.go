@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"slices"
 
+	"github.com/raulaguila/opcode/internal/httpclient"
 	"github.com/raulaguila/opcode/internal/llm/models"
 )
 
@@ -35,6 +36,12 @@ func configureProviders() error {
 func resolveProvider(backend models.ModelProvider, p Provider) (Provider, error) {
 	if p.Disabled {
 		return p, nil
+	}
+	if p.TLSInsecure {
+		u, err := url.Parse(p.BaseURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || (backend != models.ProviderLocal && backend != models.ProviderOpenAI) || (p.API != "" && p.API != "chat_completions" && p.API != "responses") {
+			return Provider{}, fmt.Errorf("tlsInsecure requires an explicit HTTPS baseURL and an OpenAI-compatible local/openai connection")
+		}
 	}
 	if !knownBackend(backend) {
 		return Provider{}, fmt.Errorf("unsupported backend %q", backend)
@@ -107,7 +114,7 @@ func modelCatalog(id models.ModelProvider, profile string, p Provider) func(cont
 		if p.Disabled {
 			return nil, fmt.Errorf("provider disabled")
 		}
-		found, err := models.DiscoverProviderModels(ctx, id, p.BaseURL, p.APIKey)
+		found, err := models.DiscoverProviderModels(httpclient.WithInsecureTLS(ctx, p.BaseURL, p.TLSInsecure), id, p.BaseURL, p.APIKey)
 		if err != nil {
 			return nil, err
 		}

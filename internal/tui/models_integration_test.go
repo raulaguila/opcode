@@ -14,6 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -112,7 +113,7 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 	last := lines[len(lines)-1]
 	x := strings.Index(last, "old:8b")
 	require.GreaterOrEqual(t, x, 0)
-	program.Send(tea.MouseMsg{X: x + 1, Y: len(lines) - 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	program.Send(tea.MouseMsg{X: ansi.StringWidth(last[:x]) + 1, Y: len(lines) - 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	wait("Provider catalog · 2 models")
 	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("new.model")})
 	frame = wait("Search: new.model")

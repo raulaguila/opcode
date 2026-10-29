@@ -2,10 +2,12 @@ package agent
 
 import (
 	"context"
-	"github.com/raulaguila/opcode/internal/llm/provider"
-	"github.com/raulaguila/opcode/internal/llm/tools"
 	"sync"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/raulaguila/opcode/internal/llm/provider"
+	"github.com/raulaguila/opcode/internal/llm/tools"
 )
 
 // PhaseMetrics contains cumulative observed wall time for one session in this
@@ -25,6 +27,13 @@ type PhaseMetrics struct {
 
 type UsageMetrics struct {
 	PhaseMetrics
+	LastModel            models.ModelID `json:"last_model,omitempty"`
+	LastOutputTokens     int64          `json:"last_output_tokens,omitempty"`
+	LastOutputDurationNS int64          `json:"last_output_duration_ns,omitempty"`
+	LastDurationSource   string         `json:"last_duration_source,omitempty"`
+	ContextTokens        int64          `json:"context_tokens,omitempty"`
+	ContextWindow        int64          `json:"context_window,omitempty"`
+	ContextEstimated     bool           `json:"context_estimated,omitempty"`
 
 	InputTokens       int64 `json:"input_tokens"`
 	OutputTokens      int64 `json:"output_tokens"`
@@ -41,15 +50,31 @@ func (a *agent) Usage(ctx context.Context, id string) (UsageMetrics, error) {
 	}
 	a.contextMu.Lock()
 	defer a.contextMu.Unlock()
-	return a.usageMetrics[id], nil
+	m := a.usageMetrics[id]
+	if status, ok := a.contextStatuses[id]; ok {
+		m.ContextWindow = status.ContextWindow
+		m.ContextTokens = status.EstimatedInputTokens
+		m.ContextEstimated = true
+		if status.measuredForRequest && status.ActualInputTokens > 0 {
+			m.ContextTokens = status.ActualInputTokens
+			m.ContextEstimated = false
+		}
+	}
+	return m, nil
 }
-func (a *agent) observeUsage(id string, u provider.TokenUsage) {
+func (a *agent) observeUsage(id string, u provider.TokenUsage, model ...models.ModelID) {
 	a.contextMu.Lock()
 	defer a.contextMu.Unlock()
 	if a.usageMetrics == nil {
 		a.usageMetrics = map[string]UsageMetrics{}
 	}
 	m := a.usageMetrics[id]
+	if len(model) > 0 {
+		m.LastModel = model[0]
+	}
+	m.LastOutputTokens = u.OutputTokens
+	m.LastOutputDurationNS = u.OutputDurationNS
+	m.LastDurationSource = u.DurationSource
 	m.InputTokens += u.InputTokens + u.CacheReadTokens + u.CacheCreationTokens
 	m.OutputTokens += u.OutputTokens
 	m.CachedInputTokens += u.CacheReadTokens

@@ -132,6 +132,7 @@ type ollamaResponse struct {
 	DoneReason      string          `json:"done_reason"`
 	PromptEvalCount int64           `json:"prompt_eval_count"`
 	EvalCount       int64           `json:"eval_count"`
+	EvalDuration    int64           `json:"eval_duration"`
 	Error           json.RawMessage `json:"error"`
 }
 
@@ -148,7 +149,11 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 		return nil, fmt.Errorf("Ollama response ended without done=true")
 	}
 	response := &ProviderResponse{Content: value.Message.Content, FinishReason: message.FinishReasonEndTurn,
-		Usage: TokenUsage{InputTokens: value.PromptEvalCount, OutputTokens: value.EvalCount}}
+		Usage: TokenUsage{InputTokens: value.PromptEvalCount, OutputTokens: value.EvalCount, OutputDurationNS: value.EvalDuration, DurationSource: "provider"}}
+	if value.EvalDuration <= 0 {
+		response.Usage.DurationSource = ""
+		response.Usage.OutputDurationNS = 0
+	}
 	if value.DoneReason == "length" {
 		response.FinishReason = message.FinishReasonMaxTokens
 	} else if value.DoneReason != "" && value.DoneReason != "stop" {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/raulaguila/opcode/internal/httpclient"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
@@ -32,6 +33,7 @@ func newOpenAIClient(opts providerClientOptions) *openaiClient {
 	}
 	c := &openaiClient{providerOptions: opts, options: options}
 	transport := newAPITransport(options.baseURL)
+	transport.client.Transport = httpclient.Transport(httpclient.WithInsecureTLS(context.Background(), options.baseURL, opts.tlsInsecure), transport.client.Transport)
 	if opts.apiKey != "" {
 		transport.headers.Set("Authorization", "Bearer "+opts.apiKey)
 	}

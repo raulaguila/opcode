@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/raulaguila/opcode/refs/heads/develop/opcode-schema.json",
+  "providerProfiles": {
+    "my-gateway": {
+      "name": "My OpenAI-compatible gateway",
+      "backend": "local",
+      "baseURL": "https://gateway.example/v1",
+      "api": "chat_completions",
+      "tlsInsecure": false,
+      "disabled": true
+    }
+  }
+}

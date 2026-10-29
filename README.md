@@ -3,7 +3,9 @@
 Agente de desenvolvimento em Go para trabalhar em repositórios pelo terminal.
 A interface permite perguntar, planejar e executar com ferramentas protegidas,
 acompanhar comandos ao vivo e enviar novas instruções durante o trabalho.
-O suporte a Ollama inclui o protocolo nativo e APIs locais compatíveis com OpenAI.
+O suporte a Ollama inclui o protocolo nativo e APIs compatíveis com OpenAI.
+Servidores compatíveis personalizados usam uma conexão própria, com TLS inseguro
+opcional por conexão. Veja [a configuração](docs/model-selection.md#servidor-openai-compatible-e-tls).
 
 O código deste fork é desenvolvido em
 [github.com/raulaguila/opcode](https://github.com/raulaguila/opcode), na branch
@@ -67,7 +69,7 @@ Sem modelo configurado, a abertura interativa inicia a configuração guiada. `N
 uma conexão com um preset; `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha então o modelo
 pelo seletor. A última etapa oferece começar a conversar; detalhes da configuração
 e testes opcionais com confirmação ficam em uma ação secundária. `/setup` reabre
-o fluxo. A barra inferior reúne modo, comandos e modelo; processo e lateral
+o fluxo. A barra inferior reúne modo, comandos, contexto, velocidade da última resposta e modelo; processo e lateral
 começam recolhidos. `~/.opcode/config.json` é reutilizado entre projetos;
 `./.opcode/config.json` pode acrescentar ou sobrescrever configurações do projeto.
 Os formatos anteriores `.opcode.json` e `.opencode.json` continuam reconhecidos

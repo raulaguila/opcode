@@ -245,7 +245,7 @@ abre o [cadastro de integrações MCP e LSP](integrations-settings.md).
 ## Presets e opções avançadas
 
 Em `/settings`, `N` abre presets de Ollama, LM Studio, OpenAI, Anthropic, Gemini e
-OpenRouter. `↑↓` escolhe e `Enter` prepara o formulário; nada é salvo ou conectado
+OpenRouter e **OpenAI compatible**. `↑↓` escolhe e `Enter` prepara o formulário; nada é salvo ou conectado
 nesse passo. Revise o ID, endereço e referência da chave antes de salvar.
 `Ctrl+A` mostra/oculta protocolo, limites de contexto/saída e desativação.
 Os modelos não são baixados automaticamente.
@@ -279,3 +279,31 @@ o diagnóstico informa isso sem carregá-lo. Não há redirects com credenciais.
 O próximo pedido pode mudar a alocação; um limite aprendido após erro de memória
 pode reduzir a janela da requisição. Use `/context` para o orçamento efetivo e
 `/recalibrate` para remover esse limite, sem repetir ferramentas.
+
+
+## Servidor OpenAI compatible e TLS
+
+Em `/settings` → `N`, escolha **OpenAI compatible**, preencha a URL completa
+(normalmente terminada em `/v1`) e, quando necessário, o **nome** da variável de
+ambiente com a chave. Esse preset usa `backend: "local"` para o protocolo genérico,
+inclusive quando o servidor é remoto. O campo não recebe a chave literal.
+`Ctrl+T` consulta o catálogo; salvar não executa uma inferência de teste.
+
+Veja [o exemplo de configuração](../examples/openai-compatible.example.json).
+Adicione seu perfil a `providerProfiles` no arquivo ativo, ajustando o endereço.
+O exemplo fica desativado para não consultar um endereço fictício. Ative-o com
+`disabled: false` depois de configurar. Se a API exige autenticação, acrescente
+`"apiKeyEnv": "MINHA_CHAVE_GATEWAY"` e defina essa variável no ambiente.
+
+**TLS inseguro** começa desligado. Para um servidor HTTPS com certificado que
+você decidiu não validar, habilite esse controle no formulário ou use
+`"tlsInsecure": true` no perfil. Ele desativa a verificação do certificado e da
+identidade do servidor apenas nessa conexão, tanto no catálogo quanto nas
+requisições do modelo. Não altera a validação das demais conexões. O transporte
+fica restrito à origem HTTPS configurada; redirects não enviam suas credenciais
+a outro servidor. A opção exige URL HTTPS explícita, backend `local` ou `openai`
+e API compatível (`chat_completions`, `responses` ou padrão). O protocolo nativo
+`ollama` não aceita essa opção.
+
+A [revisão da janela de provedores](provider-ui-review.md) descreve as melhorias
+de UX incluídas e as próximas prioridades. Veja também a [validação desta mudança](evidence/2026-10-29-footer-provider-tls-validation.json).

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/raulaguila/opcode/internal/httpclient"
 )
 
 var ErrCatalogUnsupported = errors.New("this provider uses the configured model catalog")
@@ -66,7 +68,7 @@ func DiscoverProviderModels(ctx context.Context, provider ModelProvider, endpoin
 	}
 	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: httpclient.Transport(ctx, http.DefaultTransport), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	found := []Model{}
 	seen := map[string]bool{}
 	// Bound pagination as well as the size of individual pages and the total list.

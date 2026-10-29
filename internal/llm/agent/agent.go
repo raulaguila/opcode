@@ -637,6 +637,12 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		}
 		if event.Type == provider.EventComplete {
 			completed = true
+			if event.Response != nil && event.Response.Usage.OutputDurationNS <= 0 {
+				copy := *event.Response
+				copy.Usage.OutputDurationNS = time.Since(providerStarted).Nanoseconds()
+				copy.Usage.DurationSource = "observed"
+				event.Response = &copy
+			}
 		}
 		if processErr := a.processEvent(ctx, sessionID, &assistantMsg, event); processErr != nil {
 			a.finishMessage(ctx, &assistantMsg, message.FinishReasonCanceled)
@@ -881,7 +887,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 }
 
 func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.Model, usage provider.TokenUsage) error {
-	a.observeUsage(sessionID, usage)
+	a.observeUsage(sessionID, usage, model.ID)
 	sess, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get session: %w", err)
@@ -1168,6 +1174,7 @@ func createAgentProviderFor(agentName config.AgentName, agentConfig config.Agent
 	}
 	opts := []provider.ProviderClientOption{
 		provider.WithAPIKey(providerCfg.APIKey),
+		provider.WithTLSInsecure(providerCfg.TLSInsecure),
 		provider.WithModel(model),
 		provider.WithSystemMessage(prompt.GetAgentPrompt(agentName, model.Provider)),
 		provider.WithMaxTokens(maxTokens),

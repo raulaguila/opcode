@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-29",
+  "source_base": "463c5fe9fbf5c9399d2eca910d30ea4e95de6a92",
+  "source_revision": "Accompanying commit",
+  "scope": "Footer effective context and output rate; custom OpenAI-compatible provider; per-connection insecure TLS; provider form review",
+  "binary_sha256": "d595265ee6f95518dbdd2d62edc764f6d167db77c286883e678ce034b2627d12",
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_changed": false,
+    "evaluation_criteria_changed": false,
+    "dependencies_added": false,
+    "global_tls_verification_disabled": false
+  },
+  "checks": {
+    "go_test_race_all": "passed: go test -race -p 2 ./...",
+    "go_vet_all": "passed",
+    "go_vet_integration_tui": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "tls": {
+    "status": "passed",
+    "server": "loopback httptest HTTPS with self-signed certificate",
+    "catalog": "rejected by default; accepted only for opted-in profile; rejected again after disabling",
+    "inference": "same opt-in isolation verified for chat completion and streaming",
+    "origin_isolation": "cross-origin request blocked before target handler",
+    "ui": "compatible preset, unique connection ID, persisted flag, default off, warning and geometry at 60x20 verified",
+    "limitations": [
+      "No external custom gateway or user credentials used",
+      "Native Ollama TLS override is unsupported; opt-in applies to compatible APIs only"
+    ]
+  },
+  "footer": {
+    "effective_context": "uses cached effective request window; configured/catalog capacity is initial fallback",
+    "token_counts": "provider usage or marked estimate; previous measurement is not relabeled as current",
+    "rate": "provider generation duration when supplied; otherwise marked client-observed request duration",
+    "isolation": "rate scoped to session and selected model; no previous result presented as live while busy",
+    "geometry": "single row; width and click coordinates verified from 36 to 180 columns"
+  },
+  "live": {
+    "status": "passed",
+    "provider": "local Ollama",
+    "model": "llama3.1:8b",
+    "sandbox": "bubblewrap",
+    "main_flow_seconds": 23.22,
+    "suite_seconds": 26.418,
+    "coverage": [
+      "real factual project response and evidence flow",
+      "effective /16k context and non-empty tok/s in footer",
+      "question and user answer",
+      "separate LSP probe approval",
+      "one exact bash approval; no replay",
+      "live terminal output before process exit",
+      "PTY user input",
+      "queued follow-up instruction",
+      "Unicode paste and composer resize",
+      "model/mode dialogs and focus",
+      "compact dark/light/no-color rendering"
+    ],
+    "credentials_inherited": false,
+    "source_fixtures_unchanged": true
+  },
+  "development_findings": [
+    "Configurable agent proxy needed to forward UsageControl for footer metrics to work in the shipped application",
+    "Mouse assertion used byte offsets; corrected it to terminal cell widths",
+    "New page test required explicit offline configuration initialization",
+    "First final suite attempt hit temporary-directory disk quota; repeated successfully with workspace cache and temporary directory"
+  ],
+  "review": "../provider-ui-review.md",
+  "limits": [
+    "Output speed is the last completed model call, not instantaneous streaming telemetry",
+    "UI review is code/test based, not a user study or accessibility certification",
+    "Broader model-quality comparison was not rerun because prompts, citation gates and evaluation criteria were unchanged"
+  ]
+}

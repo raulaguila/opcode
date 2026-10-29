@@ -241,6 +241,7 @@ func generateSchema() map[string]any {
 					"description": "API key for the provider",
 				},
 				"apiKeyEnv":        map[string]any{"type": "string", "description": "Environment variable containing the API key. Only the variable name is saved."},
+				"tlsInsecure":      map[string]any{"type": "boolean", "default": false, "description": "Disable certificate and server identity verification only for this explicit HTTPS local/openai OpenAI-compatible connection. Applies to discovery and inference; never follows redirects."},
 				"api":              map[string]any{"type": "string", "enum": []string{"", "chat_completions", "responses", "ollama"}, "description": "Default transport for discovered models. ollama is available only for local."},
 				"contextWindow":    map[string]any{"type": "integer", "minimum": 0, "description": "Default context limit for discovered models; zero keeps server/catalog metadata."},
 				"defaultMaxTokens": map[string]any{"type": "integer", "minimum": 0, "description": "Default output limit for discovered models; zero keeps server/catalog metadata."},

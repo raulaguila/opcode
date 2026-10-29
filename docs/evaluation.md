@@ -99,6 +99,19 @@ O teste não instala modelos. Usa `llama3.1:8b` por padrão e admite
 `OPCODE_LIVE_OLLAMA_MODEL` e `LOCAL_ENDPOINT`. O teste é opt-in; a suíte comum
 não faz inferência nem acessa uma API externa.
 
+Para as seis tarefas originais, incluindo edição, citação e retomada de plano:
+
+```sh
+OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \
+OPCODE_EVAL_BINARY=/tmp/opcode-eval \
+go test -tags=integration ./internal/evaluation \
+  -run '^TestLiveOllamaWorkflowEvaluation$' -count=1 -timeout=12m
+```
+
+Esse teste permite as ferramentas mutáveis somente nas fixtures descartáveis,
+com os mesmos controles do runner. Não altera prompts, critérios ou timeouts
+da suíte. É uma avaliação real opt-in, não um teste determinístico da aplicação.
+
 ## Comparar mudanças e repetir os mesmos critérios
 
 ```sh

@@ -271,6 +271,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		return a.err(fmt.Errorf("failed to create user message: %w", err))
 	}
 	run.startMessageID = userMsg.ID
+	run.turnMessageID = userMsg.ID
 	if resumingRequest(content) {
 		for i := len(msgs) - 1; i >= 0; i-- {
 			if msgs[i].Role == message.User && !strings.HasPrefix(msgs[i].Content().Text, "Application validation:") && !resumingRequest(msgs[i].Content().Text) {
@@ -307,6 +308,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	}
 	signatures := make([][32]byte, 0, 10)
 	repairs := 0
+	citationRepairs := 0
 	contextRetries := 0
 	for {
 		if run.steps >= run.limits.MaxSteps {
@@ -467,6 +469,23 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 				continue
 			}
 		}
+		if problem := missingSourceCitation(run, msgHistory, agentMessage.Content().Text); problem != "" {
+			if citationRepairs >= 1 {
+				return a.err(fmt.Errorf("source citation remains missing after repair; read evidence preserved"))
+			}
+			citationRepairs++
+			correction, err := a.createUserMessage(ctx, sessionID, "Application validation: "+problem, nil)
+			if err != nil {
+				return a.err(err)
+			}
+			msgHistory = append(msgHistory, correction)
+			a.runMu.Lock()
+			if ctx.Err() == nil {
+				run.accepting = true
+			}
+			a.runMu.Unlock()
+			continue
+		}
 		outcome := "completed"
 		if a.workflow != nil {
 			if task, err := a.workflow.Get(ctx, sessionID); err == nil && (task.Status == "blocked" || task.Status == "partial" || task.Status == "planned") {
@@ -588,6 +607,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	}
 	toolResults := make([]message.ToolResult, len(assistantMsg.ToolCalls()))
 	toolCalls := assistantMsg.ToolCalls()
+	batchReads := batchSourceReads(toolCalls)
 	for i, toolCall := range toolCalls {
 		if len(toolCalls) > 16 || run.toolBytes >= run.limits.ToolBudget {
 			for j := i; j < len(toolCalls); j++ {
@@ -642,6 +662,10 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 					Content:    fmt.Sprintf("Tool unavailable in %s mode or not loaded: %s. Use get_tools_catalog/request_tools.", run.mode, toolCall.Name),
 					IsError:    true,
 				}
+				continue
+			}
+			if mutationAwaitingSource(toolCall, batchReads) {
+				toolResults[i] = message.ToolResult{ToolCallID: toolCall.ID, Content: "No change applied: this response also requests the file's source. Read the actual tool result first, then call the edit/write/patch tool in the next response using exact source text. Do not repeat the read and edit together.", IsError: true}
 				continue
 			}
 			before := ""

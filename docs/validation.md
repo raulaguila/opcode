@@ -186,3 +186,51 @@ que tratava “não use bash” como obrigação de chamar bash; há regressão 
 Veja o [relatório sanitizado](evidence/2026-10-28-runtime-roadmap.json). Esse
 resultado limita a conclusão: os recursos e guardas funcionam, mas não há prova
 de melhora geral do llama3.1:8b nem de superioridade entre aplicativos.
+
+## Correção de edição, retomada e citação — 28/10/2026
+
+A reprodução das três falhas usou as mesmas fixtures e API nativa do
+`llama3.1:8b`, com janela de 16.384 e saída reservada de 2.048 tokens. O diagnóstico
+identificou:
+
+- O modelo agrupava leitura e edição na mesma resposta, sem ter recebido a
+  fonte, e substituía o nome da função pelo texto de uma expressão. A alteração
+  dependente agora recebe um recibo explícito sem mudança; a leitura real volta
+  ao modelo antes de ele gerar os argumentos da edição seguinte.
+- No segundo turno do plano, o Ollama misturava `final_answer` com operações
+  como `get_task`. O parser rejeitava o lote inteiro. Agora descarta a resposta
+  prematura e encaminha somente as operações reais para os controles normais.
+  Schemas, validação do plano, permissões e estado `planned` continuam exigidos.
+- A resposta identificava a operação errada, mas omitia o arquivo. `view` agora
+  inclui o caminho no texto do resultado; uma guarda limitada pede a citação
+  ausente usando recibos de fonte bem-sucedidos do turno, sem fabricar referências.
+
+O prompt passou para `opcode-2026-10-v3`. O arquivo da suíte de avaliação não foi
+alterado: hash `08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24`.
+Com os seis pedidos e critérios originais, a repetição em processos e workspaces
+novos passou **6/6 em cada uma de três execuções (18/18)**. O
+[relatório sanitizado](evidence/2026-10-28-ollama-workflow-repair.json) registra
+critérios, ferramentas, tokens, estados e durações; os relatórios anteriores
+permanecem como histórico. A edição passa pelos critérios de conteúdo e termina
+`partial`, pois essa fixture não configura checks; não há recibo de teste
+inventado nem conclusão completa automática.
+
+Os testes determinísticos cobrem edição prematura em ambas as ordens do lote,
+leituras paginadas, patches, arquivos independentes, limites de reparo de citação,
+recusa de leituras antigas/erros como prova, negações e preferências explícitas,
+respostas Ollama mistas e recusa de argumentos inválidos. A suíte completa com
+`-race`, `go vet` e build com `CGO_ENABLED=0` passaram. O teste opt-in
+`TestLiveOllamaWorkflowEvaluation` também executa as seis fixtures originais
+diretamente no Ollama, separado dos testes determinísticos.
+
+O mesmo código também passou nos fluxos reais de primeira pergunta com contexto
+automático de 131.072 tokens, repositório grande com janela manual de 16.384 e
+pedido composto de recuperação. O PTY real passou com aprovação pela TUI,
+saída ao vivo, entrada humana e nova instrução enquanto o agente aguardava;
+Bubblewrap permaneceu ativo e a ordem persistida das mensagens foi conferida.
+
+Esses resultados comprovam os critérios declarados dessas tarefas, não a
+correção semântica de toda a prosa. A guarda de referências verifica presença de
+caminho, não valida automaticamente a linha citada; checks reais e revisão do
+resultado continuam necessários. Não foi feita comparação de qualidade com
+outros aplicativos nesta correção.

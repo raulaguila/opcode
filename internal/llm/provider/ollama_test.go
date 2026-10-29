@@ -81,7 +81,8 @@ func TestOllamaRejectsIncompleteOrInvalidStreams(t *testing.T) {
 		`{"message":{"tool_calls":[{"function":{"name":"inspect","arguments":"{}"}}]},"done":true,"done_reason":"stop"}`,
 		`{"error":"private details"}`,
 		`not json`,
-		`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"ok"}}},{"function":{"name":"inspect","arguments":{}}}]},"done":true,"done_reason":"stop"}`,
+		`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"ok"}}},{"function":{"name":"inspect","arguments":"{}"}}]},"done":true,"done_reason":"stop"}`,
+		`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"one"}}},{"function":{"name":"final_answer","arguments":{"answer":"two"}}}]},"done":true,"done_reason":"stop"}`,
 	} {
 		c := newOllamaClient(testOptions(models.ProviderLocal), "http://local.invalid/v1")
 		c.transport.client = wireHTTP(t, 200, "application/x-ndjson", body, nil)
@@ -92,6 +93,35 @@ func TestOllamaRejectsIncompleteOrInvalidStreams(t *testing.T) {
 		for _, event := range events {
 			require.NotEqual(t, EventComplete, event.Type)
 		}
+	}
+}
+
+func TestOllamaMixedAnswerWaitsForRealToolResults(t *testing.T) {
+	for _, answerFirst := range []bool{true, false} {
+		answer := `{"function":{"name":"final_answer","arguments":{"answer":"PREMATURE_SUCCESS"}}}`
+		operation := `{"id":"saved-call","function":{"name":"get_task","arguments":{}}}`
+		calls := operation + "," + answer
+		if answerFirst {
+			calls = answer + "," + operation
+		}
+		body := `{"message":{"tool_calls":[` + calls + `]},"done":true,"done_reason":"stop"}`
+		c := newOllamaClient(testOptions(models.ProviderLocal), "http://local.invalid/v1")
+		decoded, err := c.decodeResponse([]byte(body))
+		require.NoError(t, err)
+		require.Empty(t, decoded.Content)
+		require.Equal(t, message.FinishReasonToolUse, decoded.FinishReason)
+		require.Len(t, decoded.ToolCalls, 1)
+		require.Equal(t, "get_task", decoded.ToolCalls[0].Name)
+		require.Equal(t, "saved-call", decoded.ToolCalls[0].ID)
+		c.transport.client = wireHTTP(t, 200, "application/x-ndjson", body, nil)
+		events := collectEvents(t, c.stream(context.Background(), userMessages(), nil))
+		for _, event := range events {
+			require.NotContains(t, event.Content, "PREMATURE_SUCCESS")
+		}
+		last := events[len(events)-1]
+		require.Equal(t, EventComplete, last.Type)
+		require.Equal(t, decoded.ToolCalls, last.Response.ToolCalls)
+		require.Empty(t, last.Response.Content)
 	}
 }
 

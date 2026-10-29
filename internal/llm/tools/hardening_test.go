@@ -85,6 +85,24 @@ func TestLargeFileSlicesAndLongLines(t *testing.T) {
 	_, _, err = readTextFile(context.Background(), path, -1, 1)
 	require.Error(t, err)
 }
+
+func TestViewResultCarriesQuotedPathAndLineNumbersForCitations(t *testing.T) {
+	dir := workspaceTestDir(t)
+	path := filepath.Join(dir, "source\"name.py")
+	require.NoError(t, os.WriteFile(path, []byte("def add(a, b):\n    return a - b\n"), 0600))
+	response, err := SecureTool(NewViewTool(nil), nil).Run(toolContext(), toolInput(ViewParams{FilePath: path, Offset: 1, Limit: 1}))
+	require.NoError(t, err)
+	require.False(t, response.IsError)
+	first, _, ok := strings.Cut(response.Content, "\n")
+	require.True(t, ok)
+	var quoted string
+	require.NoError(t, json.Unmarshal([]byte(strings.TrimPrefix(first, "File: ")), &quoted))
+	relative, err := filepath.Rel(config.WorkingDirectory(), path)
+	require.NoError(t, err)
+	require.Equal(t, filepath.ToSlash(relative), quoted)
+	require.Contains(t, response.Content, "2|    return a - b")
+	require.NotContains(t, response.Content, "1|def add")
+}
 func TestAtomicWriteRejectsStaleApprovalAndPreservesMode(t *testing.T) {
 	path := filepath.Join(workspaceTestDir(t), "file.txt")
 	require.NoError(t, os.WriteFile(path, []byte("before"), 0750))

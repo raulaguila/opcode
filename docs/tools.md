@@ -77,6 +77,15 @@ Leitura dentro do workspace é permitida para arquivos comuns. Caminhos externos
 
 `view` aceita arquivos grandes e retorna uma janela de até 2000 linhas. `offset` é baseado em zero. Linhas extensas são limitadas sem exigir que o scanner mantenha toda a linha na memória. Arquivos usados para edição têm limite de 16 MiB.
 
+O resultado inclui `File: "caminho"` e números de linha, para manter a identidade
+da fonte mesmo em templates de modelo que não exibem os argumentos da chamada.
+O caminho fica relativo ao projeto quando possível e é escapado como string
+JSON. Os números de linha são apresentação, não parte do texto usado em `edit`.
+Uma leitura e sua edição dependente não podem ser geradas no mesmo lote: o
+modelo precisa receber a fonte antes de propor a alteração. A aplicação retorna
+um recibo sem mudança para essa edição prematura; a chamada seguinte conserva
+as aprovações normais.
+
 `grep` usa `rg --json`, sem configuração externa do ripgrep, com argumentos delimitados, ordem por caminho e limite de 100 correspondências durante a leitura. `glob` usa a listagem delimitada por NUL do ripgrep. Isso preserva nomes com espaços e `:`. Sem ripgrep, existe um fallback de percurso local, que omite diretórios comuns, arquivos ocultos, credenciais e links; as regras avançadas de `.gitignore` dependem do ripgrep. Ambos os caminhos respeitam cancelamento e limites. Buscas sem ripgrep examinam no máximo 10000 candidatos.
 
 `write`, `edit` e `patch` preparam arquivos temporários no mesmo diretório e preservam os bits de permissão de arquivos existentes. O conteúdo esperado é revalidado após a autorização e antes da instalação. Mudanças de vários arquivos são serializadas dentro do aplicativo, preparadas antes da instalação e restauradas de backups se uma etapa falhar. Destinos conflitantes são rejeitados.

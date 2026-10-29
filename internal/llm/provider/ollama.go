@@ -143,6 +143,7 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 	} else if value.DoneReason != "" && value.DoneReason != "stop" {
 		return nil, fmt.Errorf("Ollama returned an unexpected completion reason")
 	}
+	finalAnswer := ""
 	for _, call := range value.Message.ToolCalls {
 		if response.FinishReason == message.FinishReasonMaxTokens || call.Function.Name == "" || !ollamaArgumentsValid(call.Function.Arguments) {
 			return nil, fmt.Errorf("Ollama returned an incomplete tool call")
@@ -151,17 +152,22 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 			var args struct {
 				Answer string `json:"answer"`
 			}
-			if len(value.Message.ToolCalls) != 1 || json.Unmarshal(call.Function.Arguments, &args) != nil || strings.TrimSpace(args.Answer) == "" {
-				return nil, fmt.Errorf("invalid Ollama final answer or mixed answer and tool calls")
+			if finalAnswer != "" || json.Unmarshal(call.Function.Arguments, &args) != nil || strings.TrimSpace(args.Answer) == "" {
+				return nil, fmt.Errorf("invalid Ollama final answer")
 			}
-			response.Content += args.Answer
-			return response, nil
+			finalAnswer = args.Answer
+			continue
 		}
 		response.ToolCalls = append(response.ToolCalls, message.ToolCall{ID: cmp.Or(call.ID, uuid.NewString()), Name: call.Function.Name,
 			Input: string(call.Function.Arguments), Type: "function", Finished: true})
 	}
 	if len(response.ToolCalls) > 0 {
+		// A premature answer cannot conclude a batch of operations whose results
+		// the model has not seen. Discard it; the ordinary agent loop executes
+		// the real calls under its existing mode/approval checks, then asks again.
 		response.FinishReason = message.FinishReasonToolUse
+	} else {
+		response.Content += finalAnswer
 	}
 	return response, nil
 }

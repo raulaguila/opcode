@@ -168,7 +168,14 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	}
 
 	notifyLspOpenFile(ctx, filePath, v.lspClients)
-	output := "<file>\n"
+	// Providers do not all retain tool-call arguments in their templates. Keep
+	// the inspected path in the result itself, alongside its numbered source.
+	sourcePath := filePath
+	if relative, err := filepath.Rel(config.WorkingDirectory(), filePath); err == nil && filepath.IsLocal(relative) {
+		sourcePath = relative
+	}
+	quotedPath, _ := json.Marshal(filepath.ToSlash(sourcePath))
+	output := "File: " + string(quotedPath) + "\n<file>\n"
 	// Format the output with line numbers
 	output += addLineNumbers(content, params.Offset+1)
 

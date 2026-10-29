@@ -243,6 +243,33 @@ Ao encerrar uma edição simples sem checks disponíveis, o runtime registra
 converte esse estado em conclusão. Tarefas com verificações ou planos ativos
 continuam sujeitas aos seus critérios e ao reparo limitado.
 
+Leitura e edição dependente do mesmo arquivo precisam estar em respostas
+distintas do modelo. Se uma resposta pedir `view`/`read_lines`/`read_symbol` e
+também editar esse arquivo, a leitura retorna normalmente e a alteração recebe
+um erro explícito de **nenhuma mudança aplicada**, antes de pedir aprovação.
+O modelo deve observar a fonte e gerar os argumentos corretos na resposta
+seguinte. Leituras e edições de arquivos independentes continuam agrupáveis;
+a edição posterior mantém a autorização e a verificação de conteúdo atual.
+Isso cobre `edit`, `write`, patches e operações de edição LSP identificáveis
+pelo arquivo de entrada.
+
+Se a API nativa do Ollama misturar `final_answer` com operações reais, a resposta
+prematura é descartada. Somente as operações seguem para o runtime, sob os modos
+e permissões normais; seus resultados voltam ao modelo antes da resposta final.
+Argumentos incompletos, JSON inválido e respostas finais duplicadas continuam
+recusados. O conteúdo de planos permanece fornecido pelo modelo e validado pelo
+Store.
+
+Pedidos de explicação/localização no modo Perguntar têm uma tentativa limitada
+de reparo quando a resposta omite todos os caminhos de fonte consultados. A
+referência deve vir de leitura bem-sucedida; buscas, erros e caminhos citados
+somente em prosa não servem como recibo. O runtime pede a referência ao modelo,
+sem acrescentar uma citação fabricada à resposta. A guarda verifica presença
+de caminho, não a correção semântica da explicação nem o número de linha.
+Pedidos explícitos sem referências desativam essa preferência, inclusive quando
+enviados como nova instrução durante o turno. Leituras de uma solicitação antiga
+não são promovidas a evidência atual pela retomada dos requisitos de ferramentas.
+
 ## Requisitos e diagnóstico
 
 Pedidos explícitos `use/chame/call NOME_DA_TOOL` geram requisitos observáveis de

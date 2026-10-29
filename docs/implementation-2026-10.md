@@ -43,6 +43,12 @@ código ou prompt FSL do Crush foi incorporado.
 - As seis tarefas gerais foram repetidas com os critérios originais: **3/6**
   passaram nesta execução. O relatório sanitizado está em
   [evidência](evidence/2026-10-28-runtime-roadmap.json).
+- Correção posterior de edição, retomada e citação: **6/6 em três execuções**,
+  com o mesmo hash da suíte e critérios preservados. Veja a
+  [validação](validation.md#correção-de-edição-retomada-e-citação--28102026) e o
+  [novo relatório](evidence/2026-10-28-ollama-workflow-repair.json). O resultado
+  anterior permanece como linha de base; nenhuma conclusão de qualidade geral
+  é inferida dessas fixtures.
 
 ## Limites da conclusão
 

@@ -1,0 +1,645 @@
+{
+  "repeats": 3,
+  "version": 1,
+  "mode": "live_provider",
+  "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+  "cases": [
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 1032,
+      "output_tokens": 107,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 3312,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 5561,
+      "output_tokens": 291,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 7253,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "tool_failures": {
+        "edit:current_read_required": 1
+      },
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 6312,
+      "output_tokens": 162,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 5641,
+      "id": "edit",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "partial",
+      "requires_changes": true,
+      "changes_verified": true,
+      "tool_names": [
+        "edit",
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 1931,
+      "output_tokens": 66,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 2383,
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "tool_failures": {
+        "view:missing_resource": 1
+      },
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 3111,
+      "output_tokens": 32,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 2709,
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 8542,
+      "output_tokens": 337,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 1,
+      "duration_ms": 10206,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "planned",
+      "tool_names": [
+        "finish_task",
+        "get_task",
+        "update_plan",
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 1032,
+      "output_tokens": 107,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 3447,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 6811,
+      "output_tokens": 251,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 6762,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "tool_failures": {
+        "edit:current_read_required": 1
+      },
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 5196,
+      "output_tokens": 142,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 5307,
+      "id": "edit",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "partial",
+      "requires_changes": true,
+      "changes_verified": true,
+      "tool_names": [
+        "edit",
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 1928,
+      "output_tokens": 41,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 1932,
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "tool_failures": {
+        "view:missing_resource": 1
+      },
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 3108,
+      "output_tokens": 32,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 2686,
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 8553,
+      "output_tokens": 348,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 2,
+      "duration_ms": 10180,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "planned",
+      "tool_names": [
+        "finish_task",
+        "get_task",
+        "update_plan",
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 1032,
+      "output_tokens": 91,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 3,
+      "duration_ms": 2811,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 5561,
+      "output_tokens": 291,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 3,
+      "duration_ms": 7294,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 3,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "tool_failures": {
+        "edit:current_read_required": 1
+      },
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 6312,
+      "output_tokens": 188,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 3,
+      "duration_ms": 6093,
+      "id": "edit",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "partial",
+      "requires_changes": true,
+      "changes_verified": true,
+      "tool_names": [
+        "edit",
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 1926,
+      "output_tokens": 66,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 3,
+      "duration_ms": 2371,
+      "id": "validate",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "check_passed",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 2,
+      "task_status": "idle",
+      "tool_names": [
+        "run_checks",
+        "view"
+      ]
+    },
+    {
+      "tool_failures": {
+        "view:missing_resource": 1
+      },
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 3108,
+      "output_tokens": 32,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 3,
+      "duration_ms": 2685,
+      "id": "error",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 1,
+      "task_status": "idle",
+      "tool_names": [
+        "view"
+      ]
+    },
+    {
+      "application": "opcode",
+      "context_window": 16384,
+      "input_tokens": 8463,
+      "output_tokens": 291,
+      "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+      "trial": 3,
+      "duration_ms": 9211,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_calls": 4,
+      "task_status": "planned",
+      "tool_names": [
+        "finish_task",
+        "get_task",
+        "update_plan",
+        "view"
+      ]
+    }
+  ],
+  "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+}

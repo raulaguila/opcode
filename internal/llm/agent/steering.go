@@ -38,12 +38,14 @@ type generationRun struct {
 	toolLeases       map[string]int
 	requiredCalls    map[string]int
 	startMessageID   string
+	turnMessageID    string
 	available        []tools.BaseTool
 	limits           config.RuntimeConfig
 	steps, toolBytes int
 	hookRuns         int
 	provider         provider.Provider
 	requiresPlan     bool
+	requiresCitation bool
 }
 
 func (a *agent) Run(ctx context.Context, sessionID, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {

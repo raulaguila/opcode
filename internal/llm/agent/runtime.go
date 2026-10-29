@@ -175,6 +175,13 @@ func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
 }
 func (a *agent) prefetchTools(run *generationRun, content string) {
 	requiredToolCalls(content, run)
+	if run.mode == workflow.Ask {
+		if citationOptOut(content) {
+			run.requiresCitation = false
+		} else if requiresSourceCitation(content) {
+			run.requiresCitation = true
+		}
+	}
 	if a.workflow == nil {
 		return
 	}

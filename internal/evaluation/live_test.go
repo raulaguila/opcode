@@ -18,6 +18,17 @@ import (
 // This test uses a separately built production binary. No fake provider is
 // present in the evaluator; it is deliberately opt-in and loopback-only.
 func TestLiveOllamaOverviewEvaluation(t *testing.T) {
+	liveOllamaEvaluation(t, []string{"overview"}, false)
+}
+
+func TestLiveOllamaWorkflowEvaluation(t *testing.T) {
+	// Keep the bundled prompts, fixtures, time limits and criteria unchanged.
+	// These are model-quality gates, separate from deterministic runtime tests.
+	liveOllamaEvaluation(t, nil, true)
+}
+
+func liveOllamaEvaluation(t *testing.T, caseIDs []string, allowExecution bool) {
+	t.Helper()
 	if appconfig.Environment("OPCODE_LIVE_TESTS") != "1" || appconfig.Environment("OPCODE_LIVE_OLLAMA") != "1" {
 		t.Skip("requires OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 and a production OPCODE_EVAL_BINARY")
 	}
@@ -44,16 +55,12 @@ func TestLiveOllamaOverviewEvaluation(t *testing.T) {
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "provider.json")
 	require.NoError(t, os.WriteFile(path, raw, 0600))
-	suite, _, err := Load("")
-	require.NoError(t, err)
-	suite.Cases = suite.Cases[:1]
-	suite.Cases[0].TimeoutSeconds = 600
-	raw, err = json.Marshal(suite)
+	suite, raw, err := Load("")
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 11*time.Minute)
 	defer cancel()
-	report, err := Run(ctx, suite, raw, Options{Live: true, ProviderConfig: path, Executable: binary})
+	report, err := Run(ctx, suite, raw, Options{Live: true, AllowExecution: allowExecution, CaseIDs: caseIDs, ProviderConfig: path, Executable: binary})
 	require.NoError(t, err)
-	require.False(t, Failed(report), "declared overview criteria failed: %+v", report)
+	require.False(t, Failed(report), "declared fixture criteria failed: %+v", report)
 	require.Equal(t, "live_provider", report.Mode)
 }

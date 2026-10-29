@@ -94,7 +94,7 @@ func TestPreferencesAndPermissionControlsUseSelectedLocale(t *testing.T) {
 	permissionUI.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	permissionUI.SetPermissions(permission.PermissionRequest{ID: "pt", ToolName: tools.BashToolName, Params: tools.BashPermissionsParams{Command: "echo hello"}})
 	require.Contains(t, permissionUI.View(), "Permitir (a)")
-	require.Contains(t, permissionUI.View(), "Recusar (d)")
+	require.Contains(t, permissionUI.View(), "Recusar (Esc/d)")
 	config.Get().TUI.Language = "en"
 	require.Contains(t, permissionUI.View(), "Allow (a)")
 }

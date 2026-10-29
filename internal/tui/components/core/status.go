@@ -94,6 +94,12 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	}
 	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
 		center = strings.Join(strings.Fields(m.info.Msg), " ")
+		if m.info.Type == util.InfoTypeWarn {
+			center = config.Text("Aviso: ", "Warning: ") + center
+		}
+		if m.info.Type == util.InfoTypeError {
+			center = config.Text("Erro: ", "Error: ") + center
+		}
 	}
 	return
 }
@@ -152,6 +158,14 @@ func (m statusCmp) ActionAt(x int, state util.FooterState) string {
 	}
 	if x >= lw+cw {
 		return "models"
+	}
+	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
+		// Only open known panels. A hint can never execute a tool or retry work.
+		for _, action := range []string{"integrations", "context", "settings", "models", "error"} {
+			if strings.Contains(m.info.Msg, "/"+action) {
+				return action
+			}
+		}
 	}
 	if state.Pending > 0 {
 		return "queue"

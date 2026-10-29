@@ -57,3 +57,12 @@ func TestFooterAdvertisesOnlyConfirmedEnhancedNewline(t *testing.T) {
 	updated, _ := m.Update(util.EnhancedKeyboardMsg{Supported: true})
 	require.Contains(t, ansi.Strip(updated.View()), "Shift+Enter")
 }
+
+func TestWarningClickFollowsVisibleSafeResolution(t *testing.T) {
+	m := statusCmp{width: 100, info: util.InfoMsg{Type: util.InfoTypeWarn, Msg: "LSP unavailable; see /integrations"}}
+	state := util.FooterState{Busy: true, Pending: 2}
+	require.Equal(t, "integrations", m.ActionAt(25, state))
+	require.Contains(t, ansi.Strip(m.ViewFor(state)), "Warning:")
+	m.info.Msg = "See /retry" // Clicking a hint must never resume tool execution.
+	require.Equal(t, "queue", m.ActionAt(25, state))
+}

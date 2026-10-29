@@ -555,6 +555,10 @@
           "supports_attachments": {
             "type": "boolean"
           },
+          "supports_tools": {
+            "description": "Optional provider-reported tool capability; omitted means unknown. Does not grant tool permissions.",
+            "type": "boolean"
+          },
           "thinking_mode": {
             "enum": [
               "enabled",

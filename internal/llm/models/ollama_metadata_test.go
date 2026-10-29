@@ -88,3 +88,28 @@ func TestOptionalOllamaMetadataFailureKeepsEstimatedCatalog(t *testing.T) {
 		})
 	}
 }
+
+func TestOllamaToolsCapabilityUsesOnlyReportedMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		name, extra      string
+		known, supported bool
+	}{
+		{"unknown", "", false, false}, {"reported", `,"capabilities":["completion","tools"]`, true, true}, {"absent", `,"capabilities":[]`, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			old := http.DefaultTransport
+			t.Cleanup(func() { http.DefaultTransport = old })
+			http.DefaultTransport = discoveryTransport(func(req *http.Request) (*http.Response, error) {
+				require.Equal(t, "/api/show", req.URL.Path, "metadata must never generate or load")
+				body := `{"model_info":{"general.architecture":"llama","llama.context_length":131072}` + tc.extra + `}`
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: req}, nil
+			})
+			model, err := InspectLocalModelMetadata(context.Background(), "http://local.invalid/v1", "", "llama3.1:8b")
+			require.NoError(t, err)
+			require.Equal(t, tc.known, model.SupportsTools != nil)
+			if tc.known {
+				require.Equal(t, tc.supported, *model.SupportsTools)
+			}
+		})
+	}
+}

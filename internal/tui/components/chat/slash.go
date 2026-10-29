@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -27,7 +28,10 @@ type slashState struct {
 	dismissed string
 }
 
-func slashOptions(value string) ([]slashOption, bool) {
+type CommandContextMsg struct{ Priorities []string }
+
+func slashOptions(value string) ([]slashOption, bool) { return slashOptionsWith(value, nil) }
+func slashOptionsWith(value string, priorities []string) ([]slashOption, bool) {
 	value = strings.TrimLeft(value, " \t")
 	if !strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\r\n") || strings.Contains(value[1:], "/") {
 		return nil, false
@@ -35,7 +39,12 @@ func slashOptions(value string) ([]slashOption, bool) {
 	query := strings.ToLower(value)
 	var options []slashOption
 	if query == "/" {
-		for _, id := range []string{"new", "models", "settings", "files", "terminal", "sessions", "commands"} {
+		seen := map[string]bool{}
+		for _, id := range append(append([]string{}, priorities...), "new", "models", "settings", "files", "terminal", "sessions", "commands") {
+			if seen[id] || len(options) >= 7 {
+				continue
+			}
+			seen[id] = true
 			for _, cmd := range commands.Builtins {
 				if cmd.ID == id {
 					cmd = commands.Localized(cmd)
@@ -65,10 +74,11 @@ func slashOptions(value string) ([]slashOption, bool) {
 	}
 	var matches []slashOption
 	for _, option := range options {
-		if strings.HasPrefix(option.text, query) {
+		if commands.Match(query, option.text, option.description) {
 			matches = append(matches, option)
 		}
 	}
+	slices.SortStableFunc(matches, func(a, b slashOption) int { return commands.Rank(query, a.text) - commands.Rank(query, b.text) })
 	return matches, true
 }
 
@@ -83,7 +93,7 @@ func (m *editorCmp) SlashMenuOpen() bool {
 	if info.StartColumn+info.ColumnOffset != utf8.RuneCountInString(m.textarea.Value()) {
 		return false
 	}
-	_, open := slashOptions(m.textarea.Value())
+	_, open := slashOptionsWith(m.textarea.Value(), m.commandPriorities)
 	return open
 }
 
@@ -91,7 +101,7 @@ func (m *editorCmp) slashKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	if !m.SlashMenuOpen() {
 		return nil, false
 	}
-	options, _ := slashOptions(m.textarea.Value())
+	options, _ := slashOptionsWith(m.textarea.Value(), m.commandPriorities)
 	switch msg.String() {
 	case "esc":
 		m.slash.dismissed = m.textarea.Value()
@@ -130,10 +140,10 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 	if !m.SlashMenuOpen() || width < 1 || maxHeight < 1 {
 		return ""
 	}
-	options, _ := slashOptions(m.textarea.Value())
+	options, _ := slashOptionsWith(m.textarea.Value(), m.commandPriorities)
 	width = min(width, 76)
 	if len(options) == 0 {
-		return styles.BaseStyle().Foreground(theme.CurrentTheme().TextMuted()).Render(ansi.Truncate(" Nenhum comando encontrado · Esc fecha", width, "…"))
+		return styles.BaseStyle().Foreground(theme.CurrentTheme().TextMuted()).Render(ansi.Truncate(config.Text(" Nenhum comando encontrado · Esc fecha", " No commands found · Esc closes"), width, "…"))
 	}
 	selected := min(m.slash.selected, len(options)-1)
 	if width < 20 || maxHeight < 4 {
@@ -157,6 +167,6 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 		}
 		rows = append(rows, style.Render(ansi.Truncate(label, rowWidth, "…")))
 	}
-	rows = append(rows, styles.BaseStyle().Foreground(t.TextMuted()).Render(ansi.Truncate(" ↑/↓ escolhe · Tab completa · Enter seleciona · Esc fecha", rowWidth, "…")))
+	rows = append(rows, styles.BaseStyle().Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text(" ↑/↓ escolhe · Tab completa · Enter seleciona · Esc fecha", " ↑/↓ choose · Tab complete · Enter select · Esc close"), rowWidth, "…")))
 	return styles.BaseStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderNormal()).Width(rowWidth).Render(strings.Join(rows, "\n"))
 }

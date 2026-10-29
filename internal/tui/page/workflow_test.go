@@ -33,7 +33,9 @@ func (p *workflowProbe) SetMode(ctx context.Context, id string, mode workflow.Mo
 	_, err := p.store.SetMode(ctx, id, mode)
 	return err
 }
-func (p *workflowProbe) Cancel(string) { p.canceled++ }
+func (p *workflowProbe) IsSessionBusy(string) bool { return p.busy }
+func (p *workflowProbe) IsBusy() bool              { return p.busy }
+func (p *workflowProbe) Cancel(string)             { p.canceled++ }
 func workflowPage(t *testing.T) *chatPage {
 	t.Helper()
 	store := workflow.New(nil, t.TempDir(), workflow.Execute)

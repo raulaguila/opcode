@@ -346,6 +346,7 @@ func generateSchema() map[string]any {
 		"default_max_tokens":   map[string]any{"type": "integer", "minimum": 1},
 		"can_reason":           map[string]any{"type": "boolean"},
 		"supports_attachments": map[string]any{"type": "boolean"},
+		"supports_tools":       map[string]any{"type": "boolean", "description": "Optional provider-reported tool capability; omitted means unknown. Does not grant tool permissions."},
 	}
 	for _, field := range []string{"cost_per_1m_in", "cost_per_1m_out", "cost_per_1m_in_cached", "cost_per_1m_out_cached"} {
 		modelProperties[field] = map[string]any{"type": "number", "minimum": 0}

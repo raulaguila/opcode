@@ -78,3 +78,12 @@ oferece acesso ao orçamento, índice, alocação e diagnóstico. A apresentaç�
 prosa limitada, ações visíveis, tempo decorrido, prévia de temas e notificações
 optativas. Essas mudanças não concedem capacidades nem alteram os gates de
 citação, conclusão ou permissão. Ver [interface](docs/workspace-ui.md).
+
+As aprovações começam em Recusar e aceitam Esc ou clique no botão; o escopo
+continua exato. O editor externo devolve um rascunho. Conexões mostram seu estado
+ativo, e catálogos não são apresentados como testes de qualidade. Planos podem
+ser ajustados ou continuados após confirmação explícita de modo. Painéis têm
+navegação de volta, contexto começa pelo resumo e sessões mostram recência e
+prévia humana. Código e tabelas usam a largura disponível sem alargar os blocos
+de prosa da mesma resposta. Temas claro/escuro e NO_COLOR mantêm marcadores de
+seleção visíveis. Ver os limites e evidências em docs/evidence.

@@ -9,10 +9,14 @@ está em [`internal/config/template.json`](../internal/config/template.json), co
 Ollama, LM Studio e exemplos remotos desativados, sem credenciais ou modelo escolhido.
 Reinicie o aplicativo depois de editar os provedores no JSON.
 
-Clique no modelo no rodapé para abrir o seletor. Escolha pelo nome; `Ctrl+D`
-mostra contexto informado pelo provedor, origem dos metadados, protocolo e
-capacidades. O formulário básico da conexão mostra nome, URL e variável da
-chave; `Ctrl+A` abre os campos técnicos sem alterar valores escondidos.
+Clique no modelo no rodapé para abrir o seletor. Contexto, origem e suporte a
+ferramentas aparecem ao selecionar uma linha. “Não informado” significa que o
+provedor não enviou essa capacidade; não é uma inferência pelo nome do modelo.
+`Ctrl+D` mostra ID, protocolo e outros detalhes. O formulário básico da conexão
+mostra nome, URL, variável da chave e Conexão ativa. `Ctrl+S` salva sem mudar
+esse estado; `Ctrl+G` salva e ativa explicitamente. Perfis desativados permanecem
+visíveis em Conexões, mas não entram no catálogo ativo. `Ctrl+A` abre os campos
+técnicos sem alterar valores escondidos.
 
 Uma cópia de referência também é criada em `~/opcode/config.example.json` a cada
 inicialização normal em que estiver ausente. Esse arquivo não é carregado e não

@@ -20,12 +20,11 @@ func (p *chatPage) CommandPriorities() []string {
 		return []string{"retry", "error", "models", "settings", "context", "changes"}
 	}
 	if p.workflow.task.Objective != "" {
-		return []string{"task", "changes", "checks", "resume-task", "context"}
+		return []string{"task", "changes", "checks", "resume", "context"}
 	}
 	return []string{"new", "models", "files", "settings", "task"}
 }
-func (p *chatPage) openTask() tea.Cmd {
-	p.refreshWorkflow()
+func (p *chatPage) taskBody() string {
 	body := strings.Join(p.planRows(), "\n")
 	if p.workflow.task.Objective == "" {
 		body = config.Text("Descreva o resultado desejado na conversa. O plano e os critérios aparecerão aqui.", "Describe the desired result in the conversation. The plan and criteria will appear here.")
@@ -34,21 +33,30 @@ func (p *chatPage) openTask() tea.Cmd {
 	if p.workflow.question.ID != "" {
 		body += "\n" + config.Text("Volte à conversa para responder à pergunta pendente.", "Return to the conversation to answer the pending question.")
 	}
-	if p.app != nil && p.session.ID != "" && config.Get() != nil {
-		if turns, err := p.reviewStore().List(p.session.ID); err == nil {
-			body += fmt.Sprintf(config.Text("\nInterações com registro de alterações: %d", "\nTurns with change records: %d"), len(turns))
-		}
+
+	return body
+}
+func (p *chatPage) openTask() tea.Cmd {
+	p.refreshWorkflow()
+	p.showWorkspace("task", config.Text("Tarefa", "Task"), p.taskBody())
+	p.workspace.actions = p.taskActions()
+	return nil
+}
+func (p *chatPage) taskActions() []workspaceAction {
+	var actions []workspaceAction
+	if p.workflow.task.Objective != "" {
+		actions = append(actions, workspaceAction{kind: "adjust-plan", label: config.Text("Ajustar plano", "Adjust plan")}, workspaceAction{kind: "execute-plan", label: config.Text("Executar com revisão…", "Execute with review…")})
 	}
-	p.showWorkspace("task", config.Text("Tarefa", "Task"), body)
+
 	for _, id := range []string{"contract", "queue", "changes", "checks", "permissions", "context", "terminal"} {
 		for _, entry := range commands.Builtins {
 			if entry.ID == id {
 				title, _ := commands.Presentation(id, entry.Title, entry.Description)
-				p.workspace.actions = append(p.workspace.actions, workspaceAction{kind: "command", text: id, label: title})
+				actions = append(actions, workspaceAction{kind: "command", text: id, label: title})
 			}
 		}
 	}
-	return nil
+	return actions
 }
 func contextPanel(kind string) bool {
 	return kind == "context" || kind == "runtime" || kind == "index" || kind == "local-status"

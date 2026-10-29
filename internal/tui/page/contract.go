@@ -76,7 +76,7 @@ func splitContractField(s, separator string) []string {
 func (p *chatPage) contractKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
-		p.closeWorkspace()
+		p.backWorkspace()
 		return nil
 	case "tab", "down", "shift+tab", "up":
 		p.workspace.fields[p.workspace.focus].Blur()

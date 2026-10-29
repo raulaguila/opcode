@@ -18,7 +18,7 @@ func (p *chatPage) openSetup() tea.Cmd {
 		return util.CmdHandler(dialog.OpenProviderDialogMsg{Setup: true})
 	}
 	m := p.app.CoderAgent.Model()
-	p.showWorkspace("setup", config.Text("Configuração · 3/3 · pronto para conversar", "Setup · 3/3 · ready to chat"), fmt.Sprintf(config.Text("Modelo: %s\n\nSua configuração foi salva. Você já pode começar.", "Model: %s\n\nYour configuration is saved. You can start chatting."), panelText(m.APIModel)))
+	p.showWorkspace("setup", config.Text("Configuração · 3/3 · pronto para conversar", "Setup · 3/3 · ready to chat"), fmt.Sprintf(config.Text("Modelo: %s\n\nConfiguração salva. Catálogo e chamada de ferramenta são verificações separadas; consulte Detalhes para testar.", "Model: %s\n\nConfiguration saved. Catalog access and tool calling are separate checks; open Details to test."), panelText(m.APIModel)))
 	p.workspace.actions = []workspaceAction{{kind: "setup-done", label: config.Text("Começar a conversar", "Start chatting")}, {kind: "setup-details", label: config.Text("Detalhes e testes opcionais", "Details and optional tests")}}
 	return nil
 }

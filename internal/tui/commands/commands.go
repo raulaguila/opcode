@@ -12,7 +12,7 @@ var Builtins = []Command{
 	{ID: "terminal", Title: "Terminal", Description: "Abrir ou voltar ao terminal"},
 	{ID: "commands", Title: "Todos os comandos", Description: "Buscar ações e ferramentas"},
 	{ID: "mode ", Title: "Modo de trabalho", Description: "Escolher modo de trabalho…", Group: true},
-	{ID: "plan", Title: "Mostrar/recolher plano", Description: "Mostrar ou recolher o plano"},
+	{ID: "plan", Title: "Plano e próximas ações", Description: "Rever, ajustar ou executar o plano"},
 	{ID: "task", Title: "Tarefa atual", Description: "Ver tarefa e critérios de aceite"},
 	{ID: "resume", Title: "Retomar tarefa", Description: "Continuar a tarefa salva"},
 	{ID: "setup", Title: "Configuração guiada", Description: "Provedor, modelo e testes opcionais"},

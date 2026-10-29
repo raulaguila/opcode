@@ -103,6 +103,7 @@ type localModel struct {
 	MaxContextLength    int64  `json:"max_context_length"`
 	LoadedContextLength int64  `json:"loaded_context_length"`
 	ContextSource       string
+	SupportsTools       *bool `json:"supports_tools,omitempty"`
 }
 
 func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey string, lmStudio bool) ([]localModel, error) {
@@ -171,6 +172,7 @@ func convertLocalModel(model localModel) Model {
 		DefaultMaxTokens:    min(4096, window/2),
 		CanReason:           false,
 		SupportsAttachments: false,
+		SupportsTools:       model.SupportsTools,
 	}
 }
 

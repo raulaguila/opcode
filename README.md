@@ -91,7 +91,10 @@ Para configurar Ollama uma vez, por exemplo:
 
 O contexto é consultado no provedor, sem guardar seu tamanho no JSON.
 Um `contextWindow` positivo é uma opção para definir um limite manual.
-O seletor identifica contexto alocado, máximo anunciado ou estimativa alternativa.
+O seletor identifica contexto alocado, máximo anunciado ou estimativa alternativa,
+e mostra suporte a ferramentas informado pelo provedor (ou desconhecido).
+A configuração básica inclui o estado ativo da conexão; salvar um perfil
+desativado não o ativa silenciosamente.
 Consultar o catálogo não baixa
 pesos nem gera respostas. Clique no modelo do rodapé, pressione `Ctrl+O` ou use
 `/models` para buscar, trocar de perfil e escolher. `Ctrl+F` marca favoritos,

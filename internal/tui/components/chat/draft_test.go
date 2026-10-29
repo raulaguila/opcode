@@ -107,9 +107,11 @@ func TestExternalEditorResultPreservesEditedDraftAndAttachmentsUntilAck(t *testi
 	m.textarea.SetValue("old draft")
 	m.attachments = []message.Attachment{{FileName: "keep.png", Content: []byte("image")}}
 	_, cmd := m.Update(editorResultMsg{Text: "edited draft"})
-	require.NotNil(t, cmd)
+	require.Nil(t, cmd, "closing the editor must not submit")
 	require.Equal(t, "edited draft", m.textarea.Value())
 	require.Len(t, m.attachments, 1)
+	require.False(t, m.submitting)
+	require.NotNil(t, m.send(), "sending remains explicit")
 	m.Update(SubmissionResultMsg{Text: "edited draft", Error: errors.New("rejected")})
 	require.Equal(t, "edited draft", m.textarea.Value())
 	require.Len(t, m.attachments, 1)

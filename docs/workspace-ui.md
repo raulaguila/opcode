@@ -3,7 +3,7 @@
 Digite `/` no começo do campo para ver os comandos. Use `↑`/`↓` para escolher,
 `Tab` para completar, `Enter` para executar e `Esc` para fechar as sugestões.
 `Ctrl+K` abre a paleta. Os painéis mantêm o rascunho enquanto você consulta o
-processo, contexto e arquivos; `Esc` volta à conversa.
+processo, contexto e arquivos. `Esc` volta ao painel anterior, mantendo seleção e rolagem; na raiz, volta à conversa.
 
 A barra inferior reúne os controles: clique no modo à esquerda para escolher
 Perguntar/Planejar/Executar, no modelo à direita para abrir seu catálogo e na
@@ -13,7 +13,8 @@ e o clique abre a fila. O menu `/` começa com ações comuns; digite o nome de 
 comando para encontrar os demais ou use `/commands` para pesquisar na paleta.
 `Ctrl+?` mantém a ajuda completa de atalhos.
 
-A paleta prioriza ações conforme a situação: terminal/fila durante a execução,
+O menu `/` e a paleta compartilham a busca em português/inglês (com ou sem
+acentos), os identificadores dos comandos e a prioridade conforme a situação: terminal/fila durante a execução,
 recuperação após uma falha e revisão quando há um plano. Uma descrição explica a
 opção selecionada; escolher uma ação continua passando pelos controles normais
 de modo e permissão. `/cancel` solicita o cancelamento do trabalho atual.
@@ -44,17 +45,23 @@ quando exigem atenção. O campo mantém três linhas iniciais.
 | MCP e servidores de linguagem | `/integrations` ou `I` em Settings |
 | Testar/salvar formulário | `Ctrl+T` / `Ctrl+S`; `Tab` alterna campos |
 
-Sem um modelo, a primeira abertura mostra Settings. Salvar uma conexão leva ao
-seletor. Credenciais usam referências a variáveis de ambiente, sem exibir seus
+Sem um modelo, a primeira abertura mostra Settings. Salvar uma conexão ativa leva ao
+seletor. Conexões desativadas aparecem identificadas na lista e continuam
+desativadas ao salvar; `Ctrl+G` salva e ativa explicitamente. Credenciais usam referências a variáveis de ambiente, sem exibir seus
 valores. Provedores/perfis e preferências são salvos para a próxima abertura;
-O formulário básico mostra nome, URL e variável da chave; `Ctrl+A` revela ID,
+O formulário básico mostra nome, URL, variável da chave e **Conexão ativa**; `Ctrl+A` revela ID,
 backend, protocolo e limites. MCP usa os ajustes na chamada seguinte, enquanto servidores LSP ativos exigem
 reinício. Testes MCP/LSP pedem aprovação, têm prazo e encerram o cliente.
+Salvar a configuração, consultar o catálogo e testar uma chamada de ferramenta
+são resultados diferentes. O catálogo não certifica a qualidade do modelo.
 
 Sem filtro, o catálogo coloca primeiro o modelo atual daquela função, seguido
 dos favoritos, recentes e demais modelos. Os rótulos aparecem quando há largura;
 os indicadores do atual/favorito/recente permanecem. Uma busca usa a relevância
-do texto. A seleção destacada só vira o modelo ativo após confirmar.
+do texto. A seleção destacada só vira o modelo ativo após confirmar. Contexto e origem
+aparecem no modo básico, junto do suporte a ferramentas informado pelo provedor
+(ou “não informado”). O Opcode consulta metadados, sem deduzir capacidades pelo
+nome e sem executar inferência para preencher esses campos.
 
 Booleanos e opções conhecidas usam `←`/`→` ou espaço, sem exigir digitar valores
 JSON. Em Argumentos de MCP/LSP, `Enter` abre uma lista: cada linha representa um
@@ -90,6 +97,11 @@ entrada ao `keybindings.json`, conforme os
 }
 ```
 
+O editor externo (`Ctrl+E`) devolve o texto ao rascunho; fechar o editor não
+envia a mensagem. `EDITOR="code --wait"` aceita argumentos literais e caminhos
+entre aspas, sem shell ou expansão de variáveis. Revise e pressione Enter para
+enviar. `Ctrl+V` também funciona nos campos da paleta e das preferências.
+
 Esse ajuste do VS Code vale para seus terminais em foco. O Opcode não altera
 atalhos globais do editor automaticamente.
 
@@ -114,9 +126,11 @@ prévia de arquivo usa as permissões normais e não conta como leitura do agent
 para permitir uma edição. Se a área de transferência estiver indisponível,
 use a opção de selecionar texto.
 Uma indicação discreta abaixo da última resposta concluída torna essas ações
-visíveis. Respostas só de prosa usam até 72 colunas por padrão; `tui.proseWidth`
-permite ajustar de 1 a 240, com `0` restaurando o padrão. Mensagens com blocos
-de código ou tabelas conservam a largura disponível. O texto copiado é integral.
+visíveis. Blocos de prosa usam até 72 colunas por padrão; `tui.proseWidth`
+permite ajustar de 1 a 240, com `0` restaurando o padrão. Código e tabelas
+conservam a largura disponível, mesmo em respostas mistas. Listas e citações
+em bloco que contêm código/tabelas mantêm sua estrutura e largura. Links de
+referência são resolvidos no documento completo. O texto copiado é integral.
 
 O terminal mantém os controles existentes: `Ctrl+P` abre/fecha o painel,
 `Ctrl+N` cria um PTY, `Alt+←`/`Alt+→` alterna processos e `Ctrl+X` encerra o processo
@@ -139,7 +153,11 @@ ordenados. `/queue` mostra os itens ainda pendentes:
 
 ## Contexto e modos
 
-`/context` mostra janela, entrada estimada, schemas, reserva de resposta e margem.
+`/context` começa informando se há espaço estimado para continuar, o total previsto,
+a reserva de resposta e a origem do limite efetivo. Capacidade anunciada e alocação
+atual no Ollama são informações distintas. `D` abre/fecha os dados técnicos
+(schemas, margem, componentes e calibração); Índice e Diagnóstico também
+começam com resumo e deixam o JSON em detalhes.
 No painel, `C` solicita compactação e `Ctrl+R` atualiza. `/compact` abre diretamente
 a compactação. A conversa salva é preservada; a preparação das próximas
 requisições abrevia apenas conteúdos antigos permitidos. A contagem é uma
@@ -156,11 +174,20 @@ arquivos, não compacta sozinho e não altera a validação das citações.
 Os dois primeiros não recebem ferramentas de escrita ou comandos. `/plan` e
 `/resume` mostram ou retomam o plano persistente, sem restaurar aprovações antigas.
 `/task` reúne plano, atividade, fila e atalhos para contrato, alterações, checks,
-permissões, contexto e terminal. `Ctrl+R` atualiza esse retrato; `/task new`
-continua criando uma tarefa explicitamente. A troca de modo/modelo é recusada
+permissões, contexto e terminal. O painel atualiza o progresso sem mover a seleção;
+`Ctrl+R` também permite atualizar. **Ajustar plano** muda para Planejar e prepara
+um rascunho somente se o campo estiver vazio. **Executar com revisão** pede
+confirmação explícita para mudar para Executar e continuar; comandos e edições
+ainda passam pelas permissões normais. Rascunhos e anexos não enviados são
+preservados. `/task new` continua criando uma tarefa explicitamente. A troca de modo/modelo é recusada
 enquanto há execução.
 
 ## Alterações, verificações e permissões
+
+Cada nova aprovação começa em **Recusar**. `Esc` ou `D` recusa; `Tab`/setas
+alternam opções e Enter confirma a opção marcada. Clique no botão também
+responde à solicitação exibida. “Repetir escopo exato” não muda parâmetros nem
+concede autorização geral. O marcador `›` continua visível sem cores.
 
 `/changes` ou `/checks` mostra interações com alterações e os recibos de validação.
 `Enter` abre os diffs de uma interação. `U` prepara o undo da última interação
@@ -184,6 +211,10 @@ modifica os parâmetros autorizados. Aprovar uma vez ou lembrar na sessão
 continua valendo somente para a solicitação/escopo correspondente.
 
 ## Gerenciar conversas e recuperar falhas
+
+As conversas são ordenadas por recência. A data aparece quando há espaço; a
+prévia carrega somente para a conversa selecionada e mostra a última mensagem
+humana, omitindo instruções internas de reparo.
 
 `/sessions` abre a busca por título/ID. No seletor:
 

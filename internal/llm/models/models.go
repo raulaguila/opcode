@@ -26,6 +26,9 @@ type Model struct {
 	DefaultMaxTokens    int64         `json:"default_max_tokens" mapstructure:"default_max_tokens"`
 	CanReason           bool          `json:"can_reason" mapstructure:"can_reason"`
 	SupportsAttachments bool          `json:"supports_attachments" mapstructure:"supports_attachments"`
+	// Nil means the provider did not report tool capability. Metadata is not an
+	// inference test and never changes tool authorization.
+	SupportsTools *bool `json:"supports_tools,omitempty" mapstructure:"supports_tools"`
 }
 
 // A missing context is a request for provider metadata. ContextAuto also accepts

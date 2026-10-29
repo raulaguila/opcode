@@ -90,6 +90,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	configPath := filepath.Join(home, ".opcode", "config.json")
 	require.NoError(t, os.WriteFile(configPath, raw, 0600))
 	h := newPTYUIHarness(t, binary, home, workspace)
+	h.resize(60, 20)
 	h.wait("fresh-project initialization choice", 20*time.Second, func(frame string) bool { return strings.Contains(frame, "Initialize Project") })
 	h.send("n") // decline optional memory-file generation; never authorize mutations in Ask.
 	h.wait("initialization dismissed", 5*time.Second, func(frame string) bool {
@@ -97,6 +98,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	})
 	h.wait("initial composer", 20*time.Second, ptyUIHasFooter)
 	h.assertComposer()
+	h.resize(80, 24)
 
 	// Physical newlines in bracketed paste must never submit the prompt. A long
 	// draft grows to eight rows and survives real modal focus changes and resize.
@@ -161,7 +163,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.paste("/context")
 	h.send("\r")
 	h.wait("unified context panel", 10*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "1 Budget") && strings.Contains(frame, "Window source")
+		return strings.Contains(frame, "1 Budget") && strings.Contains(frame, "Source:")
 	})
 	h.send("\x1b")
 	h.wait("context dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "1 Budget") && ptyUIHasFooter(frame) })
@@ -194,7 +196,18 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "LSP probe must not start before explicit UI approval")
 	require.Contains(t, h.frame(), "/bin/bash")
 	require.Contains(t, h.frame(), "lsp-stderr.sh")
-	h.send("a")
+	for _, refuse := range []string{"\x1b", "\r"} {
+		require.Contains(t, h.frame(), "› Deny (Esc/d)")
+		h.send(refuse)
+		h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool {
+			return !strings.Contains(frame, "Allow (a)") && strings.Contains(frame, "Test failed:")
+		})
+		_, statErr := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
+		require.True(t, os.IsNotExist(statErr), "denied probe must never run")
+		h.send("\x14")
+		h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "› Deny (Esc/d)") })
+	}
+	h.clickLabel("Allow (a)")
 	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow (a)") })
 	h.wait("LSP stderr fixture executed", 10*time.Second, func(string) bool {
 		_, err := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
@@ -346,13 +359,17 @@ type ptyUIHarness struct {
 }
 
 func newPTYUIHarness(t *testing.T, binary, home, workspace string) *ptyUIHarness {
+	return newPTYUIHarnessAtSize(t, binary, home, workspace, 80, 24)
+}
+func newPTYUIHarnessAtSize(t *testing.T, binary, home, workspace string, cols, rows int, extraEnv ...string) *ptyUIHarness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Minute)
 	command := exec.CommandContext(ctx, binary, "--cwd", workspace)
 	command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "SHELL=/bin/bash", "LANG=C.UTF-8", "TERM=xterm-256color"}
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
+	command.Env = append(command.Env, extraEnv...)
+	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 	require.NoError(t, err)
-	h := &ptyUIHarness{t: t, terminal: terminal, screen: vt10x.New(vt10x.WithSize(80, 24), vt10x.WithWriter(terminal))}
+	h := &ptyUIHarness{t: t, terminal: terminal, screen: vt10x.New(vt10x.WithSize(cols, rows), vt10x.WithWriter(terminal))}
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -612,4 +629,78 @@ func (m ptyUIMessage) finished() bool {
 		}
 	}
 	return false
+}
+
+func (h *ptyUIHarness) clickLabel(label string) {
+	h.t.Helper()
+	for y, line := range strings.Split(h.frame(), "\n") {
+		if at := strings.Index(line, label); at >= 0 {
+			x := ansi.StringWidth(line[:at]) + 1
+			h.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, y+1, x, y+1))
+			return
+		}
+	}
+	h.t.Fatalf("click target absent: %s", label)
+}
+
+func TestPTYUICompactThemes(t *testing.T) {
+	if os.Getenv("OPCODE_LIVE_TESTS") != "1" || os.Getenv("OPCODE_LIVE_OLLAMA") != "1" {
+		t.Skip("explicit live opt-in required")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux PTY acceptance")
+	}
+	binary := os.Getenv("OPCODE_EVAL_BINARY")
+	require.True(t, filepath.IsAbs(binary))
+	for _, variant := range []struct {
+		name, bg string
+		noColor  bool
+	}{{"dark", "15;0", false}, {"light", "0;15", false}, {"no-color", "0;15", true}} {
+		t.Run(variant.name, func(t *testing.T) {
+			root := t.TempDir()
+			home, workspace := filepath.Join(root, "home"), filepath.Join(root, "project")
+			require.NoError(t, os.MkdirAll(filepath.Join(home, ".opcode"), 0700))
+			require.NoError(t, os.MkdirAll(workspace, 0700))
+			configuration := map[string]any{
+				"data": map[string]any{"directory": filepath.Join(root, "data")}, "tui": map[string]any{"language": "en", "theme": "opcode", "sidebar": "hidden"},
+				"runtime": map[string]any{"mode": "ask"}, "providers": map[string]any{"local": map[string]any{"baseURL": "http://127.0.0.1:11434/v1", "api": "ollama"}},
+				"models": map[string]any{"local.llama3.1:8b": map[string]any{"provider": "local", "api_model": "llama3.1:8b", "api": "ollama", "context_window": 16384, "default_max_tokens": 2048}},
+				"agents": map[string]any{"coder": map[string]any{"model": "local.llama3.1:8b"}},
+			}
+			raw, err := json.Marshal(configuration)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(home, ".opcode", "config.json"), raw, 0600))
+			env := []string{"COLORFGBG=" + variant.bg}
+			if variant.noColor {
+				env = append(env, "NO_COLOR=1")
+			}
+			h := newPTYUIHarnessAtSize(t, binary, home, workspace, 60, 20, env...)
+			h.wait("compact initialization", 20*time.Second, func(frame string) bool {
+				return strings.Contains(frame, "Initialize Project") && strings.Contains(frame, "Yes") && strings.Contains(frame, "No")
+			})
+			h.send("n")
+			h.wait("compact input", 10*time.Second, func(frame string) bool {
+				return !strings.Contains(frame, "Initialize Project") && ptyUIHasFooter(frame)
+			})
+			h.assertComposer()
+			h.paste("compact draft ação")
+			h.wait("compact draft typed", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })
+			h.send("\x0f")
+			h.wait("compact model selector", 10*time.Second, func(frame string) bool {
+				return strings.Contains(frame, "Choose model") && strings.Contains(frame, "Context:") && strings.Contains(frame, "Tools:")
+			})
+			require.Contains(t, h.frame(), "›")
+			h.send("\x1b")
+			h.wait("draft restored", 5*time.Second, func(frame string) bool {
+				return !strings.Contains(frame, "Choose model") && strings.Contains(frame, "compact draft ação")
+			})
+			h.resize(80, 24)
+			h.wait("resized draft intact", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })
+			if variant.noColor {
+				require.NotRegexp(t, regexp.MustCompile("\x1b\\[(?:38|48);"), h.rawOutput(), "NO_COLOR must suppress foreground/background color sequences")
+			}
+			require.NoFileExists(t, filepath.Join(workspace, "Opcode.md"), "declining init must not create project memory")
+			require.NoError(t, os.WriteFile("/tmp/opcode-ui-"+variant.name+"-frame.txt", []byte(h.frame()), 0600))
+		})
+	}
 }

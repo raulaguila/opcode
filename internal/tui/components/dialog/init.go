@@ -98,7 +98,7 @@ func (m InitDialogCmp) View() string {
 	baseStyle := styles.BaseStyle()
 
 	// Calculate width needed for content
-	maxWidth := 60 // Width for explanation text
+	maxWidth := max(1, min(60, m.width-10)) // Wrap inside the available frame.
 
 	title := baseStyle.
 		Foreground(t.Primary()).
@@ -119,7 +119,6 @@ func (m InitDialogCmp) View() string {
 		Padding(1, 1).
 		Render(config.Text("Deseja inicializar este projeto?", "Would you like to initialize this project?"))
 
-	maxWidth = min(maxWidth, m.width-10)
 	yesStyle := baseStyle
 	noStyle := baseStyle
 
@@ -141,8 +140,14 @@ func (m InitDialogCmp) View() string {
 			Foreground(t.Primary())
 	}
 
-	yes := yesStyle.Padding(0, 3).Render(config.Text("Sim", "Yes"))
-	no := noStyle.Padding(0, 3).Render(config.Text("Não", "No"))
+	yesMark, noMark := "  ", "  "
+	if m.selected == 0 {
+		yesMark = "› "
+	} else {
+		noMark = "› "
+	}
+	yes := yesStyle.Padding(0, 2).Render(yesMark + config.Text("Sim", "Yes"))
+	no := noStyle.Padding(0, 2).Render(noMark + config.Text("Não", "No"))
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yes, baseStyle.Render("  "), no)
 	buttons = baseStyle.

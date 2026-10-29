@@ -107,7 +107,7 @@ func TestClipboardFailureKeepsSelectableTextAndRecoveryPersists(t *testing.T) {
 	require.Len(t, p.workspace.actions, 3)
 	cmd := p.workspaceChoose()
 	p.workspaceResult(cmd().(WorkspaceResultMsg))
-	require.Contains(t, p.workspace.note, "Selecionar texto")
+	require.Contains(t, p.workspace.note, config.Text("Selecionar texto", "Select text"))
 	p.workspace.selected = 1
 	p.workspaceChoose()
 	require.Equal(t, "text", p.workspace.kind)

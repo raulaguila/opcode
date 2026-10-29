@@ -51,6 +51,10 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 	case dialog.ProviderSettingsSavedMsg:
 		a.providerDialog.Close()
 		a.showProviderDialog = false
+		if msg.ProviderChanged && msg.Disabled {
+			a.showProviderDialog = true
+			return tea.Batch(a.providerDialog.Open(), util.ReportInfo(config.Text("Conexão salva como desativada. Ative-a para escolher um modelo.", "Connection saved as disabled. Enable it to choose a model."))), true
+		}
 		if msg.ProviderChanged {
 			var err error
 			if a.app.CoderAgent != nil && a.app.CoderAgent.Model().ID != "" {
@@ -70,9 +74,9 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		if p, ok := a.pages[page.ChatPage]; ok {
 			updated, cmd := p.Update(chat.ProcessPreferencesChangedMsg{})
 			a.pages[page.ChatPage] = updated
-			return tea.Batch(cmd, util.ReportInfo("Preferências salvas")), true
+			return tea.Batch(cmd, util.ReportInfo(config.Text("Preferências salvas", "Preferences saved"))), true
 		}
-		return util.ReportInfo("Preferências salvas"), true
+		return util.ReportInfo(config.Text("Preferências salvas", "Preferences saved")), true
 	case dialog.OpenIntegrationDialogMsg:
 		a.closeSettings()
 		a.modelDialog.Close()
@@ -87,9 +91,9 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		return nil, true
 	case dialog.IntegrationSettingsSavedMsg:
 		if msg.Kind == "mcp" {
-			return util.ReportInfo("MCP salvo. As próximas chamadas usam a configuração atualizada."), true
+			return util.ReportInfo(config.Text("MCP salvo. As próximas chamadas usam a configuração atualizada.", "MCP saved. Subsequent calls use the updated configuration.")), true
 		}
-		return util.ReportInfo("Servidor LSP salvo. Reinicie para carregar o cadastro atualizado."), true
+		return util.ReportInfo(config.Text("Servidor LSP salvo. Reinicie para carregar o cadastro atualizado.", "LSP server saved. Restart to load the updated configuration.")), true
 	case page.OpenModelsMsg:
 		a.closeSettings()
 		a.showInitDialog = false
@@ -110,6 +114,11 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		return nil, true
 	case page.OpenModeChooserMsg:
 		return a.openModeChooser(), true
+	case dialog.SessionPreviewRequestMsg:
+		if !a.showSessionDialog || a.app.Messages == nil {
+			return nil, true
+		}
+		return a.sessionPreview(msg.ID), true
 	case dialog.SessionActionMsg:
 		return a.sessionAction(msg), true
 	}
@@ -143,20 +152,20 @@ func (a *appModel) openSessions() tea.Cmd {
 	a.sessionDialog.SetSessions(items)
 	a.sessionDialog.SetSelectedSession(a.selectedSession.ID)
 	a.showSessionDialog = true
-	return nil
+	return a.sessionDialog.Init()
 }
 func (a *appModel) sessionAction(msg dialog.SessionActionMsg) tea.Cmd {
 	cfg := config.Get()
 	catalog := session.NewCatalog(cfg.WorkingDir, cfg.Data.Directory)
 	if a.app.CoderAgent != nil && a.app.CoderAgent.IsSessionBusy(msg.Session.ID) {
-		return util.ReportWarn("Aguarde ou cancele esta conversa antes de gerenciá-la")
+		return util.ReportWarn(config.Text("Aguarde ou cancele esta conversa antes de gerenciá-la", "Wait or cancel this conversation before managing it"))
 	}
 	switch msg.Action {
 	case "rename":
 		target := msg.Session
 		target.Title = strings.TrimSpace(msg.Title)
 		if target.Title == "" || len(target.Title) > 200 {
-			return util.ReportWarn("Use um título entre 1 e 200 caracteres")
+			return util.ReportWarn(config.Text("Use um título entre 1 e 200 caracteres", "Use a title between 1 and 200 characters"))
 		}
 		saved, err := a.app.Sessions.Save(context.Background(), target)
 		if err != nil {
@@ -200,10 +209,10 @@ func (a *appModel) sessionAction(msg dialog.SessionActionMsg) tea.Cmd {
 		}
 		return util.ReportInfo("Conversa exportada: " + path)
 	}
-	return util.ReportError(fmt.Errorf("ação de conversa desconhecida"))
+	return util.ReportError(fmt.Errorf("%s", config.Text("ação de conversa desconhecida", "unknown conversation action")))
 }
 func (a appModel) dialogOrigin(overlay string) (int, int) {
-	base := lipgloss.JoinVertical(lipgloss.Top, a.pages[a.currentPage].View(), a.statusView())
+	base := a.baseView()
 	w, h := lipgloss.Width(base), lipgloss.Height(base)
 	ow, oh := lipgloss.Width(overlay), lipgloss.Height(overlay)
 	return max(0, min(w/2-ow/2, w-ow-1)), max(0, min(h/2-oh/2, h-oh-1))

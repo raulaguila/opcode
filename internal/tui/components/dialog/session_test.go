@@ -2,6 +2,7 @@ package dialog
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -45,4 +46,23 @@ func TestSessionMouseSelectionUsesVisibleOffset(t *testing.T) {
 	require.Equal(t, 1, d.offset)
 	_, cmd := d.Update(tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, X: 4, Y: 4})
 	require.Equal(t, "two", cmd().(SessionSelectedMsg).Session.ID)
+}
+
+func TestSessionRecencyPreviewAndCompactLayout(t *testing.T) {
+	d := NewSessionDialogCmp().(*sessionDialogCmp)
+	d.SetSessions([]session.Session{{ID: "older", Title: "Older", UpdatedAt: 100}, {ID: "recent", Title: "Recent", UpdatedAt: 200}})
+	require.Equal(t, "recent", d.filtered[0].ID)
+	require.Equal(t, "recent", d.Init()().(SessionPreviewRequestMsg).ID)
+	d.Update(SessionPreviewLoadedMsg{ID: "recent", Text: "Last message: investigate scroll"})
+	for _, size := range [][2]int{{60, 20}, {80, 24}, {120, 36}} {
+		d.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		require.Contains(t, d.View(), "investigate scroll")
+		require.LessOrEqual(t, lipgloss.Width(d.View()), size[0])
+		require.LessOrEqual(t, lipgloss.Height(d.View()), size[1])
+	}
+	d.Update(tea.KeyMsg{Type: tea.KeyDown})
+	d.Update(SessionPreviewLoadedMsg{ID: "recent", Text: "STALE"})
+	require.NotContains(t, d.View(), "STALE")
+	d.Update(SessionPreviewLoadedMsg{ID: "older", Text: "Older preview"})
+	require.Contains(t, d.View(), "Older preview")
 }

@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/app"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"
 )
@@ -106,7 +107,21 @@ func TestSlashMenuFitsSmallTerminalsAndUnknownPrefixKeepsNormalSend(t *testing.T
 		require.LessOrEqual(t, lipgloss.Height(view), size[1])
 	}
 	enterText(m, "desconhecido")
-	require.Contains(t, m.SlashMenuView(80, 10), "Nenhum comando")
+	require.Contains(t, m.SlashMenuView(80, 10), config.Text("Nenhum comando", "No commands"))
 	messages := slashMessages(editorKey(m, tea.KeyMsg{Type: tea.KeyEnter}))
 	require.Equal(t, "/desconhecido", messages[0].(SendMsg).Text)
+}
+
+func TestSlashSharesLocalizedSearchAndActivityPriorities(t *testing.T) {
+	m := slashEditor()
+	m.Update(CommandContextMsg{Priorities: []string{"queue", "terminal", "cancel"}})
+	enterText(m, "/")
+	options, _ := slashOptionsWith(m.textarea.Value(), m.commandPriorities)
+	require.Equal(t, "/queue", options[0].text)
+	m.textarea.Reset()
+	enterText(m, "/permissoes")
+	require.Contains(t, m.SlashMenuView(80, 10), "/permissions")
+	require.Nil(t, editorKey(m, tea.KeyMsg{Type: tea.KeyTab}))
+	require.Equal(t, "/permissions", m.textarea.Value())
+	require.False(t, m.submitting)
 }

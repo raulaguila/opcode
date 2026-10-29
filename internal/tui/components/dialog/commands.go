@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -122,6 +123,14 @@ func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
+	default:
+		before := c.search.Value()
+		var cmd tea.Cmd
+		c.search, cmd = c.search.Update(msg)
+		if before != c.search.Value() {
+			c.filter()
+		}
+		return c, cmd
 	}
 
 	u, cmd := c.listView.Update(msg)
@@ -163,10 +172,12 @@ func (c *commandDialogCmp) View() string {
 			name = "✓ " + name
 		}
 		style := baseStyle.Width(maxWidth)
+		mark := "  "
 		if i == selected {
+			mark = "› "
 			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
 		}
-		rows = append(rows, style.Render(ansi.Truncate(" "+name, maxWidth, "…")))
+		rows = append(rows, style.Render(ansi.Truncate(mark+name, maxWidth, "…")))
 	}
 	if len(items) == 0 {
 		rows = append(rows, config.Text("Nenhum comando encontrado", "No commands found"))
@@ -224,10 +235,11 @@ func (c *commandDialogCmp) filter() {
 	var matches []Command
 	for _, item := range c.commands {
 		title, description := commands.Presentation(item.ID, item.Title, item.Description)
-		if strings.Contains(strings.ToLower(item.ID+" "+title+" "+description), query) {
+		if commands.Match(query, item.ID, title+" "+description) {
 			matches = append(matches, item)
 		}
 	}
+	slices.SortStableFunc(matches, func(a, b Command) int { return commands.Rank(query, a.ID) - commands.Rank(query, b.ID) })
 	c.listView.SetItems(matches)
 }
 

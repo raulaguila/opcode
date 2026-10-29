@@ -42,6 +42,7 @@ type chatPage struct {
 	composer             chat.SlashCompleter
 	transcript           chat.TranscriptControl
 	workspace            workspacePanel
+	workspaceHistory     []workspacePanel
 	recovery             recoveryState
 	lastRequest          chat.SendMsg
 	sidebar              layout.Container
@@ -84,6 +85,10 @@ func (p *chatPage) Init() tea.Cmd {
 
 func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 	defer func() {
+		if p.editor != nil {
+			p.editor.Update(chat.CommandContextMsg{Priorities: p.CommandPriorities()})
+		}
+		p.refreshTaskPanel()
 		if focus := p.syncInputFocus(); focus != nil {
 			result = tea.Batch(result, focus)
 		}
@@ -408,9 +413,9 @@ func (p *chatPage) sendMessage(text string, attachments []message.Attachment) te
 	}
 	return tea.Batch(append(cmds, p.submitAgentMessage(text, attachments, text))...)
 }
-func (p *chatPage) submitAgentMessage(text string, attachments []message.Attachment, draft string) tea.Cmd {
+func (p *chatPage) submitAgentMessage(text string, attachments []message.Attachment, draft string, keepDraft ...bool) tea.Cmd {
 	if p.app.CoderAgent == nil {
-		return tea.Batch(util.ReportWarn("Configure um provedor em /settings"), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: fmt.Errorf("provedor não configurado")}))
+		return tea.Batch(util.ReportWarn(config.Text("Configure um provedor em /settings", "Configure a provider in /settings")), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: fmt.Errorf("%s", config.Text("provedor não configurado", "provider not configured"))}))
 	}
 	_, queued, err := p.app.CoderAgent.Submit(context.Background(), p.session.ID, text, attachments...)
 	if err != nil {
@@ -422,9 +427,9 @@ func (p *chatPage) submitAgentMessage(text string, attachments []message.Attachm
 		p.activityStarted = time.Now()
 	}
 	p.lastRequest = chat.SendMsg{Text: text, Attachments: cloneUserAttachments(attachments)}
-	cmds := []tea.Cmd{util.CmdHandler(chat.SubmissionResultMsg{Text: draft})}
+	cmds := []tea.Cmd{util.CmdHandler(chat.SubmissionResultMsg{Text: draft, KeepDraft: len(keepDraft) > 0 && keepDraft[0]})}
 	if queued {
-		cmds = append(cmds, util.ReportInfo("Instrução pendente; será incorporada após a operação atual"))
+		cmds = append(cmds, util.ReportInfo(config.Text("Instrução pendente; será incorporada após a operação atual", "Instruction queued; it will be incorporated after the current operation")))
 	}
 	return tea.Batch(cmds...)
 }

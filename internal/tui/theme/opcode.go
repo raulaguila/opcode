@@ -35,14 +35,14 @@ func NewOpcodeTheme() *OpcodeTheme {
 	lightSelection := "#e5e5e6"
 	lightForeground := "#2a2a2a"
 	lightComment := "#626262"
-	lightPrimary := "#3b7dd8"   // Primary blue
+	lightPrimary := "#2866b5"   // Primary blue
 	lightSecondary := "#7b5bb6" // Secondary purple
-	lightAccent := "#d68c27"    // Accent orange/gold
-	lightRed := "#d1383d"       // Error red
-	lightOrange := "#d68c27"    // Warning orange
-	lightGreen := "#3d9a57"     // Success green
-	lightCyan := "#318795"      // Info cyan
-	lightYellow := "#b0851f"    // Emphasized text
+	lightAccent := "#95600f"    // Accent orange/gold
+	lightRed := "#bf3036"       // Error red
+	lightOrange := "#95600f"    // Warning orange
+	lightGreen := "#287440"     // Success green
+	lightCyan := "#236d79"      // Info cyan
+	lightYellow := "#80600e"    // Emphasized text
 	lightBorder := "#d3d3d3"    // Border color
 
 	theme := &OpcodeTheme{}

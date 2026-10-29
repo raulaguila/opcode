@@ -67,6 +67,8 @@ func TestSetupIsOptionalRequiresConfirmationAndEscapePreservesDraft(t *testing.T
 	require.Equal(t, "setup-probe-confirm", p.workspace.kind)
 	require.False(t, p.workspace.loading)
 	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	require.Equal(t, "setup-details", p.workspace.kind)
+	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
 	require.False(t, p.WorkspaceFocused())
 	draft, _ := p.composer.(chat.DraftControl).Draft()
 	require.Equal(t, "draft", draft)

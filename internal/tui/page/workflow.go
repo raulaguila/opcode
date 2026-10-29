@@ -314,7 +314,7 @@ func (p *chatPage) applyWorkflowCommand(command, value string) (tea.Cmd, error) 
 		p.refreshWorkflow()
 		return tea.Batch(p.resizeContent(), util.ReportInfo(config.Text("Modo: ", "Mode: ")+modeLabel(p.mode()))), nil
 	case "plan", "task":
-		if command == "task" && value == "" {
+		if (command == "task" || command == "plan" && p.workflow.task.Objective != "") && value == "" {
 			return p.openTask(), nil
 		}
 		if value == "new" {

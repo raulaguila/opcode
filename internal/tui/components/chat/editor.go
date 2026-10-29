@@ -27,6 +27,7 @@ import (
 )
 
 type editorCmp struct {
+	commandPriorities     []string
 	width                 int
 	height                int
 	app                   *app.App
@@ -123,7 +124,12 @@ func (m *editorCmp) openEditor() tea.Cmd {
 		os.Remove(path)
 		return util.ReportError(err)
 	}
-	command := exec.Command(editor, path)
+	argv, err := editorArguments(editor)
+	if err != nil {
+		os.Remove(path)
+		return util.ReportError(err)
+	}
+	command := exec.Command(argv[0], append(argv[1:], path)...)
 	command.Stdin = os.Stdin
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
@@ -188,10 +194,13 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.preparedDraft = nil
 	}
 	switch msg := msg.(type) {
+	case CommandContextMsg:
+		m.commandPriorities = msg.Priorities
+		return m, nil
 	case editorResultMsg:
 		m.textarea.SetValue(msg.Text)
 		m.textarea.CursorEnd()
-		return m, m.send()
+		return m, nil
 	case SaveDraftMsg:
 		if err := m.PersistDraft(); err != nil {
 			return m, util.ReportError(err)
@@ -206,6 +215,9 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.attachments = cloneAttachments(msg.Attachments)
 		return m, nil
 	case SubmissionResultMsg:
+		if msg.KeepDraft {
+			return m, nil
+		}
 		sameSession := m.submissionText == "" || m.session.ID == m.submissionSession
 		m.submitting = false
 		if msg.Error == nil && msg.Text != "" && sameSession {

@@ -25,6 +25,7 @@ func ModelMetadata(model models.Model) func(context.Context) (models.Model, erro
 			model.ContextSource = found.ContextSource
 			model.DefaultMaxTokens = min(model.DefaultMaxTokens, model.ContextWindow/2)
 		}
+		model.SupportsTools = found.SupportsTools
 		return providerModelDefaults(p, model), nil
 	}
 }

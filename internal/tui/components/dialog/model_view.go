@@ -140,7 +140,7 @@ func (m *modelDialogCmp) modelLabel(model models.Model) string {
 }
 
 func (m *modelDialogCmp) modelDetailLines() []string {
-	if !m.details || m.selectedIdx < 0 || m.selectedIdx >= len(m.filtered) {
+	if m.selectedIdx < 0 || m.selectedIdx >= len(m.filtered) {
 		return nil
 	}
 	selected := m.filtered[m.selectedIdx]
@@ -160,7 +160,21 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 			context += " (" + contextNote + ")"
 		}
 	}
-	rows := []string{"ID: " + selected.APIModel, context}
+	tools := config.Text("Ferramentas: não informado", "Tools: not reported")
+	if selected.SupportsTools != nil {
+		if *selected.SupportsTools {
+			tools = config.Text("Ferramentas: informadas pelo provedor", "Tools: reported by provider")
+		} else {
+			tools = config.Text("Ferramentas: não suportadas", "Tools: not supported")
+		}
+	}
+	if !m.details {
+		if m.height > 0 && m.height < 18 {
+			return []string{context}
+		}
+		return []string{context, tools}
+	}
+	rows := []string{"ID: " + selected.APIModel, context, tools}
 	if m.height > 0 && m.height < 18 {
 		return rows
 	}
@@ -259,7 +273,7 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	position += config.Text(" · ✓ atual", " · ✓ current")
 	rows = append(rows, line(position))
-	hint := config.Text("↑↓ · Enter escolhe · Esc volta · Ctrl+D detalhes", "↑↓ · Enter choose · Esc back · Ctrl+D details")
+	hint := config.Text("Enter escolhe · Alt+←/→ provedor · Ctrl+D detalhes · Esc", "Enter choose · Alt+←/→ provider · Ctrl+D details · Esc")
 	if g.width < 48 {
 		hint = config.Text("↑↓ · Enter · Esc · Ctrl+D", "↑↓ · Enter · Esc · Ctrl+D")
 	}

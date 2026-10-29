@@ -5,6 +5,7 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -21,6 +22,8 @@ import (
 
 type SessionSelectedMsg struct{ Session session.Session }
 type CloseSessionDialogMsg struct{}
+type SessionPreviewRequestMsg struct{ ID string }
+type SessionPreviewLoadedMsg struct{ ID, Text string }
 type SessionActionMsg struct {
 	Action  string
 	Session session.Session
@@ -35,16 +38,27 @@ type SessionDialog interface {
 	SetArchived(map[string]bool)
 }
 type sessionDialogCmp struct {
-	sessions, filtered                 []session.Session
-	selectedIdx, width, height, offset int
-	selectedSessionID, query, rename   string
-	editing, showArchived              bool
-	archived                           map[string]bool
+	sessions, filtered                   []session.Session
+	selectedIdx, width, height, offset   int
+	selectedSessionID, query, rename     string
+	previewID, preview, requestedPreview string
+	editing, showArchived                bool
+	archived                             map[string]bool
 }
 
-func (s *sessionDialogCmp) Init() tea.Cmd { return nil }
-func (s *sessionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (s *sessionDialogCmp) Init() tea.Cmd { return s.requestPreview() }
+func (s *sessionDialogCmp) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+	defer func() {
+		if preview := s.requestPreviewIfIdle(cmd); preview != nil {
+			cmd = tea.Batch(cmd, preview)
+		}
+	}()
 	switch msg := msg.(type) {
+	case SessionPreviewLoadedMsg:
+		if msg.ID == s.requestedPreview {
+			s.previewID, s.preview = msg.ID, msg.Text
+		}
+
 	case tea.WindowSizeMsg:
 		s.width, s.height = msg.Width, msg.Height
 	case tea.MouseMsg:
@@ -140,7 +154,11 @@ func (s *sessionDialogCmp) rows() int {
 	if s.height == 0 {
 		return 10
 	}
-	return max(1, min(10, s.height-10))
+	reserve := 10
+	if s.height >= 18 {
+		reserve += 2
+	}
+	return max(1, min(10, s.height-reserve))
 }
 func (s *sessionDialogCmp) move(delta int) {
 	if len(s.filtered) == 0 {
@@ -190,18 +208,35 @@ func (s *sessionDialogCmp) View() string {
 	}
 	for i := s.offset; i < min(len(s.filtered), s.offset+s.rows()); i++ {
 		item := s.filtered[i]
-		label := item.Title
+		label := ansi.Strip(item.Title)
+		if i == s.selectedIdx {
+			label = "› " + label
+		} else {
+			label = "  " + label
+		}
 		if item.ID == s.selectedSessionID {
 			label = "● " + label
 		}
 		if s.archived[item.ID] {
 			label += config.Text(" · arquivada", " · archived")
 		}
+		if width >= 48 {
+			age := sessionRecency(item.UpdatedAt, time.Now())
+			label = ansi.Truncate(label, max(1, width-ansi.StringWidth(age)-2), "…")
+			label += strings.Repeat(" ", max(2, width-ansi.StringWidth(label)-ansi.StringWidth(age))) + age
+		}
 		row := base
 		if i == s.selectedIdx {
 			row = row.Background(t.Primary()).Foreground(t.Background())
 		}
 		rows = append(rows, row.Render(ansi.Truncate(label, width, "…")))
+	}
+	if len(s.filtered) > 0 && !s.editing && (s.height == 0 || s.height >= 18) {
+		preview := config.Text("Carregando prévia…", "Loading preview…")
+		if s.previewID == s.filtered[s.selectedIdx].ID {
+			preview = s.preview
+		}
+		rows = append(rows, line(""), line(preview))
 	}
 	if s.editing {
 		rows = append(rows, line(config.Text("Novo título: ", "New title: ")+s.rename), line(config.Text("Enter salva · Esc volta", "Enter save · Esc back")))
@@ -215,8 +250,55 @@ func (s *sessionDialogCmp) BindingKeys() []key.Binding {
 }
 func (s *sessionDialogCmp) SetSessions(items []session.Session) {
 	s.sessions = slices.Clone(items)
+	slices.SortStableFunc(s.sessions, func(a, b session.Session) int {
+		if a.UpdatedAt > b.UpdatedAt {
+			return -1
+		}
+		if a.UpdatedAt < b.UpdatedAt {
+			return 1
+		}
+		return 0
+	})
+	s.previewID, s.preview, s.requestedPreview = "", "", ""
 	s.filter()
 }
 func (s *sessionDialogCmp) SetSelectedSession(id string)         { s.selectedSessionID = id; s.filter() }
 func (s *sessionDialogCmp) SetArchived(archived map[string]bool) { s.archived = archived; s.filter() }
 func NewSessionDialogCmp() SessionDialog                         { return &sessionDialogCmp{archived: map[string]bool{}} }
+
+func (s *sessionDialogCmp) requestPreview() tea.Cmd {
+	if len(s.filtered) == 0 {
+		return nil
+	}
+	id := s.filtered[s.selectedIdx].ID
+	if s.requestedPreview == id {
+		return nil
+	}
+	s.requestedPreview = id
+	return util.CmdHandler(SessionPreviewRequestMsg{ID: id})
+}
+func sessionRecency(updated int64, now time.Time) string {
+	if updated <= 0 {
+		return config.Text("sem data", "undated")
+	}
+	elapsed := now.Sub(time.Unix(updated, 0))
+	switch {
+	case elapsed < time.Minute:
+		return config.Text("agora", "now")
+	case elapsed < time.Hour:
+		return fmt.Sprintf("%dm", int(elapsed.Minutes()))
+	case elapsed < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(elapsed.Hours()))
+	case elapsed < 7*24*time.Hour:
+		return fmt.Sprintf("%dd", int(elapsed.Hours()/24))
+	default:
+		return time.Unix(updated, 0).Format("2006-01-02")
+	}
+}
+
+func (s *sessionDialogCmp) requestPreviewIfIdle(cmd tea.Cmd) tea.Cmd {
+	if cmd != nil || s.editing {
+		return nil
+	}
+	return s.requestPreview()
+}

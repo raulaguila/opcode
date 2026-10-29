@@ -57,7 +57,10 @@ func PlaceOverlay(
 			if i == 0 {
 				shadowbg += bgchar + strings.Repeat(bgchar, fgWidth) + "\n"
 			} else {
-				shadowbg += bgchar + strings.Repeat(shadowchar, fgWidth) + "\n"
+				shadowbg += bgchar + strings.Repeat(shadowchar, fgWidth)
+				if i < fgHeight {
+					shadowbg += "\n"
+				}
 			}
 		}
 

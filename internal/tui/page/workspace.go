@@ -47,6 +47,7 @@ type WorkspaceResultMsg struct {
 	session string
 	seq     uint64
 	body    string
+	details string
 	err     error
 	applied bool
 }
@@ -59,6 +60,8 @@ type workspacePanel struct {
 	focus                   int
 	contractKind            string
 	kind, title, body, note string
+	details                 string
+	showDetails             bool
 	diffMode                string
 	selected                int
 	actions                 []workspaceAction
@@ -78,6 +81,10 @@ var writeClipboard = clipboard.WriteAll
 
 func (p *chatPage) WorkspaceFocused() bool { return p.workspace.kind != "" }
 func (p *chatPage) closeWorkspace() {
+	p.workspaceHistory = nil
+	p.resetWorkspace()
+}
+func (p *chatPage) resetWorkspace() {
 	if p.workspace.cancel != nil {
 		p.workspace.cancel()
 	}
@@ -85,7 +92,7 @@ func (p *chatPage) closeWorkspace() {
 	p.workspace = workspacePanel{seq: seq}
 }
 func (p *chatPage) showWorkspace(kind, title, body string) {
-	p.closeWorkspace()
+	p.resetWorkspace()
 	p.workspace.kind, p.workspace.title, p.workspace.body = kind, safePanel(title), safePanel(body)
 	p.workspace.view = viewport.New(max(1, p.width-4), max(1, p.height-6))
 	p.workspace.view.SetContent(p.workspace.body)
@@ -117,6 +124,7 @@ func (p *chatPage) workspaceResult(msg WorkspaceResultMsg) tea.Cmd {
 		return util.ReportError(msg.err)
 	}
 	p.workspace.note = ""
+	p.workspace.details = safePanel(msg.details)
 	if msg.body != "" {
 		p.workspace.body = safePanel(msg.body)
 		p.workspace.view.SetContent(p.workspace.body)
@@ -145,6 +153,7 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 	case "commands":
 		return util.CmdHandler(OpenCommandsMsg{})
 	case "terminal":
+		p.closeWorkspace()
 		return p.toggleTerminal()
 	case "worktrees":
 		return p.openGitWorkspace()
@@ -223,7 +232,7 @@ func (p *chatPage) openQueue() tea.Cmd {
 	p.showWorkspace("queue", config.Text("Instruções pendentes", "Pending instructions"), "")
 	control, ok := p.app.CoderAgent.(agent.QueueControl)
 	if !ok {
-		p.workspace.body = "Fila indisponível neste agente"
+		p.workspace.body = config.Text("Fila indisponível neste agente", "Queue unavailable for this agent")
 		return nil
 	}
 	for _, item := range control.QueuedInstructions(p.session.ID) {
@@ -271,21 +280,20 @@ func (p *chatPage) openContext(compact bool) tea.Cmd {
 		return nil
 	}
 	id := p.session.ID
-	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
+	return p.workspaceDetailedAsync(func(ctx context.Context) (string, string, error) {
 		status, err := control.ContextStatus(ctx, id)
 		if compact {
 			status, err = control.CompactContext(ctx, id)
 		}
 		if err != nil {
-			return "", false, err
+			return "", "", err
 		}
-		total := status.EstimatedInputTokens + status.ReservedOutputTokens + status.SafetyTokens
-		text := fmt.Sprintf(config.Text("Método: %s\nJanela: %d tokens\nEntrada estimada: %d\nSchemas das ferramentas: %d\nReserva de resposta: %d\nMargem: %d\nTotal previsto: %d\nCabe na janela: %t\nMensagens compactadas: %d\n\nA estimativa inclui instruções, histórico e schemas. R recalibra o limite aprendido. O limite do servidor pode ser menor. Compactar altera apenas a preparação do contexto, preservando a conversa salva.", "Method: %s\nEffective window: %d tokens\nEstimated input: %d\nTool schemas: %d\nOutput reserve: %d\nSafety margin: %d\nEstimated total: %d\nFits window: %t\nCompacted messages: %d\n\nThe estimate includes instructions, history and schemas. R resets the learned limit. The server limit may be smaller. Compaction changes request preparation and preserves the saved conversation."), status.Method, status.ContextWindow, status.EstimatedInputTokens, status.ToolSchemaTokens, status.ReservedOutputTokens, status.SafetyTokens, total, status.Fits, status.CompactedMessages)
-		details, _ := json.MarshalIndent(status.Components, "", "  ")
-		text = fmt.Sprintf(config.Text("Origem da janela: %s\nÚltima entrada medida: %d tokens · amostras: %d\n", "Window source: %s\nLast measured input: %d tokens · samples: %d\n"), status.ContextSource, status.ActualInputTokens, status.CalibrationSamples) + text + config.Text("\n\nComponentes: ", "\n\nComponents: ") + string(details)
-		return usage + text + p.contextReceipts(ctx, id), false, nil
+		summary := contextSummary(status)
+		details, _ := json.MarshalIndent(status, "", "  ")
+		return summary + "\n\n" + usage + p.contextReceipts(ctx, id), string(details), nil
 	})
 }
+
 func (p *chatPage) openSkills() tea.Cmd {
 	p.showWorkspace("skills", config.Text("Skills disponíveis", "Available skills"), "")
 	control, ok := p.app.CoderAgent.(agent.ExtensionControl)
@@ -299,7 +307,7 @@ func (p *chatPage) openSkills() tea.Cmd {
 	for _, skill := range skills {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: skill.Name + " · " + skill.Description, kind: "skill", text: skill.Name})
 	}
-	p.workspace.body = "Enter prepara /skill NOME no rascunho. As skills vêm dos diretórios explícitos da configuração global e não concedem permissões. Hooks before_tool/after_tool são opt-in no JSON global; rodam apenas em Executar com as permissões e sandbox normais."
+	p.workspace.body = config.Text("Enter prepara /skill NOME no rascunho. As skills vêm dos diretórios explícitos da configuração global e não concedem permissões. Hooks before_tool/after_tool são opt-in no JSON global; rodam apenas em Executar com as permissões e sandbox normais.", "Enter prepares /skill NAME in the draft. Skills come from explicitly configured global directories and do not grant permissions. Hooks before_tool/after_tool are opt-in in global JSON; they run only in Execute with normal permissions and sandboxing.")
 	return nil
 }
 func (p *chatPage) invokeSkill(value string, draft ...string) tea.Cmd {
@@ -371,7 +379,7 @@ func formatValidationReport(body string) (string, error) {
 		Problem    string             `json:"validation_problem"`
 	}
 	if err := json.Unmarshal([]byte(body), &report); err != nil {
-		return "", fmt.Errorf("relatório de validação inválido")
+		return "", fmt.Errorf("%s", config.Text("relatório de validação inválido", "invalid validation report"))
 	}
 	var out strings.Builder
 	fmt.Fprintf(&out, config.Text("Revisão atual: %d · estado conferido ao abrir este painel\n", "Current revision: %d · state checked when opening this panel\n"), report.Revision)
@@ -554,7 +562,18 @@ func (p *chatPage) openFile(path string, line int) tea.Cmd {
 		return result.Content, false, err
 	})
 }
-func (p *chatPage) workspaceChoose() tea.Cmd {
+func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
+	previous := p.workspace
+	defer func() {
+		if previous.kind != "" && p.workspace.kind != "" && previous.kind != p.workspace.kind {
+			previous.cancel = nil
+			previous.loading = false
+			p.workspaceHistory = append(p.workspaceHistory, previous)
+			if len(p.workspaceHistory) > 8 {
+				p.workspaceHistory = p.workspaceHistory[len(p.workspaceHistory)-8:]
+			}
+		}
+	}()
 	if p.workspace.loading {
 		return nil
 	}
@@ -563,6 +582,8 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 	}
 	item := p.workspace.actions[p.workspace.selected]
 	switch item.kind {
+	case "adjust-plan", "execute-plan", "confirm-plan":
+		return p.planAction(item.kind)
 	case "command":
 		return p.workspaceCommand(item.text, "")
 	case "worktree-open", "worktree-open-confirm", "worktree-create", "worktree-create-confirm", "git-diff", "git-diff-staged", "git-checks":
@@ -598,7 +619,7 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 		text := item.text
 		return p.workspaceAsync(func(context.Context) (string, bool, error) {
 			if err := writeClipboard(text); err != nil {
-				return "", false, fmt.Errorf("clipboard indisponível; escolha Selecionar texto: %w", err)
+				return "", false, fmt.Errorf(config.Text("clipboard indisponível; escolha Selecionar texto: %w", "clipboard unavailable; choose Select text: %w"), err)
 			}
 			return config.Text("Conteúdo copiado para a área de transferência.", "Content copied to clipboard."), false, nil
 		})
@@ -617,6 +638,12 @@ func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch msg.String() {
+	case "d":
+		if p.workspace.details != "" {
+			p.workspace.showDetails = !p.workspace.showDetails
+			p.workspace.view.GotoTop()
+		}
+		return nil
 	case "t":
 		if p.workspace.kind == "turn" || p.workspace.kind == "review" {
 			switch p.workspace.diffMode {
@@ -630,7 +657,7 @@ func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	case "esc":
-		p.closeWorkspace()
+		p.backWorkspace()
 		return nil
 	case "enter":
 		return p.workspaceChoose()
@@ -712,12 +739,19 @@ func (p *chatPage) workspaceView() string {
 	if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
 		help = config.Text("Enter arquivo · T diff · U desfaz · R refaz · Esc volta", "Enter file · T diff · U undo · R redo · Esc back")
 	}
+	if p.workspace.details != "" {
+		help = config.Text("D detalhes · ", "D details · ") + help
+	}
 	p.workspace.view.Width = w
 	p.workspace.view.Height = max(1, h)
 	if p.workspace.kind == "turn" || p.workspace.kind == "review" {
 		p.workspace.view.SetContent(dialog.RenderReviewDiff(p.workspace.body, w, p.workspace.diffMode))
 	} else {
-		p.workspace.view.SetContent(ansi.Hardwrap(safePanel(p.workspace.body), w, true))
+		body := p.workspace.body
+		if p.workspace.showDetails {
+			body += "\n\n" + p.workspace.details
+		}
+		p.workspace.view.SetContent(ansi.Hardwrap(safePanel(body), w, true))
 	}
 	if contextPanel(p.workspace.kind) {
 		lines = append(lines, ansi.Truncate(config.Text("1 Orçamento · 2 Índice · 3 Alocação · 4 Diagnóstico", "1 Budget · 2 Index · 3 Allocation · 4 Diagnostics"), w, "…"))
@@ -810,7 +844,7 @@ func (p *chatPage) workspaceMouse(msg tea.MouseMsg) tea.Cmd {
 
 func (p *chatPage) retryRequest(draft string) tea.Cmd {
 	if p.lastRequest.Text == "" {
-		err := fmt.Errorf("nenhuma pergunta anterior disponível")
+		err := fmt.Errorf("%s", config.Text("nenhuma pergunta anterior disponível", "no previous question available"))
 		return tea.Batch(util.ReportError(err), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: err}))
 	}
 	if strings.HasPrefix(p.lastRequest.Text, "/skill ") {
@@ -854,27 +888,39 @@ func (p *chatPage) openIndex(action string) tea.Cmd {
 		action = "status"
 	}
 	p.showWorkspace("index", config.Text("Índice do projeto", "Project index"), "")
-	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
-		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
+	return p.workspaceDetailedAsync(func(ctx context.Context) (string, string, error) {
 		verb, path, _ := strings.Cut(strings.TrimSpace(action), " ")
-		text, err := tools.IndexStatusJSON(ctx, verb, strings.TrimSpace(path))
-		return text + config.Text("\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain CAMINHO. Nenhuma inferência é executada.", "\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain PATH. No inference is executed."), false, err
+		status, err := tools.ControlCodeIndex(ctx, verb, strings.TrimSpace(path))
+		if err != nil {
+			return "", "", err
+		}
+		state := config.Text("Ativo", "Active")
+		if status.Paused {
+			state = config.Text("Pausado", "Paused")
+		}
+		summary := fmt.Sprintf(config.Text("Índice: %s\n%d arquivos · %d trechos · %d pendentes\n\nA busca usa este índice derivado; os arquivos originais são preservados.", "Index: %s\n%d files · %d chunks · %d pending\n\nSearch uses this derived index; original files are preserved."), state, status.Files, status.Chunks, status.Pending)
+		if status.Exclusion != "" {
+			summary += "\n" + status.Exclusion
+		}
+		summary += config.Text("\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain CAMINHO. Nenhuma inferência é executada.", "\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain PATH. No inference is executed.")
+		raw, err := json.MarshalIndent(status, "", "  ")
+		return summary, string(raw), err
 	})
 }
 
 func (p *chatPage) openRuntime() tea.Cmd {
 	p.showWorkspace("runtime", config.Text("Diagnóstico da execução", "Execution diagnostics"), "")
-	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
+	return p.workspaceDetailedAsync(func(ctx context.Context) (string, string, error) {
 		c, ok := p.app.CoderAgent.(agent.RuntimeDiagnosticControl)
 		if !ok {
-			return "", false, fmt.Errorf("runtime diagnostic unavailable")
+			return "", "", fmt.Errorf("%s", config.Text("diagnóstico indisponível", "runtime diagnostic unavailable"))
 		}
 		report, err := c.RuntimeDiagnostic(ctx, p.session.ID)
 		if err != nil {
-			return "", false, err
+			return "", "", err
 		}
 		raw, err := json.MarshalIndent(report, "", "  ")
-		return string(raw), false, err
+		summary := fmt.Sprintf(config.Text("Modelo: %v\nProtocolo: %v\nProjeto: %v\n\nDiagnóstico da configuração atual. Credenciais omitidas; não executa inferência. D mostra os detalhes técnicos.", "Model: %v\nProtocol: %v\nProject: %v\n\nCurrent configuration diagnostics. Credentials omitted; no inference is executed. D shows technical details."), report["model"], report["protocol"], report["cwd"])
+		return summary, string(raw), err
 	})
 }

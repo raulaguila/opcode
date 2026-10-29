@@ -150,7 +150,7 @@ func (m *providerDialogCmp) experienceUpdate(msg tea.Msg) (tea.Cmd, bool) {
 				m.settingPath = s.Path
 				m.screen = "setting"
 				m.setFields([]string{s.Label}, []string{fmt.Sprint(v.Value)})
-				m.note = s.Help + " · " + v.Origin + config.Text(" · Ctrl+S salvar · Ctrl+R restaurar", " · Ctrl+S save · Ctrl+R reset")
+				m.note = localizedSettingHelp(s.Help) + " · " + v.Origin + config.Text(" · Ctrl+S salvar · Ctrl+R restaurar", " · Ctrl+S save · Ctrl+R reset")
 				return textinput.Blink, true
 			}
 		default:
@@ -175,7 +175,19 @@ func (m *providerDialogCmp) experienceUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		return nil, true
 	}
-	return nil, true
+	var cmd tea.Cmd
+	if m.screen == "setting" && len(m.fields) > 0 {
+		if len(settingOptions(m.settingPath)) == 0 {
+			m.fields[0], cmd = m.fields[0].Update(msg)
+		}
+	} else if m.screen == "settings" || m.screen == "effective" {
+		before := m.settingsFilter.Value()
+		m.settingsFilter, cmd = m.settingsFilter.Update(msg)
+		if before != m.settingsFilter.Value() {
+			m.selected = 0
+		}
+	}
+	return cmd, true
 }
 
 type UserPreferencesChangedMsg struct{}

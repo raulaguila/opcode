@@ -19,6 +19,7 @@ func GetMarkdownRenderer(width int) *glamour.TermRenderer {
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(generateMarkdownStyleConfig()),
 		glamour.WithWordWrap(width),
+		glamour.WithColorProfile(lipgloss.ColorProfile()),
 	)
 	return r
 }
@@ -249,12 +250,8 @@ func generateMarkdownStyleConfig() ansi.StyleConfig {
 			},
 		},
 		Table: ansi.StyleTable{
-			StyleBlock: ansi.StyleBlock{
-				StylePrimitive: ansi.StylePrimitive{
-					BlockPrefix: "\n",
-					BlockSuffix: "\n",
-				},
-			},
+			// The table renderer supplies block spacing. Prefix/suffix here also
+			// apply to cells and would hide headers behind an initial blank line.
 			CenterSeparator: stringPtr("┼"),
 			ColumnSeparator: stringPtr("│"),
 			RowSeparator:    stringPtr("─"),

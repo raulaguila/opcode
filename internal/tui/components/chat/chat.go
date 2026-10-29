@@ -21,8 +21,9 @@ type SendMsg struct {
 }
 
 type SubmissionResultMsg struct {
-	Text  string
-	Error error
+	Text      string
+	Error     error
+	KeepDraft bool // Panel actions submit independently of the composer.
 }
 
 type SessionSelectedMsg = session.Session

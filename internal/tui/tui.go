@@ -940,7 +940,9 @@ func (a *appModel) moveToPage(pageID page.PageID) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (a appModel) View() string {
+// baseView is shared by rendering and mouse hit testing so both use the same
+// bounded page dimensions, including while a page is loading or resizing.
+func (a appModel) baseView() string {
 	pageView := a.pages[a.currentPage].View()
 	if a.width > 0 {
 		if a.height == 0 {
@@ -958,22 +960,11 @@ func (a appModel) View() string {
 
 	components = append(components, a.statusView())
 
-	appView := lipgloss.JoinVertical(lipgloss.Top, components...)
+	return lipgloss.JoinVertical(lipgloss.Top, components...)
+}
 
-	if a.showPermissions {
-		overlay := a.permissions.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
+func (a appModel) View() string {
+	appView := a.baseView()
 
 	if a.showFilepicker {
 		overlay := a.filepicker.View()
@@ -1288,12 +1279,7 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 }
 
 func (a appModel) modelDialogOrigin() (int, int) {
-	base := lipgloss.JoinVertical(lipgloss.Top, a.pages[a.currentPage].View(), a.statusView())
-	overlay := a.modelDialog.View()
-	width, height := lipgloss.Width(base), lipgloss.Height(base)
-	ow, oh := lipgloss.Width(overlay), lipgloss.Height(overlay)
-	// PlaceOverlay adds a one-cell shadow, then clamps the origin.
-	return max(0, min(width/2-ow/2, width-ow-1)), max(0, min(height/2-oh/2, height-oh-1))
+	return a.dialogOrigin(a.modelDialog.View())
 }
 
 func agentEventSession(event agent.AgentEvent, fallback string) string {

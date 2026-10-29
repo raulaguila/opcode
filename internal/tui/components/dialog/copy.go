@@ -12,7 +12,7 @@ func interfaceCopy(english string) string {
 		return "› " + interfaceCopy(strings.TrimPrefix(english, "› "))
 	}
 	portuguese := map[string]string{
-		"Backend": "Provedor", "Transport": "Transporte", "Disabled": "Desativado", "Initial mode": "Modo inicial", "Resume most recent session": "Retomar conversa recente", "Show process by default": "Mostrar processo ao iniciar", "OAuth enabled": "OAuth ativo",
+		"Connection active": "Conexão ativa", "Backend": "Provedor", "Transport": "Transporte", "Disabled": "Desativado", "Initial mode": "Modo inicial", "Resume most recent session": "Retomar conversa recente", "Show process by default": "Mostrar processo ao iniciar", "OAuth enabled": "OAuth ativo",
 		"previous theme": "tema anterior", "next theme": "próximo tema", "select theme": "escolher tema", "switch options": "trocar opção", "confirm": "confirmar", "yes": "sim", "no": "não", "toggle selection": "trocar seleção", "yes/no": "sim/não", "delete attachment at index i": "remover anexo i", "cancel delete mode": "cancelar remoção", "delete all attchments": "remover todos os anexos",
 		"Ctrl+P settings · Ctrl+A role · Ctrl+R catalog · Ctrl+T probe · Esc":             "Ctrl+P ajustes · Ctrl+A função · Ctrl+R catálogo · Ctrl+T teste · Esc",
 		"Configure a connection once; choose its model with Ctrl+O.":                      "Configure uma conexão; escolha o modelo com Ctrl+O.",
@@ -72,4 +72,21 @@ func interfaceCopy(english string) string {
 		return config.Text(pt, english)
 	}
 	return english
+}
+
+func localizedSettingHelp(help string) string {
+	translations := map[string]string{
+		"0: auto (72); 1–240 columns. Code keeps full width.": "0: automático (72); 1–240 colunas. Código mantém a largura disponível.",
+		"auto, shown, hidden": "automático, visível ou oculto",
+		"pt, en":              "português ou inglês",
+		"off, bell, auto, native, osc (only when unfocused)": "desativadas, sino, automático, nativas ou OSC (somente sem foco)",
+		"true, false":        "ativado ou desativado",
+		"ask, plan, execute": "Perguntar, Planejar ou Executar",
+		"1–7200 seconds":     "1–7200 segundos", "1–1800 seconds": "1–1800 segundos", "1–600 seconds": "1–600 segundos",
+		"ctrl+letter, alt+letter": "ctrl+letra ou alt+letra",
+	}
+	if translated, ok := translations[help]; ok {
+		return config.Text(translated, help)
+	}
+	return help
 }

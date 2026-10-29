@@ -22,7 +22,10 @@ import (
 
 type OpenProviderDialogMsg struct{ Setup bool }
 type CloseProviderDialogMsg struct{}
-type ProviderSettingsSavedMsg struct{ ProviderChanged bool }
+type ProviderSettingsSavedMsg struct {
+	ProviderChanged bool
+	Disabled        bool
+}
 type providerTestMsg struct {
 	request uint64
 	count   int
@@ -119,7 +122,7 @@ func (m *providerDialogCmp) setFields(labels, values []string) {
 func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 	m.Close()
 	m.screen = "provider"
-	m.note = "Ctrl+T tests metadata only; Ctrl+S saves. Credentials stay in your environment."
+	m.note = ""
 	m.legacy = false
 	m.originalID = ""
 	m.originalKey = ""
@@ -139,7 +142,7 @@ func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 			profile.APIKeyEnv = config.ProviderEnvironmentName(profile.Backend)
 		}
 	}
-	m.setFields([]string{"Profile ID", "Name", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API base URL", "API key environment variable", "API (empty/chat_completions/responses/ollama)", "Context window (0 uses catalog)", "Default output tokens (0 uses catalog)", "Disabled (true/false)"}, []string{id, profile.Name, string(profile.Backend), profile.BaseURL, profile.APIKeyEnv, profile.API, strconv.FormatInt(profile.ContextWindow, 10), strconv.FormatInt(profile.DefaultMaxTokens, 10), strconv.FormatBool(profile.Disabled)})
+	m.setFields([]string{"Profile ID", "Name", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API base URL", "API key environment variable", "API (empty/chat_completions/responses/ollama)", "Context window (0 uses catalog)", "Default output tokens (0 uses catalog)", "Connection active (true/false)"}, []string{id, profile.Name, string(profile.Backend), profile.BaseURL, profile.APIKeyEnv, profile.API, strconv.FormatInt(profile.ContextWindow, 10), strconv.FormatInt(profile.DefaultMaxTokens, 10), strconv.FormatBool(!profile.Disabled)})
 	m.advanced = false
 	m.fields[0].Blur()
 	m.focus = 1
@@ -174,9 +177,10 @@ func (m *providerDialogCmp) readProfile() (string, config.ProviderProfile, error
 	if err != nil || p.DefaultMaxTokens < 0 {
 		return "", p, fmt.Errorf("output tokens must be a nonnegative integer")
 	}
-	p.Disabled, err = strconv.ParseBool(value(8))
+	active, err := strconv.ParseBool(value(8))
+	p.Disabled = !active
 	if err != nil {
-		return "", p, fmt.Errorf("disabled must be true or false")
+		return "", p, fmt.Errorf("connection active must be true or false")
 	}
 	return id, p, nil
 }
@@ -206,10 +210,12 @@ func (m *providerDialogCmp) save() tea.Cmd {
 		}
 	}
 	var err error
+	disabled := false
 	if m.screen == "provider" {
 		var id string
 		var p config.ProviderProfile
 		id, p, err = m.readProfile()
+		disabled = p.Disabled
 		if err == nil {
 			if m.legacy {
 				err = config.SaveProvider(p.Backend, p.Provider)
@@ -248,7 +254,7 @@ func (m *providerDialogCmp) save() tea.Cmd {
 	}
 	changed := m.screen == "provider"
 	m.Close()
-	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed})
+	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Disabled: disabled})
 }
 func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.experienceUpdate(msg); handled {
@@ -264,7 +270,7 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.note = config.Text("Falha na consulta: ", "Connection test failed: ") + msg.err.Error()
 		} else {
-			m.note = fmt.Sprintf(config.Text("Conectado · %d modelos disponíveis. Ctrl+S salva.", "Connected · %d models available. Ctrl+S saves this connection."), msg.count)
+			m.note = fmt.Sprintf(config.Text("Catálogo consultado · %d modelos. Ferramentas não testadas. Ctrl+S salva.", "Catalog queried · %d models. Tools not tested. Ctrl+S saves."), msg.count)
 		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -294,7 +300,7 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(indices) {
 					m.fields[m.focus].Blur()
 					m.focus = indices[i]
-					return m, m.fields[i].Focus()
+					return m, m.fields[m.focus].Focus()
 				}
 			}
 		}
@@ -347,6 +353,12 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		switch msg.String() {
+		case "ctrl+g":
+			if m.screen == "provider" {
+				m.fields[8].SetValue("true")
+				return m, m.save()
+			}
+			return m, nil
 		case "ctrl+s":
 			return m, m.save()
 		case "ctrl+a":
@@ -424,6 +436,15 @@ func (m *providerDialogCmp) View() string {
 				p := config.Get().ProviderProfiles[row.id]
 				label = p.Name + " · " + row.id + " (" + string(p.Backend) + ")"
 			}
+			disabled := false
+			if row.legacy {
+				disabled = config.Get().Providers[models.ModelProvider(row.id)].Disabled
+			} else {
+				disabled = config.Get().ProviderProfiles[row.id].Disabled
+			}
+			if disabled {
+				label += config.Text(" · desativada", " · disabled")
+			}
 			style := base
 			if i == m.selected {
 				style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
@@ -447,7 +468,10 @@ func (m *providerDialogCmp) View() string {
 		}
 		hint := "Tab/↑↓ fields · Ctrl+S save · Esc back"
 		if m.screen == "provider" {
-			hint = config.Text("Ctrl+A avançado · Ctrl+T catálogo · Ctrl+S salvar", "Ctrl+A advanced · Ctrl+T metadata · Ctrl+S save")
+			hint = config.Text("Ctrl+S salvar · Ctrl+T catálogo · Ctrl+A mais · Esc", "Ctrl+S save · Ctrl+T catalog · Ctrl+A more · Esc")
+			if m.fields[8].Value() == "false" {
+				hint = config.Text("Ctrl+G salvar e ativar · ", "Ctrl+G save and enable · ") + hint
+			}
 		}
 		lines = append(lines, line(hint))
 	}
@@ -481,7 +505,7 @@ func (m *providerDialogCmp) fieldCount() int {
 
 func (m *providerDialogCmp) fieldIndices() []int {
 	if m.screen == "provider" && !m.advanced {
-		return []int{1, 3, 4}
+		return []int{1, 3, 4, 8}
 	}
 	indices := make([]int, len(m.fields))
 	for i := range indices {

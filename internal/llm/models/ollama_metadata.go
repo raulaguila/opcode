@@ -49,11 +49,21 @@ func enrichOllamaContexts(ctx context.Context, client *http.Client, endpoint, ke
 			continue
 		}
 		var details struct {
-			Parameters string                     `json:"parameters"`
-			Info       map[string]json.RawMessage `json:"model_info"`
+			Capabilities *[]string                  `json:"capabilities"`
+			Parameters   string                     `json:"parameters"`
+			Info         map[string]json.RawMessage `json:"model_info"`
 		}
 		if json.Unmarshal(raw, &details) != nil {
 			continue
+		}
+		if details.Capabilities != nil {
+			supported := false
+			for _, capability := range *details.Capabilities {
+				if capability == "tools" {
+					supported = true
+				}
+			}
+			model.SupportsTools = &supported
 		}
 		var architecture string
 		_ = json.Unmarshal(details.Info["general.architecture"], &architecture)

@@ -1,0 +1,107 @@
+{
+  "date": "2026-10-29",
+  "scope": "Twelve UI/UX follow-up priorities from the review after 39aa5a4",
+  "source_base": "39aa5a465a5ad7501235014e6a504233d35acabf",
+  "source_revision": "Accompanying commit",
+  "binary_sha256": "c65fd0d492d60cb10f72204a4b963462eb963f5c1cbea3e8eb98a2671eaad17a",
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_weakened": false,
+    "completion_criteria_changed": false,
+    "comparative_evaluation_criteria_changed": false,
+    "new_approval_defaults_to_deny": true,
+    "editor_return_requires_explicit_send": true,
+    "disabled_connections_require_explicit_enable": true
+  },
+  "checks": {
+    "go_test_race_all": "passed: go test -race -p 2 ./...",
+    "go_vet_all": "passed",
+    "go_vet_integration_tui": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "focused_regressions": [
+    "Approval selection resets; Esc and Enter deny; actual rendered mouse targets work at 60x20, 80x24 and 120x36.",
+    "Disabled profiles remain visible; basic form focus targets visible fields; saving does not activate silently.",
+    "External editor returns a draft; quoted EDITOR arguments do not invoke a shell; asynchronous clipboard reaches the intended fields using fake clipboard executables.",
+    "Semantic text colors meet the tested 4.5 contrast ratio against light/dark backgrounds; compact initialization and textual selection markers fit.",
+    "Plan execution requires explicit mode confirmation; text and attachment-only drafts survive; busy sessions refuse mode changes.",
+    "Slash and palette share contextual ranking and accent-insensitive Portuguese/English search.",
+    "Context/index/runtime show summaries with explicit technical details; inspecting them does not compact automatically.",
+    "Nested panels return to previous selection/scroll, ignore stale asynchronous results and update task actions without moving focus.",
+    "Ollama tool capability metadata preserves unknown/false/true; only metadata endpoints are used.",
+    "Session previews ignore application repair messages, preserve recency and ignore stale selection results.",
+    "Warning actions open the appropriate panel without triggering execution or retry.",
+    "Mixed Markdown retains narrow prose, wide code/tables, reference links, numbering and NO_COLOR output; stored/copied text is unchanged."
+  ],
+  "live_acceptance": {
+    "command": "OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 OPCODE_LIVE_OLLAMA_MODEL=llama3.1:8b OPCODE_EVAL_BINARY=<built-binary> go test -tags=integration ./internal/tui -run \"^(TestLiveOllamaPTYUI|TestPTYUI.*)$\" -count=1 -timeout=10m -v",
+    "status": "passed",
+    "main_flow_seconds": 19.2,
+    "suite_seconds": 21.64,
+    "provider": "local Ollama",
+    "model": "llama3.1:8b",
+    "protocol": "ollama",
+    "binary_cgo_enabled": false,
+    "sandbox": "bubblewrap",
+    "fixture_context_limit": 16384,
+    "isolated_home_and_workspace": true,
+    "inherited_credentials": false,
+    "downloaded_models": false,
+    "source_fixtures_unchanged": true,
+    "terminal_sizes": [
+      [
+        60,
+        20
+      ],
+      [
+        80,
+        24
+      ],
+      [
+        120,
+        36
+      ],
+      [
+        180,
+        40
+      ]
+    ],
+    "compact_themes": [
+      "dark",
+      "light",
+      "NO_COLOR"
+    ],
+    "denied_lsp_probes": 2,
+    "approved_lsp_probes": 1,
+    "approved_bash_commands": 1,
+    "replayed_bash_commands": 0,
+    "overview_sha256": "7183e17df406c0515cc1f34bcad9485d3d0acf7e948af3eea12f8457e40803d0",
+    "checks": [
+      "Unicode paste and 3–8-row composer preserve drafts through resize and model/mode dialogs.",
+      "Catalog search, pagination and no-result state remain functional.",
+      "An LSP probe cannot run before approval; Esc and default Enter refuse it; clicking Allow approves the exact request.",
+      "No raw noisy LSP stderr reaches the terminal.",
+      "Real Ollama produces a factual fixture explanation with a source citation.",
+      "The exact PTY command is checked against the persisted tool call and approved once.",
+      "Live output precedes exit; HUMAN_PTY_OK reaches terminal stdin.",
+      "A queued instruction is persisted after the tool result and answered without replaying the command.",
+      "The idle composer returns and source fixtures remain unchanged.",
+      "Dark, light and NO_COLOR render at 60x20 and resize to 80x24; NO_COLOR contains no color sequences."
+    ]
+  },
+  "development_failures_resolved": [
+    "Temporary binary write exceeded /tmp quota; final binary and build caches were placed in the workspace.",
+    "Compact startup waits now synchronize with the rendered application instead of an intermediate terminal frame.",
+    "PTY approval click exposed an extra shadow row that displaced mouse targets. Shadow height and shared bounded dialog geometry were corrected; a root-render regression reproduces the original defect.",
+    "Review caught attachment-only draft loss and application messages in session previews; both now have regression coverage."
+  ],
+  "limitations": [
+    "This local PTY fixture is not a new comparative quality or latency benchmark against Codaro or Crush.",
+    "Automated VT checks and computed color contrast do not replace acceptance in every terminal or assistive technology.",
+    "The LSP failure is a controlled fixture, not every real language server.",
+    "The 16384 context fixture limits test resource use and is not saved to the user configuration.",
+    "Tool capability reported by the provider is metadata, not a verified tool-calling quality score.",
+    "Other provider APIs were not called in this UI validation."
+  ]
+}

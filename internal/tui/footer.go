@@ -32,8 +32,8 @@ func (a *appModel) footerClick(x int) tea.Cmd {
 		items := a.contextualCommands()
 		a.commandDialog.SetCommands(items)
 		a.showCommandDialog = true
-	case "queue":
-		return util.CmdHandler(page.WorkspaceCommandMsg{Command: "queue"})
+	case "queue", "context", "error", "settings", "integrations":
+		return util.CmdHandler(page.WorkspaceCommandMsg{Command: action})
 	}
 	return nil
 }

@@ -276,7 +276,7 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	position += config.Text(" · ✓ atual", " · ✓ current")
 	rows = append(rows, line(position))
-	hint := config.Text("Enter escolhe · Ctrl+F ★ · Alt+←/→ provedor · Ctrl+D · Esc", "Enter choose · Ctrl+F ★ · Alt+←/→ provider · Ctrl+D · Esc")
+	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+F ★ · Ctrl+D · Esc", "Enter choose · Tab provider · Ctrl+F ★ · Ctrl+D · Esc")
 	if g.width < 48 {
 		hint = config.Text("↑↓ · Enter · Esc · Ctrl+D", "↑↓ · Enter · Esc · Ctrl+D")
 	}
@@ -288,7 +288,7 @@ func (m *modelDialogCmp) catalogView() string {
 		if len(m.reasoningModel().ReasoningChoices()) > 0 {
 			rows = append(rows, line(config.Text("Ctrl+E esforço do modelo ativo", "Ctrl+E active model effort")))
 		}
-		rows = append(rows, line(config.Text("Alt+←/→ provedor · Ctrl+F ★ · Ctrl+R atualiza", "Alt+←/→ provider · Ctrl+F ★ · Ctrl+R refresh")))
+		rows = append(rows, line(config.Text("Alt+←/→ ou Tab/Shift+Tab provedor · Ctrl+R atualiza", "Alt+←/→ or Tab/Shift+Tab provider · Ctrl+R refresh")))
 		rows = append(rows, line(config.Text("Ctrl+A função · Ctrl+T testar · Ctrl+P conexão", "Ctrl+A role · Ctrl+T probe · Ctrl+P connection")))
 	}
 	frame := styles.BaseStyle().Padding(g.padY, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderNormal()).Render(strings.Join(rows, "\n"))

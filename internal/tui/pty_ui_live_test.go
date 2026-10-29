@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"github.com/raulaguila/opcode/internal/clipboard"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
@@ -76,6 +78,17 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	for _, name := range []string{"coder", "title", "summarizer", "task"} {
 		agents[name] = map[string]any{"model": modelID}
 	}
+	// A second loopback connection has a distinct catalog, so navigation must
+	// replace the model list rather than merely changing the provider title.
+	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"data":[{"id":"UI_NAVIGATION_ONLY_MODEL"}]}`)
+	}))
+	defer catalog.Close()
 	configuration := map[string]any{
 		"data": map[string]any{"directory": data}, "runtime": map[string]any{"mode": "ask"},
 		"tui":       map[string]any{"language": "en", "sidebar": "hidden"},
@@ -84,7 +97,8 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 		"providers": map[string]any{"local": map[string]any{"baseURL": endpoint, "api": "ollama"}},
 		"models":    map[string]any{modelID: map[string]any{"provider": "local", "api_model": model, "api": "ollama", "context_window": 16384, "default_max_tokens": 2048}},
 		"agents":    agents, "autoCompact": false,
-		"lsp": map[string]any{"00-ui-acceptance": map[string]any{"command": "/bin/bash", "args": []string{filepath.Join(workspace, "lsp-stderr.sh")}, "fileTypes": []string{"go"}, "rootMarkers": []string{"go.mod"}}},
+		"providerProfiles": map[string]any{"navigation": map[string]any{"name": "Navigation fixture", "backend": "local", "baseURL": catalog.URL + "/v1", "api": "chat_completions"}},
+		"lsp":              map[string]any{"00-ui-acceptance": map[string]any{"command": "/bin/bash", "args": []string{filepath.Join(workspace, "lsp-stderr.sh")}, "fileTypes": []string{"go"}, "rootMarkers": []string{"go.mod"}}},
 	}
 	raw, err := json.Marshal(configuration)
 	require.NoError(t, err)
@@ -121,6 +135,20 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("\x0f") // Ctrl+O opens model selection even with a draft.
 	h.wait("model selector", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Choose model") })
 	h.wait("provider catalog", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Provider catalog") })
+	for _, keys := range []struct{ next, previous string }{
+		{"\x1b[1;3C", "\x1b[1;3D"},         // Xterm Alt+arrows.
+		{"\x1b[57351;3u", "\x1b[57350;3u"}, // CSI-u Alt+arrows.
+		{"\t", "\x1b[Z"},                   // Tab/Shift+Tab fallback.
+	} {
+		h.send(keys.next)
+		h.wait("second provider and distinct catalog", 10*time.Second, func(frame string) bool {
+			return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+		})
+		h.send(keys.previous)
+		h.wait("Ollama provider restored", 10*time.Second, func(frame string) bool {
+			return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+		})
+	}
 	for i := 0; i < 16; i++ {
 		h.send("\x1b[B")
 	}

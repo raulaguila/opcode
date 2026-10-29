@@ -66,8 +66,8 @@ var modelKeys = struct {
 }{
 	key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "previous model")),
 	key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "next model")),
-	key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("Alt+←", "previous provider")),
-	key.NewBinding(key.WithKeys("alt+right"), key.WithHelp("Alt+→", "next provider")),
+	key.NewBinding(key.WithKeys("alt+left", "shift+tab"), key.WithHelp("Alt+←/Shift+Tab", "previous provider")),
+	key.NewBinding(key.WithKeys("alt+right", "tab"), key.WithHelp("Alt+→/Tab", "next provider")),
 	key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select model")),
 	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close")),
 	key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "refresh models")),
@@ -325,6 +325,10 @@ func (m *modelDialogCmp) choose() tea.Cmd {
 }
 func (m *modelDialogCmp) switchProvider(offset int) tea.Cmd {
 	if len(m.availableProviders) < 2 {
+		m.note = config.Text("Este é o único provedor habilitado · Ctrl+P conexões", "This is the only enabled provider · Ctrl+P connections")
+		if len(m.availableProviders) == 0 {
+			m.note = config.Text("Nenhum provedor habilitado · Ctrl+P conexões", "No enabled providers · Ctrl+P connections")
+		}
 		return nil
 	}
 	index := slices.Index(m.availableProviders, m.provider)

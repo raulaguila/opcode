@@ -52,10 +52,30 @@ func TestEnhancedKeyboardUsesRealBubbleTeaDecoder(t *testing.T) {
 		"\x1b[233;3u":   "alt+é",
 		"\r":            "enter",
 		"\x1b\r":        "alt+enter",
+		"\x1b[1;3D":     "alt+left",
+		"\x1b[1;3C":     "alt+right",
 	} {
 		t.Run(want+sequence, func(t *testing.T) {
 			key := captureKey(t, sequence, NewKeyboard(io.Discard))
 			require.Equal(t, want, key.String())
+		})
+	}
+}
+
+func TestEnhancedProviderArrowsUseRealDecoder(t *testing.T) {
+	for _, tc := range []struct{ input, want string }{
+		{"\x1b[57350;3u", "alt+left"},
+		{"\x1b[57351;3u", "alt+right"},
+		{"\x1b[57350;1u", "left"},
+		{"\x1b[57351;2u", "shift+right"},
+		{"\x1b[57350;5u", "ctrl+left"},
+		{"\x1b[57351;8u", "alt+ctrl+shift+right"},
+		{"\x1b[57351;3:2u", "alt+right"},
+		{"\x1b[57350;3:3u\x1b[57351;3u", "alt+right"},
+	} {
+		t.Run(tc.want+tc.input, func(t *testing.T) {
+			got := captureKey(t, tc.input, NewKeyboard(io.Discard))
+			require.Equal(t, tc.want, got.String())
 		})
 	}
 }

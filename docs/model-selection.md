@@ -77,8 +77,12 @@ quando você escolhe um modelo.
 
 - Clique no nome do modelo com `▾`, no rodapé, ou pressione `Ctrl+O`.
 - O seletor começa no provedor do modelo atual e consulta seu catálogo ao vivo.
-- Use `Alt+←`/`Alt+→` para alternar entre os provedores habilitados. Também é possível
-  clicar na metade esquerda/direita do título.
+- Use `Alt+←`/`Alt+→` para alternar entre os provedores habilitados. `Shift+Tab`/`Tab`
+  fazem a mesma navegação quando o terminal ou editor intercepta o atalho Alt.
+  Também é possível clicar na metade esquerda/direita do título. Com apenas um
+  provedor habilitado, a tentativa mostra um aviso e `Ctrl+P` abre as conexões.
+  Navegar consulta o catálogo da conexão escolhida e limpa o filtro anterior;
+  o modelo ativo só muda após confirmar uma linha.
 - Digite parte do nome ou ID para filtrar. A busca tem cursor próprio; `←`/`→`,
   `Home`, `End` e `Backspace` editam o texto sem alterar o rascunho da conversa.
 - Use `↑`/`↓`, `PgUp`/`PgDn` ou a roda do mouse para navegar; `Enter` ou clique

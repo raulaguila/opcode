@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-29",
+  "source_base": "a57fd50",
+  "source_revision": "Accompanying commit",
+  "scope": "Provider navigation in model picker: CSI-u Alt arrows, Tab fallback and single-provider feedback",
+  "binary_sha256": "a6663efa6caf59646759054eacdfbcb3becacc20b028b33fef2f88a444dac760",
+  "reproduction": {
+    "standard_xterm_alt_arrows": "already switched distinct catalogs in component test",
+    "csi_u_functional_arrows": "ignored by old keyboard adapter; reproduced through real Bubble Tea decoder",
+    "tab_navigation": "previously unavailable",
+    "single_enabled_provider": "previously returned without user feedback",
+    "actual_user_terminal_bytes": "not captured; terminal interception remains a possible external cause"
+  },
+  "checks": {
+    "go_test_race_all": "passed",
+    "go_vet_all": "passed",
+    "go_vet_integration_tui": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "regressions": [
+    "CSI-u left/right keys preserve Alt/Ctrl/Shift modifiers",
+    "Key releases do not navigate; pasted escape sequences are not shortcuts",
+    "Alt and Tab navigation replace catalogs and clear previous search filter",
+    "Late catalog results cannot replace current connection list",
+    "Disabled providers are excluded; one enabled provider produces actionable notice",
+    "Browsing does not persist a model selection"
+  ],
+  "live": {
+    "status": "passed",
+    "provider": "local Ollama plus independent loopback catalog fixture",
+    "model": "llama3.1:8b",
+    "sandbox": "bubblewrap",
+    "main_flow_seconds": 23.58,
+    "suite_seconds": 26.69,
+    "navigation": [
+      "xterm Alt+Left/Right",
+      "CSI-u Alt+Left/Right",
+      "Tab/Shift+Tab"
+    ],
+    "catalogs_differ": true,
+    "subsequent_flow": [
+      "factual repository overview",
+      "question and answer",
+      "separately approved LSP probe",
+      "one exact approved Bash command",
+      "live command output",
+      "PTY input",
+      "queued instructions",
+      "composer and modal resize",
+      "compact themes"
+    ]
+  },
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_changed": false,
+    "provider_credentials_changed": false,
+    "dependencies_added": false,
+    "real_remote_api_used": false
+  },
+  "limits": [
+    "Application cannot receive a shortcut intercepted by the terminal/editor or operating system; Tab/Shift+Tab and title clicks provide alternatives",
+    "Single-provider notice explains configuration state without enabling another provider automatically"
+  ]
+}

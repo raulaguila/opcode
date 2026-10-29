@@ -37,7 +37,7 @@ quando exigem atenção. O campo mantém três linhas iniciais.
 | --- | --- |
 | Cadastrar/editar conexão e preferências | `/settings` ou `/providers` |
 | Escolher modelo | Clique no modelo do rodapé, `Ctrl+O` ou `/models` |
-| Trocar conexão no seletor | `Alt+←`/`Alt+→` ou metades do título |
+| Trocar conexão no seletor | `Alt+←`/`Alt+→`, `Shift+Tab`/`Tab` ou metades do título |
 | Buscar, marcar favorito, atualizar catálogo | Digitar, `Ctrl+F`, `Ctrl+R` |
 | Busca aproximada de modelos | Digite parte das letras na ordem, por exemplo `llm8b` para `llama3.1:8b` |
 | Mostrar/ocultar detalhes técnicos do modelo | `Ctrl+D` no seletor |

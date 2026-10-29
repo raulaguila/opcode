@@ -52,11 +52,12 @@ func compactCompletedBatches(history []message.Message) ([]message.Message, int)
 			continue
 		}
 		type action struct {
-			Name   string `json:"tool"`
-			CallID string `json:"call_id"`
-			Source string `json:"message_id"`
-			Result string `json:"historical_result"`
-			Failed bool   `json:"failed"`
+			Name       string                   `json:"tool"`
+			CallID     string                   `json:"call_id"`
+			Source     string                   `json:"message_id"`
+			Result     string                   `json:"historical_result"`
+			Failed     bool                     `json:"failed"`
+			SourceRead *tools.SourceReadReceipt `json:"source_read,omitempty"`
 		}
 		entries := []action{}
 		calls := history[i].ToolCalls()
@@ -64,7 +65,16 @@ func compactCompletedBatches(history []message.Message) ([]message.Message, int)
 			for j := i + 1; j <= b.last; j++ {
 				for _, r := range history[j].ToolResults() {
 					if r.ToolCallID == c.ID {
-						entries = append(entries, action{c.Name, c.ID, history[j].ID, clip(tools.RedactCredentials(r.Content), 180), r.IsError})
+						entry := action{Name: c.Name, CallID: c.ID, Source: history[j].ID, Result: clip(tools.RedactCredentials(r.Content), 180), Failed: r.IsError}
+						if !r.IsError {
+							if receipt, ok := tools.VisibleSourceReadReceipt(c.Name, r.Content, r.Metadata); ok {
+								entry.SourceRead = &receipt
+								// Keep an exact locator even when the body is abbreviated.
+								// Freshness must still be checked by a native read/validator.
+								entry.Result = "Read source interval; use the saved message for exact content and revalidate the hash before relying on it."
+							}
+						}
+						entries = append(entries, entry)
 					}
 				}
 			}

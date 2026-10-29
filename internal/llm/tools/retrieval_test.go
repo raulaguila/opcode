@@ -224,7 +224,7 @@ func TestCodeIndexCredentialChangesInvalidateCacheAndRetainLegacyIndex(t *testin
 func TestMixedLanguageFiltersAndTextFallback(t *testing.T) {
 	root := productivityV2Workspace(t)
 	fixtures := map[string]struct{ Text, Language string }{
-		"main.go": {"package demo\nfunc Needle() {}\n", "go"}, "main.py": {"def needle(): pass\n", "python"}, "main.ts": {"function needle() {}\n", "typescript"}, "main.tsx": {"function Needle() { return <div/> }\n", "tsx"}, "main.js": {"function needle() {}\n", "javascript"}, "main.rs": {"fn needle() {}\n", "rust"}, "main.java": {"class Needle {}\n", "java"}, "main.cpp": {"void needle() {}\n", "cpp"}, "main.cs": {"class Needle {}\n", "csharp"}, "main.kt": {"fun needle() {}\n", "kotlin"}, "main.sql": {"SELECT 'needle';\n", "sql"}, "main.xyz": {"needle unknown language\n", "text"},
+		"main.go": {"package demo\nfunc Needle() {}\n", "go"}, "main.py": {"def needle(): pass\n", "python"}, "main.ts": {"function needle() {}\n", "typescript"}, "main.tsx": {"function Needle() { return <div/> }\n", "tsx"}, "main.js": {"function needle() {}\n", "javascript"}, "main.rs": {"fn needle() {}\n", "rust"}, "main.java": {"class Needle {}\n", "java"}, "main.cpp": {"void needle() {}\n", "cpp"}, "main.cs": {"class Needle {}\n", "csharp"}, "main.kt": {"fun needle() {}\n", "kotlin"}, "main.sql": {"SELECT 'needle';\n", "sql"}, "main.nix": {"{ needle = 37; }\n", "nix"}, "main.xyz": {"needle unknown language\n", "text"},
 	}
 	for path, fixture := range fixtures {
 		retrievalFixture(t, root, path, fixture.Text)
@@ -242,7 +242,7 @@ func TestMixedLanguageFiltersAndTextFallback(t *testing.T) {
 			require.NotEmpty(t, page.Results)
 			for _, hit := range page.Results {
 				require.Equal(t, fixture.Language, hit.Language)
-				expected := map[string]string{"go": "function", "python": "function", "javascript": "function", "typescript": "function", "tsx": "function", "rust": "function", "cpp": "function", "csharp": "class", "java": "class"}[hit.Language]
+				expected := map[string]string{"go": "function", "python": "function", "javascript": "function", "typescript": "function", "tsx": "function", "rust": "function", "cpp": "function", "csharp": "class", "java": "class", "kotlin": "function"}[hit.Language]
 				if expected == "" {
 					expected = "text"
 				}
@@ -250,4 +250,26 @@ func TestMixedLanguageFiltersAndTextFallback(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExpandedParserPolicyRebuildsUnchangedLegacyChunks(t *testing.T) {
+	root := productivityV2Workspace(t)
+	retrievalFixture(t, root, "ledger.rb", "class Ledger\n def needle\n  37\n end\nend\n")
+	tool := SecureTool(NewCodeIndexTool(), nil)
+	page := searchPage(t, tool, map[string]any{"query": "needle", "language": "ruby"})
+	require.NotEmpty(t, page.Results)
+	db, err := openCodeIndex(toolContext(), root)
+	require.NoError(t, err)
+	secrets := credentialValues()
+	sort.Strings(secrets)
+	legacy := indexDigest("parser-v3\x00" + strings.Join(secrets, "\x00"))
+	_, err = db.Exec(`UPDATE files SET policy=?`, legacy)
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE chunks SET symbol='<file>',kind='text'`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+	page = searchPage(t, tool, map[string]any{"query": "needle", "language": "ruby"})
+	require.NotEmpty(t, page.Results)
+	require.Equal(t, "Ledger.needle", page.Results[0].Symbol)
+	require.Equal(t, "method", page.Results[0].Kind)
 }

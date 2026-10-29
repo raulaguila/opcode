@@ -8,6 +8,16 @@ import (
 )
 
 func DetectLanguageID(uri string) protocol.LanguageKind {
+	switch strings.ToLower(filepath.Base(uri)) {
+	case "dockerfile", "containerfile":
+		return protocol.LangDockerfile
+	case "makefile", "gnumakefile":
+		return protocol.LangMakefile
+	case "cmakelists.txt":
+		return protocol.LanguageKind("cmake")
+	case "gemfile", "rakefile", "vagrantfile":
+		return protocol.LangRuby
+	}
 	ext := strings.ToLower(filepath.Ext(uri))
 	switch ext {
 	case ".abap":
@@ -20,9 +30,9 @@ func DetectLanguageID(uri string) protocol.LanguageKind {
 		return protocol.LangClojure
 	case ".coffee":
 		return protocol.LangCoffeescript
-	case ".c":
+	case ".c", ".h":
 		return protocol.LangC
-	case ".cpp", ".cxx", ".cc", ".c++":
+	case ".cpp", ".cxx", ".cc", ".c++", ".hpp", ".hh", ".hxx":
 		return protocol.LangCPP
 	case ".cs":
 		return protocol.LangCSharp
@@ -62,7 +72,7 @@ func DetectLanguageID(uri string) protocol.LanguageKind {
 		return protocol.LangIni
 	case ".java":
 		return protocol.LangJava
-	case ".js":
+	case ".js", ".mjs", ".cjs":
 		return protocol.LangJavaScript
 	case ".jsx":
 		return protocol.LangJavaScriptReact
@@ -92,13 +102,13 @@ func DetectLanguageID(uri string) protocol.LanguageKind {
 		return protocol.LangPowershell
 	case ".pug", ".jade":
 		return protocol.LangPug
-	case ".py":
+	case ".py", ".pyi":
 		return protocol.LangPython
 	case ".r":
 		return protocol.LangR
 	case ".cshtml", ".razor":
 		return protocol.LangRazor
-	case ".rb":
+	case ".rb", ".rake":
 		return protocol.LangRuby
 	case ".rs":
 		return protocol.LangRust
@@ -116,7 +126,7 @@ func DetectLanguageID(uri string) protocol.LanguageKind {
 		return protocol.LangSQL
 	case ".swift":
 		return protocol.LangSwift
-	case ".ts":
+	case ".ts", ".mts", ".cts":
 		return protocol.LangTypeScript
 	case ".tsx":
 		return protocol.LangTypeScriptReact
@@ -126,6 +136,16 @@ func DetectLanguageID(uri string) protocol.LanguageKind {
 		return protocol.LangXSL
 	case ".yaml", ".yml":
 		return protocol.LangYAML
+	case ".kt", ".kts":
+		return protocol.LanguageKind("kotlin")
+	case ".vue":
+		return protocol.LanguageKind("vue")
+	case ".svelte":
+		return protocol.LanguageKind("svelte")
+	case ".tf", ".tfvars", ".hcl":
+		return protocol.LanguageKind("terraform")
+	case ".toml":
+		return protocol.LanguageKind("toml")
 	default:
 		return protocol.LanguageKind("") // Unknown language
 	}

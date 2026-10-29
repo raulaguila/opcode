@@ -21,6 +21,7 @@ type ollamaClient struct {
 }
 
 const ollamaFinalAnswer = "final_answer"
+const ollamaSourceAnswer = "answer_with_sources"
 
 func newOllamaClient(opts providerClientOptions, endpoint string) *ollamaClient {
 	c := &ollamaClient{opts: opts}
@@ -85,7 +86,7 @@ func (o *ollamaClient) request(history []message.Message, definitions []tools.Ba
 	var functions []object
 	for _, tool := range definitions {
 		info := tool.Info()
-		if info.Name == ollamaFinalAnswer {
+		if info.Name == ollamaFinalAnswer || info.Name == ollamaSourceAnswer {
 			return "", nil, fmt.Errorf("Ollama tool name final_answer is reserved for replies")
 		}
 		functions = append(functions, object{"type": "function", "function": object{"name": info.Name, "description": info.Description, "parameters": toolSchema(tool)}})
@@ -93,11 +94,21 @@ func (o *ollamaClient) request(history []message.Message, definitions []tools.Ba
 	if len(functions) > 0 {
 		// Some Ollama templates request a function for every trailing user
 		// message. Give them a way to answer without inventing a shell action.
-		functions = append(functions, object{"type": "function", "function": object{
+		final := object{
 			"name": ollamaFinalAnswer, "description": "Reply to the user with your final answer after gathering needed facts or completing the requested work. This only sends your answer; it does not execute a command. Use this when no further tool operation is needed.",
-			"parameters": object{"type": "object", "properties": object{"answer": object{"type": "string", "description": "The final answer in the user's language."}}, "required": []string{"answer"}},
-		}})
-		messages[0]["content"] = o.opts.systemMessage + "\nWhen the required facts or work are complete, call final_answer with your answer text to finish the turn. In particular, a request to reply or acknowledge something uses final_answer, never bash echo/printf or another operation."
+			"parameters": object{"type": "object", "properties": object{"answer": object{"type": "string", "description": "The complete answer to the original user request in its language, including the requested facts and inspected path:line citations for code explanations."}}, "required": []string{"answer"}},
+		}
+		instruction := "\nWhen the required facts or work are complete, call final_answer with your answer text to finish the turn. A request to reply or acknowledge something uses final_answer, never bash echo/printf or another operation."
+		if len(o.opts.sourceCitations) > 0 {
+			final = object{"name": ollamaSourceAnswer, "description": "Finish the corrected explanation of the original user's project or code defect. This sends a reply, never executes an operation. Explain the actual finding in the user's language and select the inspected source.",
+				"parameters": object{"type": "object", "additionalProperties": false, "properties": object{
+					"source":      object{"type": "string", "enum": o.opts.sourceCitations, "description": "Select one inspected file and line interval."},
+					"explanation": object{"type": "string", "description": "Answer the ORIGINAL user request in its language. Preserve the project name and requested facts or explain the actual defect. Do not discuss the application validation notice."},
+				}, "required": []string{"source", "explanation"}}}
+			instruction = "\nFor this citation correction, finish with answer_with_sources: choose source from its enum and put your corrected answer in explanation. Do not call final_answer for this correction. Do not explain the validation notice or repeat successful reads. Source selection is still verified by the application."
+		}
+		functions = append(functions, object{"type": "function", "function": final})
+		messages[0]["content"] = o.opts.systemMessage + instruction
 		params["tools"] = functions
 	}
 	return "/api/chat", params, nil
@@ -146,16 +157,39 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 	finalAnswer := ""
 	for _, call := range value.Message.ToolCalls {
 		if response.FinishReason == message.FinishReasonMaxTokens || call.Function.Name == "" || !ollamaArgumentsValid(call.Function.Arguments) {
+			if response.FinishReason != message.FinishReasonMaxTokens && (call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer) {
+				return nil, fmt.Errorf("%w: incomplete Ollama reply arguments", ErrInvalidFinalAnswer)
+			}
 			return nil, fmt.Errorf("Ollama returned an incomplete tool call")
 		}
-		if call.Function.Name == ollamaFinalAnswer {
+		if call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer {
 			var args struct {
-				Answer string `json:"answer"`
+				Answer      string `json:"answer"`
+				Citations   string `json:"citations_text"`
+				Source      string `json:"source"`
+				Explanation string `json:"explanation"`
 			}
-			if finalAnswer != "" || json.Unmarshal(call.Function.Arguments, &args) != nil || strings.TrimSpace(args.Answer) == "" {
-				return nil, fmt.Errorf("invalid Ollama final answer")
+			if finalAnswer != "" || json.Unmarshal(call.Function.Arguments, &args) != nil {
+				return nil, fmt.Errorf("%w: invalid Ollama final answer", ErrInvalidFinalAnswer)
+			}
+			if call.Function.Name == ollamaSourceAnswer {
+				if strings.TrimSpace(args.Source) == "" || strings.TrimSpace(args.Explanation) == "" {
+					return nil, fmt.Errorf("%w: invalid Ollama source answer", ErrInvalidFinalAnswer)
+				}
+				args.Answer, args.Citations = args.Explanation, args.Source
+			}
+			if strings.TrimSpace(args.Answer) == "" {
+				return nil, fmt.Errorf("%w: invalid Ollama final answer", ErrInvalidFinalAnswer)
 			}
 			finalAnswer = args.Answer
+			if len(args.Citations) > 2048 {
+				return nil, fmt.Errorf("%w: Ollama final answer citations exceed limit", ErrInvalidFinalAnswer)
+			}
+			if strings.TrimSpace(args.Citations) != "" {
+				// These are model-provided references, not application assertions.
+				// The agent still verifies every path/range/hash before completion.
+				finalAnswer += "\n\n" + strings.TrimSpace(args.Citations)
+			}
 			continue
 		}
 		response.ToolCalls = append(response.ToolCalls, message.ToolCall{ID: cmp.Or(call.ID, uuid.NewString()), Name: call.Function.Name,

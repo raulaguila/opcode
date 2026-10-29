@@ -10,11 +10,12 @@ import (
 )
 
 type Question struct {
-	ID          string   `json:"id"`
-	SessionID   string   `json:"session_id"`
-	Question    string   `json:"question"`
-	Explanation string   `json:"explanation,omitempty"`
-	Choices     []string `json:"choices,omitempty"`
+	ID          string         `json:"id"`
+	SessionID   string         `json:"session_id"`
+	Question    string         `json:"question"`
+	Explanation string         `json:"explanation,omitempty"`
+	Choices     []string       `json:"choices,omitempty"`
+	Questions   []QuestionItem `json:"questions,omitempty"`
 }
 type pending struct {
 	question Question
@@ -37,14 +38,20 @@ func (s *Questions) Pending(session string) (Question, bool) {
 	defer s.mu.Unlock()
 	p, ok := s.pending[session]
 	q := p.question
-	q.Choices = append([]string(nil), q.Choices...)
+	q = cloneQuestion(q)
 	return q, ok
 }
 func (s *Questions) Ask(ctx context.Context, q Question) (string, error) {
 	if strings.TrimSpace(q.SessionID) == "" {
 		return "", fmt.Errorf("question requires a session")
 	}
-	if strings.TrimSpace(q.Question) == "" || len(q.Question) > 500 || len(q.Explanation) > 1000 || len(q.Choices) > 5 {
+	if len(q.Questions) > 0 {
+		var err error
+		q, err = normalizeBatch(q)
+		if err != nil {
+			return "", err
+		}
+	} else if strings.TrimSpace(q.Question) == "" || len(q.Question) > 500 || len(q.Explanation) > 1000 || len(q.Choices) > 5 {
 		return "", fmt.Errorf("question requires text (up to 500 bytes), explanation up to 1000 and at most five choices")
 	}
 	for _, choice := range q.Choices {
@@ -65,7 +72,7 @@ func (s *Questions) Ask(ctx context.Context, q Question) (string, error) {
 		return "", fmt.Errorf("a question is already pending")
 	}
 	q.ID = uuid.NewString()
-	q.Choices = append([]string(nil), q.Choices...)
+	q = cloneQuestion(q)
 	p := pending{question: q, answer: make(chan string, 1)}
 	s.pending[q.SessionID] = p
 	s.mu.Unlock()
@@ -87,7 +94,7 @@ func (s *Questions) Ask(ctx context.Context, q Question) (string, error) {
 	}
 }
 func (s *Questions) Answer(session, id, text string) error {
-	if strings.TrimSpace(text) == "" || len(text) > 4000 {
+	if strings.TrimSpace(text) == "" || len(text) > 20000 {
 		return fmt.Errorf("answer must contain 1–4000 bytes")
 	}
 	s.mu.Lock()
@@ -95,6 +102,17 @@ func (s *Questions) Answer(session, id, text string) error {
 	p, ok := s.pending[session]
 	if !ok || p.question.ID != id {
 		return fmt.Errorf("question is no longer pending")
+	}
+	if len(p.question.Questions) > 0 {
+		batch, err := parseAnswerBatch(text)
+		if err != nil {
+			return fmt.Errorf("invalid question answers")
+		}
+		if err := ValidateAnswers(p.question, batch.Answers); err != nil {
+			return err
+		}
+	} else if len(text) > 4000 {
+		return fmt.Errorf("answer must contain 1–4000 bytes")
 	}
 	select {
 	case p.answer <- text:

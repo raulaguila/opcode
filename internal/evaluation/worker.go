@@ -16,11 +16,13 @@ import (
 	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/llm/prompt"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/session"
+	"github.com/raulaguila/opcode/internal/version"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/spf13/viper"
 )
@@ -136,11 +138,18 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 		}
 	}
 	retrieved := []string{}
+	strategies := []string{}
 	for _, msg := range history {
 		for _, r := range msg.ToolResults() {
 			if !r.IsError {
-				var page struct{ Results []struct{ Path string } }
+				var page struct {
+					Results  []struct{ Path string }
+					Strategy string
+				}
 				if json.Unmarshal([]byte(r.Content), &page) == nil {
+					if page.Strategy != "" && len(strategies) < 8 && !contains(strategies, page.Strategy) {
+						strategies = append(strategies, page.Strategy)
+					}
 					for _, hit := range page.Results {
 						if len(retrieved) < 200 {
 							retrieved = append(retrieved, hit.Path)
@@ -151,6 +160,7 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 		}
 	}
 	result := Evaluate(job.Case, job.Workspace, Observation{Response: response.String(), Error: runError, Tools: calls, Task: task, RetrievedPaths: retrieved})
+	result.RetrievalStrategies = strategies
 	callsByID := map[string]string{}
 	for _, msg := range history {
 		for _, call := range msg.ToolCalls() {
@@ -175,12 +185,25 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 		result.AgentFailureKind = evaluationFailureKind(runError.Error())
 	}
 	result.Application = "opcode"
+	result.ApplicationVersion = version.Version
+	result.APIModel = service.Model().APIModel
+	result.Protocol = service.Model().API
+	if result.Protocol == "ollama" {
+		zero := 0.0
+		result.Temperature = &zero
+	}
+	result.OutputReserve = cfg.Agents[config.AgentCoder].MaxTokens
+	result.PromptVersion = prompt.Version
 	result.ContextWindow = service.Model().ContextWindow
 	if control, ok := service.(agent.ContextControl); ok {
 		if status, e := control.ContextStatus(ctx, saved.ID); e == nil {
 			result.ContextWindow = status.ContextWindow
+			result.ContextMethod = status.Method
+			result.ContextComponents = status.Components
+			result.OutputReserve = status.ReservedOutputTokens
 		}
 	}
+	result.PromptProfile = prompt.ProfileForWindow(result.ContextWindow)
 	result.MetricsOrigin = "native runtime usage and observed tool receipts; title generation excluded"
 	if job.Conditions.ContextWindow > 0 && result.ContextWindow != job.Conditions.ContextWindow {
 		result.MetricsOrigin += "; effective context differs from requested comparison"

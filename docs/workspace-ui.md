@@ -26,6 +26,7 @@ quando exigem atenção. O campo mantém três linhas iniciais.
 | Escolher modelo | Clique no modelo do rodapé, `Ctrl+O` ou `/models` |
 | Trocar conexão no seletor | `←`/`→` ou metades do título |
 | Buscar, marcar favorito, atualizar catálogo | Digitar, `Ctrl+F`, `Ctrl+R` |
+| Busca aproximada de modelos | Digite parte das letras na ordem, por exemplo `llm8b` para `llama3.1:8b` |
 | Mostrar/ocultar detalhes técnicos do modelo | `Ctrl+D` no seletor |
 | Escolher função principal ou auxiliar | `Ctrl+A`: coder, task, title, summarizer |
 | MCP e servidores de linguagem | `/integrations` ou `I` em Settings |
@@ -266,3 +267,6 @@ Durante comandos ativos, há uma prévia de saída de até seis linhas, sem tran
 o foco do chat. Ela desaparece ao terminar e fica recolhida em telas com menos de
 20 linhas; Ctrl+P mantém o terminal completo disponível. `/index` e `/runtime`
 abrem painéis de controle/diagnóstico, sem acrescentar barras permanentes.
+
+
+Veja também a [evolução comparativa](comparative-evolution.md) para perguntas agrupadas, busca aproximada de modelos, citações verificadas e diagnóstico de linguagens.

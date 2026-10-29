@@ -124,8 +124,11 @@ resultado esperado de tarefas e trabalhar com Git/worktrees.
 | Revisão | Diffs por interação, recibos de checks e undo/redo de edições de arquivos com detecção de conflitos e aprovação. |
 | Conversas | Busca, renomeação, arquivamento, exportação, retomada opcional e ações de recuperação de erro. |
 | Ferramentas | Listagem paginada, índice local com filtros e prévias curtas, mapa, outline/símbolos, artefatos paginados, checks, navegação/edição LSP e MCP sob demanda. |
+| Linguagens | 26 perfis de parsers locais; diagnóstico `doctor --languages --json` distingue parser, LSP e checks sem instalar ferramentas. |
+| Referências | Citações verificadas contra caminho, linhas realmente lidas e hash atual; reparo limitado preserva o pedido original. |
+| Decisões | Perguntas individuais ou agrupadas com seleção única/múltipla, texto livre e revisão antes do envio. |
 | Extensões | Skills invocadas explicitamente pelo usuário e hooks globais opt-in, sujeitos às permissões e ao sandbox. |
-| Avaliações | Fixtures determinísticas e avaliações reais opt-in, com critérios observáveis e suporte a Ollama. |
+| Avaliações | Fixtures e avaliações reais opt-in, drivers Codaro/Crush, comparação de condições e medição de ranking lexical/híbrido sem inferência. |
 | Confiabilidade | Conclusão com evidência de alteração ou justificativa explícita, estado parcial/bloqueado e recuperação de contexto/OOM com calibração local temporária. |
 | Produtividade | Índice incremental FTS5/BM25, exploração somente leitura com orçamento, formatação e worktrees protegidas. |
 | Preferências | Lateral adaptável, input crescente, busca de configurações com origem efetiva, atalhos, idioma e notificações opcionais. |

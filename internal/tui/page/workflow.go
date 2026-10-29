@@ -22,14 +22,17 @@ import (
 
 type WorkflowCommandMsg struct{ Command, Value string }
 type workflowPanel struct {
-	task       workflow.Task
-	expanded   bool
-	question   interaction.Question
-	answer     textinput.Model
-	choice     int
-	offset     int
-	details    bool
-	detailView viewport.Model
+	task            workflow.Task
+	expanded        bool
+	question        interaction.Question
+	answer          textinput.Model
+	choice          int
+	offset          int
+	details         bool
+	detailView      viewport.Model
+	questionIndex   int
+	batchAnswers    []interaction.AnswerItem
+	selectedChoices map[int]bool
 }
 
 func (p *chatPage) refreshWorkflow() {
@@ -55,6 +58,9 @@ func (p *chatPage) refreshWorkflow() {
 		p.workflow.detailView = viewport.New(max(1, p.width-2), max(1, p.height-8))
 		p.workflow.answer = input
 		p.workflow.choice = -1
+		p.workflow.questionIndex = 0
+		p.workflow.batchAnswers = make([]interaction.AnswerItem, len(q.Questions))
+		p.workflow.selectedChoices = map[int]bool{}
 	}
 	p.workflow.question = q
 }
@@ -140,6 +146,9 @@ func (p *chatPage) workflowHeight() int {
 	}
 	h := 1
 	if p.workflow.question.ID != "" {
+		if len(p.workflow.question.Questions) > 0 {
+			return min(p.batchQuestionHeight(), max(1, p.height-5))
+		}
 		if p.workflow.details {
 			return min(max(3, p.height-5), 18)
 		}
@@ -156,6 +165,9 @@ func (p *chatPage) workflowView() string {
 	height := p.workflowHeight()
 	if height == 0 {
 		return ""
+	}
+	if len(p.workflow.question.Questions) > 0 {
+		return p.batchQuestionView(height)
 	}
 	w := max(1, p.width-2)
 	task := p.workflow.task
@@ -218,6 +230,9 @@ func (p *chatPage) workflowView() string {
 }
 func (p *chatPage) questionKey(msg tea.KeyMsg) tea.Cmd {
 	q := p.workflow.question
+	if len(q.Questions) > 0 {
+		return p.batchQuestionKey(msg)
+	}
 	if msg.String() == "f2" {
 		p.workflow.details = !p.workflow.details
 		return p.resizeContent()

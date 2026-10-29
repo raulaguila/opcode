@@ -24,21 +24,31 @@ type Adapter struct {
 }
 type Conditions struct {
 	Model         string `json:"model"`
+	APIModel      string `json:"api_model,omitempty"`
+	Protocol      string `json:"protocol,omitempty"`
+	OutputReserve int64  `json:"output_reserve,omitempty"`
 	ContextWindow int64  `json:"context_window"`
 	Mode          string `json:"mode"`
 	FixtureSHA256 string `json:"fixture_sha256"`
 }
 type AdapterObservation struct {
-	Conditions     Conditions    `json:"conditions"`
-	Task           workflow.Task `json:"task,omitempty"`
-	Response       string        `json:"response"`
-	Error          string        `json:"error,omitempty"`
-	Tools          []string      `json:"tools"`
-	InputTokens    *int64        `json:"input_tokens"`
-	OutputTokens   *int64        `json:"output_tokens"`
-	ToolCalls      *int          `json:"tool_calls"`
-	RetrievedPaths []string      `json:"retrieved_paths"`
-	Version        string        `json:"version"`
+	Temperature            *float64      `json:"temperature"`
+	EffectiveContextWindow *int64        `json:"effective_context_window,omitempty"`
+	EffectiveOutputReserve *int64        `json:"effective_output_reserve,omitempty"`
+	Unavailable            string        `json:"unavailable,omitempty"`
+	UnsupportedCriteria    []string      `json:"unsupported_criteria,omitempty"`
+	MetricsUnavailable     []string      `json:"metrics_unavailable,omitempty"`
+	Conditions             Conditions    `json:"conditions"`
+	Task                   workflow.Task `json:"task,omitempty"`
+	Response               string        `json:"response"`
+	Error                  string        `json:"error,omitempty"`
+	Tools                  []string      `json:"tools"`
+	LocalTools             []string      `json:"local_tools,omitempty"`
+	InputTokens            *int64        `json:"input_tokens"`
+	OutputTokens           *int64        `json:"output_tokens"`
+	ToolCalls              *int          `json:"tool_calls"`
+	RetrievedPaths         []string      `json:"retrieved_paths"`
+	Version                string        `json:"version"`
 }
 
 func LoadAdapter(path string) (*Adapter, error) {
@@ -65,6 +75,8 @@ func canonicalTool(app, name string) string {
 		case "search_code":
 			return "search_code_index"
 		case "read_lines":
+			return "view"
+		case "read_symbol":
 			return "view"
 		case "run_command":
 			return "bash"
@@ -100,14 +112,30 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 		return CaseResult{ID: job.Case.ID, Status: "failed", Error: "external adapter failed or timed out; output omitted"}, nil
 	}
 	var observed AdapterObservation
-	if output.overflow || json.Unmarshal(output.data, &observed) != nil || len(observed.Tools) > 2000 || len(observed.RetrievedPaths) > 200 || len(observed.Response) > 64000 {
+	if output.overflow || json.Unmarshal(output.data, &observed) != nil || len(observed.Tools) > 2000 || len(observed.LocalTools) > 2000 || len(observed.RetrievedPaths) > 200 || len(observed.Response) > 64000 {
 		return CaseResult{}, fmt.Errorf("invalid or oversized adapter observation")
 	}
 	if observed.Conditions != job.Conditions {
 		return CaseResult{}, fmt.Errorf("adapter conditions differ: model, explicit context, mode and fixture hash must match")
 	}
+	if observed.Unavailable != "" {
+		result := unavailableResult(job.Case, "adapter capability unavailable; see adapter documentation")
+		result.Application = a.Name
+		result.Model = job.Conditions.APIModel
+		result.APIModel = job.Conditions.APIModel
+		result.OutputReserve = job.Conditions.OutputReserve
+		result.ContextWindow = job.Conditions.ContextWindow
+		result.Protocol = job.Conditions.Protocol
+		return result, nil
+	}
+	if len(observed.UnsupportedCriteria) > 8 || len(observed.MetricsUnavailable) > 12 {
+		return CaseResult{}, fmt.Errorf("adapter unavailable fields exceed limits")
+	}
 	if observed.InputTokens != nil && *observed.InputTokens < 0 || observed.OutputTokens != nil && *observed.OutputTokens < 0 || observed.ToolCalls != nil && *observed.ToolCalls < 0 {
 		return CaseResult{}, fmt.Errorf("adapter metrics must be nonnegative or null")
+	}
+	if observed.EffectiveContextWindow != nil && (*observed.EffectiveContextWindow < 4096 || *observed.EffectiveContextWindow > 2000000) || observed.EffectiveOutputReserve != nil && (*observed.EffectiveOutputReserve < 1 || *observed.EffectiveOutputReserve > 2000000) {
+		return CaseResult{}, fmt.Errorf("invalid effective adapter context")
 	}
 	calls := map[string]bool{}
 	for _, name := range observed.Tools {
@@ -118,15 +146,92 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 		runError = fmt.Errorf("external adapter reported failure")
 	}
 	result := Evaluate(job.Case, workspace, Observation{Response: observed.Response, Error: runError, Tools: calls, Task: observed.Task, RetrievedPaths: observed.RetrievedPaths})
+	if observed.Temperature != nil && (*observed.Temperature < 0 || *observed.Temperature > 2) {
+		return CaseResult{}, fmt.Errorf("invalid adapter temperature")
+	}
+	result.Temperature = observed.Temperature
+	for i, criterion := range job.Case.Criteria {
+		if contains(observed.UnsupportedCriteria, criterion.Kind) {
+			result.Criteria[i].Passed = nil
+		}
+	}
+	result.Status = "passed"
+	for _, criterion := range result.Criteria {
+		if criterion.Passed == nil && result.Status == "passed" {
+			result.Status = "unavailable"
+		}
+		if criterion.Passed != nil && !*criterion.Passed {
+			result.Status = "failed"
+		}
+	}
+	if runError != nil {
+		expected := false
+		for _, criterion := range job.Case.Criteria {
+			if criterion.Kind == "expect_error" {
+				expected = true
+			}
+		}
+		if !expected {
+			result.Status = "failed"
+		}
+	}
 	result.Application = a.Name
-	if regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.-]{1,30})?$`).MatchString(observed.Version) {
+	for _, name := range observed.Tools {
+		if len(name) <= 80 && !contains(result.NativeToolNames, name) && len(result.NativeToolNames) < 64 {
+			result.NativeToolNames = append(result.NativeToolNames, tools.RedactCredentials(name))
+		}
+		canonical := canonicalTool(a.Name, name)
+		if len(canonical) <= 80 && !contains(result.ToolNames, canonical) && len(result.ToolNames) < 64 {
+			result.ToolNames = append(result.ToolNames, tools.RedactCredentials(canonical))
+		}
+	}
+	for _, name := range observed.LocalTools {
+		if len(name) <= 80 && !contains(result.LocalToolNames, name) && len(result.LocalToolNames) < 64 {
+			result.LocalToolNames = append(result.LocalToolNames, tools.RedactCredentials(name))
+		}
+	}
+	if regexp.MustCompile(`^(?:v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.-]{1,40})?|[a-f0-9]{7,40})$`).MatchString(observed.Version) {
 		result.ApplicationVersion = tools.RedactCredentials(observed.Version)
 	}
 	result.Model = observed.Conditions.Model
+	result.APIModel = observed.Conditions.APIModel
+	result.Protocol = observed.Conditions.Protocol
+	result.OutputReserve = observed.Conditions.OutputReserve
 	result.ContextWindow = observed.Conditions.ContextWindow
+	if observed.EffectiveContextWindow != nil {
+		result.ContextWindow = *observed.EffectiveContextWindow
+	}
+	if observed.EffectiveOutputReserve != nil {
+		result.OutputReserve = *observed.EffectiveOutputReserve
+	}
 	result.InputTokens = observed.InputTokens
 	result.OutputTokens = observed.OutputTokens
 	result.ReportedToolCalls = observed.ToolCalls
 	result.MetricsOrigin = "external adapter report; policy/tool receipts not independently verified"
+	for _, name := range observed.MetricsUnavailable {
+		if contains([]string{"input_tokens", "output_tokens", "tool_calls", "retrieval", "task_receipts", "prompt_profile", "context_budget"}, name) {
+			result.MetricsUnavailable = append(result.MetricsUnavailable, name)
+		}
+	}
+	if contains(result.MetricsUnavailable, "retrieval") {
+		result.RetrievalRecall, result.RetrievalMRR = nil, nil
+	}
 	return result, nil
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func unavailableResult(c Case, reason string) CaseResult {
+	r := CaseResult{ID: c.ID, Status: "unavailable", Error: reason}
+	for _, criterion := range c.Criteria {
+		r.Criteria = append(r.Criteria, CriterionResult{Kind: criterion.Kind, Path: criterion.Path})
+	}
+	return r
 }

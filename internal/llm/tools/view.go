@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,8 +26,9 @@ type viewTool struct {
 }
 
 type ViewResponseMetadata struct {
-	FilePath string `json:"file_path"`
-	Content  string `json:"content"`
+	FilePath   string             `json:"file_path"`
+	Content    string             `json:"content"`
+	SourceRead *SourceReadReceipt `json:"source_read,omitempty"`
 }
 
 const (
@@ -162,7 +164,19 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	}
 
 	// Read the file content
-	content, lineCount, err := readTextFile(ctx, filePath, params.Offset, params.Limit)
+	var raw []byte
+	var content string
+	var lineCount int
+	// Read and hash the same snapshot. Very large files retain bounded viewing
+	// without claiming a whole-file receipt that cannot be checked within limits.
+	if fileInfo.Size() <= 16<<20 {
+		raw, err = readFile(ctx, filePath)
+		if err == nil {
+			content, lineCount, err = readTextReader(ctx, bytes.NewReader(raw), params.Offset, params.Limit)
+		}
+	} else {
+		content, lineCount, err = readTextFile(ctx, filePath, params.Offset, params.Limit)
+	}
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("error reading file: %w", err)
 	}
@@ -187,12 +201,17 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	output += "\n</file>\n"
 	output += getDiagnostics(filePath, v.lspClients)
 	recordFileRead(filePath)
+	preview := content
+	if len(preview) > 1024 {
+		preview = string([]rune(preview)[:min(256, len([]rune(preview)))]) + "\n[Preview abbreviated; full source is in the tool result.]"
+	}
+	metadata := ViewResponseMetadata{FilePath: filePath, Content: preview}
+	if raw != nil && content != "" {
+		metadata.SourceRead = &SourceReadReceipt{Path: filePath, Hash: indexDigest(string(raw)), StartLine: params.Offset + 1, EndLine: params.Offset + len(strings.Split(content, "\n"))}
+	}
 	return WithResponseMetadata(
 		NewTextResponse(output),
-		ViewResponseMetadata{
-			FilePath: filePath,
-			Content:  content,
-		},
+		metadata,
 	), nil
 }
 
@@ -227,6 +246,10 @@ func readTextFile(ctx context.Context, filePath string, offset, limit int) (stri
 		return "", 0, err
 	}
 	defer file.Close()
+	return readTextReader(ctx, file, offset, limit)
+}
+
+func readTextReader(ctx context.Context, source io.Reader, offset, limit int) (string, int, error) {
 
 	if offset < 0 {
 		return "", 0, fmt.Errorf("offset must be nonnegative")
@@ -235,7 +258,7 @@ func readTextFile(ctx context.Context, filePath string, offset, limit int) (stri
 		limit = DefaultReadLimit
 	}
 	limit = min(limit, DefaultReadLimit)
-	reader := bufio.NewReader(file)
+	reader := bufio.NewReader(source)
 	var lines []string
 	lineCount := 0
 	for {

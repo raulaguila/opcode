@@ -31,7 +31,7 @@ func toolCategory(name string) string {
 		return "memory"
 	case strings.Contains(name, "process") || name == "bash" || strings.Contains(name, "check"):
 		return "terminal"
-	case strings.Contains(name, "task") || strings.Contains(name, "plan"):
+	case strings.Contains(name, "task") || strings.Contains(name, "plan") || strings.Contains(name, "question"):
 		return "workflow"
 	case strings.HasPrefix(name, "git_"):
 		return "git"

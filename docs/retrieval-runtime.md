@@ -67,20 +67,54 @@ curtas de navegação; `view`, `read_lines` ou `read_symbol` estabelecem leitura
 `file_hash` é SHA256 da fonte inteira. `read_lines` deve reenviá-lo em
 `expected_hash` e usar os próximos offset/column, também em linhas longas.
 
-Go usa parser padrão. Python, JS, TS, TSX, Rust, Java, C, C++ e C# têm gramáticas
-locais selecionadas, nomes de escopos e fixtures de declarações. Demais linguagens
-continuam com texto/filtros e LSP quando configurado. Referências por binding,
-renomeação e hierarquia exigem LSP; resultados textuais são candidatos.
+Go usa parser padrão. As gramáticas locais selecionadas cobrem Python, JS, TS,
+TSX, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, SQL, Bash, Lua, Dart, Vue,
+Svelte, HCL/Terraform, YAML, TOML, JSON, HTML e CSS: 26 perfis de sintaxe, contando
+TSX e formatos de configuração separadamente. Cada perfil tem fixture de
+declaração e chunk de índice; isso não certifica toda a sintaxe de uma linguagem.
+Os parsers já pertencem à dependência Go existente, sem instalação de runtimes.
+
+Vue/Svelte extraem declarações dos scripts JS/TS incorporados, preservando linhas
+do arquivo original. Templates ficam pesquisáveis como texto; não se presume
+resolução de bindings entre template e script. Dart inclui o corpo após a
+assinatura. HCL expõe blocos/atributos, YAML/JSON chaves, TOML seções/chaves, HTML
+elementos com `id` e CSS seletores. Esses nomes são navegação sintática, não
+referências semânticas. Sintaxe inválida ou não suportada continua indexada em
+janelas de texto. Arquivos acima de 256 KiB, cancelamento e limites do parser
+continuam aplicados; arquivos com mais de oito scripts usam o fallback textual.
+
+Demais linguagens continuam com texto/filtros e LSP quando configurado.
+Referências por binding, renomeação e hierarquia exigem LSP; resultados textuais
+são candidatos. A política de índice `parser-v4` reconstrói chunks anteriores
+mesmo quando os arquivos não mudaram.
 
 ## LSP sob demanda
 
 Presets reconhecem gopls, pyright-langserver/pylsp,
-typescript-language-server, rust-analyzer, clangd, jdtls e csharp-ls. Servidores
+typescript-language-server, rust-analyzer, clangd, jdtls e csharp-ls. Também incluem
+ruby-lsp/solargraph, intelephense/phpactor, kotlin-language-server, sourcekit-lsp,
+sqls, bash-language-server, lua-language-server, dart, vue-language-server,
+svelteserver, terraform-ls, yaml-language-server, taplo e servidores VS Code
+de JSON/HTML/CSS. Servidores
 precisam estar instalados e configurados; comandos genéricos desconhecidos não
 iniciam por inspeção. Para outro servidor, configure `fileTypes` (IDs ou extensões)
 e `rootMarkers` (nomes relativos, sem glob). Presets têm marcadores conhecidos;
 sem marcador compatível o servidor não inicia. A execução conserva sandbox e
 configuração autorizada de integração.
+
+`get_language_support` separa parser testado, servidor configurado, executável
+encontrado e checks configurados. Aceita `language`, `offset`, `limit` (padrão 10,
+teto 20) e `detect_project` (padrão false). A descoberta opcional conta até 2000
+arquivos com as exclusões compartilhadas, sem ler conteúdo de fonte; contagens
+parciais são sinalizadas. As sugestões incluem comando, argumentos e marcadores
+para configuração explícita, sem iniciar/instalar servidores nem executar checks.
+Checks listados são do projeto, sem atribuição automática a uma linguagem.
+
+Na CLI, `opcode doctor --languages --json` apresenta somente linguagens detectadas
+no projeto, com esses estados e sugestões. O diagnóstico não faz inferência nem
+download; `doctor` sem a flag mantém a inspeção breve existente. Um executável no
+PATH ainda precisa de configuração, marcadores de raiz compatíveis e autorização
+normal de integração para ser iniciado durante o trabalho.
 
 ## Embeddings opcionais
 

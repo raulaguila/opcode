@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-28",
+  "base_revision": "18bc80dc358a",
+  "working_tree": "uncommitted implementation",
+  "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+  "shared_conditions": {
+    "model": "llama3.1:8b",
+    "protocol": "ollama",
+    "context_window": 16384,
+    "output_reserve": 2048,
+    "temperature": 0,
+    "repetitions": 3
+  },
+  "comparison_cases": [
+    "overview",
+    "localize"
+  ],
+  "comparison": {
+    "opcode": {
+      "passed": 6,
+      "total": 6,
+      "criteria_passed": 24,
+      "criteria_total": 24
+    },
+    "codaro": {
+      "passed": 6,
+      "total": 6,
+      "criteria_passed": 24,
+      "criteria_total": 24
+    }
+  },
+  "full_opcode_suite": {
+    "passed": 18,
+    "total": 18
+  },
+  "checks": {
+    "go_test_race_all": "passed",
+    "go_vet_all": "passed",
+    "cgo_disabled_build": "passed",
+    "python_adapter_tests": {
+      "passed": 7,
+      "total": 7
+    },
+    "fixture_criteria_changed": false
+  },
+  "sampling_control": "Codaro public provider codec overrides only Ollama temperature 0.1 to 0; original Agent/transport/permissions unchanged. Preliminary runs without shared sampling are not the final comparison.",
+  "limitations": [
+    "No general superiority or semantic-prose accuracy claim.",
+    "External adapter observations are not independently verified native Opcode receipts.",
+    "Crush executable unavailable; no live Crush result.",
+    "No embeddings model configured; hybrid ranking measurements explicitly used lexical fallback.",
+    "Two source-specific ranking fixtures reached recall/MRR 1; synonym fixture reached 0 without embeddings."
+  ]
+}

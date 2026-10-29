@@ -122,3 +122,57 @@ atuais; alvos/critérios não provam semântica nem liberam caminhos. Bindings
 simplificados de planos locais preservam a validação do estado. Uma mudança sem
 checks disponíveis deve permanecer parcial. Backups de configuração pertencem
 à área privada `.opcode`, inclusive quando o arquivo original é legado.
+
+## Evolução comparativa — 28/10/2026
+
+O usuário autorizou implementar as recomendações, priorizando avaliação, citações e recuperação. Os contratos anteriores permanecem aplicáveis.
+
+### Superfícies e resultados observáveis
+
+- Avaliação: adapters executáveis para Opcode/Codaro/Crush, metadados de versão,
+  comparações repetidas com critérios idênticos, relatório de resultados e medidas
+  ausentes explícitas. Execução externa opt-in, limitada ao workspace descartável.
+- Citações: caminhos e intervalos precisam corresponder a leituras reais atuais;
+  referências inválidas recebem reparo limitado. Preferências explícitas do usuário
+  continuam respeitadas; referência válida não comprova interpretação semântica.
+- Recuperação: preservar instruções, pares de chamadas/resultados e acesso às
+  fontes ao compactar; avaliar ranking lexical/híbrido e regressões sem inventar
+  ganho de embeddings ou gastar contexto com árvores completas.
+- Linguagens: ampliar parsers locais e fixtures, mantendo fallback textual e
+  distinguindo parser, LSP instalado/configurado e checks do projeto.
+- Perguntas: contratos aditivos para lotes, seleção única/múltipla e texto livre;
+  apresentação progressiva no composer preservando rascunho e cancelamento.
+- Modelos: busca aproximada, seleção estável e metadados sob demanda com
+  cancelamento; erros preservam catálogo utilizável. Sem inferência automática.
+- Fluxo diário: modo/modelo/atividade no rodapé; plano, terminal e detalhes sob
+  demanda. Diagnóstico orienta configuração de linguagens sem instalar ferramentas.
+- Prompts: versão e orçamento observáveis na avaliação; variantes comparadas com
+  o mesmo conjunto, sem transferir garantias de segurança para instruções textuais.
+
+### Auth
+
+Permissões, sandbox, hashes e checks por revisão permanecem obrigatórios.
+Perguntas, índices, adapters, skills e respostas do modelo não concedem acesso.
+Configuração e contratos existentes continuam válidos; novos campos são aditivos.
+Cancelamento encerra trabalho pendente sem executar efeitos novamente. Relatórios
+não incluem credenciais nem conteúdo privado completo.
+
+### Mocks e validação
+
+Testes determinísticos usam doubles explícitos, separados de avaliações live.
+Live usa somente modelos/provedores presentes e autorização opt-in do runner.
+Falhas, indisponibilidade e métricas não observadas são registradas como tais.
+Critérios originais da suíte permanecem; novos critérios e casos são aditivos.
+Aceite: testes direcionados, suíte Go com race, vet e build; fluxos Ollama reais
+quando acessíveis. Documentação acompanha comportamento e limitações.
+
+### Fora do escopo
+
+Não copiar código do Crush, instalar toolchains/modelos automaticamente, mudar
+permissões padrão, declarar superioridade geral ou publicar resultados fabricados.
+Servidor multiworkspace compartilhado fica para uma evolução específica.
+
+### Questões abertas
+
+Nenhuma impede a implementação. A disponibilidade local de Codaro/Crush e Ollama
+será verificada antes de selecionar quais comparações live podem ser executadas.

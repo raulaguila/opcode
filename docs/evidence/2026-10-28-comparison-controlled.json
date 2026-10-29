@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "comparable_conditions": true,
+  "differences": [],
+  "runs": [
+    {
+      "application": "opcode",
+      "application_version": "v0.2.1-0.20261029013923-18bc80dc358a+dirty",
+      "passed_cases": 6,
+      "failed_cases": 0,
+      "unavailable_cases": 0,
+      "observed_criteria": 24,
+      "passed_criteria": 24,
+      "unavailable_criteria": 0,
+      "duration_ms": 50934,
+      "input_tokens": 25789,
+      "output_tokens": 1479,
+      "retrieval_recall": null,
+      "retrieval_mrr": null,
+      "prompt_versions": [
+        "opcode-2026-10-v4"
+      ],
+      "prompt_profiles": [
+        "reduced"
+      ],
+      "api_models": [
+        "llama3.1:8b"
+      ],
+      "protocols": [
+        "ollama"
+      ],
+      "context_windows": [
+        16384
+      ],
+      "output_reserves": [
+        2048
+      ],
+      "temperatures": [
+        0
+      ],
+      "tool_calls": 15
+    },
+    {
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "passed_cases": 6,
+      "failed_cases": 0,
+      "unavailable_cases": 0,
+      "observed_criteria": 24,
+      "passed_criteria": 24,
+      "unavailable_criteria": 0,
+      "duration_ms": 26688,
+      "input_tokens": 26995,
+      "output_tokens": 1022,
+      "retrieval_recall": null,
+      "retrieval_mrr": null,
+      "prompt_versions": [],
+      "prompt_profiles": [],
+      "api_models": [
+        "llama3.1:8b"
+      ],
+      "protocols": [
+        "ollama"
+      ],
+      "context_windows": [
+        16384
+      ],
+      "output_reserves": [
+        2048
+      ],
+      "temperatures": [
+        0
+      ],
+      "tool_calls": 18
+    }
+  ],
+  "notice": "Same fixture hash, case/trial/criteria, requested model, protocol, effective context and output reserve are required. Applications retain different prompts/tools/policies. Missing metrics are null; unavailable criteria are not passed. This does not establish general superiority or causal prompt improvements."
+}

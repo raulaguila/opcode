@@ -53,6 +53,11 @@ type modelDialogCmp struct {
 	target                                   config.AgentName
 	probeConfirm, probeRunning               bool
 	setup                                    bool
+	catalogProvider                          models.ModelProvider
+	metadataCancel                           context.CancelFunc
+	metadataRequest                          uint64
+	metadataFor, metadataNote                string
+	selecting                                bool
 	details                                  bool
 }
 
@@ -71,6 +76,7 @@ var modelKeys = struct {
 func (m *modelDialogCmp) Init() tea.Cmd { return nil }
 func (m *modelDialogCmp) Open() tea.Cmd {
 	m.Close()
+	m.catalogProvider = ""
 	m.details = false
 	cfg := config.Get()
 	m.availableProviders = getEnabledProviders(cfg)
@@ -90,6 +96,13 @@ func (m *modelDialogCmp) Open() tea.Cmd {
 	return m.load()
 }
 func (m *modelDialogCmp) Close() {
+	m.selecting = false
+	if m.metadataCancel != nil {
+		m.metadataCancel()
+		m.metadataCancel = nil
+	}
+	m.metadataRequest++
+	m.metadataFor, m.metadataNote = "", ""
 	if m.cancel != nil {
 		m.cancel()
 		m.cancel = nil
@@ -101,8 +114,11 @@ func (m *modelDialogCmp) Close() {
 }
 func (m *modelDialogCmp) load() tea.Cmd {
 	m.Close()
-	m.models = getModelsForProvider(m.provider)
-	m.note = "Configured catalog"
+	if m.provider == "" || m.catalogProvider != m.provider {
+		m.models = getModelsForProvider(m.provider)
+		m.catalogProvider = m.provider
+	}
+	m.note = config.Text("Catálogo disponível", "Available catalog")
 	m.filter()
 	if m.provider == "" {
 		m.note = "Configure a provider in ~/.opcode/config.json"
@@ -117,12 +133,15 @@ func (m *modelDialogCmp) load() tea.Cmd {
 	m.loading = true
 	request := m.request
 	return func() tea.Msg {
-		found, err := fetch(ctx)
+		found, err := fetch(models.WithoutCatalogMetadata(ctx))
 		cancel()
 		return ModelCatalogLoadedMsg{request, found, err}
 	}
 }
 func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if result, ok := msg.(modelMetadataLoadedMsg); ok {
+		return m, m.acceptMetadata(result)
+	}
 	if cmd, handled := m.modelProbeUpdate(msg); handled {
 		return m, cmd
 	}
@@ -140,7 +159,7 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if errors.Is(msg.err, models.ErrCatalogUnsupported) {
 			m.note = "Configured catalog · live listing unavailable"
 		} else {
-			m.note = "Could not load models; showing configured catalog. Ctrl+R retries."
+			m.note = config.Text("Falha ao atualizar; catálogo anterior preservado. Ctrl+R tenta novamente.", "Refresh failed; previous catalog preserved. Ctrl+R retries.")
 		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -150,7 +169,7 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.String() == "ctrl+d":
 			m.details = !m.details
 			m.keepVisible()
-			return m, nil
+			return m, m.scheduleMetadata()
 		case key.Matches(msg, modelKeys.Up):
 			m.move(-1)
 		case key.Matches(msg, modelKeys.Down):
@@ -173,6 +192,7 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.String() == "ctrl+a":
 			roles := []config.AgentName{config.AgentCoder, config.AgentTask, config.AgentTitle, config.AgentSummarizer}
 			m.target = roles[(slices.Index(roles, m.target)+1)%len(roles)]
+			m.selectedIdx = -1
 			m.filter()
 			return m, nil
 		case key.Matches(msg, modelKeys.Refresh):
@@ -218,15 +238,32 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	return m, nil
+	return m, m.scheduleMetadata()
 }
 func (m *modelDialogCmp) choose() tea.Cmd {
 	if len(m.filtered) == 0 || m.selectedIdx < 0 || m.selectedIdx >= len(m.filtered) {
 		return nil
 	}
 	selected := m.filtered[m.selectedIdx]
+	lookup := config.ModelMetadata(selected)
+	agent := m.target
 	m.Close()
-	return util.CmdHandler(ModelSelectedMsg{Model: selected, Agent: m.target})
+	if lookup != nil && (selected.ContextEstimated || selected.ContextSource == "cache") {
+		m.selecting = true
+		ctx, cancel := context.WithCancel(context.Background())
+		m.metadataCancel = cancel
+		return func() tea.Msg {
+			defer cancel()
+			if found, err := lookup(ctx); err == nil {
+				selected = found
+			}
+			if ctx.Err() != nil {
+				return nil
+			}
+			return ModelSelectedMsg{Model: selected, Agent: agent}
+		}
+	}
+	return util.CmdHandler(ModelSelectedMsg{Model: selected, Agent: agent})
 }
 func (m *modelDialogCmp) switchProvider(offset int) tea.Cmd {
 	if len(m.availableProviders) < 2 {
@@ -239,14 +276,25 @@ func (m *modelDialogCmp) switchProvider(offset int) tea.Cmd {
 	return m.load()
 }
 func (m *modelDialogCmp) filter() {
+	previous := models.ModelID("")
+	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
+		previous = m.filtered[m.selectedIdx].ID
+	}
 	m.filtered = nil
 	for _, model := range m.models {
-		if strings.Contains(strings.ToLower(model.Name+" "+model.APIModel), strings.ToLower(m.query)) {
+		if _, ok := modelMatchScore(m.query, model.Name+" "+model.APIModel); ok {
 			m.filtered = append(m.filtered, model)
 		}
 	}
 	prefs := config.Get().Preferences
 	slices.SortStableFunc(m.filtered, func(a, b models.Model) int {
+		if m.query != "" {
+			sa, _ := modelMatchScore(m.query, a.Name+" "+a.APIModel)
+			sb, _ := modelMatchScore(m.query, b.Name+" "+b.APIModel)
+			if sa != sb {
+				return sa - sb
+			}
+		}
 		fa, fb := slices.Contains(prefs.FavoriteModels, a.ID), slices.Contains(prefs.FavoriteModels, b.ID)
 		if fa != fb {
 			if fa {
@@ -272,6 +320,9 @@ func (m *modelDialogCmp) filter() {
 		target = config.AgentCoder
 	}
 	selected := config.Get().Agents[target].Model
+	if previous != "" && slices.ContainsFunc(m.filtered, func(model models.Model) bool { return model.ID == previous }) {
+		selected = previous
+	}
 	for i, model := range m.filtered {
 		if model.ID == selected {
 			m.selectedIdx = i
@@ -301,7 +352,7 @@ func (m *modelDialogCmp) visibleRows() int {
 	}
 	reserve := 10
 	if m.details {
-		reserve = 13
+		reserve = 14
 	}
 	return max(1, min(numVisibleModels, m.height-reserve))
 }
@@ -407,6 +458,9 @@ func (m *modelDialogCmp) View() string {
 			protocol = config.Text("padrão do provedor", "provider default")
 		}
 		lines = append(lines, line("API: "+protocol+config.Text(" · capacidades declaradas: ", " · capabilities declared: ")+strings.Join(caps, ", ")))
+		if m.metadataNote != "" {
+			lines = append(lines, line(m.metadataNote))
+		}
 	}
 	lines = append(lines, line(config.Text("↑↓ modelos · ←→ provedor · Enter escolhe · Ctrl+D detalhes", "↑↓ models · ←→ provider · Enter choose · Ctrl+D details")))
 	if m.details {

@@ -46,10 +46,19 @@ qualidade do modelo. Ver [guia diário](docs/daily-workflow.md).
 
 A evolução de recuperação/contexto inclui prompts por modo/protocolo/janela,
 compactação de lotes concluídos, estimativas calibradas e origem de contexto,
-parsers locais em dez linguagens, mapa estrutural, leitura/hash/páginas estáveis,
+parsers locais em 26 perfis de linguagens, mapa estrutural, leitura/hash/páginas estáveis,
 memória pesquisável por projeto, índice administrável e descoberta compartilhada.
 Embeddings locais são opcionais e não baixam modelos; o LSP inicia sob demanda.
 Controles avançados ficam em painéis `/index`, `/runtime` e `/context` para manter
 o chat compacto. Recibos validam ações explícitas e patches podem ser pré-visualizados.
 A avaliação compartilhada diferencia medidas nativas de declarações de adapters;
 não há conclusão de que o Opcode supera Codaro/Crush em qualidade geral.
+
+A evolução comparativa acrescenta drivers de avaliação Codaro/Crush, comparação
+de condições e métricas ausentes explícitas, além de medição do ranking sem
+inferência. Citações são conferidas contra caminho, intervalo entregue e hash
+atual; leituras iniciais preservam seus recibos. Isso não comprova a interpretação
+semântica da resposta. Perguntas agrupadas aceitam seleção múltipla, texto livre
+e revisão antes de enviar. O seletor usa busca aproximada, preserva seleção e
+catálogo e consulta metadados individuais com cancelamento, sem inferência.
+`doctor --languages` orienta configuração de LSP sem instalar/iniciar servidores.

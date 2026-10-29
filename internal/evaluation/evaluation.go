@@ -20,7 +20,7 @@ import (
 	"github.com/raulaguila/opcode/internal/localstate"
 )
 
-//go:embed testdata/cases.json
+//go:embed testdata/cases.json testdata/retrieval.json
 var fixtures embed.FS
 
 type Suite struct {
@@ -48,6 +48,16 @@ type CriterionResult struct {
 	Passed *bool  `json:"passed"`
 }
 type CaseResult struct {
+	Temperature           *float64          `json:"temperature"`
+	APIModel              string            `json:"api_model,omitempty"`
+	Protocol              string            `json:"protocol,omitempty"`
+	OutputReserve         int64             `json:"output_reserve,omitempty"`
+	PromptVersion         string            `json:"prompt_version,omitempty"`
+	PromptProfile         string            `json:"prompt_profile,omitempty"`
+	ContextMethod         string            `json:"context_method,omitempty"`
+	ContextComponents     map[string]int64  `json:"context_components,omitempty"`
+	MetricsUnavailable    []string          `json:"metrics_unavailable,omitempty"`
+	RetrievalStrategies   []string          `json:"retrieval_strategies,omitempty"`
 	ToolFailures          map[string]int    `json:"tool_failures,omitempty"`
 	AgentFailureKind      string            `json:"agent_failure_kind,omitempty"`
 	Application           string            `json:"application,omitempty"`
@@ -72,8 +82,11 @@ type CaseResult struct {
 	ChangesVerified       bool              `json:"changes_verified,omitempty"`
 	NoChangeJustification bool              `json:"no_change_justification,omitempty"`
 	ToolNames             []string          `json:"tool_names,omitempty"`
+	NativeToolNames       []string          `json:"native_tool_names,omitempty"`
+	LocalToolNames        []string          `json:"local_tool_names,omitempty"`
 }
 type Report struct {
+	Experiment    string       `json:"experiment,omitempty"`
 	Repeats       int          `json:"repeats,omitempty"`
 	SelectedCases []string     `json:"selected_cases,omitempty"`
 	Version       int          `json:"version"`
@@ -83,6 +96,7 @@ type Report struct {
 	Notice        string       `json:"notice"`
 }
 type Options struct {
+	Experiment     string
 	Adapter        *Adapter
 	ContextWindow  int64
 	Repeats        int
@@ -247,6 +261,9 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 	if err := suite.Validate(); err != nil {
 		return Report{}, err
 	}
+	if len(options.Experiment) > 64 || strings.Trim(options.Experiment, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.") != "" {
+		return Report{}, fmt.Errorf("experiment must be an ASCII label up to 64 characters")
+	}
 	repeats := options.Repeats
 	if repeats == 0 {
 		repeats = 1
@@ -276,6 +293,7 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 	}
 	hash := sha256.Sum256(raw)
 	report := Report{Repeats: repeats, SelectedCases: options.CaseIDs, Version: 1, Mode: "offline_fixture_validation", SuiteSHA256: hex.EncodeToString(hash[:]), Notice: "Offline only validates fixture contracts and safe preparation. Null criteria were not run; this is not an agent quality score."}
+	report.Experiment = options.Experiment
 	if options.Adapter != nil && (!options.Live || options.ContextWindow < 4096) {
 		return report, fmt.Errorf("external adapters require --live and --context-window >=4096 for comparable conditions")
 	}
@@ -397,6 +415,43 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 	fixtureRaw, _ := json.Marshal(c.Files)
 	fixtureHash := sha256.Sum256(fixtureRaw)
 	conditions := Conditions{Model: fmt.Sprint(agentDefinitions["coder"]["model"]), ContextWindow: options.ContextWindow, Mode: c.Mode, FixtureSHA256: hex.EncodeToString(fixtureHash[:])}
+	var modelDefinitions map[string]struct {
+		APIModel         string `json:"api_model"`
+		API              string `json:"api"`
+		Provider         string `json:"provider"`
+		Profile          string `json:"provider_profile"`
+		DefaultMaxTokens int64  `json:"default_max_tokens"`
+	}
+	_ = json.Unmarshal(source["models"], &modelDefinitions)
+	definition := modelDefinitions[conditions.Model]
+	conditions.APIModel, conditions.Protocol = definition.APIModel, definition.API
+	if n, ok := agentDefinitions["coder"]["maxTokens"].(float64); ok {
+		conditions.OutputReserve = int64(n)
+	}
+	if conditions.OutputReserve == 0 {
+		conditions.OutputReserve = definition.DefaultMaxTokens
+	}
+	if conditions.OutputReserve == 0 {
+		conditions.OutputReserve = config.MaxTokensFallbackDefault
+	}
+	if options.ContextWindow > 0 && conditions.OutputReserve > options.ContextWindow/2 {
+		conditions.OutputReserve = options.ContextWindow / 2
+	}
+	if conditions.Protocol == "" {
+		var connections map[string]struct {
+			API string `json:"api"`
+		}
+		if definition.Profile != "" {
+			_ = json.Unmarshal(source["providerProfiles"], &connections)
+			conditions.Protocol = connections[definition.Profile].API
+		} else {
+			_ = json.Unmarshal(source["providers"], &connections)
+			conditions.Protocol = connections[definition.Provider].API
+		}
+		if conditions.Protocol == "" {
+			conditions.Protocol = "openai"
+		}
+	}
 	job := Job{Conditions: conditions, Workspace: workspace, Config: configPath, Case: c, AllowExecution: options.AllowExecution}
 	if err := localstate.Write(jobPath, job, 2<<20); err != nil {
 		return CaseResult{}, err
@@ -427,7 +482,7 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 	}
 	command.Env = append(command.Env, "HOME="+base, "XDG_CONFIG_HOME="+filepath.Join(base, "config"))
 	if options.Adapter != nil {
-		return adapterCommand(childCtx, options.Adapter, workspace, job, command.Env)
+		return adapterCommand(childCtx, options.Adapter, workspace, job, adapterEnvironment(command.Env, allowedEnv))
 	}
 	var output boundedBuffer
 	command.Stdout = &output
@@ -444,6 +499,18 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 		return CaseResult{ID: c.ID, Status: "failed", Error: "invalid or oversized worker report"}, nil
 	}
 	return result, nil
+}
+
+func adapterEnvironment(environment []string, credentials map[string]bool) []string {
+	allowed := map[string]bool{"PATH": true, "HOME": true, "XDG_CONFIG_HOME": true, "LANG": true, "LC_ALL": true, "SHELL": true, "TMPDIR": true, "SYSTEMROOT": true, "WINDIR": true, "USERPROFILE": true, "TEMP": true, "TMP": true, "SSL_CERT_FILE": true, "SSL_CERT_DIR": true}
+	result := []string{}
+	for _, entry := range environment {
+		key, _, ok := strings.Cut(entry, "=")
+		if ok && (allowed[key] || credentials[key]) {
+			result = append(result, entry)
+		}
+	}
+	return result
 }
 func timeout(c Case) int {
 	if c.TimeoutSeconds > 0 {
@@ -467,7 +534,7 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 }
 func Failed(report Report) bool {
 	for _, result := range report.Cases {
-		if result.Status == "failed" {
+		if result.Status == "failed" || result.Status == "unavailable" {
 			return true
 		}
 	}

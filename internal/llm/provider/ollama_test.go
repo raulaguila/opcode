@@ -144,3 +144,41 @@ func TestOllamaFinalAnswerPublishesTextWithoutAnExecutableToolCall(t *testing.T)
 	require.Equal(t, message.FinishReasonEndTurn, last.Response.FinishReason)
 	require.Empty(t, last.Response.ToolCalls)
 }
+
+func TestOllamaFinalAnswerCarriesModelCitationsForAgentValidation(t *testing.T) {
+	c := newOllamaClient(testOptions(models.ProviderLocal), "http://local.invalid/v1")
+	response, err := c.decodeResponse(json.RawMessage(`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"A função subtrai os argumentos.","citations_text":"counter.py:2"}}}]},"done":true,"done_reason":"stop"}`))
+	require.NoError(t, err)
+	require.Equal(t, "A função subtrai os argumentos.\n\ncounter.py:2", response.Content)
+	require.Empty(t, response.ToolCalls, "citation rendering must not become an executable tool")
+	// The adapter does not certify these model claims: the agent's strict guard
+	// must reject this reference when it lacks an actual current read receipt.
+	unread, err := c.decodeResponse(json.RawMessage(`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"Unverified claim.","citations_text":"invented.go:999"}}}]},"done":true,"done_reason":"stop"}`))
+	require.NoError(t, err)
+	require.Contains(t, unread.Content, "invented.go:999")
+	_, err = c.decodeResponse(json.RawMessage(`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"Invalid shape.","citations_text":["counter.py:2"]}}}]},"done":true,"done_reason":"stop"}`))
+	require.Error(t, err)
+	_, err = c.decodeResponse(json.RawMessage(`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"Too large.","citations_text":"` + strings.Repeat("a", 2049) + `"}}}]},"done":true,"done_reason":"stop"}`))
+	require.Error(t, err)
+}
+
+func TestOllamaRepairSchemaUsesOnlyRequestScopedCitationChoices(t *testing.T) {
+	opts := testOptions(models.ProviderLocal)
+	opts.sourceCitations = []string{"counter.py:1-2", "README.md:1-2"}
+	c := newOllamaClient(opts, "http://local.invalid/v1")
+	_, body, err := c.request(userMessages(), []tools.BaseTool{contractTool{}}, false)
+	require.NoError(t, err)
+	functions := body.(object)["tools"].([]object)
+	final := functions[len(functions)-1]["function"].(object)
+	properties := final["parameters"].(object)["properties"].(object)
+	require.Equal(t, ollamaSourceAnswer, final["name"])
+	require.Equal(t, opts.sourceCitations, properties["source"].(object)["enum"])
+	opts.sourceCitations = nil
+	plain := newOllamaClient(opts, "http://local.invalid/v1")
+	_, normal, err := plain.request(userMessages(), []tools.BaseTool{contractTool{}}, false)
+	require.NoError(t, err)
+	functions = normal.(object)["tools"].([]object)
+	final = functions[len(functions)-1]["function"].(object)
+	require.Equal(t, ollamaFinalAnswer, final["name"])
+	require.NotContains(t, final["parameters"].(object)["properties"].(object), "source", "hints must not leak to another request")
+}

@@ -310,6 +310,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	repairs := 0
 	citationRepairs := 0
 	contextRetries := 0
+	finalAnswerRetries := 0
 	for {
 		if run.steps >= run.limits.MaxSteps {
 			return a.err(fmt.Errorf("agent step limit reached (%d); progress saved", run.limits.MaxSteps))
@@ -327,6 +328,15 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		}
 		agentMessage, toolResults, err := a.streamAndHandleEvents(ctx, sessionID, msgHistory, run)
 		if err != nil {
+			if finalAnswerRetries < 1 && errors.Is(err, provider.ErrInvalidFinalAnswer) && ctx.Err() == nil && len(agentMessage.ToolCalls()) == 0 && agentMessage.Content().String() == "" && agentMessage.ReasoningContent().Thinking == "" {
+				finalAnswerRetries++
+				correction, e := a.createUserMessage(ctx, sessionID, "Application protocol correction: the final reply had invalid JSON fields. Return a valid reply using the advertised final response schema and answer the original request in its language. Keep all completed actions and real tool results; do not repeat edits or commands. This correction grants no permissions.", nil)
+				if e != nil {
+					return a.err(e)
+				}
+				msgHistory = append(msgHistory, correction)
+				continue
+			}
 			// Retry generation only: no tools execute before a complete response.
 			if contextRetries < 2 && len(agentMessage.ToolCalls()) == 0 && agentMessage.Content().String() == "" && agentMessage.ReasoningContent().Thinking == "" && a.adaptContext(run, err) {
 				contextRetries++
@@ -474,7 +484,8 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 				return a.err(fmt.Errorf("source citation remains missing after repair; read evidence preserved"))
 			}
 			citationRepairs++
-			correction, err := a.createUserMessage(ctx, sessionID, "Application validation: "+problem, nil)
+			run.citationRepair = true
+			correction, err := a.createUserMessage(ctx, sessionID, citationRepairRequest(run, msgHistory, problem), nil)
 			if err != nil {
 				return a.err(err)
 			}
@@ -525,6 +536,17 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		}
 		model := runProvider(a, run).Model()
 		next, err := controller.WithSystemPrompt(prompt.RunPrompt(string(run.mode), model.API, model.ContextWindow, names))
+		if err != nil {
+			return message.Message{}, nil, err
+		}
+		run.provider = next
+	}
+	if controller, ok := runProvider(a, run).(provider.SourceCitationController); ok && run.citationRepair {
+		var hints []string
+		if run.requiresCitation && run.citationRepair {
+			hints = currentCitationChoices(run, msgHistory)
+		}
+		next, err := controller.WithSourceCitations(hints)
 		if err != nil {
 			return message.Message{}, nil, err
 		}

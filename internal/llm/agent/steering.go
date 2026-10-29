@@ -46,6 +46,7 @@ type generationRun struct {
 	provider         provider.Provider
 	requiresPlan     bool
 	requiresCitation bool
+	citationRepair   bool
 }
 
 func (a *agent) Run(ctx context.Context, sessionID, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {

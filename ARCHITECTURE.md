@@ -6,7 +6,7 @@ Este documento descreve os limites alterados na modernização. A visão geral d
 
 O agente consome a interface `provider.Provider`. Adaptadores privados convertem mensagens, ferramentas e streams de cada protocolo; `apiTransport` concentra HTTP e reenvios. Os SDKs de geração foram removidos. Bibliotecas de autenticação/assinatura de nuvem e a biblioteca MCP permanecem.
 
-Modelos locais podem selecionar `api: "ollama"` para usar `/api/chat` com NDJSON e contexto aplicado por requisição. O adaptador traduz a função interna `final_answer` em conteúdo de resposta, rejeita respostas misturadas com operações e mantém todas as ferramentas reais no caminho normal de autorização. O protocolo local compatível com OpenAI permanece disponível.
+Modelos locais podem selecionar `api: "ollama"` para usar `/api/chat` com NDJSON e contexto aplicado por requisição. O adaptador traduz a função interna `final_answer` em conteúdo de resposta, descarta respostas prematuras em lotes mistos e mantém todas as ferramentas reais no caminho normal de autorização. O protocolo local compatível com OpenAI permanece disponível.
 
 As fábricas de ferramentas dos agentes aplicam `tools.SecureTool` a cada entrada. A política de acesso é propagada pelo contexto e usa o serviço de permissões. O agente de pesquisa recebe somente ferramentas de leitura. O executor `tools/shell` é usado por comandos, inspeção Git, verificações, processos, LSP e MCP stdio. Configurações de segurança vêm da configuração global do usuário; opções do repositório não podem enfraquecê-las.
 
@@ -342,3 +342,44 @@ mede uso do runtime, chamadas, arquivos e recibos. Nenhum código/prompt FSL do
 Crush foi incorporado. Novas dependências de produção: gotreesitter (gramáticas
 selecionadas), go-gitignore e tokenizer com vocabulários embarcados. Build
 CGO_ENABLED=0 continua suportado.
+
+
+## Evolução comparativa, fontes e decisões
+
+As ferramentas de leitura emitem `SourceReadReceipt` com snapshot/hash/faixa. O
+runtime preserva os metadados inclusive no contexto inicial e restringe recibos
+ao conteúdo realmente entregue. A guarda de citações revalida fontes locais
+regulares sob uma política sem concessões adicionais, antes de concluir. Um
+reparo conserva o pedido original; o binding Ollama usa `answer_with_sources`
+nesse reparo, com explicação e opções limitadas de intervalos atuais separadas. `SourceCitationController`
+clona a conexão por pedido sem I/O, preserva autenticação e inclui o schema na
+contagem do payload. O retorno ainda passa pela guarda; nenhuma sugestão de
+schema constitui prova ou permissão. A compactação conserva localizadores
+históricos limitados, separados de recibos atuais.
+
+`interaction.Questions` mantém uma decisão pendente por sessão; lotes de até
+cinco itens têm IDs e validação por tipo. A TUI coleta as respostas em etapas,
+preserva o composer e só envia após revisão. O contrato simples segue válido.
+Respostas e cancelamento não alteram autorizações.
+
+A descoberta inicial mantém o fluxo de metadados completo. Na TUI, um contexto
+optativo solicita apenas o catálogo; a seleção consulta `/api/show` individual,
+com debounce, cancelamento e identificadores contra respostas atrasadas. Os
+fetchers capturam configuração na thread da UI e não publicam no registro
+global. O cache visual dura o diálogo e preserva seleção/último catálogo.
+
+A avaliação compara relatórios limitados por hash/condições/versões, com null
+para métricas ausentes. Drivers Codaro/Crush usam workspaces descartáveis e
+capacidades declaradas, sem inventar recibos externos. O worker de ranking
+reutiliza a ferramenta protegida de busca, mede cache frio/quente e informa
+a estratégia efetiva inclusive fallback lexical. Não há instalação automática
+nem serviço adicional. A política `parser-v4` invalida chunks de parsers antigos;
+26 perfis têm fixtures locais, com fallback e limites preservados.
+
+
+A recuperação de protocolo reconhece uma resposta final Ollama malformada por
+`ErrInvalidFinalAnswer`. Há no máximo uma regeneração por turno, sem texto
+parcial/calls publicados e sem reenviar operações concluídas. Parsers, guardas
+de citação e permissões continuam exigidos. A avaliação inclui temperatura
+observada; o driver Codaro fixa zero apenas no codec público, preservando seu
+transporte e execução. Comparação distingue zero de observação ausente.

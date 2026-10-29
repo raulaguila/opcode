@@ -79,7 +79,7 @@ func (t briefTool) Info() tools.ToolInfo {
 
 func readOnlyTool(name string) bool {
 	switch name {
-	case "view", "ls", "glob", "grep", "symbols", "definition", "references", "diagnostics", "git_status", "git_diff", "git_log", "fetch", "sourcegraph", "get_task", "ask_user_question", "get_tools_catalog", "request_tools", "get_context_status", "compact_context", "explore_code", "recalibrate_context", "search_conversation", "read_conversation", "save_finding", "list_findings", "get_skills_catalog", "get_project_map", "get_file_outline", "read_symbol", "get_artifact_info", "read_artifact", "search_artifact", "discover_checks", "get_validation_report", "lsp_call_hierarchy", "list_mcp_resources", "read_mcp_resource", "list_mcp_tools", "search_code_index", "get_language_support", "read_lines", "get_runtime_info", "search_findings":
+	case "view", "ls", "glob", "grep", "symbols", "definition", "references", "diagnostics", "git_status", "git_diff", "git_log", "fetch", "sourcegraph", "get_task", "ask_user_question", "ask_user_questions", "get_tools_catalog", "request_tools", "get_context_status", "compact_context", "explore_code", "recalibrate_context", "search_conversation", "read_conversation", "save_finding", "list_findings", "get_skills_catalog", "get_project_map", "get_file_outline", "read_symbol", "get_artifact_info", "read_artifact", "search_artifact", "discover_checks", "get_validation_report", "lsp_call_hierarchy", "list_mcp_resources", "read_mcp_resource", "list_mcp_tools", "search_code_index", "get_language_support", "read_lines", "get_runtime_info", "search_findings":
 		return true
 	}
 	return false
@@ -355,7 +355,7 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 		}),
 	}
 	if a.questions != nil {
-		result = append(result, makeTool("ask_user_question", "Ask a necessary decision, with up to five choices and a free-text response. Wait for the real user. Answers never approve edits or commands.", map[string]any{"question": stringParam, "explanation": stringParam, "choices": map[string]any{"type": "array", "maxItems": 5, "items": stringParam}}, []string{"question"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
+		ask := func(ctx context.Context, call tools.ToolCall) (any, error) {
 			var q interaction.Question
 			if json.Unmarshal([]byte(call.Input), &q) != nil {
 				return nil, fmt.Errorf("invalid question")
@@ -363,7 +363,11 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 			q.SessionID = session
 			answer, err := a.questions.Ask(ctx, q)
 			return map[string]string{"user_response": answer}, err
-		}))
+		}
+		result = append(result,
+			makeTool("ask_user_question", "Ask a necessary decision with up to five choices or free text. Wait for the real user; answers never approve commands. For grouped typed decisions, load ask_user_questions with request_tools.", questionParameters(), []string{"question"}, ask),
+			makeTool("ask_user_questions", "Ask up to five typed decisions in one batch: single_choice, multi_choice, yes_no or free_text. The user reviews answers before sending. Answers never approve tools or commands.", questionBatchParameters(), []string{"questions"}, ask),
+		)
 	}
 	return result
 }
@@ -466,8 +470,12 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 		}
 		response.Content = clip(response.Content, remaining)
 		run.toolBytes += len(response.Content)
+		if len(response.Metadata) > min(4096, max(0, run.limits.ToolBudget-run.toolBytes)) {
+			response.Metadata = ""
+		}
+		run.toolBytes += len(response.Metadata)
 		a.finishMessage(ctx, &assistant, message.FinishReasonToolUse)
-		result, err := a.messages.Create(ctx, session, message.CreateMessageParams{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Content: response.Content, IsError: response.IsError}}})
+		result, err := a.messages.Create(ctx, session, message.CreateMessageParams{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Content: response.Content, Metadata: response.Metadata, IsError: response.IsError}}})
 		if err != nil {
 			return history, err
 		}

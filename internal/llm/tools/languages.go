@@ -3,30 +3,43 @@ package tools
 import (
 	"context"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/lsp"
-	"os/exec"
-	"path/filepath"
-	"slices"
-	"sort"
-	"strings"
 	"sync/atomic"
 
 	ts "github.com/odvcencio/gotreesitter"
+	"github.com/odvcencio/gotreesitter/grammars/bash"
 	cgrammar "github.com/odvcencio/gotreesitter/grammars/c"
 	csharp "github.com/odvcencio/gotreesitter/grammars/c_sharp"
 	"github.com/odvcencio/gotreesitter/grammars/cpp"
+	"github.com/odvcencio/gotreesitter/grammars/css"
+	"github.com/odvcencio/gotreesitter/grammars/dart"
+	"github.com/odvcencio/gotreesitter/grammars/hcl"
+	"github.com/odvcencio/gotreesitter/grammars/html"
 	"github.com/odvcencio/gotreesitter/grammars/java"
 	"github.com/odvcencio/gotreesitter/grammars/javascript"
+	"github.com/odvcencio/gotreesitter/grammars/json"
+	"github.com/odvcencio/gotreesitter/grammars/kotlin"
+	"github.com/odvcencio/gotreesitter/grammars/lua"
+	"github.com/odvcencio/gotreesitter/grammars/php"
 	"github.com/odvcencio/gotreesitter/grammars/python"
+	"github.com/odvcencio/gotreesitter/grammars/ruby"
 	"github.com/odvcencio/gotreesitter/grammars/rust"
+	"github.com/odvcencio/gotreesitter/grammars/sql"
+	"github.com/odvcencio/gotreesitter/grammars/svelte"
+	"github.com/odvcencio/gotreesitter/grammars/swift"
+	"github.com/odvcencio/gotreesitter/grammars/toml"
 	"github.com/odvcencio/gotreesitter/grammars/tsx"
 	"github.com/odvcencio/gotreesitter/grammars/typescript"
-	"github.com/raulaguila/opcode/internal/config"
+	"github.com/odvcencio/gotreesitter/grammars/vue"
+	"github.com/odvcencio/gotreesitter/grammars/yaml"
 )
 
 var localParsers = map[string]func() *ts.Language{
 	"python": python.Language, "javascript": javascript.Language, "typescript": typescript.Language, "tsx": tsx.Language,
 	"rust": rust.Language, "java": java.Language, "c": cgrammar.Language, "cpp": cpp.Language, "csharp": csharp.Language,
+	"ruby": ruby.Language, "php": php.Language, "kotlin": kotlin.Language, "swift": swift.Language,
+	"sql": sql.Language, "bash": bash.Language, "lua": lua.Language, "dart": dart.Language,
+	"vue": vue.Language, "svelte": svelte.Language, "hcl": hcl.Language, "yaml": yaml.Language,
+	"toml": toml.Language, "json": json.Language, "html": html.Language, "css": css.Language,
 }
 var declarationKinds = map[string]string{
 	"function_definition": "function", "function_declaration": "function", "generator_function_declaration": "function", "function_item": "function",
@@ -37,22 +50,22 @@ var declarationKinds = map[string]string{
 }
 
 func localOutline(ctx context.Context, path string, raw []byte) ([]codeSymbol, error) {
+	return localOutlineLanguage(ctx, sourceLanguage(path), path, raw)
+}
+
+func localOutlineLanguage(ctx context.Context, language, path string, raw []byte) ([]codeSymbol, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if len(raw) > 256*1024 {
 		return nil, fmt.Errorf("structural parsing limit is 256 KiB")
 	}
-	language := sourceLanguage(path)
 	if language == "go" {
 		return goOutline(path, raw)
 	}
 	load := localParsers[language]
 	if load == nil {
 		return nil, fmt.Errorf("no local structural parser for %s; use a configured LSP or text search", language)
-	}
-	if len(raw) > 256*1024 {
-		return nil, fmt.Errorf("structural parsing limit is 256 KiB")
 	}
 	lang := load()
 	p := ts.NewParser(lang)
@@ -75,6 +88,7 @@ func localOutline(ctx context.Context, path string, raw []byte) ([]codeSymbol, e
 	}
 	result := []codeSymbol{}
 	visited := 0
+	embeddedCount := 0
 	var visit func(*ts.Node, string, int) error
 	var findName func(*ts.Node, int) string
 	findName = func(n *ts.Node, depth int) string {
@@ -85,7 +99,7 @@ func localOutline(ctx context.Context, path string, raw []byte) ([]codeSymbol, e
 			return name.Text(raw)
 		}
 		switch n.Type(lang) {
-		case "identifier", "type_identifier", "field_identifier", "namespace_identifier":
+		case "identifier", "type_identifier", "field_identifier", "namespace_identifier", "simple_identifier", "name", "constant":
 			return n.Text(raw)
 		}
 		for _, field := range []string{"declarator", "type"} {
@@ -97,7 +111,7 @@ func localOutline(ctx context.Context, path string, raw []byte) ([]codeSymbol, e
 		for i := 0; i < n.NamedChildCount(); i++ {
 			child := n.NamedChild(i)
 			switch child.Type(lang) {
-			case "variable_declarator", "function_declarator", "pointer_declarator", "identifier", "type_identifier":
+			case "variable_declarator", "function_declarator", "pointer_declarator", "identifier", "type_identifier", "simple_identifier", "name", "constant":
 				if name := findName(child, depth+1); name != "" {
 					return name
 				}
@@ -114,22 +128,37 @@ func localOutline(ctx context.Context, path string, raw []byte) ([]codeSymbol, e
 			return err
 		}
 		prefix := parent
-		if kind := declarationKinds[n.Type(lang)]; kind != "" {
-			name := findName(n, 0)
+		if kind := localDeclarationKind(language, n.Type(lang)); kind != "" {
+			name := localDeclarationName(language, n, lang, raw)
+			if name == "" {
+				name = findName(n, 0)
+			}
 			if name != "" && len(name) <= 240 {
 				qualified := name
 				if parent != "" {
 					qualified = parent + "." + name
 				}
-				end := int(n.EndPoint().Row) + 1
-				if n.EndPoint().Column == 0 && end > int(n.StartPoint().Row)+1 {
+				last := declarationEnd(language, n, lang)
+				end := int(last.EndPoint().Row) + 1
+				if last.EndPoint().Column == 0 && end > int(n.StartPoint().Row)+1 {
 					end--
 				}
 				result = append(result, codeSymbol{qualified, kind, int(n.StartPoint().Row) + 1, end})
-				if kind != "variable" && kind != "const" {
+				if kind != "variable" && kind != "const" && kind != "attribute" {
 					prefix = qualified
 				}
 			}
+		}
+		if (language == "vue" || language == "svelte" || language == "html") && n.Type(lang) == "script_element" {
+			embeddedCount++
+			if embeddedCount > 8 {
+				return fmt.Errorf("embedded script outline limit reached; use text search or LSP")
+			}
+			embedded, err := embeddedScriptOutline(ctx, n, lang, raw)
+			if err != nil {
+				return err
+			}
+			result = append(result, embedded...)
 		}
 		for i := 0; i < n.NamedChildCount(); i++ {
 			if err := visit(n.NamedChild(i), prefix, depth+1); err != nil {
@@ -142,51 +171,4 @@ func localOutline(ctx context.Context, path string, raw []byte) ([]codeSymbol, e
 		return nil, err
 	}
 	return result, nil
-}
-
-type languageSupportTool struct{}
-
-func NewLanguageSupportTool() BaseTool { return &languageSupportTool{} }
-func (*languageSupportTool) Info() ToolInfo {
-	return ToolInfo{Name: "get_language_support", Description: "Inventory local structural parsers and fixture coverage separately from configured LSP/checks. Recognition is not semantic resolution; no server or install is started.", Parameters: map[string]any{}}
-}
-func (*languageSupportTool) Run(ctx context.Context, _ ToolCall) (ToolResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return ToolResponse{}, err
-	}
-	languages := []string{"go"}
-	for name := range localParsers {
-		languages = append(languages, name)
-	}
-	sort.Strings(languages)
-	items := []map[string]any{}
-	for _, name := range languages {
-		lspNames := []map[string]any{}
-		checks := []string{}
-		if cfg := config.Get(); cfg != nil {
-			for key, entry := range cfg.LSP {
-				if !entry.Disabled {
-					types := entry.FileTypes
-					if len(types) == 0 {
-						types = lsp.Presets[filepath.Base(entry.Command)].Languages
-					}
-					languageID := name
-					if name == "tsx" {
-						languageID = "typescriptreact"
-					}
-					if slices.Contains(types, languageID) {
-						_, err := exec.LookPath(entry.Command)
-						lspNames = append(lspNames, map[string]any{"name": key, "executable_available": err == nil, "started_by_inventory": false})
-					}
-				}
-			}
-			for key := range cfg.Checks {
-				checks = append(checks, key)
-			}
-		}
-		sort.Slice(lspNames, func(i, j int) bool { return fmt.Sprint(lspNames[i]["name"]) < fmt.Sprint(lspNames[j]["name"]) })
-		sort.Strings(checks)
-		items = append(items, map[string]any{"language": name, "recognition": true, "local_parser": true, "parser_fixture": true, "semantic_references": "configured LSP only", "configured_servers": lspNames, "configured_checks": checks})
-	}
-	return jsonToolResult(map[string]any{"languages": items, "other_languages": "extension recognition, text search and optional configured LSP", "parser": "Go standard parser; selected gotreesitter grammars (pure Go)", "note": strings.TrimSpace("Configured checks/servers do not establish language coverage; consult server file types and check commands.")}), nil
 }

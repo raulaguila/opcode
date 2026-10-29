@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "python-scoped-symbol",
+      "query": "calculate_invoice_total", "path": "src", "language": "python",
+      "files": {
+        "src/billing.py": "def calculate_invoice_total(amount):\n    return amount + 37\n",
+        "src/demo.ts": "export function calculate_invoice_total(amount: number) { return amount + 91; }\n",
+        "docs/billing.md": "calculate_invoice_total is described here; not production code.\n"
+      },
+      "expected": ["src/billing.py"]
+    },
+    {
+      "id": "go-current-implementation",
+      "query": "RetryDelay", "path": "retry", "language": "go",
+      "files": {
+        "retry/policy.go": "package retry\nfunc RetryDelay(attempt int) int { return attempt * 17 }\n",
+        "archive/policy.go": "package archive\nfunc RetryDelay(attempt int) int { return attempt * 99 }\n"
+      },
+      "expected": ["retry/policy.go"]
+    },
+    {
+      "id": "semantic-synonym-candidate",
+      "query": "customer reimbursement", "path": "src", "language": "python",
+      "files": {
+        "src/chargeback.py": "def refund_purchase(payment):\n    \"\"\"Return the buyer's money after cancellation.\"\"\"\n    return payment.amount\n",
+        "src/customer.py": "def customer_address(customer):\n    return customer.address\n",
+        "src/catalog.py": "def product_catalog():\n    return []\n"
+      },
+      "expected": ["src/chargeback.py"]
+    }
+  ]
+}

@@ -158,7 +158,10 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 			status.CompactedMessages = count
 		}
 	}
-	if !status.Fits || manual || status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100 {
+	// Initial progressive reads are one bootstrap exchange: let the model see
+	// them before proactively replacing closed batches with historical locators.
+	// The hard serialized budget (including output and safety) always applies.
+	if !status.Fits || manual || (run.steps > 1 && status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100) {
 		compacted, count := compactCompletedBatches(history)
 		if count > 0 {
 			history = compacted

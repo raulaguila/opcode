@@ -134,6 +134,146 @@ deve exigir também `task_status: completed` e `check_passed` para seus checks.
 
 ## Comparação Opcode / Codaro / Crush
 
+Há drivers concretos em `scripts/evaluation_adapter.py`. Eles executam aplicações
+reais e não substituem respostas por fixtures. O Codaro usa a API pública Python
+`Agent.ask`, pois `codaro chat` é interativo. O Crush usa `crush run --quiet`,
+com continuação da mesma sessão para os pedidos seguintes. Nada é instalado.
+
+O driver deve ser executado pelo Python do ambiente que já contém o Codaro:
+
+```json
+{
+  "name": "codaro",
+  "command": "/caminho/codaro/.venv/bin/python",
+  "args": ["/caminho/opcode/scripts/evaluation_adapter.py", "--application", "codaro"]
+}
+```
+
+Para Crush, selecione um Python 3 existente em `command` e use os argumentos:
+`["/caminho/opcode/scripts/evaluation_adapter.py", "--application", "crush",
+"--crush-command", "/caminho/absoluto/crush"]`. O driver de subprocesso do Crush
+requer POSIX para limitar a saída em disco. O executável precisa estar instalado;
+a avaliação não o baixa nem usa `--yolo`.
+
+Use configuração de provedor explícita para que os fatores sejam verificáveis:
+
+```json
+{
+  "providers": {"local": {"baseURL": "http://127.0.0.1:11434/v1"}},
+  "models": {"local.llama3.1:8b": {
+    "provider": "local", "api": "ollama", "api_model": "llama3.1:8b",
+    "context_window": 16384, "default_max_tokens": 2048
+  }},
+  "agents": {"coder": {"model": "local.llama3.1:8b", "maxTokens": 2048}}
+}
+```
+
+Os drivers só recebem fixtures descartáveis e a cópia privada de configuração.
+O Codaro conserva os modos reais, exige Bubblewrap para comandos e aprova edição
+somente nos arquivos existentes da fixture quando `--allow-execution` foi dado.
+MCP/plugins/LSP são desligados. Comandos livres são recusados. O check shell
+nomeado do caso `validate` não tem binding `argv` idêntico no Codaro; o driver
+marca esse caso como `unavailable`, sem reescrever o pedido ou fabricar recibo.
+
+O driver Crush suporta somente Perguntar, com ferramentas mutáveis, comandos,
+busca de rede e delegação desativados. Planejar/Executar ficam `unavailable`.
+APIs OpenAI/Anthropic explícitas são traduzidas; o protocolo Ollama nativo não é
+trocado silenciosamente por OpenAI. Essa comparação fica indisponível no driver
+Crush. A saída CLI não expõe recibos confiáveis de ferramentas, tarefa ou tokens:
+essas medidas são `null` e critérios dependentes ficam `unavailable`.
+
+`unavailable` nunca significa aprovado e faz a execução retornar erro depois de
+gravar o relatório. Critérios observáveis que falharam continuam reprovados,
+mesmo quando outro critério é indisponível. Para comparar o subconjunto comum,
+selecione explicitamente os mesmos casos nos dois comandos:
+
+```sh
+/tmp/opcode-eval evaluate --live --case overview,localize,error \
+  --provider-config /caminho/provedor.json --context-window 16384 --repeat 3 \
+  --experiment baseline --output /tmp/opcode-native.json
+/tmp/opcode-eval evaluate --live --case overview,localize,error \
+  --provider-config /caminho/provedor.json --context-window 16384 --repeat 3 \
+  --adapter /caminho/codaro-adapter.json --output /tmp/codaro-live.json
+/tmp/opcode-eval evaluate compare /tmp/opcode-native.json /tmp/codaro-live.json \
+  --output /tmp/comparison.json
+```
+
+`compare` exige relatórios live limitados, registra os totais por aplicação e
+marca diferenças de hash da suíte, casos/repetições/critérios, modelo da API,
+protocolo, contexto efetivo e reserva de resposta. Não soma métricas ausentes
+como zero e não inclui critérios indisponíveis entre os aprovados. As políticas,
+prompts e ferramentas dos aplicativos continuam diferentes; condições iguais
+não demonstram superioridade geral ou isolamento de uma variável causal.
+
+O relatório nativo inclui versão da aplicação e do prompt, perfil observado
+(`minimal`/`reduced`/`full`), método e componentes do orçamento. `--experiment`
+aceita um rótulo ASCII de até 64 caracteres para comparar execuções observadas;
+não muda o system prompt. Alterar contexto também muda o perfil e precisa ser
+declarado como diferença, em vez de atribuir o resultado apenas ao prompt.
+
+### Recuperação com fontes concorrentes
+
+O benchmark direto de ranking independe do agente e não gera chat:
+
+```sh
+opcode evaluate retrieval --output /tmp/ranking.json
+# Opcional, apenas com um modelo de embeddings já instalado:
+opcode evaluate retrieval --embedding-config /caminho/embeddings.json \
+  --output /tmp/ranking-hybrid.json
+```
+
+O JSON opcional contém somente `endpoint` e `model`, por exemplo
+`{"endpoint":"http://127.0.0.1:11434/api/embed","model":"nomic-embed-text"}`.
+Fornecê-lo autoriza chamadas locais limitadas para embeddings. São recusados
+endpoints externos, redirects, chaves e campos adicionais. Sem esse arquivo,
+nenhum serviço de embeddings é contatado; o híbrido registra fallback lexical.
+
+Cada fixture e estratégia usam outro processo e workspace descartável; a query é
+repetida no mesmo índice para registrar estado `cold` e `warm`. A ferramenta real
+`search_code_index` conserva suas permissões e limites. O relatório inclui recall,
+MRR, estratégia solicitada/efetiva, arquivos lidos/reutilizados/atualizados,
+quantidade de resultados, bytes de resposta e tempo. Nenhum conteúdo de código é
+incluído. Os casos cobrem símbolo com linguagem/escopo, implementação concorrente
+e sinônimos deliberadamente ausentes da fonte. Zero recall no caso de sinônimos
+é uma medida possível; não é convertido em sucesso fictício de embeddings.
+
+`--cases` aceita o contrato separado de `internal/evaluation/testdata/retrieval.json`:
+até 16 casos, cada um com `id`, `files`, `query`, `path`/`language` opcionais e
+`expected` obrigatório. O arquivo de workflow original não é alterado.
+
+`examples/evaluation-retrieval.json` é uma suíte adicional com caminhos esperados,
+linguagens e diretórios distintos, implementações concorrentes e constantes
+diferentes. Os seis casos originais permanecem intactos. Execute com `--cases`
+e o mesmo provedor opt-in; `expected_retrieval` produz recall e MRR a partir dos
+caminhos realmente retornados. A resposta também precisa citar e interpretar a
+fonte correta; acertar apenas o ranking não aprova todos os critérios.
+
+O relatório nativo registra `retrieval_strategies`, incluindo o fallback efetivo.
+Busca híbrida já exige embeddings locais configurados explicitamente; a suíte
+não instala nem ativa um modelo de embeddings. Os drivers externos não fingem
+equivalência de ranking quando não observam as páginas de busca. Para comparar
+embeddings, use fixtures e configurações declaradas separadamente e preserve os
+relatórios, inclusive resultados de cache frio/quente e falhas de serviço.
+
+Testes dos drivers sem inferência:
+
+```sh
+python3 scripts/evaluation_adapter_test.py
+/caminho/codaro/.venv/bin/python scripts/evaluation_adapter_test.py
+```
+
+A segunda execução também exercita a API pública do Codaro com provedor
+roteirizado: realiza leitura de arquivo real e confere os recibos. Isso valida
+compatibilidade do driver; não é uma avaliação de qualidade do modelo.
+
+Leituras iniciais do Codaro possuem recibos reais em `local_retrievals`, separados
+das chamadas emitidas pelo modelo. O driver inclui esses recibos sem contar suas
+cópias novamente. `native_tool_names` guarda os nomes nativos, `tool_names` guarda
+os equivalentes do avaliador (`read_lines`/`read_symbol` → `view`) e
+`local_tool_names` identifica leituras do bootstrap. Uma tentativa de leitura que
+falhou comprova somente a chamada, nunca uma leitura bem-sucedida. Sem recibo,
+nenhuma equivalência é inferida a partir da resposta em prosa.
+
 O runner aceita um adapter executável explícito via JSON:
 
 ```json
@@ -176,3 +316,16 @@ busca filtrada e leitura de fonte num único pedido, com arquivos preservados.
 Falhas de ferramenta podem aparecer como contagens por nome/categoria em
 `tool_failures`; `agent_failure_kind` identifica a categoria do encerramento.
 Não incluem argumentos, mensagens completas de erro nem payloads de provedores.
+
+
+### Amostragem controlada no Ollama
+
+Relatórios incluem `temperature` quando observada; desconhecida fica `null`.
+`evaluate compare` distingue temperaturas diferentes ou observação ausente de
+zero. O adapter Codaro nativo usa a extensão pública do codec `wire_payload`
+para fixar somente a temperatura em zero, igual ao Opcode. Agente, prompts,
+transporte/cancelamento, ferramentas e permissões do Codaro permanecem reais.
+Sem esse controle, o padrão Codaro 0,1 seria um fator adicional da comparação.
+Outros protocolos não recebem uma temperatura presumida. Mesmo com os fatores
+compartilhados, aplicativos mantêm prompts/políticas diferentes; não há inferência
+de superioridade geral ou de efeito causal de uma mudança isolada.

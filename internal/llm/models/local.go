@@ -66,7 +66,7 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 	if len(found) == 0 {
 		return nil, fmt.Errorf("local server returned no language models; load a model in Ollama or LM Studio")
 	}
-	if compatibleCatalog {
+	if compatibleCatalog && ctx.Value(catalogMetadataKey{}) != false {
 		if running, err := InspectOllama(ctx, endpoint, apiKey); err == nil {
 			enrichOllamaContexts(ctx, client, endpoint, apiKey, found, running)
 		}

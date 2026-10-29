@@ -93,5 +93,10 @@ func readSourcePage(ctx context.Context, path string, raw []byte, p ReadPagePara
 		column = 0
 	}
 	recordFileRead(path)
-	return jsonToolResult(map[string]any{"file_path": path, "file_hash": digest, "hash_scope": "whole file (max 16 MiB)", "offset": p.Offset, "column": p.Column, "content": content.String(), "bytes": content.Len(), "next_offset": line, "next_column": column, "more": line < len(lines)}), nil
+	response := jsonToolResult(map[string]any{"file_path": path, "file_hash": digest, "hash_scope": "whole file (max 16 MiB)", "offset": p.Offset, "column": p.Column, "content": content.String(), "bytes": content.Len(), "next_offset": line, "next_column": column, "more": line < len(lines)})
+	if content.Len() > 0 {
+		end := p.Offset + strings.Count(strings.TrimSuffix(content.String(), "\n"), "\n") + 1
+		response = sourceReadMetadata(response, path, raw, p.Offset+1, end)
+	}
+	return response, nil
 }

@@ -123,3 +123,6 @@ edições capturadas pelas ferramentas. Não há commit, merge, reset ou push
 automático nesse painel. Worktrees cujo diretório Git comum fique fora dos
 caminhos permitidos pelo sandbox podem ter operações indisponíveis; a proteção
 não é desativada para contornar isso.
+
+
+Veja também a [evolução comparativa](comparative-evolution.md) para perguntas agrupadas, busca aproximada de modelos, citações verificadas e diagnóstico de linguagens.

@@ -77,3 +77,7 @@ integration.local.json
 # Legacy executable output and generated local guidance
 opencode
 opencode.md
+
+# Python evaluation adapter caches
+__pycache__/
+*.py[cod]

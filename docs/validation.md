@@ -234,3 +234,66 @@ correção semântica de toda a prosa. A guarda de referências verifica presen�
 caminho, não valida automaticamente a linha citada; checks reais e revisão do
 resultado continuam necessários. Não foi feita comparação de qualidade com
 outros aplicativos nesta correção.
+
+## Comparação controlada, citações e linguagens — 28/10/2026
+
+O novo validador encontrou um problema real no contexto inicial: as leituras
+chegavam ao modelo, mas seus metadados não eram persistidos. O candidato inicial
+passou 12/18 tarefas; o [relatório anterior](evidence/2026-10-28-citations-before-repair.json)
+foi preservado. As leituras agora conservam o recibo nativo. Caminhos inventados,
+linhas não entregues, fontes alteradas, erros e resumos continuam recusados.
+
+O prompt é `opcode-2026-10-v4`. Há uma tentativa de reparo de citação, com o
+pedido original preservado. No Ollama, `answer_with_sources` separa explicação
+e fonte e oferece apenas intervalos atuais como opções. A resposta ainda passa
+pela mesma verificação de caminho/faixa/hash. Uma resposta final de protocolo
+malformada pode ter uma regeneração própria, sem texto parcial nem chamadas
+publicadas; testes verificam limite e ausência de repetição de efeitos.
+O [candidato intermediário](evidence/2026-10-28-protocol-before-repair.json) com
+erro após edição correta também permanece como evidência, sem ser contado como
+sucesso da rodada final.
+
+O conjunto e seus critérios não mudaram: SHA-256
+`08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24`.
+As últimas execuções usaram processos/workspaces novos, `llama3.1:8b`, API nativa
+Ollama, janela explícita 16.384 e reserva 2.048. Essa janela é uma condição do
+experimento, não um limite gravado na configuração normal do usuário.
+
+A primeira comparação tinha amostragem diferente: o padrão Codaro era 0,1.
+Na rodada controlada, o adapter usa o codec público do provedor para fixar
+temperatura zero, como no Opcode, preservando agente, prompts, transporte,
+cancelamento e permissões. Temperatura observada aparece nos relatórios; o
+comparador distingue observação ausente de zero e recusa diferenças.
+
+| Rodada final | Resultado |
+| --- | --- |
+| Opcode: explicar/localizar, três repetições | 6/6 casos, 24/24 critérios |
+| Codaro `0.2.0+b54a68640ee5`: mesmos casos/repetições | 6/6 casos, 24/24 critérios |
+| Opcode: seis tarefas originais, três repetições | 18/18 casos |
+
+Na [comparação controlada](evidence/2026-10-28-comparison-controlled.json), o
+Opcode levou 50.934 ms e consumiu 25.789 tokens de entrada/1.479 de saída; o
+Codaro levou 26.688 ms e consumiu 26.995/1.022. São totais observados de seis casos,
+incluindo trabalho/reparos de cada agente. Não estabelecem superioridade geral,
+correção semântica da prosa ou efeito causal isolado do prompt. Observações do
+adapter externo não são recibos nativos independentes de Opcode. Não houve
+execução real do Crush: o executável não está disponível neste ambiente.
+
+O [benchmark de ranking](evidence/2026-10-28-retrieval-ranking.json) executou a
+ferramenta protegida com cache frio/quente: duas fixtures específicas atingiram
+recall/MRR 1; a fixture de sinônimos ficou em 0. Sem embeddings configurados,
+todas as solicitações híbridas declararam fallback lexical. Não há medição de
+ganho semântico real. Nenhum modelo foi baixado.
+
+Passaram `go test -race ./...`, `go vet ./...`, build com `CGO_ENABLED=0` e sete
+testes Python do adapter. A suíte inclui 26 perfis de parsers, migração da política
+do índice, paginação/privacidade, diagnóstico LSP sem efeitos, seleção cancelável
+de modelos, perguntas agrupadas com revisão e preservação do composer, validação
+de fontes, protocolo Ollama e permissões/sandbox existentes. A primeira pergunta
+de 16k preserva as leituras iniciais quando o payload completo cabe; o orçamento
+duro e a reserva de saída continuam obrigatórios. Perguntas avançadas carregam
+seu schema sob demanda.
+
+Veja o [resumo sanitizado](evidence/2026-10-28-comparative-validation.json), o
+[resultado completo do Opcode](evidence/2026-10-28-suite-controlled.json) e o
+[guia das mudanças](comparative-evolution.md).

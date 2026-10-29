@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "retrieve-python-with-decoys",
+      "mode": "ask",
+      "files": {
+        "README.md": "# InvoiceLab\nA cobrança Python é a implementação de produção; TypeScript é uma demonstração.\n",
+        "src/billing.py": "def calculate_invoice_total(amount):\n    return amount + 37\n",
+        "demo/billing.ts": "export function calculate_invoice_total(amount: number) { return amount + 91; }\n",
+        "docs/billing.md": "Exemplo de calculate_invoice_total: o exemplo da documentação não é a implementação.\n"
+      },
+      "prompts": ["Busque calculate_invoice_total no índice de código, filtrando linguagem python e caminho src. Leia a fonte encontrada e informe qual constante a implementação de produção adiciona ao valor. Cite o arquivo e a linha. Não altere arquivos nem execute comandos."],
+      "expected_retrieval": ["src/billing.py"],
+      "criteria": [
+        {"kind": "response_contains", "value": "37"},
+        {"kind": "response_contains", "value": "src/billing.py"},
+        {"kind": "response_not_contains", "value": "91"},
+        {"kind": "file_contains", "path": "src/billing.py", "value": "return amount + 37"}
+      ]
+    },
+    {
+      "id": "retrieve-go-current-source",
+      "mode": "ask",
+      "files": {
+        "README.md": "# RetryLab\nA política atual está no pacote retry.\n",
+        "retry/policy.go": "package retry\n\nfunc RetryDelay(attempt int) int {\n    return attempt * 17\n}\n",
+        "archive/policy.go": "package archive\n\nfunc RetryDelay(attempt int) int { return attempt * 99 }\n"
+      },
+      "prompts": ["Localize RetryDelay por busca no índice, restrita ao diretório retry. Leia a implementação atual e explique o multiplicador usado. Cite retry/policy.go e a linha, sem editar nem executar comandos."],
+      "expected_retrieval": ["retry/policy.go"],
+      "criteria": [
+        {"kind": "response_contains", "value": "17"},
+        {"kind": "response_contains", "value": "retry/policy.go"},
+        {"kind": "response_not_contains", "value": "99"},
+        {"kind": "file_contains", "path": "retry/policy.go", "value": "return attempt * 17"}
+      ]
+    }
+  ]
+}

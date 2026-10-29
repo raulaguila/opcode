@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,6 +12,10 @@ import (
 )
 
 type EventType string
+
+// ErrInvalidFinalAnswer identifies a malformed private reply, before any tool
+// execution. Retrying generation must never replay previous completed effects.
+var ErrInvalidFinalAnswer = errors.New("invalid final answer protocol")
 
 const maxRetries = 8
 
@@ -60,11 +65,12 @@ type Provider interface {
 }
 
 type providerClientOptions struct {
-	apiKey        string
-	baseURL       string
-	model         models.Model
-	maxTokens     int64
-	systemMessage string
+	apiKey          string
+	baseURL         string
+	model           models.Model
+	maxTokens       int64
+	systemMessage   string
+	sourceCitations []string
 
 	anthropicOptions []AnthropicOption
 	openaiOptions    []OpenAIOption

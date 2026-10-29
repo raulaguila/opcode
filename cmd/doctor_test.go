@@ -73,6 +73,40 @@ func TestDoctorWorksWithoutCoderAndNeverStartsModel(t *testing.T) {
 	require.Contains(t, output, `"sandbox"`)
 	require.NotContains(t, output, "agent coder not found")
 }
+
+func TestDoctorLanguageSetupIsOfflineAndDoesNotStartServers(t *testing.T) {
+	dir := doctorFixture(t, `{"lsp":{"ruby":{"command":"ruby-lsp"}},"checks":{"test":{"command":"touch check-was-run"}}}`)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "ledger.rb"), []byte("class Ledger\nend\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Gemfile"), []byte("source 'https://example.invalid'\n"), 0600))
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "ruby-lsp"), []byte("#!/bin/sh\ntouch '"+filepath.Join(dir, "server-was-run")+"'\n"), 0700))
+	t.Setenv("PATH", bin)
+	output, _ := doctorProcess(t, dir, false, "--languages")
+	var report doctorReport
+	start := strings.Index(output, "{")
+	require.GreaterOrEqual(t, start, 0, output)
+	require.NoError(t, json.NewDecoder(strings.NewReader(output[start:])).Decode(&report), output)
+	require.NotNil(t, report.Languages)
+	require.True(t, report.Languages.ProjectInspected)
+	var found bool
+	for _, entry := range report.Languages.Languages {
+		if entry.Language != "ruby" {
+			continue
+		}
+		found = true
+		require.True(t, entry.LocalParser)
+		require.Equal(t, 2, entry.ProjectFiles)
+		require.Len(t, entry.ConfiguredServers, 1)
+		require.True(t, entry.ConfiguredServers[0].ExecutableAvailable)
+		require.False(t, entry.ConfiguredServers[0].StartedByInventory)
+		require.Equal(t, []string{"test"}, entry.ConfiguredChecks)
+	}
+	require.True(t, found, output)
+	for _, marker := range []string{"server-was-run", "check-was-run"} {
+		_, err := os.Stat(filepath.Join(dir, marker))
+		require.True(t, os.IsNotExist(err), marker)
+	}
+}
 func TestDoctorConfigurationErrorsDoNotEchoLiteralCredentials(t *testing.T) {
 	dir := doctorFixture(t, `{"providers":{"unknown-credential-do-not-echo":{"apiKey":"literal-private-credential-do-not-echo"}}}`)
 	output, err := doctorProcess(t, dir, false)

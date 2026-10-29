@@ -41,7 +41,7 @@ func (s *retrievalScope) validate() error {
 		return fmt.Errorf("invalid glob filter")
 	}
 	s.Language = strings.ToLower(strings.TrimSpace(s.Language))
-	aliases := map[string]string{"js": "javascript", "node": "javascript", "nodejs": "javascript", "ts": "typescript", "py": "python", "golang": "go", "c++": "cpp", "c#": "csharp", "rs": "rust", "shell": "bash", "shellscript": "bash", "protobuf": "proto"}
+	aliases := map[string]string{"js": "javascript", "node": "javascript", "nodejs": "javascript", "ts": "typescript", "py": "python", "golang": "go", "c++": "cpp", "c#": "csharp", "rs": "rust", "shell": "bash", "shellscript": "bash", "protobuf": "proto", "rb": "ruby", "kt": "kotlin", "terraform": "hcl", "yml": "yaml", "vuejs": "vue"}
 	if alias := aliases[s.Language]; alias != "" {
 		s.Language = alias
 	}
@@ -62,6 +62,8 @@ func sourceLanguage(path string) string {
 		return "make"
 	case "cmakelists.txt":
 		return "cmake"
+	case "gemfile", "rakefile", "vagrantfile":
+		return "ruby"
 	}
 	extra := map[string]string{
 		".pyi": "python", ".mjs": "javascript", ".cjs": "javascript", ".mts": "typescript", ".cts": "typescript",
@@ -69,6 +71,9 @@ func sourceLanguage(path string) string {
 		".zig": "zig", ".vue": "vue", ".svelte": "svelte", ".proto": "proto", ".graphql": "graphql", ".gql": "graphql",
 		".tf": "hcl", ".hcl": "hcl", ".toml": "toml", ".ml": "ocaml", ".mli": "ocaml", ".jl": "julia",
 		".nim": "nim", ".sol": "solidity", ".cljc": "clojure", ".cljs": "clojure", ".edn": "clojure",
+		".rake": "ruby", ".tfvars": "hcl", ".luau": "lua", ".sc": "scala", ".gradle": "groovy", ".cmake": "cmake",
+		".fish": "fish", ".tcl": "tcl", ".nix": "nix", ".bicep": "bicep", ".prisma": "prisma", ".ex": "elixir", ".exs": "elixir",
+		".erl": "erlang", ".hrl": "erlang", ".f90": "fortran", ".f95": "fortran", ".gd": "gdscript", ".gleam": "gleam",
 	}
 	if language := extra[strings.ToLower(filepath.Ext(path))]; language != "" {
 		return language

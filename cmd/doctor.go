@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -26,12 +27,13 @@ type doctorCheck struct {
 	Detail string `json:"detail"`
 }
 type doctorReport struct {
-	Version string        `json:"version"`
-	Checks  []doctorCheck `json:"checks"`
+	Version   string                       `json:"version"`
+	Checks    []doctorCheck                `json:"checks"`
+	Languages *tools.LanguageSupportReport `json:"languages,omitempty"`
 }
 
 func newDoctorCommand() *cobra.Command {
-	var jsonOutput, checkProvider, probeModel, ollamaStatus bool
+	var jsonOutput, checkProvider, probeModel, ollamaStatus, languageSupport bool
 	var profile, modelID string
 	command := &cobra.Command{Use: "doctor", Short: "Diagnose configuration and execution readiness without starting an agent", Args: cobra.NoArgs}
 	command.RunE = func(cmd *cobra.Command, _ []string) error {
@@ -104,6 +106,47 @@ func newDoctorCommand() *cobra.Command {
 					add("lsp:"+key, "warning", "Configured executable is unavailable; the server was not started.")
 				} else {
 					add("lsp:"+key, "ok", "Executable available; server not started.")
+				}
+			}
+			if languageSupport {
+				ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
+				inventory, languageErr := tools.InspectLanguageSupport(ctx, true)
+				cancel()
+				if languageErr != nil {
+					add("languages", "warning", "Language discovery could not finish; source content was not inspected. Retry with an accessible workspace.")
+				} else {
+					projectLanguages := inventory.Languages[:0]
+					for _, language := range inventory.Languages {
+						if language.ProjectFiles == 0 {
+							continue
+						}
+						projectLanguages = append(projectLanguages, language)
+						status, parser := "ok", "tested local syntax parser"
+						if !language.LocalParser {
+							status, parser = "warning", "text search; no local syntax parser"
+						}
+						servers := []string{}
+						for _, server := range language.ConfiguredServers {
+							state := "missing executable"
+							if server.ExecutableAvailable {
+								state = "executable available"
+							}
+							if server.Disabled {
+								state = "disabled"
+							}
+							servers = append(servers, server.Name+" ("+state+")")
+						}
+						serverNote := strings.Join(servers, ", ")
+						if serverNote == "" {
+							serverNote = "not configured; consult languages.suggested_servers in --json and configure explicitly"
+						}
+						add("language:"+language.Language, status, fmt.Sprintf("%d files; %s. LSP: %s. %d configured project checks; none executed.", language.ProjectFiles, parser, serverNote, len(language.ConfiguredChecks)))
+					}
+					inventory.Languages = projectLanguages
+					report.Languages = &inventory
+					if inventory.Truncated {
+						add("languages", "warning", "Language discovery stopped at 2000 files; counts are partial. Nothing was installed or started.")
+					}
 				}
 			}
 			if checkProvider {
@@ -197,6 +240,7 @@ func newDoctorCommand() *cobra.Command {
 	command.Flags().BoolVar(&ollamaStatus, "ollama-status", false, "Opt in to GET /api/ps for actual model context and CPU/GPU allocation; no inference or model load")
 	command.Flags().BoolVar(&jsonOutput, "json", false, "Print a structured report without credentials")
 	command.Flags().StringP("cwd", "c", "", "Workspace to diagnose")
+	command.Flags().BoolVar(&languageSupport, "languages", false, "Discover project languages and report parser/LSP/check readiness without installing or starting language servers")
 	command.Flags().BoolVar(&checkProvider, "check-provider", false, "Opt in to a bounded metadata/catalog request; does not generate tokens")
 	command.Flags().StringVar(&profile, "profile", "", "Provider profile ID for the optional catalog request")
 	command.Flags().BoolVar(&probeModel, "probe-model", false, "Opt in to one real model/tool inference request (may incur costs; no tools execute)")

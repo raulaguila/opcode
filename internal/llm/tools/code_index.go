@@ -316,7 +316,7 @@ func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefres
 	processed := 0
 	secrets := credentialValues()
 	sort.Strings(secrets)
-	policy := indexDigest("parser-v3\x00" + strings.Join(secrets, "\x00"))
+	policy := indexDigest("parser-v4\x00" + strings.Join(secrets, "\x00"))
 	now, total := time.Now().Unix(), int64(0)
 	for _, path := range paths {
 		if err := ctx.Err(); err != nil {

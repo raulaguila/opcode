@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,7 +39,7 @@ func (t *projectTool) Info() ToolInfo {
 	if t.name == "read_symbol" {
 		required = append(required, "symbol")
 	}
-	return ToolInfo{Name: t.name, Description: "Explore code without dumping whole files. Project map excludes secret, storage, link and dependency paths; bounded to 20000 entries with pagination. Go/Python/JS/TS/TSX/Rust/Java/C/C++/C# use local syntax parsers; other languages use configured LSP document symbols. read_symbol uses an exact outline declaration name and paginates lines. Outlines are navigation, not edit-read evidence.", Required: required, Parameters: map[string]any{"path": map[string]any{"type": "string"}, "file_path": map[string]any{"type": "string"}, "symbol": map[string]any{"type": "string"}, "expected_hash": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1}}}
+	return ToolInfo{Name: t.name, Description: "Explore code without dumping whole files. Project map excludes secret, storage, link and dependency paths; bounded to 20000 entries with pagination. Local syntax parsers cover common programming, component and configuration languages; get_language_support inventories tested coverage and optional LSP. read_symbol uses an exact outline declaration name and paginates lines. Outlines are navigation, not edit-read evidence.", Required: required, Parameters: map[string]any{"path": map[string]any{"type": "string"}, "file_path": map[string]any{"type": "string"}, "symbol": map[string]any{"type": "string"}, "expected_hash": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1}}}
 }
 func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	var p struct {
@@ -103,11 +104,16 @@ func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 		if start >= symbol.End {
 			return NewTextErrorResponse("offset exceeds symbol range"), nil
 		}
-		content, _, err := readTextFile(ctx, path, start, min(limit, symbol.End-start))
+		content, _, err := readTextReader(ctx, bytes.NewReader(raw), start, min(limit, symbol.End-start))
 		if err != nil {
 			return ToolResponse{}, err
 		}
-		return jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbol": symbol, "content": addLineNumbers(content, start+1), "next_offset": p.Offset + len(strings.Split(content, "\n")), "more": start+len(strings.Split(content, "\n")) < symbol.End}), nil
+		recordFileRead(path)
+		response := jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbol": symbol, "content": addLineNumbers(content, start+1), "next_offset": p.Offset + len(strings.Split(content, "\n")), "more": start+len(strings.Split(content, "\n")) < symbol.End})
+		if content != "" {
+			response = sourceReadMetadata(response, path, raw, start+1, start+len(strings.Split(content, "\n")))
+		}
+		return response, nil
 	}
 	return NewTextErrorResponse("declaration not found; inspect get_file_outline for exact names"), nil
 }

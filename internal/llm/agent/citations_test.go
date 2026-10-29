@@ -82,7 +82,10 @@ func TestCitationRepairIsBoundedAndDoesNotFabricateReferences(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		nextGeneration(t, p).reply <- provider.ProviderResponse{Content: "Uncited explanation", FinishReason: message.FinishReasonEndTurn}
 	}
-	require.ErrorContains(t, finishGeneration(t, done).Error, "citation remains missing")
+	failure := finishGeneration(t, done).Error
+	require.ErrorContains(t, failure, "citation remains missing")
+	require.ErrorContains(t, failure, "No file:line reference was supplied")
+	require.ErrorContains(t, failure, "source.go:1-1")
 }
 
 func TestCitationPresenceUsesOnlyCurrentSuccessfulReadReceipts(t *testing.T) {
@@ -106,6 +109,25 @@ func TestCitationPresenceUsesOnlyCurrentSuccessfulReadReceipts(t *testing.T) {
 	require.Empty(t, missingSourceCitation(run, history, "pkg/source.go:2"))
 	run.requiresCitation = false
 	require.Empty(t, missingSourceCitation(run, history, "No code explanation was requested."))
+}
+
+func TestCitationFailureDiagnosticIsBoundedAndRedactsCredentials(t *testing.T) {
+	a, p, _, root := runtimeAgent(t, workflow.Ask)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "source.go"), []byte("package source\n"), 0600))
+	a.tools = []tools.BaseTool{tools.NewViewTool(nil)}
+	const secret = "synthetic-citation-private-key"
+	t.Setenv("OPCODE_TEST_CITATION_API_KEY", secret)
+	done, err := a.Run(context.Background(), "s", "Explain this code")
+	require.NoError(t, err)
+	replyTools(nextGeneration(t, p), toolCall("view", `{"file_path":"source.go"}`))
+	answer := secret + strings.Repeat("x", 3000) + ".go:1"
+	for range 2 {
+		nextGeneration(t, p).reply <- provider.ProviderResponse{Content: answer, FinishReason: message.FinishReasonEndTurn}
+	}
+	failure := finishGeneration(t, done).Error
+	require.ErrorContains(t, failure, "Unverified references")
+	require.NotContains(t, failure.Error(), secret)
+	require.Less(t, len(failure.Error()), 2000)
 }
 
 func TestCitationHeuristicRespectsNegationAndExplicitReferenceOptOut(t *testing.T) {
@@ -234,7 +256,7 @@ func TestCitationValidationNeedsNativeReceiptNotProseSearchOrHistoricalSummary(t
 	r.IsError = true
 	failed[2].Parts = []message.ContentPart{r}
 	require.Empty(t, missingSourceCitation(run, failed, "Could not inspect source."))
-	// A different turn cannot resurrect the receipt.
+	// An absent current turn cannot authenticate historical receipts.
 	run.turnMessageID = "later"
 	require.Empty(t, missingSourceCitation(run, history, "No source read in this turn."))
 }

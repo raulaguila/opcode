@@ -54,7 +54,7 @@ func missingSourceCitation(run *generationRun, history []message.Message, answer
 	if !run.requiresCitation {
 		return ""
 	}
-	receipts, attempted := sourceReadReceipts(run, history)
+	receipts, attempted := citationReadReceipts(run, history)
 	refs := sourceReferences(answer)
 	if !attempted && len(refs) == 0 && !run.requiresProjectEvidence {
 		return "" // Failed reads and navigation results are not source evidence.
@@ -112,6 +112,9 @@ func missingSourceCitation(run *generationRun, history []message.Message, answer
 	}
 	encoded, _ := json.Marshal(available)
 	problem := "The explanation has missing or invalid source citations. "
+	if len(refs) == 0 {
+		problem += "No file:line reference was supplied. "
+	}
 	if !primaryValid {
 		problem += "For this project question, include the relevant topic source supplied by context preparation; a manifest/entry point alone does not establish the requested features. "
 	}
@@ -221,7 +224,7 @@ func currentCitationChoices(run *generationRun, history []message.Message) []str
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	receipts, _ := sourceReadReceipts(run, history)
+	receipts, _ := citationReadReceipts(run, history)
 	choices := []string{}
 	total := 0
 	for _, receipt := range receipts {
@@ -245,29 +248,74 @@ func currentCitationChoices(run *generationRun, history []message.Message) []str
 }
 
 func sourceReadReceipts(run *generationRun, history []message.Message) ([]tools.SourceReadReceipt, bool) {
-	started := run.turnMessageID == ""
+	start := sourceReadTurnStart(run, history)
+	if start == len(history) {
+		return nil, false
+	}
+	return collectSourceReadReceipts(history[start:], 0, history[start].SessionID)
+}
+
+// Historical source evidence must be an original native call/result pair, not
+// a continuity summary. Retain the current-turn meaning of attempted: an old
+// read must not make an unrelated answer newly require a source reference.
+// Look back at most 256 messages and retain at most 32 receipts, including new
+// ones. Revalidation still happens at each use, with the existing policy/time
+// limits; these receipts grant neither access nor a persistent freshness cache.
+func citationReadReceipts(run *generationRun, history []message.Message) ([]tools.SourceReadReceipt, bool) {
+	start := sourceReadTurnStart(run, history)
+	if start == len(history) {
+		return nil, false
+	}
+	first := max(0, start-256)
+	return collectSourceReadReceipts(history[first:], start-first, history[start].SessionID)
+}
+
+func sourceReadTurnStart(run *generationRun, history []message.Message) int {
+	if run.turnMessageID == "" {
+		return 0
+	}
+	for i, msg := range history {
+		if msg.ID == run.turnMessageID && msg.Role == message.User && !msg.IsApplication() {
+			return i
+		}
+	}
+	return len(history)
+}
+
+func collectSourceReadReceipts(history []message.Message, currentStart int, sessionID string) ([]tools.SourceReadReceipt, bool) {
 	calls := map[string]message.ToolCall{}
 	var receipts []tools.SourceReadReceipt
 	attempted := false
-	for _, msg := range history {
-		if msg.ID == run.turnMessageID {
-			started = true
-		}
-		if !started {
+	for i, msg := range history {
+		if msg.SessionID != sessionID {
 			continue
 		}
-		for _, call := range msg.ToolCalls() {
-			switch call.Name {
-			case "view", "read_lines", "read_symbol":
-				calls[call.ID] = call
+		if msg.Role == message.User {
+			// Providers may reuse call IDs across turns; an old call cannot
+			// authenticate a result in a later human/application exchange.
+			clear(calls)
+			continue
+		}
+		if msg.Role == message.Assistant {
+			for _, call := range msg.ToolCalls() {
+				switch call.Name {
+				case "view", "read_lines", "read_symbol":
+					if call.ID != "" {
+						calls[call.ID] = call
+					}
+				}
 			}
+		}
+		if msg.Role != message.Tool {
+			continue
 		}
 		for _, result := range msg.ToolResults() {
 			call, exists := calls[result.ToolCallID]
+			delete(calls, result.ToolCallID)
 			if result.IsError || !exists {
 				continue
 			}
-			attempted = true
+			attempted = attempted || i >= currentStart
 			receipt, ok := tools.VisibleSourceReadReceipt(call.Name, result.Content, result.Metadata)
 			if !ok || normalizedToolPath(receipt.Path) != normalizedToolPath(toolFilePath(call.Input)) {
 				continue

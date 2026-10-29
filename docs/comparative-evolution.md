@@ -7,8 +7,10 @@ entregues. As leituras iniciais passam pelo mesmo controle de acesso e preservam
 esses metadados no histórico. Conteúdo truncado limita o intervalo aceito.
 
 Nas explicações/localizações reconhecidas pelo runtime, uma referência precisa
-corresponder a um recibo bem-sucedido do turno atual, às linhas efetivamente
-entregues e ao hash atual. Recibos de erro, busca, resumo, turno anterior ou
+corresponder a um recibo nativo bem-sucedido da mesma conversa, às linhas efetivamente
+entregues e ao hash atual. Leituras anteriores podem ser usadas quando o par original
+de chamada/resultado ainda está no histórico considerado e passa novamente pela política
+de acesso e pela verificação do arquivo. Recibos de erro, busca, resumo ou
 arquivo alterado não bastam. Páginas adjacentes do mesmo hash podem formar um
 intervalo; lacunas não são preenchidas. A recusa explícita de citações pelo
 usuário continua respeitada.
@@ -25,6 +27,13 @@ hash e linhas. Eles ajudam a reencontrar a fonte via `read_conversation` ou nova
 leitura, mas não viram evidência atual nem concedem autorização. Fontes externas,
 sensíveis ou symlinks não são certificadas automaticamente. A revalidação tem
 prazo de três segundos e limita arquivos a 16 MiB.
+O reaproveitamento considera até 256 mensagens anteriores ao turno atual e mantém
+os 32 recibos mais recentes, incluindo as novas leituras. Fora desses limites ou
+sem o registro original, a referência exige uma nova leitura. A simples presença
+de uma leitura antiga não obriga respostas sem referências e sem investigação de
+projeto a fazer uma citação. O reparo continua limitado a uma tentativa; em caso
+de falha, `/error` exibe também o diagnóstico de validação,
+com redação de credenciais e tamanho limitado.
 
 Uma resposta final privada malformada pode ter uma regeneração adicional, apenas
 sem texto parcial ou chamadas publicadas. O parser continua estrito e operações

@@ -510,7 +510,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		}
 		if problem := missingSourceCitation(run, msgHistory, agentMessage.Content().Text); problem != "" {
 			if citationRepairs >= 1 {
-				return a.err(fmt.Errorf("source citation remains missing after repair; read evidence preserved"))
+				return a.err(fmt.Errorf("source citation remains missing after repair; read evidence preserved: %s", clip(tools.RedactCredentials(problem), 1800)))
 			}
 			citationRepairs++
 			a.observePhase(sessionID, "repair", 0)

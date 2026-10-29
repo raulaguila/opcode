@@ -66,6 +66,9 @@ verificação de arquivo, hash atual e intervalo efetivamente entregue.
 Sem leitura verificável, o agente solicita recuperação em vez de aceitar uma
 afirmação sobre o projeto. Após uma correção de citação malsucedida, o turno
 encerra com erro preservando as evidências; não inventa uma referência.
+O detalhe do erro distingue a ausência de `arquivo:linha` das referências não
+verificadas e mostra os intervalos disponíveis para recuperação. O texto é
+limitado e passa pela redação de credenciais antes de aparecer em `/error`.
 As exceções explícitas de estilo solicitadas pelo usuário permanecem respeitadas.
 O gate verifica proveniência e o vínculo com a fonte selecionada; não certifica
 a interpretação de cada afirmação. As avaliações de conteúdo permanecem necessárias.
@@ -83,6 +86,18 @@ abrevia somente cópias antigas idênticas, preservando pares de ferramentas,
 argumentos, estado privado do provedor, instruções humanas e o histórico salvo.
 A revalidação ainda faz leitura para calcular o hash; isso não é um cache sem I/O
 nem uma promessa de latência menor em todo caso.
+
+Uma citação do modelo também pode usar uma leitura nativa de turno anterior,
+sem repetir a chamada da ferramenta. O validador recupera somente pares originais
+de chamada/resultado bem-sucedidos da mesma conversa e confere novamente hash,
+linhas entregues e acesso atual ao arquivo. Considera até 256 mensagens anteriores
+e mantém até 32 recibos recentes, incluindo os do turno atual. Páginas adjacentes
+só podem ser unidas se tiverem o mesmo caminho e hash; lacunas continuam inválidas.
+Resumos, localizadores copiados, resultados sem metadados ou leituras de outra
+conversa não estabelecem evidência. Fontes alteradas, protegidas, externas ou com
+symlink não são certificadas automaticamente. O reparo, tanto no protocolo nativo
+Ollama quanto em OpenAI-compatible, usa os mesmos limites e verificações; não
+repete efeitos colaterais nem fabrica referências para fazer uma resposta passar.
 
 ## O que o processo mostra
 

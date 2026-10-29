@@ -1,6 +1,10 @@
 package lsp
 
-import "sync"
+import (
+	"context"
+	"fmt"
+	"sync"
+)
 
 var clientsMu sync.RWMutex
 
@@ -22,4 +26,27 @@ func DeleteClient(clients map[string]*Client, key string) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 	delete(clients, key)
+}
+
+var lazyStarters = map[string]func(context.Context, string) error{}
+
+func RegisterLazyClients(clients map[string]*Client, start func(context.Context, string) error) func() {
+	key := fmt.Sprintf("%p", clients)
+	clientsMu.Lock()
+	lazyStarters[key] = start
+	clientsMu.Unlock()
+	return func() { clientsMu.Lock(); delete(lazyStarters, key); clientsMu.Unlock() }
+}
+func EnsureClients(ctx context.Context, clients map[string]*Client, path string) error {
+	if path == "" {
+		return nil
+	}
+	key := fmt.Sprintf("%p", clients)
+	clientsMu.RLock()
+	start := lazyStarters[key]
+	clientsMu.RUnlock()
+	if start == nil {
+		return nil
+	}
+	return start(ctx, path)
 }

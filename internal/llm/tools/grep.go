@@ -249,7 +249,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 			continue
 		}
 		path := decodeText(event.Data.Path)
-		if shell.SensitivePath(path) {
+		if ExclusionReason(discoveryPolicyRoot(rootPath), path) != "" {
 			continue
 		}
 		if _, err := authorizeFile(ctx, path, "read"); err != nil {
@@ -280,7 +280,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 		return nil, false, err
 	}
 	if waitErr != nil && !truncated {
-		if exit, ok := waitErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 {
+		if exit, ok := waitErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 || bufferHasOutput(stderr) {
 			return nil, false, fmt.Errorf("ripgrep search failed")
 		}
 	}
@@ -350,7 +350,7 @@ func findFiles(ctx context.Context, root, pattern string, limit int) ([]string, 
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if path != root && (shouldSkip(path, nil) || shell.SensitivePath(path)) {
+		if path != root && ExclusionReason(discoveryPolicyRoot(root), path) != "" {
 			if d.IsDir() {
 				return filepath.SkipDir
 			}
@@ -379,7 +379,9 @@ func findFiles(ctx context.Context, root, pattern string, limit int) ([]string, 
 			truncated = true
 			return filepath.SkipAll
 		}
-		files = append(files, path)
+		if ExclusionReason(discoveryPolicyRoot(root), path) == "" {
+			files = append(files, path)
+		}
 		return nil
 	})
 	return files, truncated, err
@@ -406,7 +408,8 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 	if err != nil {
 		return nil, false, err
 	}
-	cmd.Stderr = &shell.Buffer{Limit: 4096}
+	stderr := &shell.Buffer{Limit: 4096}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return nil, false, err
 	}
@@ -427,7 +430,7 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 	truncated := false
 	for scanner.Scan() {
 		path := scanner.Text()
-		if shell.SensitivePath(path) {
+		if ExclusionReason(discoveryPolicyRoot(root), path) != "" {
 			continue
 		}
 		if len(paths) == limit {
@@ -449,9 +452,11 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 		return nil, false, scanErr
 	}
 	if waitErr != nil && !truncated {
-		if exit, ok := waitErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 {
+		if exit, ok := waitErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 || bufferHasOutput(stderr) {
 			return nil, false, fmt.Errorf("ripgrep file listing failed")
 		}
 	}
 	return paths, truncated, nil
 }
+
+func bufferHasOutput(b *shell.Buffer) bool { s, _ := b.Snapshot(); return len(s) > 0 }

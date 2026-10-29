@@ -6,7 +6,9 @@ import (
 )
 
 var english = map[string][2]string{
-	"new": {"New conversation", "Start another conversation"}, "files": {"Files", "Choose files to attach"}, "terminal": {"Terminal", "Open or return to the terminal"}, "commands": {"All commands", "Search actions and tools"},
+	"index":   {"Project index", "Status, update, rebuild, pause or clear derived index"},
+	"runtime": {"Runtime diagnostic", "Model, protocol, context, tools and index; credentials omitted"},
+	"new":     {"New conversation", "Start another conversation"}, "files": {"Files", "Choose files to attach"}, "terminal": {"Terminal", "Open or return to the terminal"}, "commands": {"All commands", "Search actions and tools"},
 	"mode": {"Work mode", "Choose work mode…"}, "plan": {"Show/hide plan", "Show or collapse the plan"}, "task": {"Current task", "Inspect task and acceptance criteria"}, "resume": {"Resume task", "Continue the saved task"},
 	"setup": {"Guided setup", "Provider, model and optional tests"}, "local-status": {"Ollama allocation", "Loaded context, CPU/GPU and model memory"}, "contract": {"Expected outcome", "Explain, plan, change or verify; targets and criteria"},
 	"settings": {"Settings", "Providers and preferences"}, "models": {"Choose model", "Catalog, favorites and details"}, "integrations": {"Integrations", "Configure/test MCP or LSP"}, "sessions": {"Conversations", "Search, rename, archive and export"},

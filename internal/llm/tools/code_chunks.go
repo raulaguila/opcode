@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"regexp"
 	"strings"
 	"unicode"
@@ -67,6 +68,9 @@ func compactPreview(text string, limit int) string {
 }
 
 func codeChunks(path, text string) []indexedChunk {
+	return codeChunksContext(context.Background(), path, text)
+}
+func codeChunksContext(ctx context.Context, path, text string) []indexedChunk {
 	lines := strings.Split(text, "\n")
 	var chunks []indexedChunk
 	add := func(symbol, kind string, first, last int) {
@@ -89,10 +93,21 @@ func codeChunks(path, text string) []indexedChunk {
 			start = end
 		}
 	}
-	if sourceLanguage(path) == "go" {
-		if symbols, err := goOutline(path, []byte(text)); err == nil {
+	{
+		if symbols, err := localOutline(ctx, path, []byte(text)); err == nil {
 			for _, symbol := range symbols {
+				before := len(chunks)
 				add(symbol.Name, symbol.Kind, symbol.Start, symbol.End)
+				if prefix, _, ok := strings.Cut(symbol.Name, "."); ok {
+					for _, parent := range symbols {
+						if parent.Name == prefix && parent.Start > 0 && parent.Start <= len(lines) {
+							for i := before; i < len(chunks); i++ {
+								chunks[i].Signature = compactPreview(lines[parent.Start-1]+" > "+chunks[i].Signature, 240)
+							}
+							break
+						}
+					}
+				}
 			}
 		}
 	}

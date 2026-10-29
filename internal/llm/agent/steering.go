@@ -35,6 +35,9 @@ type generationRun struct {
 	queuedBytes      int
 	mode             workflow.Mode
 	selected         map[string]bool
+	toolLeases       map[string]int
+	requiredCalls    map[string]int
+	startMessageID   string
 	available        []tools.BaseTool
 	limits           config.RuntimeConfig
 	steps, toolBytes int

@@ -120,3 +120,35 @@ func TestInitialProjectOverviewDoesNotEmbedRecursiveTree(t *testing.T) {
 	require.Contains(t, text, "get_project_map")
 	require.Contains(t, text, "search_code_index")
 }
+
+func TestPromptProfilesIdentityAndProtocol(t *testing.T) {
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	for _, mode := range []string{"ask", "plan", "execute"} {
+		full := Compose(mode, "responses", 128000, []string{"view"})
+		small := Compose(mode, "ollama", 8192, []string{"view"})
+		require.Contains(t, full, "You are Opcode")
+		require.NotContains(t, full, "built by OpenAI")
+		require.NotContains(t, full, "One word answers")
+		require.Contains(t, small, "profile=minimal")
+		require.Contains(t, small, "steps_text")
+		require.NotContains(t, full, "steps_text")
+		require.Contains(t, full, "Mode: "+mode)
+	}
+}
+func TestProjectGuidanceReloadsWithoutCrossProjectCache(t *testing.T) {
+	root := t.TempDir()
+	_, err := config.Load(root, false)
+	require.NoError(t, err)
+	cfg := config.Get()
+	cfg.WorkingDir = root
+	cfg.ContextPaths = []string{"AGENTS.md"}
+	path := filepath.Join(root, "AGENTS.md")
+	require.NoError(t, os.WriteFile(path, []byte("first instruction"), 0600))
+	require.Contains(t, getContextFromPaths(), "first instruction")
+	require.NoError(t, os.WriteFile(path, []byte("fresh instruction"), 0600))
+	require.Contains(t, getContextFromPaths(), "fresh instruction")
+	require.NotContains(t, getContextFromPaths(), "first instruction")
+	cfg.WorkingDir = t.TempDir()
+	require.Empty(t, getContextFromPaths())
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/workflow"
 )
 
 var ErrContextLimit = errors.New("context budget exceeded")
@@ -21,14 +22,20 @@ var ErrContextLimit = errors.New("context budget exceeded")
 // ContextStatus is an estimate, not a provider tokenizer measurement. Raw
 // payloads are never stored in status or written to logs.
 type ContextStatus struct {
-	ContextWindow        int64  `json:"context_window"`
-	EstimatedInputTokens int64  `json:"estimated_input_tokens"`
-	ReservedOutputTokens int64  `json:"reserved_output_tokens"`
-	SafetyTokens         int64  `json:"safety_tokens"`
-	ToolSchemaTokens     int64  `json:"tool_schema_tokens"`
-	CompactedMessages    int    `json:"compacted_messages"`
-	Method               string `json:"method"`
-	Fits                 bool   `json:"fits"`
+	uncalibratedInput    int64
+	ContextSource        string           `json:"context_source"`
+	ActualInputTokens    int64            `json:"actual_input_tokens,omitempty"`
+	CalibrationSamples   int              `json:"calibration_samples"`
+	ComponentBudgets     map[string]int64 `json:"component_budgets"`
+	Components           map[string]int64 `json:"components"`
+	ContextWindow        int64            `json:"context_window"`
+	EstimatedInputTokens int64            `json:"estimated_input_tokens"`
+	ReservedOutputTokens int64            `json:"reserved_output_tokens"`
+	SafetyTokens         int64            `json:"safety_tokens"`
+	ToolSchemaTokens     int64            `json:"tool_schema_tokens"`
+	CompactedMessages    int              `json:"compacted_messages"`
+	Method               string           `json:"method"`
+	Fits                 bool             `json:"fits"`
 }
 type ContextControl interface {
 	ContextStatus(context.Context, string) (ContextStatus, error)
@@ -69,7 +76,7 @@ func estimateContext(model models.Model, system string, history []message.Messag
 	schemaTokens := estimateTokens(schema)
 	input := estimateTokens(raw) + estimateTokens([]byte(system)) + schemaTokens + int64(len(history))*32 + 256
 	safety := max(int64(512), window/20)
-	return ContextStatus{ContextWindow: window, EstimatedInputTokens: input, ReservedOutputTokens: reserve, SafetyTokens: safety, ToolSchemaTokens: schemaTokens, Method: "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer", Fits: input+reserve+safety <= window}
+	return ContextStatus{ContextSource: model.ContextSource, Components: map[string]int64{"instructions": estimateTokens([]byte(system)), "history_and_evidence": estimateTokens(raw), "schemas": schemaTokens, "output": reserve, "safety": safety}, ContextWindow: window, EstimatedInputTokens: input, ReservedOutputTokens: reserve, SafetyTokens: safety, ToolSchemaTokens: schemaTokens, Method: "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer", Fits: input+reserve+safety <= window}
 }
 
 // compactHistory keeps every user instruction and all tool call/result pairs.
@@ -140,7 +147,7 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 	a.contextMu.Lock()
 	manual := a.compactSessions[session]
 	a.contextMu.Unlock()
-	if !status.Fits || manual {
+	if !status.Fits || manual || status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100 {
 		compacted, count := compactHistory(history)
 		if count > 0 {
 			history = compacted
@@ -149,6 +156,18 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 				return nil, err
 			}
 			status.CompactedMessages = count
+		}
+	}
+	if !status.Fits || manual || status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100 {
+		compacted, count := compactCompletedBatches(history)
+		if count > 0 {
+			history = compacted
+			previous := status.CompactedMessages
+			status, err = a.estimateProviderContext(runProvider(a, run), history, ts)
+			if err != nil {
+				return nil, err
+			}
+			status.CompactedMessages = previous + count
 		}
 	}
 	a.contextMu.Lock()
@@ -176,13 +195,57 @@ func (a *agent) ContextStatus(ctx context.Context, session string) (ContextStatu
 	if err != nil {
 		return ContextStatus{}, err
 	}
+	return a.previewContext(ctx, session, history)
+}
+func (a *agent) previewContext(ctx context.Context, session string, history []message.Message) (ContextStatus, error) {
 	a.runMu.Lock()
-	model := a.provider.Model()
-	ts := append([]tools.BaseTool(nil), a.tools...)
-	system := a.systemMessage
-	reserve := a.maxOutputTokens
+	p := a.provider
+	available := append([]tools.BaseTool(nil), a.tools...)
 	a.runMu.Unlock()
-	return estimateContext(model, system, history, ts, reserve), nil
+	preview := &generationRun{ctx: ctx, provider: p, mode: workflow.Execute, available: available}
+	if a.workflow != nil {
+		if session != "" {
+			task, e := a.workflow.Get(ctx, session)
+			if e != nil {
+				return ContextStatus{}, e
+			}
+			preview.mode = task.EffectiveMode()
+		}
+		preview.available = append(preview.available, a.contextTools(preview, session)...)
+		preview.available = append(preview.available, a.workflowTools(preview, session)...)
+		selectInitialSchemas(preview)
+	} else {
+		preview.selected = map[string]bool{}
+		for _, tool := range available {
+			preview.selected[tool.Info().Name] = true
+		}
+	}
+	if window := learnedContext(p.Model()); window >= 4096 && window < p.Model().ContextWindow {
+		if controller, ok := p.(provider.ContextWindowController); ok {
+			next, e := controller.WithContextWindow(window)
+			if e == nil {
+				p = next
+				preview.provider = next
+			}
+		}
+	}
+	selected := a.exposedTools(preview)
+	if controller, ok := p.(provider.SystemPromptController); ok {
+		names := []string{}
+		for _, tool := range selected {
+			names = append(names, tool.Info().Name)
+		}
+		model := p.Model()
+		next, e := controller.WithSystemPrompt(prompt.RunPrompt(string(preview.mode), model.API, model.ContextWindow, names))
+		if e != nil {
+			return ContextStatus{}, e
+		}
+		p = next
+	}
+	status, e := a.estimateProviderContext(p, history, selected)
+	status.Method += "; preview of initial selected schemas (next request adds current task/input)"
+	return status, e
+
 }
 func (a *agent) CompactContext(ctx context.Context, session string) (ContextStatus, error) {
 	if strings.TrimSpace(session) == "" {
@@ -193,13 +256,12 @@ func (a *agent) CompactContext(ctx context.Context, session string) (ContextStat
 		return ContextStatus{}, err
 	}
 	history, count := compactHistory(history)
-	a.runMu.Lock()
-	model := a.provider.Model()
-	ts := append([]tools.BaseTool(nil), a.tools...)
-	system := a.systemMessage
-	reserve := a.maxOutputTokens
-	a.runMu.Unlock()
-	status := estimateContext(model, system, history, ts, reserve)
+	history, batches := compactCompletedBatches(history)
+	count += batches
+	status, err := a.previewContext(ctx, session, history)
+	if err != nil {
+		return ContextStatus{}, err
+	}
 	status.CompactedMessages = count
 	a.contextMu.Lock()
 	if a.compactSessions == nil {
@@ -227,15 +289,18 @@ func configuredPrompt(agentName config.AgentName, model models.Model) (string, i
 // Auxiliary requests have no tool schemas but still include their actual system
 // prompt and output reservation. Never send an oversized summary/title request.
 func auxiliaryBudget(name config.AgentName, p provider.Provider, history []message.Message) ([]message.Message, error) {
+	return auxiliaryBudgetTools(name, p, history, nil)
+}
+func auxiliaryBudgetTools(name config.AgentName, p provider.Provider, history []message.Message, ts []tools.BaseTool) ([]message.Message, error) {
 	system, reserve := configuredPrompt(name, p.Model())
 	probe := &agent{systemMessage: system, maxOutputTokens: reserve}
-	status, err := probe.estimateProviderContext(p, history, nil)
+	status, err := probe.estimateProviderContext(p, history, ts)
 	if err != nil {
 		return nil, err
 	}
 	if !status.Fits {
 		history, _ = compactHistory(history)
-		status, err = probe.estimateProviderContext(p, history, nil)
+		status, err = probe.estimateProviderContext(p, history, ts)
 		if err != nil {
 			return nil, err
 		}
@@ -255,6 +320,11 @@ func (a *agent) estimateProviderContext(p provider.Provider, history []message.M
 		}
 		status.EstimatedInputTokens = (footprint.ASCIIBytes+1)/2 + footprint.OtherBytes + int64(len(history))*32 + 256
 		status.ToolSchemaTokens = (footprint.SchemaASCIIBytes+1)/2 + footprint.SchemaOtherBytes
+		if footprint.CompatibleTokenizer != "" {
+			status.EstimatedInputTokens = footprint.TokenizedPayloadTokens + int64(len(history))*32 + 256
+			status.ToolSchemaTokens = footprint.TokenizedSchemaTokens
+			status.Method = "compatible " + footprint.CompatibleTokenizer + " tokenizer on serialized JSON + estimated chat overhead; not exact model input"
+		}
 		if footprint.ReservedOutputTokens > 0 {
 			status.ReservedOutputTokens = footprint.ReservedOutputTokens
 		}
@@ -265,6 +335,25 @@ func (a *agent) estimateProviderContext(p provider.Provider, history []message.M
 		}
 		status.Fits = status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens <= status.ContextWindow
 	}
+	status.uncalibratedInput = status.EstimatedInputTokens
+	status = a.calibratedEstimate(p.Model(), status)
+	evidence := int64(0)
+	for _, msg := range history {
+		if msg.Role == message.Tool {
+			raw, _ := json.Marshal(msg)
+			evidence += estimateTokens(raw)
+		}
+	}
+	instruction := status.Components["instructions"]
+	hist := max(0, status.Components["history_and_evidence"]-evidence)
+	schemas := status.ToolSchemaTokens
+	base := max(1, instruction+hist+schemas+evidence)
+	scale := float64(status.EstimatedInputTokens) / float64(base)
+	status.Components = map[string]int64{"instructions": int64(float64(instruction) * scale), "history": int64(float64(hist) * scale), "evidence": int64(float64(evidence) * scale), "schemas": int64(float64(schemas) * scale), "output": status.ReservedOutputTokens, "safety": status.SafetyTokens}
+	usable := max(0, status.ContextWindow-status.ReservedOutputTokens-status.SafetyTokens)
+	status.ComponentBudgets = map[string]int64{"instructions": usable / 4, "schemas": usable / 4, "history_and_evidence": usable / 2}
+	status.Method += "; component shares are planning estimates, total budget is enforced"
+
 	return status, nil
 }
 

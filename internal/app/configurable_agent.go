@@ -310,3 +310,13 @@ func (p *configurableCoder) validateAuxiliaryConnection(role config.AgentName) e
 	}
 	return nil
 }
+
+func (p *configurableCoder) RuntimeDiagnostic(ctx context.Context, id string) (map[string]any, error) {
+	p.mu.RLock()
+	delegate := p.delegate
+	p.mu.RUnlock()
+	if c, ok := delegate.(agent.RuntimeDiagnosticControl); ok {
+		return c.RuntimeDiagnostic(ctx, id)
+	}
+	return nil, errSetupRequired
+}

@@ -40,6 +40,14 @@ func ValidateDocument(path string) error {
 	if c.SchemaVersion < 0 || c.SchemaVersion > SchemaVersion {
 		return fmt.Errorf("configuration %s: unsupported schemaVersion; maximum supported is %d", path, SchemaVersion)
 	}
+	for _, server := range c.LSP {
+		if err := server.ValidateRouting(); err != nil {
+			return err
+		}
+	}
+	if err := c.Index.Validate(); err != nil {
+		return err
+	}
 	if err := c.Runtime.Validate(); err != nil {
 		return fmt.Errorf("configuration %s: runtime: %w", path, err)
 	}

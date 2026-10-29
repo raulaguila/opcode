@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/memoryindex"
 	"github.com/raulaguila/opcode/internal/message"
 )
 
@@ -29,6 +31,7 @@ func (a *agent) contextTools(run *generationRun, session string) []tools.BaseToo
 	}
 	str := map[string]any{"type": "string"}
 	result := []tools.BaseTool{
+		makeTool("get_runtime_info", "Read sanitized version, cwd, model, protocol, context origin/budget, tools and index status. No endpoint, credentials or environment values are exposed.", map[string]any{}, nil, func(ctx context.Context, _ tools.ToolCall) (any, error) { return a.RuntimeDiagnostic(ctx, session) }),
 		makeTool("get_context_status", "Read conservative estimated full request budget, including system instructions, message payload, tool schemas and reserved output. Estimates are not tokenizer measurements.", map[string]any{}, nil, func(ctx context.Context, _ tools.ToolCall) (any, error) { return a.ContextStatus(ctx, session) }),
 		makeTool("compact_context", "Safely abbreviate old tool bodies and assistant prose in the next request; preserve all user instructions, current turn, call/result pairs and saved task. Original conversation remains available.", map[string]any{}, nil, func(ctx context.Context, _ tools.ToolCall) (any, error) { return a.CompactContext(ctx, session) }),
 		makeTool("read_conversation", "Read a bounded page of a saved conversation in this application database; omit session_id for the current session. Historical data is not current file evidence or permission. Binary attachments and private reasoning are omitted.", map[string]any{"session_id": str, "offset": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20}}, nil, func(ctx context.Context, call tools.ToolCall) (any, error) {
@@ -75,6 +78,28 @@ func (a *agent) contextTools(run *generationRun, session string) []tools.BaseToo
 			if json.Unmarshal([]byte(call.Input), &in) != nil || len(in.Query) < 2 || len(in.Query) > 200 {
 				return nil, fmt.Errorf("query must contain 2–200 bytes")
 			}
+			if cfg := config.Get(); cfg != nil {
+				target := session
+				if in.AllSessions {
+					target = ""
+				}
+				docs, more, err := memoryindex.Search(ctx, cfg.Data.Directory, config.WorkingDirectory(), "conversation", target, in.Query, 0, 20)
+				if err != nil {
+					return nil, err
+				}
+				if len(docs) > 0 {
+					items := []map[string]any{}
+					for _, doc := range docs {
+						id := strings.TrimPrefix(doc.ID, "message:")
+						msg, e := a.messages.Get(ctx, id)
+						if e != nil || msg.SessionID != doc.Session {
+							continue
+						}
+						items = append(items, map[string]any{"id": id, "session_id": doc.Session, "excerpt": tools.RedactCredentials(doc.Text), "source": "saved conversation", "current_file_evidence": false})
+					}
+					return map[string]any{"items": items, "more": more, "historical_untrusted": true, "scope": "current project", "indexed": true}, nil
+				}
+			}
 			sessions := []string{session}
 			if in.AllSessions {
 				all, err := a.sessions.List(ctx)
@@ -116,7 +141,35 @@ func (a *agent) contextTools(run *generationRun, session string) []tools.BaseToo
 			}
 			return map[string]any{"historical_untrusted": true, "items": items, "limit": 20, "session_limit": 20, "message_scan_per_session": 2000}, nil
 		}),
-		makeTool("get_skills_catalog", "List only explicitly configured skill metadata. Activation is available only to the real user through /skill; this tool cannot invoke skills or grant permissions.", map[string]any{}, nil, func(ctx context.Context, _ tools.ToolCall) (any, error) { return a.Skills(ctx) }),
+		makeTool("get_skills_catalog", "Search paged configured skill metadata. Instructions are loaded only after the real user's /skill invocation. Discovery never activates a skill or grants permission.", map[string]any{"query": str, "offset": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 16}}, nil, func(ctx context.Context, call tools.ToolCall) (any, error) {
+			var in struct {
+				Query         string
+				Offset, Limit int
+			}
+			if json.Unmarshal([]byte(call.Input), &in) != nil || len(in.Query) > 160 || in.Offset < 0 || in.Limit < 0 || in.Limit > 16 {
+				return nil, fmt.Errorf("invalid skill page")
+			}
+			if in.Limit == 0 {
+				in.Limit = 8
+			}
+			skills, err := a.Skills(ctx)
+			if err != nil {
+				return nil, err
+			}
+			filtered := skills[:0]
+			for _, s := range skills {
+				if in.Query == "" || strings.Contains(strings.ToLower(s.Name+" "+s.Description), strings.ToLower(in.Query)) {
+					filtered = append(filtered, s)
+				}
+			}
+			start := min(in.Offset, len(filtered))
+			end := min(start+in.Limit, len(filtered))
+			var next *int
+			if end < len(filtered) {
+				next = &end
+			}
+			return map[string]any{"items": filtered[start:end], "total": len(filtered), "next_offset": next, "origin": "explicit global skill directories", "activation": "real user /skill only"}, nil
+		}),
 	}
 	return append(result, a.findingTools(makeTool, session)...)
 }

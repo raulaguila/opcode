@@ -42,3 +42,14 @@ O fluxo diário inclui `/setup`, `/contract`, `/local-status` e `/worktrees`,
 com configuração offline pela CLI. Resultado parcial é distinto de conclusão.
 A validação de fixtures mede seus critérios declarados, não uma taxa geral de
 qualidade do modelo. Ver [guia diário](docs/daily-workflow.md).
+
+
+A evolução de recuperação/contexto inclui prompts por modo/protocolo/janela,
+compactação de lotes concluídos, estimativas calibradas e origem de contexto,
+parsers locais em dez linguagens, mapa estrutural, leitura/hash/páginas estáveis,
+memória pesquisável por projeto, índice administrável e descoberta compartilhada.
+Embeddings locais são opcionais e não baixam modelos; o LSP inicia sob demanda.
+Controles avançados ficam em painéis `/index`, `/runtime` e `/context` para manter
+o chat compacto. Recibos validam ações explícitas e patches podem ser pré-visualizados.
+A avaliação compartilhada diferencia medidas nativas de declarações de adapters;
+não há conclusão de que o Opcode supera Codaro/Crush em qualidade geral.

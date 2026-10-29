@@ -71,6 +71,15 @@ func (b *diagnosticsTool) Run(ctx context.Context, call ToolCall) (ToolResponse,
 		return NewTextErrorResponse(fmt.Sprintf("error parsing parameters: %s", err)), nil
 	}
 
+	if params.FilePath != "" {
+		path, err := authorizeFile(ctx, params.FilePath, "read")
+		if err != nil {
+			return ToolResponse{}, err
+		}
+		if err := lsp.EnsureClients(ctx, b.lspClients, path); err != nil {
+			return NewTextErrorResponse(err.Error()), nil
+		}
+	}
 	lsps := lsp.SnapshotClients(b.lspClients)
 
 	if len(lsps) == 0 {
@@ -88,6 +97,9 @@ func (b *diagnosticsTool) Run(ctx context.Context, call ToolCall) (ToolResponse,
 }
 
 func notifyLspOpenFile(ctx context.Context, filePath string, lsps map[string]*lsp.Client) {
+	if lsp.EnsureClients(ctx, lsps, filePath) != nil {
+		return
+	}
 	for _, client := range lsp.SnapshotClients(lsps) {
 		err := client.OpenFile(ctx, filePath)
 		if err != nil {

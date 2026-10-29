@@ -39,14 +39,13 @@ Planejar acrescenta o registro do plano; não disponibiliza comandos nem ediçõ
 Executar permite carregar ferramentas mutáveis, mantendo suas permissões e o
 isolamento existentes. Integrações MCP sem garantia de leitura ficam restritas
 a Executar. Essas restrições são verificadas no executor, inclusive se o modelo
-inventar uma chamada para uma ferramenta ausente. Serviços LSP/MCP configurados
-continuam tendo o ciclo de inicialização do aplicativo.
+inventar uma chamada para uma ferramenta ausente. LSP é iniciado sob demanda por arquivo/tipo/marcador; MCP mantém descoberta e conexão explícitas.
 
 O conjunto inicial contém leitura/busca, catálogo e estado da tarefa. O modelo
 usa `get_tools_catalog` e `request_tools` para carregar capacidades adicionais.
 Pedidos de comandos disponibilizam `bash`; ferramentas de processos são
 antecipadas quando há pedido de trabalho em segundo plano ou referência explícita
-a essas ferramentas. O carregamento vale por uma execução; não concede permissões.
+a essas ferramentas. Schemas opcionais inativos expiram após oito passos; também podem ser substituídos ou descarregados. Carregamento não concede permissões.
 
 O prompt de sistema não embute a árvore de arquivos do diretório atual. Listagens
 entram por ferramentas, quando necessárias. A `ls` oferece filtros e páginas de
@@ -68,8 +67,7 @@ As instruções de `contextPaths` também incluem AGENTS.md por padrão. A leitu
 automática é limitada a 16 arquivos/16 KiB totais, no máximo 4 KiB por arquivo,
 sem arquivos sensíveis ou links externos. Valores conhecidos de credenciais
 são removidos. Instruções de projeto não substituem pedidos do usuário nem
-autorizam ferramentas. O contexto de instruções continua carregado na criação
-do provedor; as leituras iniciais de projeto são renovadas em cada turno aplicável.
+autorizam ferramentas. O prompt e a orientação limitada são recompostos por requisição; leituras iniciais de projeto são renovadas em cada turno aplicável.
 
 ## Perguntas ao usuário
 
@@ -244,3 +242,18 @@ Ao encerrar uma edição simples sem checks disponíveis, o runtime registra
 `partial`, alterações observadas e ausência de validação. Não gera recibos nem
 converte esse estado em conclusão. Tarefas com verificações ou planos ativos
 continuam sujeitas aos seus critérios e ao reparo limitado.
+
+## Requisitos e diagnóstico
+
+Pedidos explícitos `use/chame/call NOME_DA_TOOL` geram requisitos observáveis de
+chamadas bem-sucedidas no turno atual. O runtime tenta corrigir passos ausentes
+até duas vezes e recusa concluir sem recibos; partial/blocked continuam possíveis.
+Isso não interpreta automaticamente toda condição semântica em linguagem natural.
+Critérios de tarefa e verificações reais continuam necessários.
+
+`/runtime` e `get_runtime_info` mostram versão, cwd, modelo/protocolo, orçamento,
+ferramentas e índice sem endpoints, ambiente ou credenciais. `/index` controla
+somente dados derivados. Os detalhes ficam em painéis; não há outra barra fixa.
+`explore_code` devolve relatório limitado com fontes/recibos observados, passos e
+bytes; a prosa do modelo permanece não verificada. O orçamento auxiliar inclui
+os schemas efetivamente enviados.

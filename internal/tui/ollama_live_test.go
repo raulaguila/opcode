@@ -142,6 +142,8 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { _, err := program.Run(); done <- err }()
 	defer program.Quit()
+	diagnosticSession := ""
+	lastFrame := ""
 	waitFrame := func(marker string) {
 		t.Helper()
 		deadline := time.NewTimer(30 * time.Second)
@@ -149,10 +151,34 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 		for {
 			select {
 			case frame := <-harness.frames:
+				lastFrame = frame
 				if strings.Contains(frame, marker) {
 					return
 				}
 			case <-deadline.C:
+				if diagnosticSession != "" {
+					for _, process := range application.Processes.List(diagnosticSession) {
+						snapshot, e := application.Processes.Snapshot(diagnosticSession, process.ID)
+						if e == nil {
+							t.Logf("Process diagnostic: pty=%t running=%t exit=%d timed_out=%t stdout=%q stderr=%q", snapshot.PTY, snapshot.Running, snapshot.ExitCode, snapshot.TimedOut, tools.RedactCredentials(snapshot.Stdout), tools.RedactCredentials(snapshot.Stderr))
+						}
+					}
+					if history, e := application.Messages.List(ctx, diagnosticSession); e == nil {
+						for _, msg := range history {
+							for _, result := range msg.ToolResults() {
+								text := tools.RedactCredentials(result.Content)
+								if len(text) > 400 {
+									text = text[:400]
+								}
+								t.Logf("Tool diagnostic: name=%s error=%t result=%q", result.Name, result.IsError, text)
+							}
+						}
+					}
+				}
+				if len(lastFrame) > 2000 {
+					lastFrame = lastFrame[len(lastFrame)-2000:]
+				}
+				t.Logf("Last UI frame: %q", tools.RedactCredentials(lastFrame))
 				t.Fatalf("UI did not show %q", marker)
 			case <-ctx.Done():
 				t.Fatal("live test deadline exceeded")
@@ -182,6 +208,7 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("model never requested command approval")
 	}
+	diagnosticSession = request.SessionID
 	params, ok := request.Params.(tools.BashPermissionsParams)
 	if !ok || request.ToolName != tools.BashToolName || params.Command != command || !params.PTY {
 		application.Permissions.Deny(request)

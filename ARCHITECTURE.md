@@ -151,9 +151,10 @@ Veja `docs/model-selection.md` e `docs/integrations-settings.md`.
 
 O pacote `internal/llm/agent` estima o payload completo antes da rede: prompt de
 sistema efetivo, histórico/anexos/continuação, schemas e reserva de saída, com
-margem de segurança. É uma heurística documentada, não o tokenizer do provedor.
-Compactação local preserva todas as instruções do usuário, pares de ferramentas,
-pedido atual e estado opaco; abrevia apenas corpos antigos. Se ainda não couber,
+margem de segurança. Usa tokenizer compatível em famílias reconhecidas e heurística nas demais;
+JSON/overhead ainda são aproximações calibradas por uso real. Compactação
+preventiva mantém instruções humanas e troca mais recente e substitui lotes
+concluídos integralmente por recibos recuperáveis, inclusive no turno atual. Se ainda não couber,
 recusa antes de abrir o stream. Títulos e resumos também têm orçamento.
 `ContextControl` e `QueueControl` são capacidades opcionais; editar a fila retira
 atomicamente o item sob o lock do worker e volta pelo Submit/ACK normal.
@@ -294,3 +295,50 @@ execução. `plan_arguments.go` mantém o binding plano de Ollama separado da
 validação do Store. `models.InspectOllama` consulta somente metadados. A página
 Git reutiliza ferramentas e permissões existentes; worktrees abrem outro processo
 Opcode, preservando o isolamento dos singletons e retornando à TUI anterior.
+
+
+## Recuperação estrutural e projeções derivadas
+
+`tools` possui descoberta/exclusão compartilhada e índice FTS5. `.opcodeignore`
+é aditivo às exclusões Git/fixas; nunca libera credenciais, links, dependências
+ou estado privado. O cache de regras é limitado e invalida com metadados do SO.
+Listagem fornece snapshot e leitura paginada verifica SHA256 antes de continuar.
+O mapa estrutural é bounded e lê fontes/manifests somente sob acesso normal.
+
+Go usa go/parser; nove gramáticas selecionadas de gotreesitter adicionam parsing
+local sem CGO. As nove gramáticas têm prazo, cancelamento e teto de memória; todas as fontes estruturais são limitadas a 256 KiB. Falhas mantêm recuperação textual. O inventário distingue
+fixtures sintáticas de resolução semântica pelo LSP. LSP registra inicializadores
+lazy por mapa de clientes, selecionados por tipos/marcadores/presets; Shutdown
+remove o registro, cancela inicialização e fecha clientes/watchers.
+
+`App` é dono do IndexWatcher: debounce de 150 ms, reconciliação a cada 60 s,
+atualizações incrementais de até oito arquivos, prazo configurável, até 2.048
+observadores de diretório e cancelamento/join em Shutdown. Falha na observação
+mantém reconciliação e refresh por busca. Arquivos lidos/recentes têm prioridade.
+SQLite mantém a transação anterior em falhas de refresh/rebuild; pause é estado
+privado, sem alterar a configuração do usuário. `opcode index` e `/index` não usam inferência.
+Limites de cache SQLite/parser não são uma promessa de RSS total do processo.
+
+`memoryindex` é dono de outra projeção privada SQLite/FTS5, por hash do projeto.
+`message.Service` projeta texto finalizado/resultados redigidos; `agent` projeta
+findings com fontes/hashes. Falha da projeção é diagnosticada sem apagar o dado
+original. Buscas de conversa confirmam que a mensagem original existe e findings
+revalidam fontes. Não são evidência de leitura atual nem autorização.
+
+Embeddings são opt-in global, por HTTP para IP loopback `/api/embed`, sem proxy,
+redirect ou download de pesos; texto é redigido. Respostas, dimensões, tempo,
+pool e cache são limitados. RRF combina ranks com BM25 e conserva fallback
+lexical. A configuração do projeto não pode habilitar esse fluxo de dados.
+
+Prompts têm versão, identidade única e perfis por janela/modo/protocolo. Guidance
+é relido com limites por pedido. O catálogo pagina metadados; schemas opcionais
+expiram, MCP/skills têm instruções/schemas lazy. Chamadas explicitamente pedidas
+pelo usuário exigem recibos antes de conclusão. Isso não prova critérios semânticos.
+
+O avaliador oferece contrato JSON comum para executáveis adapters explícitos
+Opcode/Codaro/Crush. Modelo, contexto manual, modo e hash de fixture precisam
+coincidir; métricas externas são identificadas como declaradas. O worker nativo
+mede uso do runtime, chamadas, arquivos e recibos. Nenhum código/prompt FSL do
+Crush foi incorporado. Novas dependências de produção: gotreesitter (gramáticas
+selecionadas), go-gitignore e tokenizer com vocabulários embarcados. Build
+CGO_ENABLED=0 continua suportado.

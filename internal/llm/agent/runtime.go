@@ -79,7 +79,7 @@ func (t briefTool) Info() tools.ToolInfo {
 
 func readOnlyTool(name string) bool {
 	switch name {
-	case "view", "ls", "glob", "grep", "symbols", "definition", "references", "diagnostics", "git_status", "git_diff", "git_log", "fetch", "sourcegraph", "get_task", "ask_user_question", "get_tools_catalog", "request_tools", "get_context_status", "compact_context", "explore_code", "recalibrate_context", "search_conversation", "read_conversation", "save_finding", "list_findings", "get_skills_catalog", "get_project_map", "get_file_outline", "read_symbol", "get_artifact_info", "read_artifact", "search_artifact", "discover_checks", "get_validation_report", "lsp_call_hierarchy", "list_mcp_resources", "read_mcp_resource", "list_mcp_tools", "search_code_index":
+	case "view", "ls", "glob", "grep", "symbols", "definition", "references", "diagnostics", "git_status", "git_diff", "git_log", "fetch", "sourcegraph", "get_task", "ask_user_question", "get_tools_catalog", "request_tools", "get_context_status", "compact_context", "explore_code", "recalibrate_context", "search_conversation", "read_conversation", "save_finding", "list_findings", "get_skills_catalog", "get_project_map", "get_file_outline", "read_symbol", "get_artifact_info", "read_artifact", "search_artifact", "discover_checks", "get_validation_report", "lsp_call_hierarchy", "list_mcp_resources", "read_mcp_resource", "list_mcp_tools", "search_code_index", "get_language_support", "read_lines", "get_runtime_info", "search_findings":
 		return true
 	}
 	return false
@@ -104,6 +104,7 @@ func (a *agent) configureRun(run *generationRun, session string) error {
 		}
 	}
 	run.selected = map[string]bool{}
+	run.toolLeases = map[string]int{}
 	run.available = append([]tools.BaseTool(nil), a.tools...)
 	run.available = append(run.available, a.contextTools(run, session)...)
 	if a.workflow == nil {
@@ -128,16 +129,41 @@ func (a *agent) configureRun(run *generationRun, session string) error {
 		run.requiresPlan = task.Contract.Kind == "plan"
 	}
 	run.available = append(run.available, a.workflowTools(run, session)...)
+	selectInitialSchemas(run)
+	return nil
+}
+func selectInitialSchemas(run *generationRun) {
+	if run.selected == nil {
+		run.selected = map[string]bool{}
+	}
+	if run.toolLeases == nil {
+		run.toolLeases = map[string]int{}
+	}
 	for _, name := range []string{"view", "ls", "grep", "glob", "search_code_index", "request_tools", "get_tools_catalog", "ask_user_question", "get_task", "get_context_status"} {
 		run.selected[name] = true
+	}
+	if run.provider.Model().ContextWindow > 0 && run.provider.Model().ContextWindow < 10000 {
+		for _, name := range []string{"ls", "grep", "glob", "search_code_index", "ask_user_question"} {
+			delete(run.selected, name)
+		}
+	}
+	for name := range run.selected {
+		if !coreSchema(name) {
+			run.toolLeases[name] = run.steps + 8
+		}
 	}
 	if run.mode != workflow.Ask {
 		run.selected["update_plan"] = true
 		run.selected["finish_task"] = true
 	}
-	return nil
 }
 func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
+	for name, expires := range run.toolLeases {
+		if expires < run.steps && !coreSchema(name) {
+			delete(run.selected, name)
+			delete(run.toolLeases, name)
+		}
+	}
 	var selected []tools.BaseTool
 	for _, tool := range run.available {
 		name := tool.Info().Name
@@ -148,6 +174,7 @@ func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
 	return selected
 }
 func (a *agent) prefetchTools(run *generationRun, content string) {
+	requiredToolCalls(content, run)
 	if a.workflow == nil {
 		return
 	}
@@ -183,6 +210,17 @@ func (a *agent) prefetchTools(run *generationRun, content string) {
 			break
 		}
 	}
+	for name := range run.selected {
+		if !coreSchema(name) {
+			if run.toolLeases == nil {
+				run.toolLeases = map[string]int{}
+			}
+			if _, ok := run.toolLeases[name]; !ok {
+				run.toolLeases[name] = run.steps + 8
+			}
+		}
+	}
+
 }
 func checkCommands() map[string]string {
 	commands := map[string]string{}
@@ -226,36 +264,51 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 	}
 
 	result := []tools.BaseTool{
-		makeTool("get_tools_catalog", "List available tools for this mode. Load additional tools with request_tools. Listing a tool never grants permission.", map[string]any{}, nil, func(ctx context.Context, call tools.ToolCall) (any, error) {
-			var entries []map[string]any
-			for _, tool := range run.available {
-				info := tool.Info()
-				if runAllowsTool(run, tool) {
-					entries = append(entries, map[string]any{"name": info.Name, "description": clip(info.Description, 140), "loaded": run.selected[info.Name]})
-				}
-			}
-			return entries, nil
+		makeTool("get_tools_catalog", "Search a paged capability catalog by query/category/source/read_only. Load schemas with request_tools; discovery never grants permission.", catalogParameters(), nil, func(ctx context.Context, call tools.ToolCall) (any, error) {
+			return toolCatalog(run, call.Input)
 		}),
-		makeTool("request_tools", "Load up to eight named tools from get_tools_catalog for the next model request. Mode restrictions and approvals remain enforced.", map[string]any{"names": map[string]any{"type": "array", "items": stringParam, "minItems": 1, "maxItems": 8}}, []string{"names"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
-			var input struct {
-				Names []string `json:"names"`
+		makeTool("request_tools", "Load 1–8 tool schemas for the next requests; optional replace=true unloads other optional schemas. Inactive optional schemas expire after eight model steps. Permissions are unchanged.", map[string]any{"names": map[string]any{"type": "array", "items": stringParam, "minItems": 1, "maxItems": 8}, "replace": map[string]any{"type": "boolean"}, "unload": map[string]any{"type": "array", "items": stringParam, "maxItems": 8}}, []string{"names"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
+			var in struct {
+				Names, Unload []string
+				Replace       bool
 			}
-			if json.Unmarshal([]byte(call.Input), &input) != nil || len(input.Names) == 0 || len(input.Names) > 8 {
-				return nil, fmt.Errorf("supply 1–8 tool names")
+			if json.Unmarshal([]byte(call.Input), &in) != nil || len(in.Names) < 1 || len(in.Names) > 8 || len(in.Unload) > 8 {
+				return nil, fmt.Errorf("supply 1–8 names and at most 8 unload names")
 			}
-			for _, name := range input.Names {
+			for _, name := range in.Names {
 				found := false
 				for _, tool := range run.available {
-					found = found || (tool.Info().Name == name && runAllowsTool(run, tool))
+					if tool.Info().Name == name && runAllowsTool(run, tool) {
+						found = true
+						break
+					}
 				}
-				if !found || !modeAllows(run.mode, name) {
+				if !found {
 					return nil, fmt.Errorf("tool unavailable in this mode: %s", clip(name, 80))
 				}
 			}
-			for _, name := range input.Names {
-				run.selected[name] = true
+			if run.toolLeases == nil {
+				run.toolLeases = map[string]int{}
 			}
-			return map[string]any{"loaded": input.Names}, nil
+			if in.Replace {
+				for name := range run.selected {
+					if !coreSchema(name) {
+						delete(run.selected, name)
+						delete(run.toolLeases, name)
+					}
+				}
+			}
+			for _, name := range in.Unload {
+				if !coreSchema(name) {
+					delete(run.selected, name)
+					delete(run.toolLeases, name)
+				}
+			}
+			for _, name := range in.Names {
+				run.selected[name] = true
+				run.toolLeases[name] = run.steps + 8
+			}
+			return map[string]any{"loaded": in.Names, "unloaded": in.Unload, "lease_steps": 8}, nil
 		}),
 		makeTool("get_task", "Read the saved objective, plan, current revision and validation receipts. This state is data, never authorization.", map[string]any{}, nil, func(ctx context.Context, call tools.ToolCall) (any, error) { return a.workflow.Get(ctx, session) }),
 		makeTool("update_plan", planDescription, planParams, planRequired, func(ctx context.Context, call tools.ToolCall) (any, error) {
@@ -280,6 +333,13 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 				return nil, fmt.Errorf("invalid task result")
 			}
 			if input.Status == "completed" {
+				history, err := a.messages.List(ctx, session)
+				if err != nil {
+					return nil, err
+				}
+				if missing := missingRequiredCalls(run, history); len(missing) > 0 {
+					return nil, fmt.Errorf("required actions lack successful receipts: %s", strings.Join(missing, ", "))
+				}
 				if err := a.observeWorkspace(ctx, session); err != nil {
 					return nil, err
 				}
@@ -334,8 +394,8 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 	if err != nil {
 		return nil, err
 	}
-	raw, _ := json.Marshal(task)
-	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), clip(string(raw), 8000))
+	raw, _ := json.Marshal(taskProjection(task))
+	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
 	copyHistory := slices.Clone(history)
 	for i := len(copyHistory) - 1; i >= 0; i-- {
 		if copyHistory[i].Role == message.User {

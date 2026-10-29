@@ -1,0 +1,18 @@
+{
+  "index": {
+    "background": true,
+    "maxFiles": 20000,
+    "maxFileBytes": 262144,
+    "maxTextBytes": 20971520,
+    "memoryMiB": 32,
+    "updateSeconds": 5
+  },
+  "lsp": {
+    "python": {
+      "command": "pyright-langserver",
+      "args": ["--stdio"],
+      "fileTypes": ["python"],
+      "rootMarkers": ["pyproject.toml", "requirements.txt"]
+    }
+  }
+}

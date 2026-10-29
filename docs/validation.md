@@ -152,3 +152,37 @@ para executar também os testes de privacidade do índice em vez de ignorá-los.
 Sem `rg` na máquina do usuário, o índice agora retorna uma orientação clara
 antes de criar o banco; não instala pacotes nem enfraquece regras de descoberta.
 Um teste cobre esse caminho e preserva a prioridade do cancelamento.
+
+## Recuperação estrutural — 28/10/2026
+
+O binário desta etapa foi exercitado com o `llama3.1:8b` local, API Ollama nativa:
+
+- Primeira pergunta num repositório com 600 arquivos, janela manual 16.384: passou.
+- Quatro turnos na mesma conversa: duas páginas ls, busca Python excluindo decoy
+  TypeScript e leitura da fonte com resposta 37: passaram.
+- Um único pedido composto com essas quatro operações: passou; o histórico
+  confirmou chamadas/resultados reais e os arquivos permaneceram iguais.
+
+Essa medição não substitui as seis tarefas gerais acima, não demonstra melhora
+geral do modelo nem superioridade sobre Codaro/Crush. Embeddings foram validados
+com serviço HTTP controlado; não foi baixado um modelo nem presumido ganho real
+na busca. As dez fixtures de parser verificam nomes, escopos e conteúdo, não a
+correção de programas em toda a linguagem. O fechamento da suíte completa está
+no [registro da implementação](implementation-2026-10.md).
+
+
+Após os testes de integração, foi corrigida uma regressão de apresentação: o
+comando produzia saída real no PTY, mas a prévia só era visível com foco no
+terminal. A prévia limitada reaparece enquanto o comando está ativo, sem retirar
+o foco do chat; desaparece ao terminar e não comprime o editor em telas pequenas.
+O teste real completo de aprovação, stdout, entrada humana e instrução concorrente
+passou depois da correção.
+
+A avaliação de seis tarefas gerais desta etapa resultou em **3/6**: overview,
+validate e error passaram; localize falhou no critério textual de caminho; edit
+não alterou a fonte e ficou partial; resume falhou nos argumentos de plano e
+ficou blocked. Os critérios não foram afrouxados. Foi corrigido o falso requisito
+que tratava “não use bash” como obrigação de chamar bash; há regressão bilíngue.
+Veja o [relatório sanitizado](evidence/2026-10-28-runtime-roadmap.json). Esse
+resultado limita a conclusão: os recursos e guardas funcionam, mas não há prova
+de melhora geral do llama3.1:8b nem de superioridade entre aplicativos.

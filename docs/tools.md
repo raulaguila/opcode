@@ -198,3 +198,9 @@ go test ./internal/llm/tools -run TestBubblewrapIsolationOnSupportedKernel -v
 ```
 
 O último teste verifica o sandbox real com dados sintéticos. Ele é marcado como `SKIP` quando Bubblewrap ou namespaces não estão disponíveis; há também um teste separado que prova que uma falha do sandbox não executa o comando fora dele. Os testes de APIs reais continuam optativos e separados dessa suíte.
+
+
+Para `read_lines`, hashes/snapshots, linguagens locais, índice administrável,
+embeddings e inicialização lazy de LSP, veja [Índice e recuperação](retrieval-runtime.md).
+`patch preview:true` produz uma proposta com hashes/preview_id; aplicar conserva
+aprovação, proteção contra conflitos e recibo da transação.

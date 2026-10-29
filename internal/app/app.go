@@ -32,14 +32,18 @@ type App struct {
 	History         history.Service
 	Permissions     permission.Service
 
-	CoderAgent agent.Service
-	Processes  *tools.ProcessManager
-	Workflows  *workflow.Store
-	Questions  *interaction.Questions
+	CoderAgent   agent.Service
+	Processes    *tools.ProcessManager
+	IndexWatcher *tools.IndexWatcher
+	Workflows    *workflow.Store
+	Questions    *interaction.Questions
 
 	LSPClients map[string]*lsp.Client
 
-	clientsMutex sync.RWMutex
+	clientsMutex  sync.RWMutex
+	lspStartMu    sync.Mutex
+	lspStop       context.CancelFunc
+	lspUnregister func()
 
 	watcherCancelFuncs []context.CancelFunc
 	cancelFuncsMutex   sync.Mutex
@@ -50,7 +54,7 @@ type App struct {
 func New(ctx context.Context, conn *sql.DB) (*App, error) {
 	q := db.New(conn)
 	sessions := session.NewService(q)
-	messages := message.NewService(q)
+	messages := message.NewService(q, message.WithSearchIndex(config.Get().Data.Directory, config.WorkingDirectory(), tools.RedactCredentials))
 	files := history.NewService(q, conn)
 
 	app := &App{
@@ -66,6 +70,8 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 
 	// Initialize theme based on configuration
 	app.initTheme()
+
+	app.IndexWatcher = tools.StartIndexWatcher(ctx)
 
 	// Initialize LSP clients in the background
 	app.initLSPClients(ctx)
@@ -204,6 +210,17 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 
 // Shutdown performs a clean shutdown of the application
 func (app *App) Shutdown() {
+	if app.lspUnregister != nil {
+		app.lspUnregister()
+	}
+	if app.lspStop != nil {
+		app.lspStop()
+	}
+	app.lspStartMu.Lock()
+	defer app.lspStartMu.Unlock()
+	if app.IndexWatcher != nil {
+		app.IndexWatcher.Close()
+	}
 	if closer, ok := app.CoderAgent.(interface{ Close() error }); ok {
 		if err := closer.Close(); err != nil {
 			logging.Error("failed to stop tool processes", "error", err)

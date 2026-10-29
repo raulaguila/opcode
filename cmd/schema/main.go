@@ -46,6 +46,16 @@ func generateSchema() map[string]any {
 
 	schema["properties"].(map[string]any)["schemaVersion"] = map[string]any{"type": "integer", "minimum": 0, "maximum": config.SchemaVersion, "description": "Configuration format version; omission preserves legacy compatibility"}
 
+	limits := (config.IndexConfig{}).Defaults()
+	indexProperties := map[string]any{"background": map[string]any{"type": "boolean", "default": true}, "embeddings": map[string]any{"type": "object", "description": "Explicit user-global local embedding service. Never downloads weights.", "required": []string{"endpoint", "model"}, "properties": map[string]any{"endpoint": map[string]any{"type": "string", "description": "HTTP loopback IP URL ending /api/embed; redirects/auth/query are rejected."}, "model": map[string]any{"type": "string", "minLength": 1, "maxLength": 160}}}}
+	for _, field := range []struct {
+		name          string
+		min, max, def int64
+	}{{"maxFiles", 1, 20000, int64(limits.MaxFiles)}, {"maxFileBytes", 1024, 262144, limits.MaxFileBytes}, {"maxTextBytes", 1024, 20971520, limits.MaxTextBytes}, {"memoryMiB", 4, 128, int64(limits.MemoryMiB)}, {"updateSeconds", 1, 30, int64(limits.UpdateSeconds)}} {
+		indexProperties[field.name] = map[string]any{"type": "integer", "anyOf": []map[string]any{{"const": 0}, {"minimum": field.min, "maximum": field.max}}, "default": field.def}
+	}
+	schema["properties"].(map[string]any)["index"] = map[string]any{"type": "object", "properties": indexProperties, "description": "Derived index resource limits. Embeddings only come from trusted user-global configuration."}
+
 	// Add Data configuration
 	schema["properties"].(map[string]any)["data"] = map[string]any{
 		"type":        "object",
@@ -399,6 +409,8 @@ func generateSchema() map[string]any {
 						"type": "string",
 					},
 				},
+				"fileTypes":   map[string]any{"type": "array", "maxItems": 32, "items": map[string]any{"type": "string", "maxLength": 80}, "description": "Language IDs or extensions for lazy activation; known commands have presets."},
+				"rootMarkers": map[string]any{"type": "array", "maxItems": 16, "items": map[string]any{"type": "string", "maxLength": 160}, "description": "Relative marker filenames between source directory and workspace root."},
 				"options": map[string]any{
 					"type":        "object",
 					"description": "Additional options for the LSP server",

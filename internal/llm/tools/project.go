@@ -8,15 +8,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/raulaguila/opcode/internal/lsp"
 )
 
@@ -42,13 +38,14 @@ func (t *projectTool) Info() ToolInfo {
 	if t.name == "read_symbol" {
 		required = append(required, "symbol")
 	}
-	return ToolInfo{Name: t.name, Description: "Explore code without dumping whole files. Project map excludes secret, storage, link and dependency paths; bounded to 20000 entries with pagination. Go outlines use the parser; other languages use configured LSP document symbols. read_symbol uses an exact outline declaration name and paginates lines. Outlines are navigation, not edit-read evidence.", Required: required, Parameters: map[string]any{"path": map[string]any{"type": "string"}, "file_path": map[string]any{"type": "string"}, "symbol": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1}}}
+	return ToolInfo{Name: t.name, Description: "Explore code without dumping whole files. Project map excludes secret, storage, link and dependency paths; bounded to 20000 entries with pagination. Go/Python/JS/TS/TSX/Rust/Java/C/C++/C# use local syntax parsers; other languages use configured LSP document symbols. read_symbol uses an exact outline declaration name and paginates lines. Outlines are navigation, not edit-read evidence.", Required: required, Parameters: map[string]any{"path": map[string]any{"type": "string"}, "file_path": map[string]any{"type": "string"}, "symbol": map[string]any{"type": "string"}, "expected_hash": map[string]any{"type": "string"}, "offset": map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1}}}
 }
 func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	var p struct {
 		Path          string
 		File          string `json:"file_path"`
 		Symbol        string
+		ExpectedHash  string `json:"expected_hash"`
 		Offset, Limit int
 	}
 	if json.Unmarshal([]byte(call.Input), &p) != nil || p.Offset < 0 || p.Limit < 0 {
@@ -68,9 +65,12 @@ func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 	if err != nil {
 		return ToolResponse{}, err
 	}
+	if p.ExpectedHash != "" && p.ExpectedHash != indexDigest(string(raw)) {
+		return NewTextErrorResponse("file changed; read the current outline again"), nil
+	}
 	var symbols []codeSymbol
-	if filepath.Ext(path) == ".go" {
-		symbols, err = goOutline(path, raw)
+	if sourceLanguage(path) == "go" || localParsers[sourceLanguage(path)] != nil {
+		symbols, err = localOutline(ctx, path, raw)
 	} else {
 		symbols, err = t.lspOutline(ctx, path)
 	}
@@ -85,7 +85,7 @@ func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 		limit = min(limit, 500)
 		start := min(p.Offset, len(symbols))
 		end := min(start+limit, len(symbols))
-		return jsonToolResult(map[string]any{"file_path": path, "symbols": symbols[start:end], "next_offset": end, "more": end < len(symbols), "total": len(symbols)}), nil
+		return jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbols": symbols[start:end], "next_offset": end, "more": end < len(symbols), "total": len(symbols)}), nil
 	}
 	if p.Symbol == "" {
 		return NewTextErrorResponse("symbol is required"), nil
@@ -107,7 +107,7 @@ func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 		if err != nil {
 			return ToolResponse{}, err
 		}
-		return jsonToolResult(map[string]any{"file_path": path, "symbol": symbol, "content": addLineNumbers(content, start+1), "next_offset": p.Offset + len(strings.Split(content, "\n")), "more": start+len(strings.Split(content, "\n")) < symbol.End}), nil
+		return jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbol": symbol, "content": addLineNumbers(content, start+1), "next_offset": p.Offset + len(strings.Split(content, "\n")), "more": start+len(strings.Split(content, "\n")) < symbol.End}), nil
 	}
 	return NewTextErrorResponse("declaration not found; inspect get_file_outline for exact names"), nil
 }
@@ -157,80 +157,15 @@ func goOutline(path string, raw []byte) ([]codeSymbol, error) {
 	return result, nil
 }
 func projectMap(ctx context.Context, path string, offset, limit int) (ToolResponse, error) {
-	path, err := authorizeFile(ctx, path, "read")
-	if err != nil {
-		return ToolResponse{}, err
-	}
-	root, err := os.OpenRoot(path)
-	if err != nil {
-		return ToolResponse{}, err
-	}
-	defer root.Close()
-	type item struct {
-		Path     string `json:"path"`
-		Bytes    int64  `json:"bytes"`
-		Language string `json:"language,omitempty"`
-	}
-	items := []item{}
-	truncated := false
-	stop := fmt.Errorf("map limit")
-	visited := 0
-	err = fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, e error) error {
-		if e != nil {
-			return e
-		}
-		if e := ctx.Err(); e != nil {
-			return e
-		}
-		visited++
-		if visited > 20000 {
-			truncated = true
-			return stop
-		}
-		full := filepath.Join(path, filepath.FromSlash(name))
-		skip := shell.SensitivePath(full) || d.Type()&os.ModeSymlink != 0
-		if cfg := config.Get(); cfg != nil && cfg.Data.Directory != "" && inside(absolutePath(cfg.Data.Directory), full) {
-			skip = true
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "node_modules", "vendor", ".venv", "venv", "__pycache__", "target", "dist", "build", ".cache", "coverage":
-				skip = true
-			}
-			if skip && name != "." {
-				return fs.SkipDir
-			}
-			return nil
-		}
-		if skip {
-			return nil
-		}
-		info, e := d.Info()
-		if e != nil {
-			return e
-		}
-		if !info.Mode().IsRegular() {
-			return nil
-		}
-		items = append(items, item{Path: name, Bytes: info.Size(), Language: strings.TrimPrefix(filepath.Ext(name), ".")})
-		return nil
-	})
-	if err != nil && err != stop {
-		return ToolResponse{}, err
-	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Path < items[j].Path })
-	if limit <= 0 {
-		limit = 100
-	}
-	limit = min(limit, 500)
-	start := min(offset, len(items))
-	end := min(start+limit, len(items))
-	return jsonToolResult(map[string]any{"root": path, "files": items[start:end], "total": len(items), "next_offset": end, "more": end < len(items), "truncated": truncated}), nil
+	return structuralProjectMap(ctx, path, offset, limit)
 }
 
 func (t *projectTool) lspOutline(ctx context.Context, path string) ([]codeSymbol, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if err := lsp.EnsureClients(ctx, t.clients, path); err != nil {
+		return nil, err
+	}
 	clients := lsp.SnapshotClients(t.clients)
 	keys := []string{}
 	for key := range clients {

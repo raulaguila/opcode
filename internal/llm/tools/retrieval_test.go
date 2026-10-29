@@ -153,7 +153,7 @@ func TestRankedCodeSearchScopesSymbolsAndBoundedPreviews(t *testing.T) {
 	page = searchPage(t, tool, map[string]any{"query": "authenticate user", "path": "api", "glob": "**/*.py", "language": "py", "extension": "py"})
 	require.Len(t, page.Results, 1)
 	require.Equal(t, "python", page.Results[0].Language)
-	require.Equal(t, "text", page.Results[0].Kind)
+	require.Equal(t, "function", page.Results[0].Kind)
 	page = searchPage(t, tool, map[string]any{"query": "AuthenticateUser", "path": "api", "extension": "go"})
 	for _, hit := range page.Results {
 		require.NotContains(t, hit.Path, "api-other")
@@ -242,9 +242,11 @@ func TestMixedLanguageFiltersAndTextFallback(t *testing.T) {
 			require.NotEmpty(t, page.Results)
 			for _, hit := range page.Results {
 				require.Equal(t, fixture.Language, hit.Language)
-				if hit.Language != "go" {
-					require.Equal(t, "text", hit.Kind)
+				expected := map[string]string{"go": "function", "python": "function", "javascript": "function", "typescript": "function", "tsx": "function", "rust": "function", "cpp": "function", "csharp": "class", "java": "class"}[hit.Language]
+				if expected == "" {
+					expected = "text"
 				}
+				require.Equal(t, expected, hit.Kind)
 			}
 		})
 	}

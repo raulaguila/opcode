@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -10,18 +12,48 @@ import (
 	"github.com/raulaguila/opcode/internal/lsp/watcher"
 )
 
-func (app *App) initLSPClients(ctx context.Context) {
-	cfg := config.Get()
-
-	// Initialize LSP clients
-	for name, clientConfig := range cfg.LSP {
-		if clientConfig.Disabled {
-			continue
+func (app *App) initLSPClients(parent context.Context) {
+	lifetime, cancel := context.WithCancel(parent)
+	app.lspStop = cancel
+	app.lspUnregister = lsp.RegisterLazyClients(app.LSPClients, func(ctx context.Context, path string) error {
+		app.lspStartMu.Lock()
+		defer app.lspStartMu.Unlock()
+		if err := lifetime.Err(); err != nil {
+			return err
 		}
-		// Start each client initialization in its own goroutine
-		go app.createAndStartLSPClient(ctx, name, clientConfig.Command, clientConfig.Args...)
-	}
-	logging.Info("LSP clients initialization started in background")
+		cfg := config.Get()
+		keys := []string{}
+		for name := range cfg.LSP {
+			keys = append(keys, name)
+		}
+		sort.Strings(keys)
+		for _, name := range keys {
+			entry := cfg.LSP[name]
+			if entry.Disabled || !lsp.ServerMatches(entry, path) {
+				continue
+			}
+			if lsp.SnapshotClients(app.LSPClients)[name] != nil {
+				continue
+			}
+			startCtx, stop := context.WithCancel(lifetime)
+			done := context.AfterFunc(ctx, stop)
+			app.createAndStartLSPClient(startCtx, name, entry.Command, entry.Args...)
+			done()
+			if ctx.Err() != nil {
+				if client := lsp.SnapshotClients(app.LSPClients)[name]; client != nil {
+					client.Close()
+					lsp.DeleteClient(app.LSPClients, name)
+				}
+				stop()
+				return ctx.Err()
+			}
+			if lsp.SnapshotClients(app.LSPClients)[name] == nil {
+				stop()
+				return fmt.Errorf("configured language server failed to start: %s", name)
+			}
+		}
+		return nil
+	})
 }
 
 // createAndStartLSPClient creates a new LSP client, initializes it, and starts its workspace watcher
@@ -59,6 +91,10 @@ func (app *App) createAndStartLSPClient(ctx context.Context, name string, comman
 		lspClient.SetServerState(lsp.StateReady)
 	}
 
+	if ctx.Err() != nil {
+		lspClient.Close()
+		return
+	}
 	logging.Info("LSP client initialized", "name", name)
 
 	// Create a child context that can be canceled when the app is shutting down

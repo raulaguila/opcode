@@ -18,7 +18,7 @@ import (
 
 // NewProductivityTools shares process lifetime with the application when supplied.
 func NewProductivityTools(permissions permission.Service, managers ...*ProcessManager) []BaseTool {
-	return []BaseTool{NewCodeIndexTool(), &formatProjectTool{bash: NewBashTool(permissions, managers...)}, &worktreeTool{permissions: permissions}}
+	return []BaseTool{NewCodeIndexTool(), &formatProjectTool{bash: NewBashTool(permissions, managers...)}, &worktreeTool{permissions: permissions}, NewLanguageSupportTool(), NewReadPageTool()}
 }
 
 type formatProjectTool struct{ bash BaseTool }

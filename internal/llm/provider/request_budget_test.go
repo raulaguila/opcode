@@ -51,3 +51,18 @@ func TestNamedLocalProfileDoesNotUseLegacyEndpointEnvironment(t *testing.T) {
 		}
 	}
 }
+
+func TestTokenizerOnlyForCompatibleProviderFamily(t *testing.T) {
+	for _, backend := range []models.ModelProvider{models.ProviderOpenAI, models.ProviderLocal} {
+		p, err := NewProvider(backend, WithBaseURL("http://127.0.0.1:11434/v1"), WithModel(models.Model{Provider: backend, APIModel: "gpt-4o", ContextWindow: 16384}), WithSystemMessage("Opcode"))
+		require.NoError(t, err)
+		footprint, err := p.(RequestSizer).RequestFootprint([]message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Explain the project"}}}}, nil)
+		require.NoError(t, err)
+		if backend == models.ProviderOpenAI {
+			require.Equal(t, "o200k_base", footprint.CompatibleTokenizer)
+			require.Positive(t, footprint.TokenizedPayloadTokens)
+		} else {
+			require.Empty(t, footprint.CompatibleTokenizer, "a model label on a local connection does not establish tokenizer compatibility")
+		}
+	}
+}

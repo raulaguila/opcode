@@ -103,7 +103,7 @@ func (s retrievalScope) matches(path string) bool {
 
 func retrievalPathAllowed(root, path string, ignore []string) bool {
 	rel, err := filepath.Rel(root, path)
-	if err != nil || !filepath.IsLocal(rel) || shell.SensitivePath(path) {
+	if err != nil || !filepath.IsLocal(rel) || shell.SensitivePath(path) || ExclusionReason(discoveryPolicyRoot(root), path) != "" {
 		return false
 	}
 	for _, pattern := range ignore {

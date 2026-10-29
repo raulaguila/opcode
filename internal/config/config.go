@@ -73,10 +73,12 @@ type Data struct {
 
 // LSPConfig defines configuration for Language Server Protocol integration.
 type LSPConfig struct {
-	Disabled bool     `json:"disabled"`
-	Command  string   `json:"command"`
-	Args     []string `json:"args"`
-	Options  any      `json:"options"`
+	FileTypes   []string `json:"fileTypes,omitempty"`
+	RootMarkers []string `json:"rootMarkers,omitempty"`
+	Disabled    bool     `json:"disabled"`
+	Command     string   `json:"command"`
+	Args        []string `json:"args"`
+	Options     any      `json:"options"`
 }
 
 // TUIConfig defines the configuration for the Terminal User Interface.
@@ -139,6 +141,7 @@ type Config struct {
 	Checks           map[string]CheckConfig            `json:"checks,omitempty"`
 	Runtime          RuntimeConfig                     `json:"runtime,omitempty"`
 	Extensions       ExtensionsConfig                  `json:"extensions,omitempty"`
+	Index            IndexConfig                       `json:"index,omitempty"`
 	AutoCompact      bool                              `json:"autoCompact,omitempty"`
 }
 
@@ -241,6 +244,7 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 	var trusted struct {
 		Security   SecurityConfig
 		Extensions ExtensionsConfig
+		Index      IndexConfig
 	}
 	if err := viper.Unmarshal(&trusted); err != nil {
 		return nil, err
@@ -284,12 +288,16 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 	}
 	cfg.Security = trusted.Security
 	cfg.Extensions = trusted.Extensions
+	cfg.Index.Embeddings = trusted.Index.Embeddings
 	if err := cfg.Extensions.Validate(); err != nil {
 		cfg = nil
 		return nil, err
 	}
 	if err := cfg.TUI.Validate(); err != nil {
 		cfg = nil
+		return nil, err
+	}
+	if err := cfg.Index.Validate(); err != nil {
 		return nil, err
 	}
 	if err := cfg.Runtime.Validate(); err != nil {

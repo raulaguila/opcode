@@ -13,6 +13,7 @@ import (
 
 type LSParams struct {
 	Path      string   `json:"path"`
+	Snapshot  string   `json:"snapshot,omitempty"`
 	Ignore    []string `json:"ignore"`
 	Offset    int      `json:"offset"`
 	Limit     int      `json:"limit"`
@@ -47,6 +48,7 @@ func NewLsTool() BaseTool {
 
 func (l *lsTool) Info() ToolInfo {
 	params := scopeParameters()
+	params["snapshot"] = map[string]any{"type": "string", "description": "Snapshot from previous page; changed listings require restarting at offset 0."}
 	params["ignore"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	params["offset"] = map[string]any{"type": "integer", "minimum": 0, "maximum": 20000}
 	params["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 60}
@@ -81,6 +83,13 @@ func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	if err != nil {
 		return ToolResponse{}, err
 	}
+	snapshot, err := listingSnapshot(ctx, root, files)
+	if err != nil {
+		return ToolResponse{}, err
+	}
+	if params.Snapshot != "" && params.Snapshot != snapshot {
+		return NewTextErrorResponse("listing changed; restart at offset 0 with the new snapshot"), nil
+	}
 	limit := params.Limit
 	if limit == 0 {
 		limit = 60
@@ -102,7 +111,7 @@ func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	if end < len(files) {
 		next = &end
 	}
-	response := jsonToolResult(map[string]any{"root": root, "files": files[start:end], "total": len(files), "offset": start, "next_offset": next, "more": next != nil, "truncated": truncated, "navigation_only": true})
+	response := jsonToolResult(map[string]any{"snapshot": snapshot, "root": root, "files": files[start:end], "total": len(files), "offset": start, "next_offset": next, "more": next != nil, "truncated": truncated, "navigation_only": true})
 	return WithResponseMetadata(response, LSResponseMetadata{NumberOfFiles: end - start, Truncated: next != nil || truncated}), nil
 }
 

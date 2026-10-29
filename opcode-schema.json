@@ -193,6 +193,100 @@
       },
       "type": "object"
     },
+    "index": {
+      "description": "Derived index resource limits. Embeddings only come from trusted user-global configuration.",
+      "properties": {
+        "background": {
+          "default": true,
+          "type": "boolean"
+        },
+        "embeddings": {
+          "description": "Explicit user-global local embedding service. Never downloads weights.",
+          "properties": {
+            "endpoint": {
+              "description": "HTTP loopback IP URL ending /api/embed; redirects/auth/query are rejected.",
+              "type": "string"
+            },
+            "model": {
+              "maxLength": 160,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "endpoint",
+            "model"
+          ],
+          "type": "object"
+        },
+        "maxFileBytes": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 262144,
+              "minimum": 1024
+            }
+          ],
+          "default": 262144,
+          "type": "integer"
+        },
+        "maxFiles": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 20000,
+              "minimum": 1
+            }
+          ],
+          "default": 20000,
+          "type": "integer"
+        },
+        "maxTextBytes": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 20971520,
+              "minimum": 1024
+            }
+          ],
+          "default": 20971520,
+          "type": "integer"
+        },
+        "memoryMiB": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 128,
+              "minimum": 4
+            }
+          ],
+          "default": 32,
+          "type": "integer"
+        },
+        "updateSeconds": {
+          "anyOf": [
+            {
+              "const": 0
+            },
+            {
+              "maximum": 30,
+              "minimum": 1
+            }
+          ],
+          "default": 5,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "lsp": {
       "additionalProperties": {
         "anyOf": [
@@ -241,9 +335,27 @@
             "description": "Whether the LSP is disabled",
             "type": "boolean"
           },
+          "fileTypes": {
+            "description": "Language IDs or extensions for lazy activation; known commands have presets.",
+            "items": {
+              "maxLength": 80,
+              "type": "string"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
           "options": {
             "description": "Additional options for the LSP server",
             "type": "object"
+          },
+          "rootMarkers": {
+            "description": "Relative marker filenames between source directory and workspace root.",
+            "items": {
+              "maxLength": 160,
+              "type": "string"
+            },
+            "maxItems": 16,
+            "type": "array"
           }
         },
         "type": "object"

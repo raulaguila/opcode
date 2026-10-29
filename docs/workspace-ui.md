@@ -260,3 +260,9 @@ As telas de inicialização, saída, tema, conversas, arquivos e comandos recebe
 textos PT/EN. Conteúdo do usuário, mensagens do modelo e erros externos não são
 traduzidos por substituição. O [guia diário](daily-workflow.md) detalha os fluxos
 e seus limites.
+
+
+Durante comandos ativos, há uma prévia de saída de até seis linhas, sem transferir
+o foco do chat. Ela desaparece ao terminar e fica recolhida em telas com menos de
+20 linhas; Ctrl+P mantém o terminal completo disponível. `/index` e `/runtime`
+abrem painéis de controle/diagnóstico, sem acrescentar barras permanentes.

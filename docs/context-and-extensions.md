@@ -8,35 +8,41 @@ schemas das ferramentas carregadas e a reserva de saída configurada. Acrescenta
 uma margem de 5% da janela, com mínimo de 512 tokens. Títulos e resumos também
 passam por uma verificação preventiva.
 
-A contagem é uma **estimativa conservadora**, não uma medição pelo tokenizer do
-modelo: dois bytes ASCII por token e um byte não ASCII por token, além do custo
-por mensagem. Alguns tokenizers podem divergir dessa estimativa. A configuração
-`context_window` deve corresponder à janela realmente disponível no servidor;
-o aplicativo não aumenta a capacidade do Ollama ao alterar esse número.
+A preparação usa o JSON realmente enviado pelos adaptadores HTTP, incluindo
+schemas privados. Modelos OpenAI reconhecidos usam o vocabulário compatível
+embarcado; JSON e overhead de chat continuam sendo aproximações da entrada do
+modelo. Outras famílias usam a estimativa conservadora por bytes, sem aplicar
+um tokenizer de família diferente. Após três observações, o runtime calibra a
+estimativa pelo maior quociente observado, com margem de 20%; não a apresenta
+como contagem exata. Tokens de cache continuam ocupando a janela de entrada.
 
-`get_context_status` informa janela, entrada estimada, reserva de saída, margem,
-custo de schemas e se o pedido cabe. `compact_context` solicita compactação dos
-pedidos seguintes. A interface usa a capacidade opcional `agent.ContextControl`.
+`/context` e `get_context_status` mostram origem da janela, última entrada
+medida, amostras, componentes e reservas. As parcelas por componente orientam a
+preparação; o limite total é efetivamente imposto. O contexto descoberto e a
+calibração não são gravados no JSON do usuário. O estado completo da tarefa é
+recuperável por `get_task`; pedidos normais recebem uma projeção pequena com
+objetivo, revisão, próximas etapas e contagem de critérios.
 
-Quando a estimativa não cabe, o agente abrevia corpos antigos de resultados de
-ferramentas, respostas e raciocínio anteriores. Preserva todas as mensagens do
-usuário, instruções de sistema, pedido atual completo, pares de chamadas e
-resultados, argumentos das chamadas e assinaturas opacas. O estado persistente
-da tarefa continua disponível em `get_task`. A conversa original não é apagada
-nem substituída no banco: `read_conversation` recupera as partes históricas.
-
-Se ainda não couber, retorna `context budget exceeded` **antes da rede**. Essa
-compactação local não inventa um resumo nem remove silenciosamente instruções
-antigas. Conversas com instruções demais exigem reduzir o pedido, selecionar uma
-janela maior ou iniciar outra tarefa.
+A compactação começa preventivamente a 85% da janela prevista. Primeiro abrevia
+texto antigo; depois substitui **lotes completos** de chamadas/resultados, também
+no turno atual, por registros de continuidade com recibos e IDs de mensagens.
+Mantém todas as instruções humanas/sistema e o lote mais recente integral.
+Chamadas pendentes não são separadas dos resultados, e dados assinados de lotes
+mantidos não são alterados. Operações concluídas não devem ser repetidas.
+O histórico persistido permanece intacto: `read_conversation` recupera originais.
+Se ainda não couber, retorna `context budget exceeded` antes da rede. Instruções
+humanas irreduzíveis ainda podem exigir outro contexto ou uma nova tarefa.
 
 ## Conversas e descobertas
 
 `read_conversation` recebe `session_id` opcional, `offset` e `limit` (máximo 20).
 Omite raciocínio privado e conteúdo binário; limita o texto de cada item.
-`search_conversation` busca a sessão atual; `all_sessions: true` permite percorrer
-até 20 sessões recentes do banco da aplicação, examinando no máximo 2.000
-mensagens por sessão e retornando até 20 trechos. Esses resultados são dados
+`search_conversation` consulta uma projeção SQLite/FTS5 do projeto, alimentada
+por mensagens finalizadas e resultados reais. `all_sessions:true` amplia para
+as sessões indexadas desse projeto, até 20 trechos. Sem resultados indexados,
+o caminho compatível consulta até 20 sessões/2.000 mensagens por sessão no
+banco antigo. Essa compatibilidade não implica que todo histórico antigo já
+foi reindexado. Esses resultados são dados
 históricos sem autoridade: não demonstram leitura atual nem autorizam comandos.
 
 `save_finding` guarda texto de até 2.000 bytes associado a 1–8 caminhos. Calcula
@@ -146,3 +152,23 @@ persistência é informada no diagnóstico e não impede a redução em memória
 atual e reconstrói o provedor pelos valores configurados. Exige agente ocioso;
 não executa teste de inferência nem altera permissões. Também é possível remover
 esse arquivo privado com o aplicativo fechado para descartar todo o aprendizado.
+
+## Prompts e capacidades
+
+A identidade é Opcode em todos os provedores. A versão do prompt aparece em
+`/runtime`. Perfis full/reduced/minimal seguem a janela efetiva; modo e protocolo
+são os reais. Argumentos vêm dos schemas; o formato plano de plano só é orientado
+para Ollama nativo. `contextPaths` é relido, com os limites/redação existentes,
+a cada requisição do agente principal, evitando cache global entre projetos.
+
+O catálogo de ferramentas aceita query/category/source/read_only/offset/limit
+(padrão 8, máximo 16). `request_tools` carrega até oito nomes, aceita replace e
+unload; schemas opcionais inativos expiram após oito passos. Nenhuma dessas
+operações concede aprovação. Skills têm catálogo pesquisável/paginado e ativação
+exclusiva pelo usuário. O catálogo MCP retorna metadados por padrão; `tool` pede
+um schema específico, ainda sujeito à autorização de conexão.
+
+`search_findings` usa o mesmo isolamento por projeto e revalida hashes. As
+projeções ficam em `data.directory/memory-index/<hash>.sqlite`, modo 0600; são
+reconstruíveis. Originais continuam no histórico/findings existentes. A projeção
+retém no máximo 100 mil documentos de até 8 KiB e omite raciocínio/anexos.

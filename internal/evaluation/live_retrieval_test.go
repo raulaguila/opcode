@@ -22,7 +22,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLiveOllamaPagedIndexLookup(t *testing.T) {
+func TestLiveOllamaPagedIndexLookup(t *testing.T)              { testLiveOllamaIndexWorkflow(t, false) }
+func TestLiveOllamaCompoundRetrievalRequirements(t *testing.T) { testLiveOllamaIndexWorkflow(t, true) }
+func testLiveOllamaIndexWorkflow(t *testing.T, compound bool) {
+	t.Helper()
 	if appconfig.Environment("OPCODE_LIVE_TESTS") != "1" || appconfig.Environment("OPCODE_LIVE_OLLAMA") != "1" {
 		t.Skip("requires explicit local Ollama inference opt-in")
 	}
@@ -60,6 +63,9 @@ func TestLiveOllamaPagedIndexLookup(t *testing.T) {
 		"Agora consulte a próxima página: use ls com path . e offset 2 e limit 2. Aguarde o resultado e responda com essa página. Não execute comandos nem altere arquivos.",
 		"Use search_code_index com query calculate_invoice_total, path src e language python. Aguarde o resultado e informe o caminho Python encontrado. Não execute comandos nem altere arquivos.",
 		"Leia src/service.py com view. Qual constante a função calculate_invoice_total adiciona ao valor? Responda com base nessa leitura real. Não execute comandos nem altere arquivos.",
+	}
+	if compound {
+		prompts = []string{"Execute estes quatro passos de leitura e só então responda: 1. Use ls com path . offset 0 limit 2. 2. Use ls com path . offset 2 limit 2. 3. Use search_code_index com query calculate_invoice_total path src language python. 4. Use view com file_path src/service.py e informe a constante adicionada pela função. Aguarde os resultados reais em cada passo. Não execute comandos nem altere arquivos."}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
 	defer cancel()
@@ -153,5 +159,5 @@ func TestLiveOllamaPagedIndexLookup(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, text, string(actual))
 	}
-	t.Log("Real Ollama resumed one session across four user requests: two file pages, a Python-scoped index search and current source reading within 16k; files unchanged")
+	t.Logf("Real Ollama retrieval workflow: compound=%t, all four required operations verified at 16k; files unchanged", compound)
 }

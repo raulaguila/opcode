@@ -2,6 +2,8 @@ package provider
 
 import (
 	"encoding/json"
+	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/tiktoken-go/tokenizer"
 
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
@@ -10,12 +12,15 @@ import (
 // RequestFootprint contains sizes only. It deliberately cannot expose raw
 // prompts, schemas, credentials or provider continuation data to logs or UI.
 type RequestFootprint struct {
-	ASCIIBytes           int64
-	OtherBytes           int64
-	SchemaASCIIBytes     int64
-	SchemaOtherBytes     int64
-	ReservedOutputTokens int64
-	ExactSerialization   bool
+	ASCIIBytes             int64
+	OtherBytes             int64
+	SchemaASCIIBytes       int64
+	SchemaOtherBytes       int64
+	ReservedOutputTokens   int64
+	CompatibleTokenizer    string
+	TokenizedPayloadTokens int64
+	TokenizedSchemaTokens  int64
+	ExactSerialization     bool
 }
 type RequestSizer interface {
 	RequestFootprint([]message.Message, []tools.BaseTool) (RequestFootprint, error)
@@ -55,12 +60,27 @@ func (p *baseProvider) RequestFootprint(history []message.Message, definitions [
 		return footprint, err
 	}
 	footprint.ASCIIBytes, footprint.OtherBytes = countBytes(raw)
+	var counter tokenizer.Codec
+	if p.options.model.Provider == models.ProviderOpenAI {
+		counter, _ = tokenizer.ForModel(tokenizer.Model(p.options.model.APIModel))
+		if counter != nil {
+			if count, err := counter.Count(string(raw)); err == nil {
+				footprint.TokenizedPayloadTokens = int64(count)
+				footprint.CompatibleTokenizer = counter.GetName()
+			}
+		}
+	}
 	// Native HTTP adapters place schemas under tools. Gemini uses tools with
 	// functionDeclarations; fallback SDK payloads use the same envelope key.
 	encoded := map[string]json.RawMessage{}
 	if json.Unmarshal(raw, &encoded) == nil {
 		if schemas, ok := encoded["tools"]; ok {
 			footprint.SchemaASCIIBytes, footprint.SchemaOtherBytes = countBytes(schemas)
+			if counter != nil {
+				if count, err := counter.Count(string(schemas)); err == nil {
+					footprint.TokenizedSchemaTokens = int64(count)
+				}
+			}
 		}
 	}
 	return footprint, nil

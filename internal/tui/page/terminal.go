@@ -86,7 +86,16 @@ func (p *chatPage) refreshTerminal() {
 }
 
 func (p *chatPage) terminalVisible() bool {
-	return p.terminal.focused && p.terminal.selected != "" && p.height >= 12 && p.width >= 20
+	if p.terminal.selected == "" || p.height < 12 || p.width < 20 {
+		return false
+	}
+	if p.terminal.focused {
+		return true
+	}
+	// A bounded live preview remains visible while a command needs attention;
+	// focus stays in chat so the user can steer the agent without typing in PTY.
+	snapshot := p.terminal.snapshot
+	return p.height >= 20 && snapshot.Running && (snapshot.PTY || snapshot.Stdout != "" || snapshot.Stderr != "")
 }
 
 func (p *chatPage) resizeContent() tea.Cmd {

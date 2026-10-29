@@ -12,7 +12,8 @@ import (
 )
 
 func newEvaluateCommand() *cobra.Command {
-	var casesPath, outputPath, providerPath string
+	var casesPath, outputPath, providerPath, adapterPath string
+	var contextWindow int64
 	var live, allowExecution bool
 	var repeat int
 	var caseIDs []string
@@ -37,7 +38,14 @@ func newEvaluateCommand() *cobra.Command {
 				}
 			}
 		}
-		report, err := evaluation.Run(command.Context(), suite, raw, evaluation.Options{Repeats: repeat, CaseIDs: caseIDs, Live: live, AllowExecution: allowExecution, ProviderConfig: providerPath, Executable: executable})
+		var adapter *evaluation.Adapter
+		if adapterPath != "" {
+			adapter, err = evaluation.LoadAdapter(adapterPath)
+			if err != nil {
+				return err
+			}
+		}
+		report, err := evaluation.Run(command.Context(), suite, raw, evaluation.Options{Adapter: adapter, ContextWindow: contextWindow, Repeats: repeat, CaseIDs: caseIDs, Live: live, AllowExecution: allowExecution, ProviderConfig: providerPath, Executable: executable})
 		if err != nil {
 			return err
 		}
@@ -57,6 +65,8 @@ func newEvaluateCommand() *cobra.Command {
 		}
 		return nil
 	}}
+	command.Flags().StringVar(&adapterPath, "adapter", "", "Explicit trusted JSON adapter executable (opcode/codaro/crush); requires --live and --context-window")
+	command.Flags().Int64Var(&contextWindow, "context-window", 0, "Explicit shared comparison context; 0 uses normal provider discovery for native Opcode")
 	command.Flags().IntVar(&repeat, "repeat", 1, "Repeat live cases 1–3 times in fresh workspaces (multiplies inference requests)")
 	command.Flags().StringSliceVar(&caseIDs, "case", nil, "Run only these bundled/custom case IDs (comma separated); criteria stay unchanged")
 	command.Flags().StringVar(&casesPath, "cases", "", "JSON suite (default: six bundled fixtures)")

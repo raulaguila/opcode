@@ -82,7 +82,7 @@ func TaskAgentTools(lspClients map[string]*lsp.Client, services ...permission.Se
 	result = append(result, tools.NewProjectTools(lspClients)...)
 	result = append(result, tools.NewArtifactTools()...)
 	result = append(result, tools.NewValidationTools()...)
-	result = append(result, tools.NewCodeIndexTool())
+	result = append(result, tools.NewCodeIndexTool(), tools.NewReadPageTool(), tools.NewLanguageSupportTool())
 	for i, tool := range result {
 		result[i] = tools.SecureTool(tool, permissions)
 	}

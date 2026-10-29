@@ -23,6 +23,8 @@ var Builtins = []Command{
 	{ID: "integrations", Title: "Integrações", Description: "Cadastrar/testar MCP ou LSP"},
 	{ID: "sessions", Title: "Conversas", Description: "Buscar, renomear, arquivar e exportar"},
 	{ID: "queue", Title: "Instruções pendentes", Description: "Editar ou remover mensagens da fila"},
+	{ID: "runtime", Title: "Diagnóstico da execução", Description: "Modelo, protocolo, contexto, ferramentas e índice; sem credenciais"},
+	{ID: "index", Title: "Índice do projeto", Description: "Estado, atualizar, reconstruir, pausar ou limpar o índice"},
 	{ID: "context", Title: "Contexto do modelo", Description: "Orçamento previsto e reservas"},
 	{ID: "recalibrate", Title: "Recalibrar contexto", Description: "Remover limite aprendido para o modelo atual"},
 	{ID: "compact", Title: "Compactar contexto", Description: "Preparar o histórico para a próxima chamada"},

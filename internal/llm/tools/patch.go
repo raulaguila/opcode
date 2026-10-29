@@ -18,12 +18,17 @@ import (
 
 type PatchParams struct {
 	PatchText string `json:"patch_text"`
+	Preview   bool   `json:"preview,omitempty"`
+	PreviewID string `json:"preview_id,omitempty"`
 }
 
 type PatchResponseMetadata struct {
-	FilesChanged []string `json:"files_changed"`
-	Additions    int      `json:"additions"`
-	Removals     int      `json:"removals"`
+	FilesChanged []string          `json:"files_changed"`
+	Additions    int               `json:"additions"`
+	Removals     int               `json:"removals"`
+	ReceiptID    string            `json:"receipt_id"`
+	BeforeHashes map[string]string `json:"before_hashes"`
+	AfterHashes  map[string]string `json:"after_hashes"`
 }
 
 type patchTool struct {
@@ -51,8 +56,8 @@ The patch text must follow this format:
 *** End Patch
 
 Before using this tool:
-1. Use the FileRead tool to understand the files' contents and context
-2. Verify all file paths are correct (use the LS tool)
+1. Use the view tool to understand the files' contents and context
+2. Verify all file paths are correct (use the ls tool)
 
 CRITICAL REQUIREMENTS FOR USING THIS TOOL:
 
@@ -77,6 +82,8 @@ func (p *patchTool) Info() ToolInfo {
 		Name:        PatchToolName,
 		Description: patchDescription,
 		Parameters: map[string]any{
+			"preview":    map[string]any{"type": "boolean", "description": "Prepare a bounded diff and preview_id without changing files or requesting edit approval."},
+			"preview_id": map[string]any{"type": "string", "description": "Optional identifier from preview. Applying rejects changed source or patch; approval is still required."},
 			"patch_text": map[string]any{
 				"type":        "string",
 				"description": "The full patch text that describes all changes to be made",
@@ -106,7 +113,7 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 		}
 
 		if getLastReadTime(absPath).IsZero() {
-			return NewTextErrorResponse(fmt.Sprintf("you must read the file %s before patching it. Use the FileRead tool first", filePath)), nil
+			return NewTextErrorResponse(fmt.Sprintf("you must read the file %s before patching it. Use the view tool first", filePath)), nil
 		}
 
 		fileInfo, err := statFile(ctx, absPath)
@@ -180,6 +187,13 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 		return NewTextErrorResponse(fmt.Sprintf("failed to create commit from patch: %s", err)), nil
 	}
 
+	previewID, beforeHashes, afterHashes, preview := patchPreview(params.PatchText, &commit)
+	if params.PreviewID != "" && params.PreviewID != previewID {
+		return NewTextErrorResponse("patch or source changed since preview; create a new preview"), nil
+	}
+	if params.Preview {
+		return jsonToolResult(map[string]any{"preview_id": previewID, "before_hashes": beforeHashes, "after_hashes": afterHashes, "diff": preview, "applied": false, "authorization": "preview grants no permission; applying requests normal approvals"}), nil
+	}
 	// Get session ID and message ID
 	sessionID, messageID := GetContextValues(ctx)
 	if sessionID == "" || messageID == "" {
@@ -395,9 +409,41 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 		NewTextResponse(result),
 		PatchResponseMetadata{
 			FilesChanged: changedFiles,
-			Additions:    totalAdditions,
-			Removals:     totalRemovals,
+			ReceiptID:    previewID, BeforeHashes: beforeHashes, AfterHashes: afterHashes,
+			Additions: totalAdditions,
+			Removals:  totalRemovals,
 		})
 	response.IsError = historyFailed
 	return response, nil
+}
+
+func patchPreview(patch string, commit *diff.Commit) (string, map[string]string, map[string]string, string) {
+	before, after := map[string]string{}, map[string]string{}
+	paths := []string{}
+	for path := range commit.Changes {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	var signature, preview string
+	for _, path := range paths {
+		change := commit.Changes[path]
+		old, next := "", ""
+		if change.OldContent != nil {
+			old = *change.OldContent
+		}
+		if change.NewContent != nil {
+			next = *change.NewContent
+		}
+		before[path] = indexDigest(old)
+		after[path] = indexDigest(next)
+		signature += path + before[path] + after[path]
+		if change.MovePath != nil {
+			signature += *change.MovePath
+		}
+		hunk, _, _ := diff.GenerateDiff(old, next, path)
+		if len(preview) < 6000 {
+			preview += clipString(redact(hunk), 6000-len(preview))
+		}
+	}
+	return indexDigest(patch + signature), before, after, preview
 }

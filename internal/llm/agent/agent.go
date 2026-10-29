@@ -76,18 +76,20 @@ type agent struct {
 	titleProvider     provider.Provider
 	summarizeProvider provider.Provider
 
-	activeRequests  sync.Map
-	runMu           sync.Mutex
-	runs            map[string]*generationRun
-	closed          bool
-	workflow        *workflow.Store
-	questions       *interaction.Questions
-	onModeChange    func(string)
-	systemMessage   string
-	maxOutputTokens int64
-	contextMu       sync.Mutex
-	contextStatuses map[string]ContextStatus
-	compactSessions map[string]bool
+	activeRequests    sync.Map
+	runMu             sync.Mutex
+	runs              map[string]*generationRun
+	closed            bool
+	workflow          *workflow.Store
+	questions         *interaction.Questions
+	onModeChange      func(string)
+	systemMessage     string
+	maxOutputTokens   int64
+	contextMu         sync.Mutex
+	contextStatuses   map[string]ContextStatus
+	compactSessions   map[string]bool
+	tokenObservations map[string]tokenObservation
+	usageMetrics      map[string]UsageMetrics
 }
 
 func NewAgent(
@@ -268,6 +270,16 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	if err != nil {
 		return a.err(fmt.Errorf("failed to create user message: %w", err))
 	}
+	run.startMessageID = userMsg.ID
+	if resumingRequest(content) {
+		for i := len(msgs) - 1; i >= 0; i-- {
+			if msgs[i].Role == message.User && !strings.HasPrefix(msgs[i].Content().Text, "Application validation:") && !resumingRequest(msgs[i].Content().Text) {
+				requiredToolCalls(msgs[i].Content().Text, run)
+				run.startMessageID = msgs[i].ID
+				break
+			}
+		}
+	}
 	// Append the new user message to the conversation history.
 	msgHistory := append(msgs, userMsg)
 	a.prefetchTools(run, content)
@@ -426,6 +438,35 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 				continue
 			}
 		}
+		if missing := missingRequiredCalls(run, msgHistory); len(missing) > 0 {
+			taskPartial := false
+			if a.workflow != nil {
+				if task, e := a.workflow.Get(ctx, sessionID); e == nil {
+					taskPartial = task.Status == "partial" || task.Status == "blocked"
+				}
+			}
+			if !taskPartial {
+				if repairs >= 2 {
+					return a.err(fmt.Errorf("required actions remain unverified: %s; progress preserved", strings.Join(missing, ", ")))
+				}
+				repairs++
+				correction, e := a.createUserMessage(ctx, sessionID, "Application validation: explicitly requested actions lack successful receipts: "+strings.Join(missing, ", ")+". Perform these authorized steps before concluding; use partial/blocked if unable. Do not repeat completed side effects.", nil)
+				if e != nil {
+					return a.err(e)
+				}
+				msgHistory = append(msgHistory, correction)
+				for name := range run.requiredCalls {
+					run.toolLeases[name] = run.steps + 8
+					run.selected[name] = true
+				}
+				a.runMu.Lock()
+				if ctx.Err() == nil {
+					run.accepting = true
+				}
+				a.runMu.Unlock()
+				continue
+			}
+		}
 		outcome := "completed"
 		if a.workflow != nil {
 			if task, err := a.workflow.Get(ctx, sessionID); err == nil && (task.Status == "blocked" || task.Status == "partial" || task.Status == "planned") {
@@ -457,6 +498,18 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	requestHistory, requestErr := a.requestHistory(ctx, sessionID, msgHistory, run)
 	if requestErr != nil {
 		return message.Message{}, nil, requestErr
+	}
+	if controller, ok := runProvider(a, run).(provider.SystemPromptController); ok {
+		names := make([]string, 0)
+		for _, tool := range a.exposedTools(run) {
+			names = append(names, tool.Info().Name)
+		}
+		model := runProvider(a, run).Model()
+		next, err := controller.WithSystemPrompt(prompt.RunPrompt(string(run.mode), model.API, model.ContextWindow, names))
+		if err != nil {
+			return message.Message{}, nil, err
+		}
+		run.provider = next
 	}
 	requestHistory, requestErr = a.budgetRequest(sessionID, requestHistory, run)
 	if requestErr != nil {
@@ -576,6 +629,12 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 				// }
 			}
 
+			if tool != nil && !coreSchema(toolCall.Name) {
+				if run.toolLeases == nil {
+					run.toolLeases = map[string]int{}
+				}
+				run.toolLeases[toolCall.Name] = run.steps + 8
+			}
 			// Tool not found
 			if tool == nil {
 				toolResults[i] = message.ToolResult{
@@ -730,6 +789,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
 			return fmt.Errorf("failed to update message: %w", err)
 		}
+		a.observeInputUsage(sessionID, a.provider.Model(), event.Response.Usage)
 		return a.TrackUsage(ctx, sessionID, a.provider.Model(), event.Response.Usage)
 	}
 
@@ -737,6 +797,7 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 }
 
 func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.Model, usage provider.TokenUsage) error {
+	a.observeUsage(sessionID, usage)
 	sess, err := a.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get session: %w", err)
@@ -748,8 +809,8 @@ func (a *agent) TrackUsage(ctx context.Context, sessionID string, model models.M
 		model.CostPer1MOut/1e6*float64(usage.OutputTokens)
 
 	sess.Cost += cost
-	sess.CompletionTokens = usage.OutputTokens + usage.CacheReadTokens
-	sess.PromptTokens = usage.InputTokens + usage.CacheCreationTokens
+	sess.CompletionTokens = usage.OutputTokens
+	sess.PromptTokens = usage.InputTokens + usage.CacheCreationTokens + usage.CacheReadTokens
 
 	_, err = a.sessions.Save(ctx, sess)
 	if err != nil {

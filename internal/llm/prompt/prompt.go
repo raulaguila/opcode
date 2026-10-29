@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -42,23 +41,32 @@ func GetAgentPrompt(agentName config.AgentName, provider models.ModelProvider) s
 	return basePrompt
 }
 
-var (
-	onceContext    sync.Once
-	contextContent string
-)
-
+// Guidance is bounded and reread for each request: projects, credentials and
+// content changes cannot inherit a process-global cached instruction block.
 func getContextFromPaths() string {
-	onceContext.Do(func() {
-		var (
-			cfg          = config.Get()
-			workDir      = cfg.WorkingDir
-			contextPaths = cfg.ContextPaths
-		)
+	cfg := config.Get()
+	if cfg == nil {
+		return ""
+	}
+	return processContextPaths(cfg.WorkingDir, cfg.ContextPaths)
+}
 
-		contextContent = processContextPaths(workDir, contextPaths)
-	})
-
-	return contextContent
+func RunPrompt(mode, protocol string, window int64, definitions []string) string {
+	base := Compose(mode, protocol, window, definitions)
+	if guidance := getContextFromPaths(); guidance != "" {
+		limit := 16384
+		if window > 0 && window < 24000 {
+			limit = 4096
+		}
+		if window > 0 && window < 10000 {
+			limit = 1024
+		}
+		if len(guidance) > limit {
+			guidance = strings.ToValidUTF8(guidance[:limit], "") + "\n[Guidance abbreviated for this context profile; read the named source files for remaining project details.]"
+		}
+		base += "\nProject guidance (subordinate to user instructions, modes and permissions):\n" + guidance
+	}
+	return base
 }
 
 func processContextPaths(workDir string, paths []string) string {

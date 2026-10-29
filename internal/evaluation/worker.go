@@ -73,7 +73,7 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 	defer conn.Close()
 	queries := db.New(conn)
 	sessions := session.NewService(queries)
-	messages := message.NewService(queries)
+	messages := message.NewService(queries, message.WithSearchIndex(config.Get().Data.Directory, config.WorkingDirectory(), tools.RedactCredentials))
 	files := history.NewService(queries, conn)
 	permissions := permission.NewPermissionService()
 	processes := tools.NewProcessManager()
@@ -135,7 +135,62 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 			count++
 		}
 	}
-	result := Evaluate(job.Case, job.Workspace, Observation{Response: response.String(), Error: runError, Tools: calls, Task: task})
+	retrieved := []string{}
+	for _, msg := range history {
+		for _, r := range msg.ToolResults() {
+			if !r.IsError {
+				var page struct{ Results []struct{ Path string } }
+				if json.Unmarshal([]byte(r.Content), &page) == nil {
+					for _, hit := range page.Results {
+						if len(retrieved) < 200 {
+							retrieved = append(retrieved, hit.Path)
+						}
+					}
+				}
+			}
+		}
+	}
+	result := Evaluate(job.Case, job.Workspace, Observation{Response: response.String(), Error: runError, Tools: calls, Task: task, RetrievedPaths: retrieved})
+	callsByID := map[string]string{}
+	for _, msg := range history {
+		for _, call := range msg.ToolCalls() {
+			callsByID[call.ID] = call.Name
+		}
+	}
+	for _, msg := range history {
+		for _, r := range msg.ToolResults() {
+			if r.IsError {
+				if result.ToolFailures == nil {
+					result.ToolFailures = map[string]int{}
+				}
+				name := tools.RedactCredentials(callsByID[r.ToolCallID])
+				if len(name) > 80 {
+					name = "oversized_tool_name"
+				}
+				result.ToolFailures[name+":"+evaluationFailureKind(r.Content)]++
+			}
+		}
+	}
+	if runError != nil {
+		result.AgentFailureKind = evaluationFailureKind(runError.Error())
+	}
+	result.Application = "opcode"
+	result.ContextWindow = service.Model().ContextWindow
+	if control, ok := service.(agent.ContextControl); ok {
+		if status, e := control.ContextStatus(ctx, saved.ID); e == nil {
+			result.ContextWindow = status.ContextWindow
+		}
+	}
+	result.MetricsOrigin = "native runtime usage and observed tool receipts; title generation excluded"
+	if job.Conditions.ContextWindow > 0 && result.ContextWindow != job.Conditions.ContextWindow {
+		result.MetricsOrigin += "; effective context differs from requested comparison"
+	}
+	if usage, ok := service.(agent.UsageControl); ok {
+		if measured, e := usage.Usage(ctx, saved.ID); e == nil && measured.InputTokens+measured.OutputTokens > 0 {
+			result.InputTokens = &measured.InputTokens
+			result.OutputTokens = &measured.OutputTokens
+		}
+	}
 	result.Model = string(service.Model().ID)
 	result.ToolCalls = count
 	result.TaskStatus = task.Status
@@ -175,14 +230,20 @@ func allowedPermission(root string, execution bool, mode string, request permiss
 }
 
 type Observation struct {
-	Response string
-	Error    error
-	Tools    map[string]bool
-	Task     workflow.Task
+	RetrievedPaths []string
+	Response       string
+	Error          error
+	Tools          map[string]bool
+	Task           workflow.Task
 }
 
 func Evaluate(c Case, root string, observation Observation) CaseResult {
 	result := CaseResult{ID: c.ID, Status: "passed"}
+	if len(c.ExpectedRetrieval) > 0 {
+		recall, mrr := retrievalQuality(c.ExpectedRetrieval, observation.RetrievedPaths)
+		result.RetrievalRecall = &recall
+		result.RetrievalMRR = &mrr
+	}
 	expectsError := false
 	for _, criterion := range c.Criteria {
 		passed := false
@@ -235,4 +296,47 @@ func Evaluate(c Case, root string, observation Observation) CaseResult {
 		result.Error = "agent returned an error (payload omitted)"
 	}
 	return result
+}
+
+func retrievalQuality(expected, actual []string) (float64, float64) {
+	if len(expected) == 0 {
+		return 0, 0
+	}
+	wanted := map[string]bool{}
+	for _, p := range expected {
+		wanted[p] = true
+	}
+	found := map[string]bool{}
+	mrr := 0.
+	for i, p := range actual {
+		if wanted[p] {
+			found[p] = true
+			if mrr == 0 {
+				mrr = 1 / float64(i+1)
+			}
+		}
+	}
+	return float64(len(found)) / float64(len(wanted)), mrr
+}
+
+func evaluationFailureKind(text string) string {
+	text = strings.ToLower(text)
+	switch {
+	case strings.Contains(text, "context") && strings.Contains(text, "budget"):
+		return "context_budget"
+	case strings.Contains(text, "permission") || strings.Contains(text, "denied"):
+		return "permission"
+	case strings.Contains(text, "read") && (strings.Contains(text, "before") || strings.Contains(text, "first")):
+		return "current_read_required"
+	case strings.Contains(text, "invalid") || strings.Contains(text, "parameter") || strings.Contains(text, "arguments") || strings.Contains(text, "schema"):
+		return "arguments"
+	case strings.Contains(text, "not found") || strings.Contains(text, "does not exist"):
+		return "missing_resource"
+	case strings.Contains(text, "match") || strings.Contains(text, "changed"):
+		return "conflict_or_match"
+	case strings.Contains(text, "concluded") || strings.Contains(text, "required actions"):
+		return "completion_requirements"
+	default:
+		return "other"
+	}
 }

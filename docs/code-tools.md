@@ -4,25 +4,23 @@ As ferramentas novas entram no catálogo progressivo do agente. Os modos Pergunt
 e Planejar podem consultar o mapa, símbolos, validações, artefatos e recursos MCP;
 renomear ou substituir símbolos só está disponível em Executar.
 
-- `ls`: lista caminhos permitidos em ordem estável, com `offset`, `limit`
-  (padrão/máximo 60), `glob`, `language`, `extension` e `ignore`. Retorna
-  `next_offset`, `more`, `total` e `truncated`. Cada página contém até 6.000 bytes
-  de caminhos; a varredura para em 20 mil arquivos. Continue com os mesmos
-  filtros e o `next_offset` recebido; se `truncated=true`, reduza o escopo.
-  Alterações no diretório entre páginas podem mudar a ordem: nesse caso, reinicie
-  pelo offset zero. Arquivos ocultos, sensíveis, dependências, armazenamento e
-  links ficam fora. Com `rg` instalado respeita `.gitignore`; sem ele, usa a
-  descoberta local com exclusões básicas, sem garantir regras completas do Git.
-- `get_project_map`: caminhos, tamanhos e extensões do projeto, com `offset` e
-  `limit` (100 por padrão, máximo 500). Ignora credenciais, links, armazenamento,
-  dependências e saídas comuns de build. O percurso para em 20 mil entradas e
-  informa truncamento; não é um índice semântico nem lê conteúdo de cada arquivo.
-- `get_file_outline`: declarações Go pelo parser; demais linguagens pelo servidor
-  LSP configurado. Retorna nomes, tipos e linhas, com paginação.
-- `read_symbol`: usa o nome exato retornado pelo outline, `file_path`, `offset` e
-  `limit` (máximo 500 linhas). Métodos Go usam `Tipo.Método`; símbolos LSP aninhados
-  usam `Pai.Filho`. Essas leituras parciais não concedem evidência de leitura
-  integral para editar: o agente deve continuar lendo o arquivo pelo fluxo normal.
+- `ls`: páginas ordenadas, até 60 caminhos/6.000 bytes, com filtros e `snapshot`.
+  Reenvie o snapshot com `next_offset`; mudanças exigem reiniciar em zero.
+- `get_project_map`: até 60 entradas (padrão 30), orçamento de 7.500 bytes, mesmas
+  exclusões da listagem. Classifica manifests, entradas, testes/documentação e
+  fontes; lê até 12 arquivos pequenos para declarações, pacotes e dependências
+  declaradas em Go, package.json, pyproject.toml e Cargo.toml. Não resolve um
+  grafo transitivo nem transforma imports em referências semânticas.
+- `get_file_outline`: Go padrão; parsers locais para Python, JS, TS, TSX, Rust,
+  Java, C, C++ e C#. Outras linguagens usam LSP configurado. Retorna hash, nomes
+  qualificados, tipos e linhas; `expected_hash` detecta fonte alterada.
+- `read_symbol`: nome exato do outline, offset/limit e `expected_hash` opcional.
+- `read_lines`: páginas UTF-8 de até 8 KiB/200 linhas (padrão 4 KiB/100), offset
+  e coluna em bytes baseados em zero. Reenvie file_hash como expected_hash e
+  continue com next_offset/next_column. Linhas longas continuam sem perder dados.
+  O hash cobre o arquivo inteiro, limitado a 16 MiB.
+- `get_language_support`: distingue reconhecimento, parser local/fixture e LSP
+  configurado/executável disponível. Não instala nem inicia servidores.
 - `lsp_call_hierarchy`: posição em linha/coluna zero-based; colunas usam UTF-16.
   `direction` aceita `incoming` ou `outgoing`. Limita a dez pontos de preparação e
   cem chamadas, com indicação de truncamento.
@@ -106,7 +104,7 @@ os bytes originais, inclusive NUL e sequências inválidas.
 Exemplo: `{"query":"autenticação usuário","path":"internal","language":"go","kind":"function"}`.
 Usa SQLite/FTS5 e ranking BM25, prioriza identificadores exatos e evita resultados
 sobrepostos. A normalização reconhece camelCase/snake_case e alguns conceitos
-em português, sem inferência nem embeddings. Quando `more=true`, refine a busca;
+em português, sem inferência no modo lexical. O modo hybrid é opt-in. Quando `more=true`, refine a busca;
 a consulta examina até 120 candidatos classificados e não promete listar todos.
 
 Retorna caminho, símbolo, tipo, linguagem, linhas, hash, assinatura (até 160 bytes)
@@ -114,9 +112,10 @@ e prévia (até 240 bytes), com orçamento de aproximadamente 8 KiB para a respo
 Leia o código atual com `view`/`read_symbol` antes de concluir ou editar. O índice
 é uma ferramenta inicial do agente, respeitando os modos e permissões.
 
-Go usa declarações do parser nativo para funções, métodos, tipos, structs,
-interfaces e valores. Janelas textuais complementam o índice para código fora
-das declarações, Go incompleto e outras linguagens. A identificação de extensões
+Go usa seu parser nativo. Nove gramáticas locais puras Go acrescentam as
+linguagens descritas acima. Chunks acompanham declarações/escopos, nomes
+qualificados e assinatura do pai quando disponível. Janelas textuais continuam
+complementando declarações e atendem fontes incompletas/não suportadas. A identificação de extensões
 não comprova disponibilidade de parser ou LSP: resultados `kind: "text"` são
 navegação textual. Os outlines das demais linguagens continuam dependendo do LSP.
 
@@ -143,7 +142,7 @@ omite caminhos sensíveis, links, dependências, armazenamento e `.opcode-worktr
 Cada varredura tem limite de 20 mil arquivos, 256 KiB por arquivo e 20 MiB de texto;
 exceder um limite aborta a atualização sem substituir o índice anterior. O banco
 tem teto de 32768 páginas SQLite. Credenciais conhecidas são removidas antes da
-persistência. Não há serviço externo, downloads nem dependência nova.
+persistência. Não há downloads de modelos. Parsers selecionados são embarcados; embeddings exigem configuração local explícita.
 
 `format_project` recebe `preset` e `files` explícitos (1–64 arquivos regulares,
 até 2 MiB cada). Os presets `go`, `python` e `javascript`/`typescript`/`json`
@@ -154,9 +153,7 @@ comando passa pela aprovação normal e pelo mesmo gerenciador de processos,
 saída ao vivo, sandbox e cancelamento de `bash`. Revise o diff e execute
 `run_checks` depois; formatar não significa que testes passaram.
 
-Os outlines continuam estruturais: parser Go e document symbols do servidor
-LSP configurado nas demais linguagens. Um LSP ausente é informado, sem inventar
-declarações a partir de expressões regulares.
+Outlines locais são sintáticos; referências resolvidas continuam sendo responsabilidade do LSP. Texto/grep nunca é apresentado como resolução de símbolos.
 
 ## Comparação multilíngue com o Codaro — 28/10/2026
 
@@ -167,23 +164,24 @@ Todos passaram em diretórios temporários, sem alterar o checkout do Codaro.
 | Capacidade | Codaro local | Opcode |
 | --- | --- | --- |
 | Cadastro de linguagens/formatos | 81 identificadores, 131 extensões | IDs LSP existentes e extensões adicionais nos filtros; sem promessa de parser para cada extensão |
-| Parsing local | Tree-sitter disponível nos 80 identificadores além de `text`; 36 casos com fixture exercitados | Parser Go, sem gramáticas adicionais |
-| Python, JS/TS/TSX, Java, C/C++, C#, Rust, SQL, Kotlin etc. | Símbolos estruturais locais, busca por símbolo e leitura da declaração | Busca textual filtrada; outline/leitura por símbolo exigem LSP configurado |
-| Filtros de busca | Caminho, glob, linguagem, extensão, tipo de símbolo | Mesmos campos; tipo estrutural no índice atual apenas para Go |
-| Atualização | Hash e metadados, com reutilização e serviço de observação | Hash e metadados com TTL de 60 s, descoberta renovada a cada busca |
-| Busca | Léxica/exata; combinação semântica opcional | Léxica/exata, sem embeddings |
-| LSP | Presets para servidores conhecidos e pool reutilizável | Servidores configuráveis; símbolos, definição, referências, hierarquia e renomeação/edição protegidas |
-| Inventário consultável | `get_language_support` paginado distingue parser, fixtures e LSP instalado | Sem inventário equivalente por linguagem; configuração e status das integrações LSP |
+| Parsing local | Até 80 parsers disponíveis, 36 fixtures exercitadas | Go + nove gramáticas selecionadas; dez fixtures de declarações/escopos exercitadas |
+| Outras linguagens | Cadastro amplo e parsing local conforme gramática | Filtros/texto e LSP configurado; sem prometer parser para toda extensão |
+| Busca | Léxica/exata e semântica opcional | Léxica/exata, intent implementation/tests/documentation e hybrid opt-in local |
+| Índice | Metadados, hashes, watcher | Metadados/hashes, watcher limitado, reconciliação periódica, pausa/admin/explicação |
+| Inventário | Parser/fixture/LSP | `get_language_support` separa parser, fixture e servidor disponível |
 
-Os testes do Opcode exercitam filtros em Go, Python, JavaScript, TypeScript, TSX,
-Rust, Java, C++, C#, Kotlin, SQL e texto desconhecido. Isso comprova recuperação
-textual e classificação dessas fixtures, não suporte estrutural equivalente ao
-Codaro. Por exemplo, `.h` é classificado como C pelo filtro; o Codaro também
-inspeciona conteúdo para distinguir cabeçalhos C++. Os filtros não iniciam nem
-instalam servidores LSP.
+O snapshot anterior do Opcode (somente parser Go) foi superado por esta etapa.
+O Codaro continua com cobertura estrutural mais ampla; não se afirma superioridade
+geral por quantidade de extensões. C/C++ `.h` continua classificado como C no
+filtro do Opcode. Os presets LSP não instalam executáveis. Veja os limites e os
+controles em [Índice e recuperação](retrieval-runtime.md).
 
-Para ampliar a paridade estrutural, o próximo passo é integrar gramáticas locais
-com testes de símbolos/escopos por linguagem, começando por Python, JS/TS/TSX e
-Rust. Só declarar extensões ou usar expressões regulares não substitui parsing.
 Build/testes continuam exigindo ferramentas instaladas e verificações explícitas,
 independentemente do reconhecimento de linguagem ou disponibilidade de parser.
+
+
+`patch` aceita `preview:true` para retornar diff limitado, before/after hashes e
+preview_id sem escrever ou aprovar. Reenviar preview_id ao aplicar rejeita mudança
+na fonte ou no patch. A aplicação continua pedindo as aprovações normais e usa a
+transação existente; o recibo inclui hashes e receipt_id. O identificador não é
+um token de autorização nem garantia contra queda da máquina durante multiwrite.

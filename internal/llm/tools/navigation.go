@@ -48,6 +48,9 @@ func (n *navigationTool) Run(ctx context.Context, call ToolCall) (ToolResponse, 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if err := lsp.EnsureClients(ctx, n.clients, path); err != nil {
+		return NewTextErrorResponse(err.Error()), nil
+	}
 	clients := lsp.SnapshotClients(n.clients)
 	keys := make([]string, 0, len(clients))
 	for key := range clients {

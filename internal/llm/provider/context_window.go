@@ -12,9 +12,22 @@ func (p *baseProvider) WithContextWindow(window int64) (Provider, error) {
 	}
 	opts := p.options
 	opts.model.ContextWindow = window
+	opts.model.ContextSource = "learned after provider context/memory failure"
 	opts.maxTokens = min(opts.maxTokens, window/4)
 	if opts.maxTokens <= 0 {
 		opts.maxTokens = min(2048, window/4)
 	}
+	return NewProvider(opts.model.Provider, func(dst *providerClientOptions) { *dst = opts })
+}
+
+// SystemPromptController creates a request-scoped connection, preserving auth
+// and protocol settings without mutating a concurrent connection.
+type SystemPromptController interface {
+	WithSystemPrompt(string) (Provider, error)
+}
+
+func (p *baseProvider) WithSystemPrompt(system string) (Provider, error) {
+	opts := p.options
+	opts.systemMessage = system
 	return NewProvider(opts.model.Provider, func(dst *providerClientOptions) { *dst = opts })
 }

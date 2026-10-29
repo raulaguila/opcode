@@ -240,6 +240,14 @@ A suíte comum não requer credenciais nem executa inferência paga. Os resultad
 observados com `llama3.1:8b`, incluindo os critérios reprovados, estão no
 [registro de validação](docs/validation.md).
 
+## Recuperação e controle do contexto
+
+Há parsers locais em dez linguagens, listagem e leitura com páginas verificadas,
+índice incremental e memória de projeto. `/index` controla o índice; `/runtime`
+mostra um diagnóstico sem credenciais; `/context` mostra origem e orçamento.
+Embeddings locais são opcionais. Veja [guia de recuperação](docs/retrieval-runtime.md)
+e [o registro desta implementação](docs/implementation-2026-10.md).
+
 ## Proveniência e licença
 
 Opcode deriva do [OpenCode original](https://github.com/opencode-ai/opencode).

@@ -72,6 +72,9 @@ func (t *advancedNavigationTool) Run(ctx context.Context, call ToolCall) (ToolRe
 	if _, err := readFile(ctx, path); err != nil {
 		return ToolResponse{}, err
 	}
+	if err := lsp.EnsureClients(ctx, t.clients, path); err != nil {
+		return NewTextErrorResponse(err.Error()), nil
+	}
 	clients := lsp.SnapshotClients(t.clients)
 	keys := []string{}
 	for key := range clients {

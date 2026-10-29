@@ -165,6 +165,10 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 		return cmd
 	case "queue":
 		return p.openQueue()
+	case "runtime":
+		return p.openRuntime()
+	case "index":
+		return p.openIndex(value)
 	case "context":
 		return p.openContext(false)
 	case "compact":
@@ -270,6 +274,8 @@ func (p *chatPage) openContext(compact bool) tea.Cmd {
 		}
 		total := status.EstimatedInputTokens + status.ReservedOutputTokens + status.SafetyTokens
 		text := fmt.Sprintf("Método: %s\nJanela: %d tokens\nEntrada estimada: %d\nSchemas das ferramentas: %d\nReserva de resposta: %d\nMargem: %d\nTotal previsto: %d\nCabe na janela: %t\nMensagens compactadas: %d\n\nA estimativa inclui instruções, histórico e schemas. R recalibra o limite aprendido. O limite do servidor pode ser menor. Compactar altera apenas a preparação do contexto, preservando a conversa salva.", status.Method, status.ContextWindow, status.EstimatedInputTokens, status.ToolSchemaTokens, status.ReservedOutputTokens, status.SafetyTokens, total, status.Fits, status.CompactedMessages)
+		details, _ := json.MarshalIndent(status.Components, "", "  ")
+		text = fmt.Sprintf("Origem da janela: %s\nÚltima entrada medida: %d tokens · amostras: %d\n", status.ContextSource, status.ActualInputTokens, status.CalibrationSamples) + text + "\n\nComponentes: " + string(details)
 		return usage + text, false, nil
 	})
 }
@@ -719,7 +725,7 @@ func (p *chatPage) handleWorkspaceMessage(text string, attachments []message.Att
 		return nil, false
 	}
 	switch command {
-	case "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
+	case "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "runtime", "index", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
 	default:
 		return nil, false
 	}
@@ -824,5 +830,35 @@ func (p *chatPage) recalibrateContext() tea.Cmd {
 			return "", false, err
 		}
 		return fmt.Sprintf("Limite aprendido removido. Janela configurada: %d tokens. O próximo turno usará esse limite; nenhuma ferramenta foi repetida.", status.ContextWindow), false, nil
+	})
+}
+
+func (p *chatPage) openIndex(action string) tea.Cmd {
+	if action == "" {
+		action = "status"
+	}
+	p.showWorkspace("index", "Índice do projeto", "")
+	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		verb, path, _ := strings.Cut(strings.TrimSpace(action), " ")
+		text, err := tools.IndexStatusJSON(ctx, verb, strings.TrimSpace(path))
+		return text + "\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain CAMINHO. Nenhuma inferência é executada.", false, err
+	})
+}
+
+func (p *chatPage) openRuntime() tea.Cmd {
+	p.showWorkspace("runtime", "Diagnóstico da execução", "")
+	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
+		c, ok := p.app.CoderAgent.(agent.RuntimeDiagnosticControl)
+		if !ok {
+			return "", false, fmt.Errorf("runtime diagnostic unavailable")
+		}
+		report, err := c.RuntimeDiagnostic(ctx, p.session.ID)
+		if err != nil {
+			return "", false, err
+		}
+		raw, err := json.MarshalIndent(report, "", "  ")
+		return string(raw), false, err
 	})
 }

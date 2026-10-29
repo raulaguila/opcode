@@ -61,7 +61,7 @@ LIMITATIONS:
 - Images can be identified but not displayed
 
 TIPS:
-- Use with Glob tool to first find files you want to view
+- Use with glob tool to first find files you want to view
 - For code exploration, first use Grep to find relevant files, then View to examine them
 - When viewing large files, use the offset parameter to read specific sections`
 )

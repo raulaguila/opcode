@@ -26,6 +26,19 @@ import (
 
 var codeIndexLocks sync.Map
 
+type codeIndexHit struct {
+	Path      string  `json:"path"`
+	Symbol    string  `json:"symbol"`
+	Signature string  `json:"signature"`
+	Kind      string  `json:"kind"`
+	Language  string  `json:"language"`
+	Start     int     `json:"start_line"`
+	End       int     `json:"end_line"`
+	Preview   string  `json:"preview"`
+	Hash      string  `json:"file_hash"`
+	Rank      float64 `json:"rank"`
+}
+
 type codeIndexTool struct{}
 
 func NewCodeIndexTool() BaseTool { return &codeIndexTool{} }
@@ -33,14 +46,17 @@ func (*codeIndexTool) Info() ToolInfo {
 	params := scopeParameters()
 	params["query"] = map[string]any{"type": "string", "maxLength": 512}
 	params["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 12}
-	params["kind"] = map[string]any{"type": "string", "description": "Declaration kind (Go parser), or text windows for other languages."}
-	return ToolInfo{Name: "search_code_index", Description: "Search a private local FTS5/BM25 index with scope filters. Returns 6 short previews by default, maximum 12; refine the query when more=true. Go symbols are parsed; other languages use text windows. Refreshes ignore rules each call and reuses unchanged metadata for at most 60 seconds. Verifies current file hashes before returning hits. Previews are navigation, not edit-read evidence; use view/read_symbol for source. Requires rg; maximum 20000 files, 256 KiB/file and 20 MiB text.", Parameters: params, Required: []string{"query"}}
+	params["intent"] = map[string]any{"type": "string", "enum": []string{"implementation", "tests", "documentation"}}
+	params["strategy"] = map[string]any{"type": "string", "enum": []string{"lexical", "hybrid"}, "description": "Hybrid requires explicitly configured local embeddings; lexical fallback remains available."}
+	params["kind"] = map[string]any{"type": "string", "description": "Structural declaration kind, or text."}
+	return ToolInfo{Name: "search_code_index", Description: "Search a private local FTS5/BM25 index with scope filters. Returns 6 short previews by default, maximum 12; refine the query when more=true. Selected languages use local syntax parsers; others use text windows. Refreshes ignore rules each call and reuses unchanged metadata for at most 60 seconds. Verifies current file hashes before returning hits. Previews are navigation, not edit-read evidence; use view/read_symbol for source. Requires rg; maximum 20000 files, 256 KiB/file and 20 MiB text.", Parameters: params, Required: []string{"query"}}
 }
 func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	var input struct {
-		Query string
-		Limit int
-		Kind  string
+		Query            string
+		Intent, Strategy string
+		Limit            int
+		Kind             string
 		retrievalScope
 	}
 	if json.Unmarshal([]byte(call.Input), &input) != nil || strings.TrimSpace(input.Query) == "" || len(input.Query) > 512 || input.Limit < 0 || input.Limit > 12 || len(input.Kind) > 40 {
@@ -48,6 +64,9 @@ func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 	}
 	if err := input.retrievalScope.validate(); err != nil {
 		return NewTextErrorResponse(err.Error()), nil
+	}
+	if input.Intent != "" && input.Intent != "implementation" && input.Intent != "tests" && input.Intent != "documentation" || input.Strategy != "" && input.Strategy != "lexical" && input.Strategy != "hybrid" {
+		return NewTextErrorResponse("invalid intent/strategy"), nil
 	}
 	if input.Limit == 0 {
 		input.Limit = 6
@@ -71,24 +90,26 @@ func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 	}
 	relativeScope, _ := filepath.Rel(root, scopeRoot)
 	relativeScope = filepath.ToSlash(relativeScope)
-	semaphore := make(chan struct{}, 1)
-	semaphore <- struct{}{}
-	lock, _ := codeIndexLocks.LoadOrStore(root, semaphore)
-	semaphore = lock.(chan struct{})
-	select {
-	case <-ctx.Done():
-		return ToolResponse{}, ctx.Err()
-	case <-semaphore:
+	unlock, err := acquireIndex(ctx, root)
+	if err != nil {
+		return ToolResponse{}, err
 	}
-	defer func() { semaphore <- struct{}{} }()
+	defer unlock()
 	db, err := openCodeIndex(ctx, root)
 	if err != nil {
 		return ToolResponse{}, err
 	}
 	defer db.Close()
-	stats, err := refreshCodeIndex(ctx, db, root)
+	stats := indexRefresh{}
+	paused, err := indexPaused(root)
 	if err != nil {
 		return ToolResponse{}, err
+	}
+	if !paused {
+		stats, err = refreshCodeIndex(ctx, db, root)
+		if err != nil {
+			return ToolResponse{}, err
+		}
 	}
 	scoped := relativeScope != "." || input.Glob != "" || input.Language != "" || input.Extension != ""
 	if scoped {
@@ -137,27 +158,24 @@ func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 		query += ` AND kind=?`
 		args = append(args, input.Kind)
 	}
-	query += ` ORDER BY (lower(symbol)=? OR lower(path)=?) DESC, (kind='text'), bm25(chunks,3,8,4,1,1,0,0,0,0,0),path,start_line LIMIT 120`
+	preference := ""
+	switch input.Intent {
+	case "tests":
+		preference = " (path NOT LIKE '%test%' AND path NOT LIKE '%spec%'),"
+	case "documentation":
+		preference = " (path NOT LIKE '%.md' AND path NOT LIKE 'docs/%'),"
+	case "implementation":
+		preference = " (path LIKE '%.md' OR path LIKE '%test%'),"
+	}
+	query += ` ORDER BY (lower(symbol)=? OR lower(path)=?) DESC, ` + preference + ` (kind='text'), bm25(chunks,3,8,4,1,1,0,0,0,0,0),path,start_line LIMIT 120`
 	args = append(args, strings.ToLower(strings.TrimSpace(input.Query)), strings.ToLower(strings.TrimSpace(input.Query)))
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return ToolResponse{}, err
 	}
-	type hit struct {
-		Path      string  `json:"path"`
-		Symbol    string  `json:"symbol"`
-		Signature string  `json:"signature"`
-		Kind      string  `json:"kind"`
-		Language  string  `json:"language"`
-		Start     int     `json:"start_line"`
-		End       int     `json:"end_line"`
-		Preview   string  `json:"preview"`
-		Hash      string  `json:"file_hash"`
-		Rank      float64 `json:"rank"`
-	}
-	var candidates []hit
+	var candidates []codeIndexHit
 	for rows.Next() {
-		var c hit
+		var c codeIndexHit
 		if err := rows.Scan(&c.Path, &c.Symbol, &c.Signature, &c.Kind, &c.Language, &c.Start, &c.End, &c.Preview, &c.Hash, &c.Rank); err != nil {
 			rows.Close()
 			return ToolResponse{}, err
@@ -169,7 +187,11 @@ func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 	if err != nil {
 		return ToolResponse{}, err
 	}
-	items := []hit{}
+	strategy := "lexical BM25 + exact identifiers"
+	if input.Strategy == "hybrid" {
+		candidates, strategy = hybridCandidates(ctx, db, input.Query, candidates, scoped, input.Kind)
+	}
+	items := []codeIndexHit{}
 	more := false
 	resultBytes := 0
 	verified := map[string]string{}
@@ -201,7 +223,7 @@ func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 			if err != nil {
 				return ToolResponse{}, err
 			}
-			digest = indexDigest(redact(string(raw)))
+			digest = indexDigest(string(raw))
 			verified[path] = digest
 		}
 		if digest != c.Hash {
@@ -221,7 +243,7 @@ func (*codeIndexTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 		resultBytes += len(encoded)
 		items = append(items, c)
 	}
-	return jsonToolResult(map[string]any{"results": items, "more": more || len(candidates) == 120, "updated_files": stats.Updated, "reused_files": stats.Reused, "scan_reads": stats.Read, "navigation_only": true}), nil
+	return jsonToolResult(map[string]any{"results": items, "more": more || len(candidates) == 120, "updated_files": stats.Updated, "reused_files": stats.Reused, "scan_reads": stats.Read, "strategy": strategy, "index_paused": paused, "navigation_only": true}), nil
 }
 func indexDigest(text string) string {
 	digest := sha256.Sum256([]byte(text))
@@ -260,7 +282,7 @@ func openCodeIndex(ctx context.Context, root string) (*sql.DB, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	for _, query := range []string{`PRAGMA journal_mode=MEMORY`, `PRAGMA secure_delete=ON`, `PRAGMA max_page_count=32768`, `CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, digest TEXT NOT NULL, stamp TEXT NOT NULL, verified INTEGER NOT NULL, policy TEXT NOT NULL)`, `CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5(path,symbol,signature,content,terms,kind UNINDEXED,language UNINDEXED,start_line UNINDEXED,end_line UNINDEXED,digest UNINDEXED)`} {
+	for _, query := range []string{`PRAGMA journal_mode=MEMORY`, `PRAGMA secure_delete=ON`, `PRAGMA max_page_count=32768`, fmt.Sprintf("PRAGMA cache_size=-%d", indexLimits().MemoryMiB*1024), `CREATE TABLE IF NOT EXISTS embeddings(key TEXT PRIMARY KEY,vector TEXT NOT NULL,at INTEGER NOT NULL)`, `CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, digest TEXT NOT NULL, stamp TEXT NOT NULL, verified INTEGER NOT NULL, policy TEXT NOT NULL)`, `CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5(path,symbol,signature,content,terms,kind UNINDEXED,language UNINDEXED,start_line UNINDEXED,end_line UNINDEXED,digest UNINDEXED)`} {
 		if _, err := db.ExecContext(ctx, query); err != nil {
 			db.Close()
 			return nil, err
@@ -269,12 +291,12 @@ func openCodeIndex(ctx context.Context, root string) (*sql.DB, error) {
 	return db, nil
 }
 
-type indexRefresh struct{ Updated, Reused, Read int }
+type indexRefresh struct{ Updated, Reused, Read, Pending int }
 
 // Metadata reuse only skips background reads; returned hits always verify content.
 func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefresh, error) {
 	var stats indexRefresh
-	paths, truncated, err := ripgrepFiles(ctx, root, "", 20000)
+	paths, truncated, err := ripgrepFiles(ctx, root, "", indexLimits().MaxFiles)
 	if err != nil {
 		return stats, fmt.Errorf("index file discovery: %w", err)
 	}
@@ -289,9 +311,12 @@ func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefres
 	if _, err = tx.ExecContext(ctx, `CREATE TEMP TABLE seen(path TEXT PRIMARY KEY)`); err != nil {
 		return stats, err
 	}
+	prioritizeIndexPaths(paths)
+	batchLimit, _ := ctx.Value(indexBatchLimitKey{}).(int)
+	processed := 0
 	secrets := credentialValues()
 	sort.Strings(secrets)
-	policy := indexDigest(strings.Join(secrets, "\x00"))
+	policy := indexDigest("parser-v3\x00" + strings.Join(secrets, "\x00"))
 	now, total := time.Now().Unix(), int64(0)
 	for _, path := range paths {
 		if err := ctx.Err(); err != nil {
@@ -311,11 +336,11 @@ func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefres
 		if err != nil {
 			return stats, err
 		}
-		if !info.Mode().IsRegular() || info.Size() > 256<<10 {
+		if !info.Mode().IsRegular() || info.Size() > indexLimits().MaxFileBytes {
 			continue
 		}
 		total += info.Size()
-		if total > 20<<20 {
+		if total > indexLimits().MaxTextBytes {
 			return stats, fmt.Errorf("workspace text exceeds 20 MiB index scan limit")
 		}
 		rel, _ := filepath.Rel(root, path)
@@ -330,10 +355,19 @@ func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefres
 		if _, err := tx.ExecContext(ctx, `INSERT INTO seen(path) VALUES(?)`, rel); err != nil {
 			return stats, err
 		}
+		force, _ := ctx.Value(indexRebuildKey{}).(bool)
+		if force {
+			oldPolicy = ""
+		}
 		if err == nil && stamp == oldStamp && policy == oldPolicy && now-verified >= 0 && now-verified < 60 {
 			stats.Reused++
 			continue
 		}
+		if batchLimit > 0 && processed >= batchLimit {
+			stats.Pending++
+			continue
+		}
+		processed++
 		raw, err := readFile(ctx, path)
 		if err != nil {
 			return stats, err
@@ -346,19 +380,19 @@ func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefres
 		if indexFileStamp(after) != stamp {
 			return stats, fmt.Errorf("file changed while indexing; retry search")
 		}
-		if len(raw) > 256<<10 || bytes.IndexByte(raw, 0) >= 0 || !utf8.Valid(raw) {
+		if int64(len(raw)) > indexLimits().MaxFileBytes || bytes.IndexByte(raw, 0) >= 0 || !utf8.Valid(raw) {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM seen WHERE path=?`, rel); err != nil {
 				return stats, err
 			}
 			continue
 		}
 		text := redact(string(raw))
-		digest := indexDigest(text)
-		if previous != digest {
+		digest := indexDigest(string(raw))
+		if previous != digest || oldPolicy != policy {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM chunks WHERE path=?`, rel); err != nil {
 				return stats, err
 			}
-			for _, chunk := range codeChunks(rel, text) {
+			for _, chunk := range codeChunksContext(ctx, rel, text) {
 				searchTerms := strings.Join(codeTerms(rel+" "+chunk.Symbol+" "+chunk.Signature+" "+chunk.Content), " ")
 				if _, err := tx.ExecContext(ctx, `INSERT INTO chunks(path,symbol,signature,content,terms,kind,language,start_line,end_line,digest) VALUES(?,?,?,?,?,?,?,?,?,?)`, rel, chunk.Symbol, chunk.Signature, chunk.Content, searchTerms, chunk.Kind, sourceLanguage(rel), chunk.Start, chunk.End, digest); err != nil {
 					return stats, err

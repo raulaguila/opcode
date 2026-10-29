@@ -97,3 +97,17 @@ func TestTerminalViewShowsOutputAndResetsBetweenSessions(t *testing.T) {
 	require.Empty(t, p.terminal.snapshot.Stdout)
 	require.Empty(t, p.terminal.selected)
 }
+
+func TestRunningTerminalPreviewDoesNotRequireFocus(t *testing.T) {
+	p := &chatPage{width: 80, height: 24, terminal: terminalPanel{selected: "process", snapshot: tools.ProcessSnapshot{ProcessInfo: tools.ProcessInfo{ID: "process", PTY: true, Running: true}, Stdout: "LIVE_READY\n"}}}
+	require.True(t, p.terminalVisible())
+	require.False(t, p.TerminalFocused())
+	require.Contains(t, p.terminalView(false), "LIVE_READY")
+	p.terminal.snapshot.Running = false
+	require.False(t, p.terminalVisible(), "finished commands must not leave a permanent preview")
+	p.terminal.snapshot.Running = true
+	p.height = 14
+	require.False(t, p.terminalVisible(), "small windows retain the composer space")
+	p.terminal.focused = true
+	require.True(t, p.terminalVisible(), "explicit full-screen terminal remains available")
+}

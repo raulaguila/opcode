@@ -11,6 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/raulaguila/opcode/internal/db"
 	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/raulaguila/opcode/internal/logging"
+	"github.com/raulaguila/opcode/internal/memoryindex"
 	"github.com/raulaguila/opcode/internal/pubsub"
 )
 
@@ -32,14 +34,19 @@ type Service interface {
 
 type service struct {
 	*pubsub.Broker[Message]
-	q db.Querier
+	q     db.Querier
+	index *SearchIndexer
 }
 
-func NewService(q db.Querier) Service {
-	return &service{
+func NewService(q db.Querier, options ...func(*service)) Service {
+	s := &service{
 		Broker: pubsub.NewBroker[Message](),
 		q:      q,
 	}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 func (s *service) Delete(ctx context.Context, id string) error {
@@ -50,6 +57,11 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	err = s.q.DeleteMessage(ctx, message.ID)
 	if err != nil {
 		return err
+	}
+	if s.index != nil {
+		if err := memoryindex.Remove(ctx, s.index.Directory, s.index.Project, "message:"+id); err != nil {
+			logging.Warn("Deleted message search projection could not be removed", "error_kind", fmt.Sprintf("%T", err))
+		}
 	}
 	s.Publish(pubsub.DeletedEvent, snapshotMessage(message))
 	return nil
@@ -79,6 +91,7 @@ func (s *service) Create(ctx context.Context, sessionID string, params CreateMes
 	if err != nil {
 		return Message{}, err
 	}
+	s.projectMessage(ctx, message)
 	s.Publish(pubsub.CreatedEvent, snapshotMessage(message))
 	return message, nil
 }
@@ -118,6 +131,7 @@ func (s *service) Update(ctx context.Context, message Message) error {
 		return err
 	}
 	message.UpdatedAt = time.Now().Unix()
+	s.projectMessage(ctx, message)
 	s.Publish(pubsub.UpdatedEvent, snapshotMessage(message))
 	return nil
 }

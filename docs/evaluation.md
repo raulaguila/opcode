@@ -118,3 +118,48 @@ schema ou modelo — e preserve os resultados reprovados como linha de base.
 A correção do arquivo não implica checks aprovados: uma fixture que exige apenas
 conteúdo pode passar com a tarefa `partial`. Uma avaliação de conclusão completa
 deve exigir também `task_status: completed` e `check_passed` para seus checks.
+
+## Comparação Opcode / Codaro / Crush
+
+O runner aceita um adapter executável explícito via JSON:
+
+```json
+{"name":"codaro","command":"/caminho/absoluto/driver","args":[]}
+```
+
+```sh
+opcode evaluate --live --case overview,localize \
+  --provider-config /caminho/provedor.json --context-window 16384 \
+  --adapter /caminho/adapter.json --output /tmp/codaro-report.json
+```
+
+Nomes aceitos: opcode/codaro/crush. O driver é integração explícita confiável,
+não uma chamada de ferramenta do modelo. Recebe `Job` em stdin: workspace
+descartável, config privada, caso e conditions (model, context_window, mode,
+fixture_sha256). Devolve `AdapterObservation`: mesmas conditions, response,
+version, tools, input_tokens/output_tokens/tool_calls (null se ausentes) e
+retrieved_paths, além de task (incluindo recibos de verificação) quando aplicável. Consulte os tipos em `internal/evaluation/adapter.go`.
+O adapter deve utilizar a API/CLI da versão instalada e respeitar o modo;
+o Opcode não instala nem modifica os outros projetos. Métricas/autorizações
+externas ficam identificadas como declaradas pelo adapter, não recibos nativos
+verificados. Condições divergentes são recusadas. Esse contrato comum não afirma
+que uma comparação real dos três aplicativos já foi realizada.
+
+No worker nativo, o relatório soma uso real do runtime (incluindo cache na
+entrada; título separado fica fora), contabiliza ferramentas e mantém os
+critérios originais. `expected_retrieval` (até 16 caminhos relativos) acrescenta
+recall e reciprocal rank da recuperação observada; não é avaliação semântica da
+resposta. Mesmo modelo, janela, fixture, prompts e permissões são necessários
+para comparar resultados. Tempos, memória/cache aquecido e versões também devem
+ser registrados pelo operador. O total de tokens fica ausente quando o provedor
+não informa uso; ausência não significa custo zero.
+
+Regressões locais adicionais cobrem continuidade durante um turno longo,
+instruções preservadas, arquivos alterados entre páginas, watcher/cancelamento,
+rebuild falho, expiração de schemas e requisitos explícitos de chamadas. O teste
+real `TestLiveOllamaCompoundRetrievalRequirements` verifica duas páginas,
+busca filtrada e leitura de fonte num único pedido, com arquivos preservados.
+
+Falhas de ferramenta podem aparecer como contagens por nome/categoria em
+`tool_failures`; `agent_failure_kind` identifica a categoria do encerramento.
+Não incluem argumentos, mensagens completas de erro nem payloads de provedores.

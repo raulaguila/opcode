@@ -28,13 +28,14 @@ type Suite struct {
 	Cases   []Case `json:"cases"`
 }
 type Case struct {
-	ID             string            `json:"id"`
-	Mode           string            `json:"mode"`
-	Files          map[string]string `json:"files"`
-	Prompts        []string          `json:"prompts"`
-	Checks         map[string]string `json:"checks,omitempty"`
-	Criteria       []Criterion       `json:"criteria"`
-	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+	ID                string            `json:"id"`
+	Mode              string            `json:"mode"`
+	Files             map[string]string `json:"files"`
+	Prompts           []string          `json:"prompts"`
+	Checks            map[string]string `json:"checks,omitempty"`
+	Criteria          []Criterion       `json:"criteria"`
+	TimeoutSeconds    int               `json:"timeout_seconds,omitempty"`
+	ExpectedRetrieval []string          `json:"expected_retrieval,omitempty"`
 }
 type Criterion struct {
 	Kind  string `json:"kind"`
@@ -47,6 +48,17 @@ type CriterionResult struct {
 	Passed *bool  `json:"passed"`
 }
 type CaseResult struct {
+	ToolFailures          map[string]int    `json:"tool_failures,omitempty"`
+	AgentFailureKind      string            `json:"agent_failure_kind,omitempty"`
+	Application           string            `json:"application,omitempty"`
+	ApplicationVersion    string            `json:"application_version,omitempty"`
+	ContextWindow         int64             `json:"context_window,omitempty"`
+	InputTokens           *int64            `json:"input_tokens,omitempty"`
+	OutputTokens          *int64            `json:"output_tokens,omitempty"`
+	ReportedToolCalls     *int              `json:"reported_tool_calls,omitempty"`
+	RetrievalRecall       *float64          `json:"retrieval_recall,omitempty"`
+	RetrievalMRR          *float64          `json:"retrieval_mrr,omitempty"`
+	MetricsOrigin         string            `json:"metrics_origin,omitempty"`
 	Trial                 int               `json:"trial,omitempty"`
 	DurationMS            int64             `json:"duration_ms,omitempty"`
 	ID                    string            `json:"id"`
@@ -71,6 +83,8 @@ type Report struct {
 	Notice        string       `json:"notice"`
 }
 type Options struct {
+	Adapter        *Adapter
+	ContextWindow  int64
 	Repeats        int
 	CaseIDs        []string
 	Live           bool
@@ -115,6 +129,14 @@ func (s Suite) Validate() error {
 			return fmt.Errorf("case identifiers must be unique ASCII names")
 		}
 		ids[c.ID] = true
+		if len(c.ExpectedRetrieval) > 16 {
+			return fmt.Errorf("at most 16 expected retrieval paths")
+		}
+		for _, path := range c.ExpectedRetrieval {
+			if !safePath(path) {
+				return fmt.Errorf("unsafe retrieval fixture path")
+			}
+		}
 		if c.Mode != "ask" && c.Mode != "plan" && c.Mode != "execute" {
 			return fmt.Errorf("case %s: mode must be ask, plan or execute", c.ID)
 		}
@@ -254,6 +276,12 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 	}
 	hash := sha256.Sum256(raw)
 	report := Report{Repeats: repeats, SelectedCases: options.CaseIDs, Version: 1, Mode: "offline_fixture_validation", SuiteSHA256: hex.EncodeToString(hash[:]), Notice: "Offline only validates fixture contracts and safe preparation. Null criteria were not run; this is not an agent quality score."}
+	if options.Adapter != nil && (!options.Live || options.ContextWindow < 4096) {
+		return report, fmt.Errorf("external adapters require --live and --context-window >=4096 for comparable conditions")
+	}
+	if options.ContextWindow < 0 || options.ContextWindow > 2000000 {
+		return report, fmt.Errorf("invalid explicit evaluation context")
+	}
 	if options.Live {
 		if options.ProviderConfig == "" {
 			return Report{}, fmt.Errorf("--live requires --provider-config; providers are never enabled implicitly")
@@ -309,10 +337,11 @@ func Run(ctx context.Context, suite Suite, raw []byte, options Options) (Report,
 }
 
 type Job struct {
-	Workspace      string `json:"workspace"`
-	Config         string `json:"config"`
-	Case           Case   `json:"case"`
-	AllowExecution bool   `json:"allow_execution"`
+	Conditions     Conditions `json:"conditions"`
+	Workspace      string     `json:"workspace"`
+	Config         string     `json:"config"`
+	Case           Case       `json:"case"`
+	AllowExecution bool       `json:"allow_execution"`
 }
 
 func runLive(ctx context.Context, base, workspace string, c Case, options Options) (CaseResult, error) {
@@ -340,6 +369,16 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 		}
 	}
 	isolated["agents"] = agentDefinitions
+	if options.ContextWindow > 0 {
+		var definitions map[string]map[string]any
+		if json.Unmarshal(source["models"], &definitions) != nil {
+			return CaseResult{}, fmt.Errorf("explicit comparison context requires model definitions")
+		}
+		for _, definition := range definitions {
+			definition["context_window"] = options.ContextWindow
+		}
+		isolated["models"] = definitions
+	}
 	isolated["data"] = map[string]any{"directory": filepath.Join(base, "state")}
 	isolated["security"] = map[string]any{"sandbox": "bubblewrap"}
 	isolated["shell"] = map[string]any{"path": "/bin/bash", "args": []string{"--noprofile", "--norc"}}
@@ -355,7 +394,11 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 		return CaseResult{}, err
 	}
 	jobPath := filepath.Join(base, "job.json")
-	if err := localstate.Write(jobPath, Job{Workspace: workspace, Config: configPath, Case: c, AllowExecution: options.AllowExecution}, 2<<20); err != nil {
+	fixtureRaw, _ := json.Marshal(c.Files)
+	fixtureHash := sha256.Sum256(fixtureRaw)
+	conditions := Conditions{Model: fmt.Sprint(agentDefinitions["coder"]["model"]), ContextWindow: options.ContextWindow, Mode: c.Mode, FixtureSHA256: hex.EncodeToString(fixtureHash[:])}
+	job := Job{Conditions: conditions, Workspace: workspace, Config: configPath, Case: c, AllowExecution: options.AllowExecution}
+	if err := localstate.Write(jobPath, job, 2<<20); err != nil {
 		return CaseResult{}, err
 	}
 	childCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout(c)+15)*time.Second)
@@ -383,6 +426,9 @@ func runLive(ctx context.Context, base, workspace string, c Case, options Option
 		}
 	}
 	command.Env = append(command.Env, "HOME="+base, "XDG_CONFIG_HOME="+filepath.Join(base, "config"))
+	if options.Adapter != nil {
+		return adapterCommand(childCtx, options.Adapter, workspace, job, command.Env)
+	}
 	var output boundedBuffer
 	command.Stdout = &output
 	command.Stderr = io.Discard

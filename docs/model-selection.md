@@ -13,7 +13,9 @@ Clique no modelo no rodapé para abrir o seletor. Contexto, origem e suporte a
 ferramentas aparecem ao selecionar uma linha. “Não informado” significa que o
 provedor não enviou essa capacidade; não é uma inferência pelo nome do modelo.
 `Ctrl+D` mostra ID, protocolo e outros detalhes. O formulário básico da conexão
-mostra nome, URL, variável da chave e Conexão ativa. `Ctrl+S` salva sem mudar
+mostra nome, URL, autenticação e Conexão ativa. Em **Autenticação**, use
+`←`/`→` para escolher **Chave direta**, **Variável de ambiente** ou **Sem autenticação**.
+Apenas o campo correspondente é exibido. `Ctrl+S` salva sem mudar
 esse estado; `Ctrl+G` salva e ativa explicitamente. Perfis desativados permanecem
 visíveis em Conexões, mas não entram no catálogo ativo. `Ctrl+A` abre os campos
 técnicos sem alterar valores escondidos.
@@ -284,9 +286,10 @@ pode reduzir a janela da requisição. Use `/context` para o orçamento efetivo 
 ## Servidor OpenAI compatible e TLS
 
 Em `/settings` → `N`, escolha **OpenAI compatible**, preencha a URL completa
-(normalmente terminada em `/v1`) e, quando necessário, o **nome** da variável de
-ambiente com a chave. Esse preset usa `backend: "local"` para o protocolo genérico,
-inclusive quando o servidor é remoto. O campo não recebe a chave literal.
+(normalmente terminada em `/v1`) e escolha a autenticação. **Chave direta** permite
+colar a chave no campo mascarado; **Variável de ambiente** recebe o nome da variável;
+**Sem autenticação** atende servidores que não exigem chave. Esse preset usa
+`backend: "local"` para o protocolo genérico, inclusive quando o servidor é remoto.
 `Ctrl+T` consulta o catálogo; salvar não executa uma inferência de teste.
 
 Veja [o exemplo de configuração](../examples/openai-compatible.example.json).
@@ -307,3 +310,34 @@ e API compatível (`chat_completions`, `responses` ou padrão). O protocolo nati
 
 A [revisão da janela de provedores](provider-ui-review.md) descreve as melhorias
 de UX incluídas e as próximas prioridades. Veja também a [validação desta mudança](evidence/2026-10-29-footer-provider-tls-validation.json).
+
+
+## Informar a API key diretamente
+
+No formulário de conexão, selecione **Autenticação → Chave direta** com `←`/`→`
+ou espaço, avance com `Tab`, cole a chave em **Chave da API** e salve com `Ctrl+S`.
+A chave fica mascarada durante a edição. Ela é armazenada como `apiKey` no arquivo
+ativo, com permissão `0600`; não é criptografada. Isso também funciona ao editar
+uma conexão existente. A interface preserva a chave já salva e permite substituí-la.
+
+Também pode configurar o JSON diretamente:
+
+```json
+{
+  "providerProfiles": {
+    "my-gateway": {
+      "name": "Meu gateway",
+      "backend": "local",
+      "baseURL": "https://gateway.example/v1",
+      "api": "chat_completions",
+      "apiKey": "SUA_CHAVE_AQUI"
+    }
+  }
+}
+```
+
+Escolher **Variável de ambiente** mantém apenas `apiKeyEnv` no arquivo, sem copiar
+o segredo resolvido. Escolher **Chave direta** grava apenas a chave digitada e remove
+a referência anterior. **Sem autenticação** remove ambos os campos. Trocar a opção
+não apaga o rascunho dos campos escondidos; só a opção escolhida é aplicada ao salvar.
+Não coloque uma configuração com chave literal no controle de versão.

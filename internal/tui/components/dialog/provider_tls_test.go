@@ -26,6 +26,7 @@ func TestCompatiblePresetTLSAndUniqueIdentity(t *testing.T) {
 	require.Equal(t, "openai-compatible-2", m.fields[0].Value())
 	require.Equal(t, "chat_completions", m.fields[5].Value())
 	require.Equal(t, "false", m.fields[9].Value())
+	m.fields[providerAuthField].SetValue("none")
 	m.fields[3].SetValue("https://gateway.invalid/v1")
 	m.fields[9].SetValue("true")
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})

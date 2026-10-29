@@ -80,6 +80,7 @@ func TestProviderBasicMouseFocusMatchesVisibleInput(t *testing.T) {
 	m := settingsDialog(t)
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 	m.edit(nil)
+	m.fields[providerAuthField].SetValue("environment")
 	for _, tc := range []struct {
 		label string
 		field int

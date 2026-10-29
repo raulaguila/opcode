@@ -15,6 +15,8 @@ func fieldOptions(label string) []string {
 		return []string{"false", "true"}
 	}
 	switch {
+	case label == "Authentication":
+		return []string{"none", "api_key", "environment"}
 	case strings.HasPrefix(label, "Backend ("):
 		return []string{"local", "openai", "anthropic", "gemini", "groq", "openrouter", "xai"}
 	case strings.HasPrefix(label, "API ("):
@@ -69,6 +71,12 @@ func choiceView(field textinput.Model, options []string) string {
 	}
 	v := field.Value()
 	switch v {
+	case "none":
+		v = config.Text("Sem autenticação", "No authentication")
+	case "api_key":
+		v = config.Text("Chave direta", "Direct API key")
+	case "environment":
+		v = config.Text("Variável de ambiente", "Environment variable")
 	case "true":
 		v = config.Text("Ligado", "On")
 	case "false":

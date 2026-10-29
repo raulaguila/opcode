@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-29",
+  "source_base": "b8d1713",
+  "source_revision": "Accompanying commit",
+  "scope": "Explicit direct-key, environment-reference and no-auth choices in provider form",
+  "binary_sha256": "1c052830656928165d38ffae837c6804253cc7859abf93149f5a17d767d32af5",
+  "checks": {
+    "go_test_race_all": "passed",
+    "final_dialog_copy_regressions": "passed after final explanatory text adjustment",
+    "go_vet_all": "passed",
+    "go_vet_integration_tui": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "regressions": [
+    "Pasted direct key is masked while focused and used as catalog Bearer credential",
+    "Direct key persists as apiKey, excludes apiKeyEnv and uses private 0600 file",
+    "Saved keys reopen intact, including legacy keys longer than 512 characters; rotation supported",
+    "Environment-to-direct switch does not copy a resolved environment secret",
+    "Direct-to-environment and no-auth switches remove inactive stored credential fields",
+    "Unsaved credential drafts survive Escape/resume and are not persisted",
+    "Form fits basic/advanced credential modes in Portuguese and English at 36x16, 60x20 and 100x30",
+    "Redacted config excludes saved direct key"
+  ],
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_changed": false,
+    "tls_defaults_changed": false,
+    "dependencies_added": false,
+    "real_credentials_used": false
+  },
+  "live": {
+    "status": "passed",
+    "model": "llama3.1:8b",
+    "provider": "local Ollama",
+    "sandbox": "bubblewrap",
+    "main_flow_seconds": 24.59,
+    "suite_seconds": 28.189,
+    "coverage": [
+      "model and mode dialogs",
+      "factual repository overview",
+      "question and answer",
+      "separate LSP approval",
+      "one exact Bash approval",
+      "live command output",
+      "PTY input and queued instructions",
+      "composer resize and compact themes"
+    ],
+    "source_fixtures_unchanged": true
+  },
+  "limits": [
+    "Direct keys are stored unencrypted in the selected private local config file",
+    "Authenticated catalog regression uses a fake key and mocked HTTP transport; no paid external API request was made",
+    "Live Ollama flow checks surrounding runtime; credential entry/mode switching are covered by dialog tests"
+  ]
+}

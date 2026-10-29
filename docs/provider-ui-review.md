@@ -25,17 +25,17 @@ não foram medidos.
   Só afeta a conexão explicitamente configurada.
 - IDs livres para novas conexões do mesmo preset, evitando sobrescrever uma
   conexão anterior ao adicionar outra.
-- Exemplos no campo de URL e indicação de que o campo de credencial recebe o
-  nome de uma variável de ambiente. Nenhum valor de segredo é mostrado.
+- Exemplos no campo de URL e escolha explícita de autenticação: chave direta
+  mascarada, variável de ambiente ou sem autenticação. Apenas o campo escolhido
+  é exibido. Chaves diretas usam `apiKey` no JSON privado, sem copiar valores do ambiente.
 - Formulário com aviso de TLS continua dentro de 60×20 no teste de geometria.
 
 ## Recomendações por prioridade
 
-1. **Alta — autenticação explícita.** Apresentar a escolha “Sem autenticação” ou
-   “Variável de ambiente”, com nome da variável e estado definido/ausente sem
-   mostrar seu valor. Preservar chaves legadas já existentes, identificando a
-   origem. Hoje um campo vazio e um placeholder opcional exigem interpretar a
-   configuração. Evidência: [`edit` e placeholders](../internal/tui/components/dialog/providers.go).
+1. **Alta — estado da credencial de ambiente.** A escolha explícita de chave
+   direta/ambiente/nenhuma já foi implementada. O próximo ganho é mostrar o
+   estado definido/ausente da variável, sem exibir seu valor. Evidência:
+   [`edit` e formulário](../internal/tui/components/dialog/providers.go).
 2. **Alta — erro no campo responsável.** Ao salvar uma URL, enum ou número
    inválido, focar e rolar até o campo, mantendo todos os valores preenchidos.
    Hoje `readProfile`, `test` e `save` devolvem o erro em uma nota geral, sem

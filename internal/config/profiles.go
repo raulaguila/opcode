@@ -138,7 +138,7 @@ func PreviewProviderProfile(id string, profile ProviderProfile) (ProviderProfile
 		return ProviderProfile{}, err
 	}
 	if p.APIKey == "" && profile.Backend != models.ProviderLocal && profile.Backend != models.ProviderBedrock && profile.Backend != models.ProviderVertexAI && profile.Backend != models.ProviderAzure {
-		return ProviderProfile{}, fmt.Errorf("set an API key environment variable for this backend")
+		return ProviderProfile{}, fmt.Errorf("set an API key or API key environment variable for this backend")
 	}
 	profile.Provider = p
 	return profile, nil

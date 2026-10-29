@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -18,6 +19,11 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
+)
+
+const (
+	providerAuthField = 10
+	providerKeyField  = 11
 )
 
 type OpenProviderDialogMsg struct{ Setup bool }
@@ -149,7 +155,18 @@ func (m *providerDialogCmp) edit(row *providerRow) tea.Cmd {
 			profile.APIKeyEnv = config.ProviderEnvironmentName(profile.Backend)
 		}
 	}
-	m.setFields([]string{"Profile ID", "Name", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API base URL", "API key environment variable", "API (empty/chat_completions/responses/ollama)", "Context window (0 uses catalog)", "Default output tokens (0 uses catalog)", "Connection active (true/false)", "TLS insecure (true/false)"}, []string{id, profile.Name, string(profile.Backend), profile.BaseURL, profile.APIKeyEnv, profile.API, strconv.FormatInt(profile.ContextWindow, 10), strconv.FormatInt(profile.DefaultMaxTokens, 10), strconv.FormatBool(!profile.Disabled), strconv.FormatBool(profile.TLSInsecure)})
+	auth := "none"
+	if profile.APIKeyEnv != "" {
+		auth = "environment"
+	} else if m.originalKey != "" || (profile.Backend != "" && profile.Backend != models.ProviderLocal) {
+		auth = "api_key"
+	}
+	m.setFields([]string{"Profile ID", "Name", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API base URL", "API key environment variable", "API (empty/chat_completions/responses/ollama)", "Context window (0 uses catalog)", "Default output tokens (0 uses catalog)", "Connection active (true/false)", "TLS insecure (true/false)", "Authentication", "API key"}, []string{id, profile.Name, string(profile.Backend), profile.BaseURL, profile.APIKeyEnv, profile.API, strconv.FormatInt(profile.ContextWindow, 10), strconv.FormatInt(profile.DefaultMaxTokens, 10), strconv.FormatBool(!profile.Disabled), strconv.FormatBool(profile.TLSInsecure), auth, ""})
+	m.fields[providerKeyField].EchoMode = textinput.EchoPassword
+	m.fields[providerKeyField].EchoCharacter = '•'
+	m.fields[providerKeyField].CharLimit = 65536
+	m.fields[providerKeyField].SetValue(m.originalKey)
+	m.baseline[providerKeyField] = m.originalKey
 	m.advanced = false
 	m.fields[0].Blur()
 	m.focus = 1
@@ -168,7 +185,7 @@ func (m *providerDialogCmp) preferences() tea.Cmd {
 func (m *providerDialogCmp) readProfile() (string, config.ProviderProfile, error) {
 	value := func(i int) string { return strings.TrimSpace(m.fields[i].Value()) }
 	id := value(0)
-	p := config.ProviderProfile{Name: value(1), Backend: models.ModelProvider(value(2)), Provider: config.Provider{BaseURL: value(3), APIKeyEnv: value(4), API: value(5), APIKey: m.originalKey}}
+	p := config.ProviderProfile{Name: value(1), Backend: models.ModelProvider(value(2)), Provider: config.Provider{BaseURL: value(3), API: value(5)}}
 	if m.originalID != "" && id != m.originalID {
 		return "", p, fmt.Errorf("profile ID cannot be changed; add a new connection instead")
 	}
@@ -192,6 +209,21 @@ func (m *providerDialogCmp) readProfile() (string, config.ProviderProfile, error
 	p.TLSInsecure, err = strconv.ParseBool(value(9))
 	if err != nil {
 		return "", p, fmt.Errorf("TLS insecure must be true or false")
+	}
+	switch value(providerAuthField) {
+	case "api_key":
+		p.APIKey = value(providerKeyField)
+		if p.APIKey == "" && !p.Disabled {
+			return "", p, errors.New(config.Text("Informe a chave da API ou escolha outra autenticação", "Enter the API key or choose another authentication method"))
+		}
+	case "environment":
+		p.APIKeyEnv = value(4)
+		if p.APIKeyEnv == "" && !p.Disabled {
+			return "", p, errors.New(config.Text("Informe o nome da variável de ambiente", "Enter the environment variable name"))
+		}
+	case "none":
+	default:
+		return "", p, fmt.Errorf("invalid authentication method")
 	}
 	return id, p, nil
 }
@@ -509,10 +541,8 @@ func (m *providerDialogCmp) View() string {
 			m.fields[4].Placeholder = config.Text("Nome da variável com a chave", "Variable holding the API key")
 			if m.fields[2].Value() == "local" {
 				m.fields[3].Placeholder = "https://server.example/v1"
-				m.fields[4].Placeholder = config.Text("Opcional: nome da variável", "Optional: variable name")
-			} else if m.originalKey != "" {
-				m.fields[4].Placeholder = config.Text("Chave já configurada", "API key already configured")
 			}
+			m.fields[providerKeyField].Placeholder = config.Text("Cole sua chave da API", "Paste your API key")
 		}
 		count := m.formRows()
 		indices := m.fieldIndices()
@@ -536,6 +566,9 @@ func (m *providerDialogCmp) View() string {
 		lines = append(lines, line(hint))
 	}
 	note := m.note
+	if note == "" && m.screen == "provider" && m.fields[providerAuthField].Value() == "api_key" {
+		note = config.Text("Ao salvar: chave no JSON local, sem criptografia.", "On save: key in local JSON, unencrypted.")
+	}
 	if m.testing {
 		note = "Testing connection… Esc cancels."
 	}
@@ -574,11 +607,24 @@ func (m *providerDialogCmp) fieldCount() int {
 }
 
 func (m *providerDialogCmp) fieldIndices() []int {
-	if m.screen == "provider" && !m.advanced {
-		if len(m.fields) > 9 && (m.fields[5].Value() == "chat_completions" || m.fields[5].Value() == "responses" || m.fields[9].Value() == "true") {
-			return []int{1, 3, 4, 9, 8}
+	if m.screen == "provider" {
+		indices := []int{1, 3, providerAuthField}
+		if m.advanced {
+			indices = []int{0, 1, 2, 3, providerAuthField}
 		}
-		return []int{1, 3, 4, 8}
+		switch m.fields[providerAuthField].Value() {
+		case "api_key":
+			indices = append(indices, providerKeyField)
+		case "environment":
+			indices = append(indices, 4)
+		}
+		if m.advanced {
+			indices = append(indices, 5, 6, 7)
+		}
+		if m.advanced || m.fields[5].Value() == "chat_completions" || m.fields[5].Value() == "responses" || m.fields[9].Value() == "true" {
+			indices = append(indices, 9)
+		}
+		return append(indices, 8)
 	}
 	indices := make([]int, len(m.fields))
 	for i := range indices {

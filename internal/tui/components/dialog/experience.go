@@ -118,6 +118,9 @@ func (m *providerDialogCmp) experienceUpdate(msg tea.Msg) (tea.Cmd, bool) {
 				m.fields[2].SetValue(string(p.Profile.Backend))
 				m.fields[3].SetValue(p.Profile.BaseURL)
 				m.fields[4].SetValue(p.Profile.APIKeyEnv)
+				if p.Profile.Backend != models.ProviderLocal || p.ID == "openai-compatible" {
+					m.fields[providerAuthField].SetValue("api_key")
+				}
 				m.fields[5].SetValue(p.Profile.API)
 				m.fields[6].SetValue(fmt.Sprint(p.Profile.ContextWindow))
 				m.fields[7].SetValue(fmt.Sprint(p.Profile.DefaultMaxTokens))

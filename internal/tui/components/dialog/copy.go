@@ -15,6 +15,7 @@ func interfaceCopy(english string) string {
 		return "› " + interfaceCopy(strings.TrimPrefix(english, "› "))
 	}
 	portuguese := map[string]string{
+		"Authentication": "Autenticação", "API key": "Chave da API",
 		"Connection active": "Conexão ativa", "Backend": "Provedor", "Transport": "Transporte", "Disabled": "Desativado", "Initial mode": "Modo inicial", "Resume most recent session": "Retomar conversa recente", "Show process by default": "Mostrar processo ao iniciar", "OAuth enabled": "OAuth ativo",
 		"previous theme": "tema anterior", "next theme": "próximo tema", "select theme": "escolher tema", "switch options": "trocar opção", "confirm": "confirmar", "yes": "sim", "no": "não", "toggle selection": "trocar seleção", "yes/no": "sim/não", "delete attachment at index i": "remover anexo i", "cancel delete mode": "cancelar remoção", "delete all attchments": "remover todos os anexos",
 		"Ctrl+P settings · Ctrl+A role · Ctrl+R catalog · Ctrl+T probe · Esc":             "Ctrl+P ajustes · Ctrl+A função · Ctrl+R catálogo · Ctrl+T teste · Esc",

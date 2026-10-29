@@ -67,7 +67,9 @@ será aberta.
 
 Sem modelo configurado, a abertura interativa inicia a configuração guiada. `N` cadastra
 uma conexão com um preset; `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha então o modelo
-pelo seletor. A última etapa oferece começar a conversar; detalhes da configuração
+pelo seletor. A autenticação aceita chave direta em campo mascarado, variável de
+ambiente ou nenhuma chave; [veja como configurar](docs/model-selection.md#informar-a-api-key-diretamente).
+A última etapa oferece começar a conversar; detalhes da configuração
 e testes opcionais com confirmação ficam em uma ação secundária. `/setup` reabre
 o fluxo. A barra inferior reúne modo, comandos, contexto, velocidade da última resposta e modelo; processo e lateral
 começam recolhidos. `~/.opcode/config.json` é reutilizado entre projetos;

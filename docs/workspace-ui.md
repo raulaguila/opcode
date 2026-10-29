@@ -47,9 +47,10 @@ quando exigem atenção. O campo mantém três linhas iniciais.
 
 Sem um modelo, a primeira abertura mostra Settings. Salvar uma conexão ativa leva ao
 seletor. Conexões desativadas aparecem identificadas na lista e continuam
-desativadas ao salvar; `Ctrl+G` salva e ativa explicitamente. Credenciais usam referências a variáveis de ambiente, sem exibir seus
-valores. Provedores/perfis e preferências são salvos para a próxima abertura;
-O formulário básico mostra nome, URL, variável da chave e **Conexão ativa**; `Ctrl+A` revela ID,
+desativadas ao salvar; `Ctrl+G` salva e ativa explicitamente. Autenticação permite chave direta mascarada, referência a variável de ambiente
+ou nenhuma chave. A chave direta é gravada no JSON local com permissão `0600`;
+a referência de ambiente não grava o segredo resolvido. Provedores/perfis e preferências são salvos para a próxima abertura;
+O formulário básico mostra nome, URL, autenticação e **Conexão ativa**; `Ctrl+A` revela ID,
 backend, protocolo e limites. Nas APIs compatíveis, o formulário básico também
 mostra **TLS inseguro**, desligado por padrão, com aviso ao habilitar. MCP usa os ajustes na chamada seguinte, enquanto servidores LSP ativos exigem
 reinício. Testes MCP/LSP pedem aprovação, têm prazo e encerram o cliente.

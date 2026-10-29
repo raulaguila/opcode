@@ -514,3 +514,9 @@ geral. Ver [comparação e limites](comparison-2026-10-29.md) e
 O cofre foi testado com backend injetado, inclusive quit e rollback assíncrono;
 nenhum cofre pessoal foi acessado. Compilação cruzada Windows/macOS e ZIP foram
 verificados; a execução nativa desses sistemas pertence aos jobs de CI.
+
+Os workflows também passaram no `actionlint v1.7.12` (sintaxe e contextos de
+Actions). Caminhos temporários do runner são exportados no primeiro passo, antes
+do setup-go; não usam `runner` no `env` do job, onde esse contexto não existe.
+O script de exportação foi exercitado com caminho Windows contendo espaços.
+Essa correção não alterou código da aplicação nem critérios de avaliação.

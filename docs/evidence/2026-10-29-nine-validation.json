@@ -69,6 +69,16 @@
       "criteria_changed": false,
       "reruns_to_improve_score": 0,
       "report": "2026-10-29-nine-comparison.json"
+    },
+    {
+      "command": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -shellcheck= -pyflakes= .github/workflows/*.yml",
+      "status": "passed",
+      "note": "Temporary development validator; no application dependency added. Validates Actions contexts as well as YAML."
+    },
+    {
+      "command": "isolated runtime-path export script with a Windows path containing spaces",
+      "status": "passed",
+      "note": "Six literal GITHUB_ENV entries; no real environment or credentials modified."
     }
   ],
   "limits": [
@@ -77,5 +87,6 @@
     "Windows PTY remains explicitly unavailable; non-Linux default sandbox refuses command execution.",
     "Public search availability is not proven by controlled HTTP tests.",
     "Fixed application order, cache state and different policies prevent causal performance or general superiority claims."
-  ]
+  ],
+  "ci_context_fix": "The first push exposed runner.temp being unavailable in job-level env. Runner paths are now exported after job startup, before setup-go. Application code and evaluation criteria unchanged."
 }

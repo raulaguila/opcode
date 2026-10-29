@@ -44,14 +44,17 @@ jobs:
         shell: bash
     env:
       CGO_ENABLED: "0"
-      TMPDIR: ${{ runner.temp }}
-      TMP: ${{ runner.temp }}
-      TEMP: ${{ runner.temp }}
-      GOTMPDIR: ${{ runner.temp }}
-      GOCACHE: ${{ runner.temp }}/opcode-native-go-cache
-      GOMODCACHE: ${{ runner.temp }}/opcode-native-go-mod
     steps:
       - uses: actions/checkout@v4
+      # runner context is unavailable in jobs.<id>.env. Export its paths after
+      # the runner starts, before setup-go discovers the cache locations.
+      - name: Configure isolated runtime paths
+        run: |
+          for key in TMPDIR TMP TEMP GOTMPDIR; do
+            printf '%s=%s\n' "$key" "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          done
+          printf 'GOCACHE=%s/opcode-native-go-cache\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'GOMODCACHE=%s/opcode-native-go-mod\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

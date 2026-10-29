@@ -82,8 +82,6 @@ type recoveryState struct {
 	resolved bool
 }
 
-var writeClipboard = func(text string) error { _, err := clipboard.Copy(context.Background(), text, nil); return err }
-
 type TerminalClipboardMsg struct {
 	Sequence string
 	Session  string
@@ -644,12 +642,19 @@ func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 			p.workspace.loading = true
 			return util.CmdHandler(TerminalClipboardMsg{Sequence: sequence, Session: p.session.ID, Request: p.workspace.seq})
 		}
-		return p.workspaceAsync(func(context.Context) (string, bool, error) {
-			if err := writeClipboard(text); err != nil {
-				return "", false, fmt.Errorf(config.Text("clipboard indisponível; escolha Selecionar texto: %w", "clipboard unavailable; choose Select text: %w"), err)
+		p.workspace.seq++
+		p.workspace.loading = true
+		id, seq := p.session.ID, p.workspace.seq
+		return util.CmdHandler(util.CopyTextMsg{Text: text, Result: func(confirmed bool, err error) tea.Msg {
+			body := config.Text("Conteúdo copiado para a área de transferência.", "Content copied to clipboard.")
+			if err != nil {
+				err = fmt.Errorf(config.Text("clipboard indisponível; use Shift+arrastar ou Selecionar texto: %w", "clipboard unavailable; use Shift+drag or Select text: %w"), err)
 			}
-			return config.Text("Conteúdo copiado para a área de transferência.", "Content copied to clipboard."), false, nil
-		})
+			if !confirmed {
+				body = config.Text("Cópia enviada ao terminal; recebimento não confirmado. Selecionar texto continua disponível.", "Copy sent to terminal; receipt unconfirmed. Text selection remains available.")
+			}
+			return WorkspaceResultMsg{session: id, seq: seq, body: body, err: err}
+		}})
 	}
 	return nil
 }

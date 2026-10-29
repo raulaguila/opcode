@@ -14,6 +14,7 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -100,13 +101,11 @@ func TestContextPanelIgnoresStaleResultsAndPreventsRepeatedOperations(t *testing
 }
 func TestClipboardFailureKeepsSelectableTextAndRecoveryPersists(t *testing.T) {
 	p, _ := workspacePage(t)
-	original := writeClipboard
-	writeClipboard = func(string) error { return errors.New("unavailable") }
-	t.Cleanup(func() { writeClipboard = original })
 	p.openResponseActions("answer\n```go\nfmt.Println(1)\n```\n")
 	require.Len(t, p.workspace.actions, 3)
 	cmd := p.workspaceChoose()
-	p.workspaceResult(cmd().(WorkspaceResultMsg))
+	request := cmd().(util.CopyTextMsg)
+	p.workspaceResult(request.Result(false, errors.New("unavailable")).(WorkspaceResultMsg))
 	require.Contains(t, p.workspace.note, config.Text("Selecionar texto", "Select text"))
 	p.workspace.selected = 1
 	p.workspaceChoose()

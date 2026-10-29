@@ -141,13 +141,19 @@ func (m statusCmp) metrics(state util.FooterState) string {
 	}
 	text := used + "/" + compactTokens(state.ContextWindow) + " ctx"
 	if m.width >= 110 {
+		if state.Busy && state.AwaitingModel {
+			return text + " · " + config.Text("Aguardando modelo…", "Awaiting model…")
+		}
+		if state.Busy && state.SpeedLive && state.TokensPerSecond <= 0 {
+			return text + " · " + config.Text("Gerando…", "Generating…")
+		}
 		rate := "—"
-		if !state.Busy && state.TokensPerSecond > 0 && !math.IsNaN(state.TokensPerSecond) && !math.IsInf(state.TokensPerSecond, 0) {
+		if (!state.Busy || state.SpeedLive) && state.TokensPerSecond > 0 && !math.IsNaN(state.TokensPerSecond) && !math.IsInf(state.TokensPerSecond, 0) {
 			rate = fmt.Sprintf("%.1f", state.TokensPerSecond)
 			if state.TokensPerSecond > 9999 {
 				rate = fmt.Sprintf("%.3g", state.TokensPerSecond)
 			}
-			if state.SpeedEstimated {
+			if state.SpeedEstimated || state.SpeedLive {
 				rate = "~" + rate
 			}
 		}

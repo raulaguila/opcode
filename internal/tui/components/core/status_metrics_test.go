@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/stretchr/testify/require"
 )
@@ -39,4 +40,17 @@ func TestFooterMetricsResizeAndClicksMatchVisibleCells(t *testing.T) {
 	state.Busy = false
 	state.SpeedEstimated = true
 	require.Contains(t, ansi.Strip(m.ViewFor(state)), "~24.5 tok/s")
+	state.Busy, state.SpeedLive = true, true
+	require.Contains(t, ansi.Strip(m.ViewFor(state)), "~24.5 tok/s")
+	state.AwaitingModel = true
+	require.NotContains(t, ansi.Strip(m.ViewFor(state)), "24.5 tok/s")
+	require.Contains(t, ansi.Strip(m.ViewFor(state)), config.Text("Aguardando modelo…", "Awaiting model…"))
+	state.AwaitingModel, state.TokensPerSecond = false, 0
+	require.Contains(t, ansi.Strip(m.ViewFor(state)), config.Text("Gerando…", "Generating…"))
+	for _, width := range []int{60, 80, 110, 120, 180} {
+		m.width = width
+		view := m.ViewFor(state)
+		require.Equal(t, 1, lipgloss.Height(view))
+		require.Equal(t, width, lipgloss.Width(view))
+	}
 }

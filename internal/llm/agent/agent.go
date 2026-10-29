@@ -90,6 +90,7 @@ type agent struct {
 	compactSessions   map[string]bool
 	tokenObservations map[string]tokenObservation
 	usageMetrics      map[string]UsageMetrics
+	streamUsages      map[string]*streamUsage
 }
 
 func NewAgent(
@@ -580,6 +581,8 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	providerStarted := time.Now()
 	stopProvider := a.startPhase(sessionID, "provider")
 	defer stopProvider()
+	streamUsage := a.startStreamUsage(sessionID, runProvider(a, run).Model().ID)
+	defer a.finishStreamUsage(sessionID, streamUsage)
 	eventChan := timedProvider(runProvider(a, run)).StreamResponse(ctx, requestHistory, a.exposedTools(run))
 
 	var err error
@@ -631,6 +634,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	firstGenerated := false
 	// Process each event in the stream.
 	for event := range eventChan {
+		a.observeStreamUsage(streamUsage, event)
 		if !firstGenerated && generatedEvent(event) {
 			a.observePhase(sessionID, "first_token", time.Since(providerStarted))
 			firstGenerated = true
@@ -655,6 +659,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	}
 
 	stopProvider()
+	a.finishStreamUsage(sessionID, streamUsage) // Tools and approvals are not generation.
 	if ctx.Err() != nil {
 		a.finishMessage(context.Background(), &assistantMsg, message.FinishReasonCanceled)
 		return assistantMsg, nil, ctx.Err()
@@ -1155,6 +1160,7 @@ func createAgentProviderFor(agentName config.AgentName, agentConfig config.Agent
 	adaptiveWindow := false
 	if learned := learnedContext(model); learned >= 4096 && (model.ContextWindow <= 0 || learned < model.ContextWindow) {
 		model.ContextWindow = learned
+		model.ContextSource = "learned after provider context/memory failure"
 		adaptiveWindow = true
 	}
 

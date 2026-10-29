@@ -167,6 +167,16 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		if p.terminal.focused {
 			return p, nil
 		}
+		if selection, ok := p.transcript.(chat.SelectionControl); ok && selection.SelectionDragging() &&
+			(msg.Action == tea.MouseActionMotion || msg.Action == tea.MouseActionRelease) {
+			// Capture the drag even when its endpoint leaves the message panel.
+			if p.height >= 12 {
+				msg.Y--
+			}
+			updated, cmd := p.messages.Update(msg)
+			p.messages = updated.(layout.Container)
+			return p, cmd
+		}
 		if p.height >= 12 {
 			if msg.Y == 0 {
 				return p, nil
@@ -200,6 +210,11 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			updated, cmd := p.messages.Update(msg)
 			p.messages = updated.(layout.Container)
 			return p, cmd
+		}
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			if selection, ok := p.transcript.(chat.SelectionControl); ok {
+				selection.ClearSelection()
+			}
 		}
 		return p, nil
 	case dialog.CompletionDialogCloseMsg:

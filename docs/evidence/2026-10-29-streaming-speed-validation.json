@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-29",
+  "base_commit": "8d5a28a",
+  "scope": "Show estimated generation speed before provider completion",
+  "behavior": {
+    "before_output": "Awaiting model; no previous-call speed",
+    "live_estimate": "Received UTF-8 output bytes / 4 / seconds since first output, marked with ~",
+    "warmup": "Generating for the first 250 ms to suppress the initial packet spike",
+    "refresh": "Existing 100 ms UI tick; no extra network requests or tokenizer dependencies",
+    "output": "Content, thinking and tool-input deltas when supplied by the adapter; completion is not counted again",
+    "final": "Provider count/duration replaces the live estimate; observed client duration remains marked with ~ when provider duration is unavailable",
+    "cleanup": "Per-session and per-model; reset for each provider attempt; cleared on completion, cancellation, error and disconnect; no generation rate during tools or approvals",
+    "privacy": "Streaming metrics retain only model identity, byte count and timing, never generated text",
+    "limitation": "A provider or adapter that buffers output until completion cannot supply a live estimate; the UI waits rather than inventing tokens. Byte estimates vary by model and language."
+  },
+  "validation": {
+    "focused_race": "passed: stream lifecycle, packet-independent counts, thinking deduplication, footer state, layout and configurable-agent forwarding",
+    "affected_suite": {
+      "command": "go test -race -p 1 ./internal/llm/agent ./internal/tui/... ./internal/app",
+      "result": "passed"
+    },
+    "vet": "passed: affected production packages and integration-tagged TUI",
+    "build": "passed: CGO_ENABLED=0 go build",
+    "binary_sha256": "9c94613a63c6dfc4b135e931f4911d9ed657e96806d60aba868cd22dbca4c518",
+    "controlled_pty": {
+      "test": "TestPTYStreamingSpeedBeforeCompletion",
+      "result": "passed",
+      "test_seconds": 4.87,
+      "transport": "Shipped binary in a real PTY; paced native Ollama HTTP fixture on loopback",
+      "proof": "Awaiting state before first output; estimated speed while server still withheld completion; further streamed output; final eval_count=40 / eval_duration=2s displayed as 20.0 tok/s without ~",
+      "test_correction": "Initial assertion incorrectly matched SPEED_DONE in the user's prompt. Replaced with an atomic server-completion marker to prove the response was still open."
+    },
+    "real_ollama_pty": {
+      "test": "TestLiveOllamaPTYUI",
+      "model": "llama3.1:8b",
+      "result": "passed",
+      "test_seconds": 38.99,
+      "scope": "Real project explanation with citations, provider navigation, permission prompts, approved Bash command, live command output, PTY input and queued instructions. This test does not assert that every native Ollama reply streams partial content."
+    },
+    "repository_wide_gate": "Not rerun after this focused change. The previous full standard/race runs had parser and terminal timing failures; see 2026-10-29-active-context-validation.json. No deadlines were increased or tests skipped to obtain a pass."
+  },
+  "preserved": [
+    "Permission checks",
+    "Citation validation and answer repair",
+    "Provider request and tool-execution behavior",
+    "Existing pending active-context changes"
+  ],
+  "publication_at_validation": "Local changes; no commit or push while the repository-wide gate remains unresolved",
+  "subsequent_validation": "2026-10-29-prepush-validation.json"
+}

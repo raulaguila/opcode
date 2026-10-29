@@ -14,26 +14,38 @@ import (
 func (p *chatPage) FooterState() util.FooterState {
 	state := util.FooterState{Mode: string(p.mode()), Terminal: p.terminal.focused}
 	if p.app != nil && p.app.CoderAgent != nil {
+		state.Busy = p.app.CoderAgent.IsSessionBusy(p.session.ID)
 		model := models.Model{}
 		if cfg := config.Get(); cfg != nil {
 			model = config.ModelWithProviderDefaults(models.SupportedModels[cfg.Agents[config.AgentCoder].Model])
 		}
 		state.ContextWindow = model.ContextWindow
-		if usage, ok := p.app.CoderAgent.(agent.UsageControl); ok && p.session.ID != "" {
+		if usage, ok := p.app.CoderAgent.(agent.UsageControl); ok {
 			if metrics, err := usage.Usage(context.Background(), p.session.ID); err == nil {
+				if metrics.ActiveModel == model.ID && metrics.ActiveContextWindow > 0 {
+					state.ContextWindow = metrics.ActiveContextWindow
+				}
 				if metrics.ContextWindow > 0 {
 					state.ContextWindow = metrics.ContextWindow
 					state.ContextTokens = metrics.ContextTokens
 					state.ContextKnown = true
 					state.ContextEstimated = metrics.ContextEstimated
 				}
-				if metrics.LastModel == model.ID && metrics.LastOutputTokens > 0 && metrics.LastOutputDurationNS > 0 {
+				if state.Busy && metrics.StreamActive && metrics.StreamModel == model.ID {
+					state.AwaitingModel = metrics.StreamOutputBytes == 0
+					state.SpeedLive = !state.AwaitingModel
+					state.SpeedEstimated = true
+					// A byte heuristic is independent of transport chunk sizes. Wait
+					// briefly to avoid a spike at the first chunk; no tokenizer claim.
+					if metrics.StreamDurationNS >= int64(250*time.Millisecond) {
+						state.TokensPerSecond = float64(metrics.StreamOutputBytes) / 4 * 1e9 / float64(metrics.StreamDurationNS)
+					}
+				} else if !state.Busy && metrics.LastModel == model.ID && metrics.LastOutputTokens > 0 && metrics.LastOutputDurationNS > 0 {
 					state.TokensPerSecond = float64(metrics.LastOutputTokens) * 1e9 / float64(metrics.LastOutputDurationNS)
 					state.SpeedEstimated = metrics.LastDurationSource != "provider"
 				}
 			}
 		}
-		state.Busy = p.app.CoderAgent.IsSessionBusy(p.session.ID)
 		if queue, ok := p.app.CoderAgent.(agent.QueueControl); ok {
 			state.Pending = len(queue.QueuedInstructions(p.session.ID))
 		}

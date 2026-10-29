@@ -25,10 +25,13 @@ func OSC52(text string) (string, error) {
 
 // Copy never starts a clipboard process on the SSH server. OSC 52 has no receipt.
 func Copy(ctx context.Context, text string, terminal io.Writer) (confirmed bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if len(text) > MaxBytes {
 		return false, fmt.Errorf("copy exceeds 64 KiB; use text selection")
 	}
-	if Remote() {
+	copyToTerminal := func() (bool, error) {
 		if terminal == nil {
 			return false, fmt.Errorf("terminal output unavailable; use text selection")
 		}
@@ -36,15 +39,27 @@ func Copy(ctx context.Context, text string, terminal io.Writer) (confirmed bool,
 		_, err = io.WriteString(terminal, sequence)
 		return false, err
 	}
+	if Remote() {
+		return copyToTerminal()
+	}
 	name, args := nativeHelper()
 	if name == "" {
+		if terminal != nil {
+			return copyToTerminal()
+		}
 		return false, fmt.Errorf("native clipboard unavailable; use text selection")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	nativeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, name, args...)
+	command := exec.CommandContext(nativeCtx, name, args...)
 	command.Stdin = strings.NewReader(text)
 	if command.Run() != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		if terminal != nil {
+			return copyToTerminal()
+		}
 		return false, fmt.Errorf("native clipboard failed or timed out; use text selection")
 	}
 	return true, nil

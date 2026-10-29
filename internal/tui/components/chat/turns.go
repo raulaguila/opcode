@@ -12,7 +12,6 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
-	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
 type ResponseActionsMsg struct{ Text string }
@@ -55,6 +54,9 @@ func (m *messagesCmp) groups() []turnGroup {
 	return groups
 }
 func (m *messagesCmp) renderTurns() {
+	if m.selection.engaged() {
+		return // Preserve the reader's selected cells while messages keep updating.
+	}
 	if m.width < 1 {
 		return
 	}
@@ -183,14 +185,17 @@ func (m *messagesCmp) renderTurns() {
 			m.hits = append(m.hits, transcriptHit{start, pos - 1, "actions", v.ID, v.Content().String()})
 			if gi == len(groups)-1 && final == finals[len(finals)-1] && !m.IsAgentWorking() {
 				start = pos
-				appendText(v.ID+":actions", base.Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text("Ctrl+Y · copiar / abrir fontes", "Ctrl+Y · copy / open sources"), m.width, "…")), toolMessageType)
+				appendText(v.ID+":actions", base.Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text("Arraste para selecionar · Ctrl+C copia · Ctrl+Y ações", "Drag to select · Ctrl+C copies · Ctrl+Y actions"), m.width, "…")), toolMessageType)
 				m.hits = append(m.hits, transcriptHit{start, pos - 1, "actions", v.ID, v.Content().String()})
 			}
 		}
 	}
-	m.viewport.SetContent(base.Width(m.width).Render(strings.Join(rendered, "\n")))
+	content := base.Width(m.width).Render(strings.Join(rendered, "\n"))
+	m.transcriptLines = strings.Split(content, "\n")
+	m.viewport.SetContent(content)
 }
 func (m *messagesCmp) toggleProcess(id string) {
+	m.ClearSelection()
 	if m.expanded == nil {
 		m.expanded = map[string]bool{}
 		m.toggled = map[string]bool{}
@@ -209,6 +214,7 @@ func (m *messagesCmp) toggleProcess(id string) {
 }
 func (m *messagesCmp) transcriptMouse(msg tea.MouseMsg) tea.Cmd {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		m.selectionMouse(msg)
 		return nil
 	}
 	// The message container adds a top and left padding cell.
@@ -219,12 +225,14 @@ func (m *messagesCmp) transcriptMouse(msg tea.MouseMsg) tea.Cmd {
 				m.toggleProcess(hit.id)
 				return nil
 			}
-			return util.CmdHandler(ResponseActionsMsg{hit.text})
 		}
 	}
 	if m.unread && msg.Y >= m.height-2 {
+		m.ClearSelection()
 		m.unread = false
 		m.viewport.GotoBottom()
+		return nil
 	}
+	m.selectionMouse(msg)
 	return nil
 }

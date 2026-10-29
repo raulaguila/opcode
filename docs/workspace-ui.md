@@ -129,17 +129,32 @@ Ao rolar para cima, novas mensagens não puxam a leitura para o fim. Use
 `Alt+PgUp`/`Alt+PgDn` rolam meia página; `Ctrl+U`, `Ctrl+D` e `Ctrl+End` ficam
 com a edição do rascunho, sem mover a conversa.
 
-Clique na resposta, use `Ctrl+Y` ou `/actions` para abrir ações: copiar texto, copiar blocos
+Clique simples na resposta não abre menus. Arraste o botão esquerdo para destacar
+um trecho, inclusive entre linhas. Selecionar não copia automaticamente.
+`Ctrl+C` copia somente o trecho destacado e mantém o destaque; `Esc` limpa a
+seleção antes de cancelar uma tarefa. Sem seleção, os atalhos normais continuam
+valendo. No PTY, `Ctrl+C` continua interrompendo o processo filho. Durante uma
+seleção, a área de leitura fica estável enquanto os novos dados chegam; ao limpar,
+o conteúdo é atualizado. Redimensionar ou trocar de conversa limpa a seleção,
+pois as coordenadas das linhas mudam. `Shift+arrastar` permite usar a seleção
+nativa nos terminais que oferecem esse gesto; nesse caso, use a cópia do próprio
+terminal, como `Ctrl+Shift+C`.
+
+Use `Ctrl+Y` ou `/actions` para abrir ações: copiar texto, copiar blocos
 de código, selecionar texto e abrir arquivos citados quando encontrados. A
 prévia de arquivo usa as permissões normais e não conta como leitura do agente
-para permitir uma edição. Se a área de transferência estiver indisponível,
-use a opção de selecionar texto.
+para permitir uma edição. Quando o clipboard gráfico local não está disponível
+ou falha, a cópia solicita o clipboard do terminal via OSC 52 e informa que o
+recebimento não é confirmado. Em SSH, usa somente essa rota, sem executar helpers
+no servidor. Se o terminal também bloquear a cópia, use a seleção nativa com
+`Shift+arrastar` ou a opção de selecionar texto.
 Uma indicação discreta abaixo da última resposta concluída torna essas ações
 visíveis. Blocos de prosa usam até 72 colunas por padrão; `tui.proseWidth`
 permite ajustar de 1 a 240, com `0` restaurando o padrão. Código e tabelas
 conservam a largura disponível, mesmo em respostas mistas. Listas e citações
 em bloco que contêm código/tabelas mantêm sua estrutura e largura. Links de
-referência são resolvidos no documento completo. O texto copiado é integral.
+referência são resolvidos no documento completo. A ação Copiar resposta usa o
+texto integral; `Ctrl+C` com seleção usa somente o trecho destacado na tela.
 
 O terminal mantém os controles existentes: `Ctrl+P` abre/fecha o painel,
 `Ctrl+N` cria um PTY, `Alt+←`/`Alt+→` alterna processos e `Ctrl+X` encerra o processo
@@ -435,8 +450,9 @@ ou tecnologias assistivas. As evidências estão em
 
 À esquerda do modelo, a barra mostra, por exemplo,
 `~8k/32k ctx · 24.5 tok/s`. Clique na informação de contexto para abrir `/context`.
-O denominador é a janela efetiva do pedido quando disponível; antes disso, usa o
-limite configurado/conhecido do modelo. Não é uma indicação de memória livre.
+O denominador é a janela efetiva do pedido quando disponível; antes da primeira
+mensagem, usa a janela do provedor vinculado ao agente. Sem agente ativo, usa o
+limite configurado/conhecido como referência. Não é uma indicação de memória livre.
 `k` representa 1024 tokens, como no seletor de modelos.
 
 O numerador representa a entrada do último pedido: sem `~`, veio do uso informado
@@ -444,12 +460,24 @@ pelo provedor; com `~`, é a estimativa do orçamento. Não soma uma conversa in
 sem considerar a recuperação e a compactação. `—` indica dado ainda indisponível.
 A renderização usa dados em memória e não consulta o provedor a cada quadro.
 
-A velocidade é a média da última chamada concluída do modelo atual na sessão,
-não uma taxa instantânea durante a geração. No Ollama, usa `eval_count` dividido
-por `eval_duration`. Quando falta duração do provedor, `~` identifica a média
-observada pelo cliente, incluindo espera pelo primeiro token e transporte, sem
-o tempo posterior de ferramentas ou aprovações. Tokens de saída podem incluir
-argumentos de chamadas de ferramentas; não representam apenas palavras visíveis.
-Sem contagem/duração válidas, ao trocar de modelo/sessão ou durante trabalho,
-a taxa aparece como `—`. Em terminais estreitos, primeiro a velocidade e depois
-o contexto são ocultados para preservar os controles. O input mantém sua altura.
+Durante a geração, `~24.5 tok/s` é uma estimativa da chamada em andamento,
+atualizada pelo ciclo de renderização existente (100 ms). A estimativa divide os
+bytes UTF-8 recebidos por quatro e pelo tempo desde o primeiro dado de saída.
+Não conta pacotes como tokens e não é um tokenizer; pode diferir bastante entre
+modelos e idiomas. Texto, raciocínio e deltas de argumentos disponibilizados pelo
+adaptador contam uma vez, sem reter o conteúdo nas métricas. Os primeiros 250 ms
+mostram `Gerando…` para evitar picos. Antes de qualquer saída, aparece
+`Aguardando modelo…`; um servidor que acumula a resposta ou uma chamada de
+ferramenta até o final pode permanecer nesse estado, sem taxa inventada.
+
+Ao concluir, a estimativa dá lugar à média da última chamada concluída do modelo
+atual na sessão. No Ollama, usa `eval_count` dividido por `eval_duration`. Quando
+falta duração do provedor, `~` identifica a média observada pelo cliente, incluindo
+espera pelo primeiro token e transporte, sem o tempo posterior de ferramentas ou
+aprovações. Tokens de saída podem incluir argumentos de chamadas de ferramentas;
+não representam apenas palavras visíveis. Ferramentas e aprovações mostram `—`,
+sem reutilizar uma chamada anterior enquanto o agente trabalha. As métricas de
+streaming são removidas ao concluir, cancelar ou falhar e reiniciadas a cada
+chamada, inclusive nas correções de resposta. Em terminais estreitos, primeiro a
+velocidade e depois o contexto são ocultados para preservar os controles. O input
+mantém sua altura.

@@ -6,6 +6,7 @@ type FooterState struct {
 	ContextKnown, ContextEstimated bool
 	TokensPerSecond                float64
 	SpeedEstimated                 bool
+	SpeedLive, AwaitingModel       bool
 	Mode, Activity                 string
 	Busy, Terminal                 bool
 	Pending                        int

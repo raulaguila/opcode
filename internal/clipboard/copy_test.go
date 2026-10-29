@@ -60,6 +60,13 @@ func TestNativeCopyPassesLiteralStdinAndReportsFailures(t *testing.T) {
 	confirmed, err = Copy(context.Background(), literal, nil)
 	require.Error(t, err)
 	require.False(t, confirmed)
+	var fallback bytes.Buffer
+	confirmed, err = Copy(context.Background(), literal, &fallback)
+	require.NoError(t, err)
+	require.False(t, confirmed)
+	sequence, err := OSC52(literal)
+	require.NoError(t, err)
+	require.Equal(t, sequence, fallback.String(), "an installed but broken helper must allow terminal fallback")
 
 	require.NoError(t, os.WriteFile(helper, []byte("#!/bin/sh\nexec /bin/sleep 5\n"), 0700))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
@@ -67,4 +74,24 @@ func TestNativeCopyPassesLiteralStdinAndReportsFailures(t *testing.T) {
 	confirmed, err = Copy(ctx, literal, nil)
 	require.Error(t, err)
 	require.False(t, confirmed)
+}
+
+func TestLocalCopyFallsBackToTerminalWithoutGraphicClipboard(t *testing.T) {
+	t.Setenv("SSH_CONNECTION", "")
+	t.Setenv("SSH_TTY", "")
+	t.Setenv("PATH", t.TempDir())
+	var out bytes.Buffer
+	literal := "seleção ação 漢字 $(not executed)"
+	confirmed, err := Copy(context.Background(), literal, &out)
+	require.NoError(t, err)
+	require.False(t, confirmed, "OSC 52 cannot confirm the terminal accepted the clipboard")
+	want, err := OSC52(literal)
+	require.NoError(t, err)
+	require.Equal(t, want, out.String())
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	out.Reset()
+	_, err = Copy(ctx, literal, &out)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, out.String())
 }

@@ -409,3 +409,24 @@ Flags de interface em `info.meta.capabilities`, como `builtin_tools`, `terminal`
 ou `vision`, não comprovam capacidades do modelo nem concedem permissão às
 ferramentas do Opcode. A normalização mantém os limites de tamanho das respostas,
 até 5000 modelos e até três níveis de envelope, com paginação limitada.
+
+## Capacidade anunciada e contexto ativo
+
+O seletor mostra a capacidade recebida do catálogo. A requisição pode usar uma
+janela menor por configuração manual ou por uma redução aprendida após erro real
+de contexto/memória. O rodapé consulta a janela do agente ativo antes da primeira
+mensagem; quando existe um orçamento de requisição, mostra o limite desse pedido.
+Essas informações ficam em memória, sem consultar o catálogo a cada renderização.
+
+`/context` identifica a origem. Uma redução reaplicada do cache aparece como
+`learned after provider context/memory failure`, inclusive quando o agente é
+recriado. Ela não deve ser atribuída a `provider` ou `fallback`. Esse limite
+aprendido pode durar até 24 horas. `/recalibrate` permite removê-lo explicitamente
+e preparar novamente o provedor; a geração seguinte ainda pode ser reduzida se o
+servidor voltar a rejeitar a janela. O comando não repete ferramentas.
+
+Omitir o contexto no JSON para manter descoberta automática não elimina os
+metadados selecionados em memória. O teste de regressão acompanha a descoberta de
+131072 tokens, a seleção, a persistência automática e o orçamento da primeira
+requisição. Outro cenário verifica a aplicação intencional de um limite aprendido
+de 4096 e a apresentação correta da sua origem.

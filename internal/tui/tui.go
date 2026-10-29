@@ -707,6 +707,13 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 				a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(msg)
 				return a, cmd
 			}
+			if selection, ok := a.pages[a.currentPage].(interface {
+				SelectionKey(tea.KeyMsg) (tea.Cmd, bool)
+			}); ok {
+				if cmd, handled := selection.SelectionKey(msg); handled {
+					return a, cmd
+				}
+			}
 		}
 		// Modal shortcuts belong to the focused dialog. In particular Ctrl+H
 		// shows archived sessions and Ctrl+F filters favorite models.

@@ -26,22 +26,24 @@ type cacheItem struct {
 	content []uiMessage
 }
 type messagesCmp struct {
-	app           *app.App
-	width, height int
-	viewport      viewport.Model
-	session       session.Session
-	messages      []message.Message
-	uiMessages    []uiMessage
-	currentMsgID  string
-	cachedContent map[string]cacheItem
-	spinner       spinner.Model
-	rendering     bool
-	attachments   viewport.Model
-	expanded      map[string]bool
-	toggled       map[string]bool
-	hits          []transcriptHit
-	unread        bool
-	lastWorking   bool
+	app             *app.App
+	width, height   int
+	viewport        viewport.Model
+	session         session.Session
+	messages        []message.Message
+	uiMessages      []uiMessage
+	currentMsgID    string
+	cachedContent   map[string]cacheItem
+	spinner         spinner.Model
+	rendering       bool
+	attachments     viewport.Model
+	expanded        map[string]bool
+	toggled         map[string]bool
+	hits            []transcriptHit
+	unread          bool
+	lastWorking     bool
+	transcriptLines []string
+	selection       textSelection
 }
 type renderFinishedMsg struct{ sessionID string }
 
@@ -91,6 +93,8 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case SessionClearedMsg:
+		m.selection = textSelection{}
+		m.transcriptLines = nil
 		m.session = session.Session{}
 		m.messages = make([]message.Message, 0)
 		m.currentMsgID = ""
@@ -104,11 +108,13 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case JumpToLatestMsg:
+		m.ClearSelection()
 		m.unread = false
 		m.viewport.GotoBottom()
 		return m, nil
 	case tea.KeyMsg:
 		if msg.String() == "alt+end" {
+			m.ClearSelection()
 			m.unread = false
 			m.viewport.GotoBottom()
 			return m, nil
@@ -130,7 +136,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+		if msg.Button == tea.MouseButtonLeft || msg.Action == tea.MouseActionRelease {
 			return m, m.transcriptMouse(msg)
 		}
 		u, cmd := m.viewport.Update(msg)
@@ -198,8 +204,8 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if needsRerender {
 			// Keep following only while the reader is at the bottom. Streaming
 			// updates must not interrupt someone reading earlier messages.
-			follow := m.viewport.AtBottom() || (msg.Type == pubsub.CreatedEvent &&
-				msg.Payload.SessionID == m.session.ID && msg.Payload.Role == message.User)
+			follow := !m.selection.engaged() && (m.viewport.AtBottom() || (msg.Type == pubsub.CreatedEvent &&
+				msg.Payload.SessionID == m.session.ID && msg.Payload.Role == message.User))
 			m.renderView()
 			if follow {
 				m.viewport.GotoBottom()
@@ -211,7 +217,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if len(m.messages) > 0 && m.lastWorking != m.IsAgentWorking() {
-		offset, follow := m.viewport.YOffset, m.viewport.AtBottom()
+		offset, follow := m.viewport.YOffset, m.viewport.AtBottom() && !m.selection.engaged()
 		m.renderView()
 		if follow {
 			m.viewport.GotoBottom()
@@ -244,7 +250,7 @@ func formatTimeDifference(unixTime1, unixTime2 int64) string {
 func (m *messagesCmp) renderView() { m.renderTurns() }
 
 func (m *messagesCmp) View() string {
-	content := m.viewport.View()
+	content := m.highlightSelection(m.viewport.View())
 	if m.rendering {
 		content = config.Text("Carregando conversa…", "Loading conversation…")
 	} else if len(m.messages) == 0 {
@@ -278,6 +284,7 @@ func (m *messagesCmp) SetSize(width, height int) tea.Cmd {
 	if m.width == width && m.height == height {
 		return nil
 	}
+	m.selection = textSelection{} // Reflow invalidates display-cell coordinates.
 	m.width = width
 	m.height = height
 	m.viewport.Width = width
@@ -296,6 +303,7 @@ func (m *messagesCmp) SetSession(session session.Session) tea.Cmd {
 	if m.session.ID == session.ID {
 		return nil
 	}
+	m.selection = textSelection{}
 	m.session = session
 	messages, err := m.app.Messages.List(context.Background(), session.ID)
 	if err != nil {

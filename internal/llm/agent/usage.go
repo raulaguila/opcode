@@ -27,6 +27,13 @@ type PhaseMetrics struct {
 
 type UsageMetrics struct {
 	PhaseMetrics
+	ActiveModel          models.ModelID `json:"active_model,omitempty"`
+	ActiveContextWindow  int64          `json:"active_context_window,omitempty"`
+	ActiveContextSource  string         `json:"active_context_source,omitempty"`
+	StreamModel          models.ModelID `json:"stream_model,omitempty"`
+	StreamActive         bool           `json:"stream_active,omitempty"`
+	StreamOutputBytes    int64          `json:"stream_output_bytes,omitempty"`
+	StreamDurationNS     int64          `json:"stream_duration_ns,omitempty"`
 	LastModel            models.ModelID `json:"last_model,omitempty"`
 	LastOutputTokens     int64          `json:"last_output_tokens,omitempty"`
 	LastOutputDurationNS int64          `json:"last_output_duration_ns,omitempty"`
@@ -48,9 +55,25 @@ func (a *agent) Usage(ctx context.Context, id string) (UsageMetrics, error) {
 	if err := ctx.Err(); err != nil {
 		return UsageMetrics{}, err
 	}
+	// Match model-selection lock order. Snapshot memory only, without discovery
+	// or payload estimation, including before the first request.
+	a.runMu.Lock()
+	defer a.runMu.Unlock()
+	active := models.Model{}
+	if a.provider != nil {
+		active = a.provider.Model()
+	}
 	a.contextMu.Lock()
 	defer a.contextMu.Unlock()
 	m := a.usageMetrics[id]
+	m.ActiveModel, m.ActiveContextWindow, m.ActiveContextSource = active.ID, active.ContextWindow, active.ContextSource
+	if stream := a.streamUsages[id]; stream != nil {
+		m.StreamModel, m.StreamActive = stream.model, true
+		m.StreamOutputBytes = stream.outputBytes
+		if !stream.firstOutput.IsZero() {
+			m.StreamDurationNS = time.Since(stream.firstOutput).Nanoseconds()
+		}
+	}
 	if status, ok := a.contextStatuses[id]; ok {
 		m.ContextWindow = status.ContextWindow
 		m.ContextTokens = status.EstimatedInputTokens

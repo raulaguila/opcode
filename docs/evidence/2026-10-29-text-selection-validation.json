@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-29",
+  "base_commit": "8d5a28a",
+  "scope": "Select and copy transcript text without opening response actions on click",
+  "behavior": [
+    "Simple response clicks do not open menus",
+    "Left-button drag highlights display cells without copying automatically",
+    "Ctrl+C copies only the selected visible text; Escape clears the highlight",
+    "Whitespace-only selection does not quit or overwrite the clipboard",
+    "Ctrl+Y and /actions retain explicit full-response/code/source actions",
+    "Unicode graphemes, reverse drags, multiple lines, scroll offsets and releases outside the panel are handled",
+    "Reading cells stay stable while selected; new messages are retained and shown after clearing",
+    "Resize/session change clears stale selection; Alt+End clears it and resumes following",
+    "Terminal and modal controls retain precedence",
+    "A missing or failed native clipboard helper falls back to the serialized terminal OSC 52 writer",
+    "OSC 52 requests do not claim confirmed receipt; SSH never launches a server clipboard helper"
+  ],
+  "validation": {
+    "affected_race_suite": {
+      "command": "go test -race -p 1 ./internal/clipboard ./internal/tui/... ./internal/app",
+      "result": "passed"
+    },
+    "vet": "passed: go vet -tags=integration ./internal/tui/... ./internal/clipboard",
+    "build": "passed: CGO_ENABLED=0 go build",
+    "final_binary_sha256": "51dd33764457ffa6c09ee70cf0467b25607906889d8c038a14f6e94396be1f68",
+    "controlled_pty": {
+      "test": "TestPTYStreamingSpeedBeforeCompletion",
+      "result": "passed: dark, light and NO_COLOR",
+      "test_seconds": 3.89,
+      "proof": "Real SGR drag changes emulator cell attributes, opens no menu and sends no clipboard output until Ctrl+C; OSC 52 contains exactly the selected substring; Escape restores the cell attributes; composer geometry and streaming speed remain valid",
+      "regression_found_and_fixed": "NO_COLOR initially suppressed Reverse styling. A color-free inverse-video attribute restores selection visibility. The same visual criteria passed after the fix."
+    },
+    "real_ollama_pty": {
+      "test": "TestLiveOllamaPTYUI",
+      "model": "llama3.1:8b",
+      "result": "passed",
+      "test_seconds": 113.93,
+      "binary_sha256": "4b3265e0fb4112ffbcea45957530f4a284637614bf14bb8242fa6a0ce480af20",
+      "scope": "Explicit Ctrl+Y full-response OSC 52 copy, cited repository explanation, provider navigation, separate LSP approval, exact approved Bash command, live output, PTY input and queued instructions",
+      "revision_note": "Completed before the final isolated NO_COLOR attribute fix; the final binary was rechecked with the three controlled PTY color variants and the affected race suite"
+    },
+    "isolation": "Clipboard tests use fake executables or OSC 52 captured by the PTY emulator; they do not read or write the user's real clipboard. HTTP fixtures and configurations are isolated.",
+    "environment": "Temporary files/logs were moved to task-owned workspace storage after /tmp quota failures; no shared/user cache cleanup was performed.",
+    "repository_wide_gate": "Not rerun for this UI change; previously recorded parser/terminal timing failures remain unresolved. See 2026-10-29-active-context-validation.json."
+  },
+  "preserved": [
+    "Permission scopes and sandbox",
+    "Citation validation and repair criteria",
+    "User configuration and credentials",
+    "Existing pending context and streaming-speed changes"
+  ],
+  "publication_at_validation": "Local changes only; no commit or push",
+  "subsequent_validation": "2026-10-29-prepush-validation.json"
+}

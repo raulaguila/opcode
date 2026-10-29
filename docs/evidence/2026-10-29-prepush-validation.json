@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-29",
+  "base_commit": "8d5a28a",
+  "scope": "Active context, streaming speed, transcript selection and clipboard fallback",
+  "final_checks": {
+    "race": {
+      "command": "go test -race -p 1 ./...",
+      "result": "passed",
+      "agent_package_seconds": 9.899,
+      "tools_package_seconds": 22.944,
+      "output_sha256": "2e20a5b4330ba2a5ee16dd691a5c9ac072133974ee68ed4b4a232e847bae3902"
+    },
+    "vet": {"command": "go vet ./...", "result": "passed"},
+    "diff_check": {"command": "git diff --cached --check", "result": "passed"},
+    "binary_sha256": "51dd33764457ffa6c09ee70cf0467b25607906889d8c038a14f6e94396be1f68",
+    "integration": "Reuse the unchanged-code PTY/Ollama and controlled dark/light/NO_COLOR proofs documented in the linked evidence"
+  },
+  "related_evidence": [
+    "2026-10-29-active-context-validation.json",
+    "2026-10-29-streaming-speed-validation.json",
+    "2026-10-29-text-selection-validation.json"
+  ],
+  "earlier_failures": "Prior parser deadline and terminal timing failures were not reproduced in this final run. No deadlines, test criteria or permission/citation controls were relaxed. Package execution was serialized with -p 1; this does not prove timing flakes are eliminated under all loads.",
+  "environment": "Task-owned workspace TMPDIR, GOTMPDIR and GOCACHE; no inherited credentials or real user clipboard used by the integration proofs",
+  "publication": {
+    "authorization": "User explicitly requested commit and push",
+    "remote": "https://github.com/raulaguila/opcode.git",
+    "source_branch": "codex/opcode",
+    "target_branch": "develop",
+    "history": "Commit identity and completed publication are recorded by Git; no force push requested"
+  }
+}

@@ -25,6 +25,21 @@ import (
 
 func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
+	case util.CopyTextMsg:
+		writer := a.terminalOutput
+		return func() tea.Msg {
+			confirmed, err := clipboard.Copy(context.Background(), msg.Text, writer)
+			if msg.Result != nil {
+				return msg.Result(confirmed, err)
+			}
+			if err != nil {
+				return util.InfoMsg{Type: util.InfoTypeError, Msg: err.Error()}
+			}
+			if confirmed {
+				return util.InfoMsg{Msg: config.Text("Seleção copiada.", "Selection copied.")}
+			}
+			return util.InfoMsg{Msg: config.Text("Cópia enviada ao terminal; recebimento não confirmado. Shift+arrastar permite seleção nativa.", "Copy sent to terminal; receipt unconfirmed. Shift+drag allows native selection.")}
+		}, true
 	case page.TerminalClipboardMsg:
 		writer := a.terminalOutput
 		return func() tea.Msg {

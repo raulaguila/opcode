@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-29",
+  "base_commit": "8d5a28a",
+  "scope": "Active context display and learned-limit attribution",
+  "original_report": {
+    "symptom": "Catalog capacity changed to 4k after sending a message",
+    "user_recovery": "Switching providers and reselecting the model restored the expected capacity",
+    "root_cause": "Unconfirmed; source information from the affected state was not captured"
+  },
+  "confirmed_findings": [
+    "A loaded learned limit reduced the agent capacity but retained an incorrect provider source label",
+    "Before a request budget existed, the footer used catalog capacity instead of the bound agent capacity"
+  ],
+  "regression_proof": {
+    "test": "TestDiscoveredGatewayContextFromSelectionThroughFirstRequest",
+    "transport": "Loopback HTTP fixture with SSE chat completion; no corporate endpoint or credentials",
+    "fresh_discovery": "max_model_len=131072 survives selection, automatic configuration persistence and the first request budget",
+    "learned_limit": "4096 remains enforced with source learned after provider context/memory failure",
+    "initial_footer": "Reads active capacity before the first request; token usage remains unknown; metadata for a different model is ignored"
+  },
+  "validation": {
+    "focused_race_tests": "passed: discovery, footer, calibration isolation/TTL and context-failure retry boundaries",
+    "vet": "passed: go vet ./... and go vet -tags=integration ./internal/tui",
+    "build": "passed: CGO_ENABLED=0 go build",
+    "binary_sha256": "04679b9348cbb9f03f48039e3dec9e074b063f7e0bad8a1a4eb28e0f2842a656",
+    "live_pty": {
+      "model": "llama3.1:8b on local Ollama",
+      "tests": "TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUIVTLastColumnErase",
+      "result": "passed",
+      "package_seconds": 59.805,
+      "coverage": [
+        "Gateway catalog context and provider navigation",
+        "Failed-provider empty list, retry and deletion confirmation",
+        "Project evidence and citations",
+        "Human question and answer",
+        "Separate LSP and exact Bash approvals",
+        "Live command output, PTY input and queued instructions",
+        "Input resizing, compact themes and last-column rendering"
+      ]
+    },
+    "full_race_suite": "failed: TestLocalLanguageDeclarations parser timeouts; other packages passed",
+    "full_standard_suite": "failed: TestLocalLanguageDeclarations/service.c parser timeout; TestUserApprovesTerminalEntersInputAndReturnsToChat did not observe Terminal exit within its deadline",
+    "parser_control_without_race": "passed in isolation: all 42 language fixtures",
+    "parser_files_and_dependencies": "No changes relative to base commit in internal/llm/tools, go.mod or go.sum",
+    "criteria": "No test skips or parser deadline increases"
+  },
+  "preserved": [
+    "Permission checks",
+    "Citation validation",
+    "Learned context cache and TTL",
+    "No automatic recalibration or tool replay",
+    "No changes to the user's provider configuration"
+  ],
+  "publication_at_validation": "Local changes only; commit and push deferred because the full test gate failed",
+  "subsequent_validation": "2026-10-29-prepush-validation.json"
+}

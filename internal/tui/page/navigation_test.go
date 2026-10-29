@@ -151,3 +151,52 @@ func TestTaskAddsPlanActionsWithoutMovingSelectedCommand(t *testing.T) {
 	require.Equal(t, "execute-plan", p.workspace.actions[1].kind)
 	require.Contains(t, p.workspace.body, "New objective")
 }
+
+func TestContractListEditorPreservesAcceptanceItems(t *testing.T) {
+	p := workflowPage(t)
+	p.editContract("explain")
+	p.workspace.focus = 1
+	p.contractKey(tea.KeyMsg{Type: tea.KeyEnter})
+	require.NotNil(t, p.workspace.itemEditor)
+	p.workspace.itemEditor.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	p.contractKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Explain A; preserve B")})
+	p.contractKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	require.Nil(t, p.workspace.itemEditor)
+	require.Equal(t, []string{"Explain A; preserve B"}, p.contractItems(1))
+	require.Equal(t, "contract", p.workspace.kind)
+}
+
+func TestReopenedContractKeepsItemSeparators(t *testing.T) {
+	p := workflowPage(t)
+	_, err := p.app.Workflows.SetContract(context.Background(), "s", &workflow.Contract{Kind: "explain", Acceptance: []string{"Explain A; preserve B"}, Targets: []string{"file,with,commas.go"}})
+	require.NoError(t, err)
+	p.refreshWorkflow()
+	p.editContract("explain")
+	require.Equal(t, []string{"Explain A; preserve B"}, p.contractItems(1))
+	require.Equal(t, []string{"file,with,commas.go"}, p.contractItems(0))
+}
+
+func TestWorkspaceMouseOnlyChoosesVisibleActions(t *testing.T) {
+	p := workflowPage(t)
+	p.width = 80
+	p.height = 24
+	p.showWorkspace("parent", "Parent", "")
+	p.showWorkspace("task", "Task", "body")
+	p.workspaceHistory = []workspacePanel{{title: "Parent"}}
+	for i := 0; i < 8; i++ {
+		p.workspace.actions = append(p.workspace.actions, workspaceAction{kind: "unused", label: "Action"})
+	}
+	first, rows, _ := p.workspaceActionGeometry()
+	require.Equal(t, 3, rows)
+	p.workspaceMouse(tea.MouseMsg{Y: first + rows, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	require.True(t, p.workspace.allActions)
+	require.Zero(t, p.workspace.selected)
+	p.workspace.allActions = false
+	p.workspaceMouse(tea.MouseMsg{Y: first + rows + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	require.Zero(t, p.workspace.selected)
+	p.editContract("explain")
+	p.workspace.focus = 1
+	p.contractKey(tea.KeyMsg{Type: tea.KeyEnter})
+	p.workspaceMouse(tea.MouseMsg{Y: 2, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	require.Equal(t, 1, p.workspace.focus)
+}

@@ -42,6 +42,8 @@ type providerRow struct {
 	legacy bool
 }
 type providerDialogCmp struct {
+	baseline                       []string
+	resumeDraft                    func()
 	allowSave                      func() error
 	rows                           []providerRow
 	selected, width, height, focus int
@@ -52,6 +54,8 @@ type providerDialogCmp struct {
 	legacy                         bool
 	originalKey                    string
 	note                           string
+	noteFull                       bool
+	noteOffset                     int
 	testing                        bool
 	request                        uint64
 	cancel                         context.CancelFunc
@@ -96,6 +100,8 @@ func (m *providerDialogCmp) Open() tea.Cmd {
 	return nil
 }
 func (m *providerDialogCmp) Close() {
+	m.noteFull = false
+	m.noteOffset = 0
 	if m.cancel != nil {
 		m.cancel()
 		m.cancel = nil
@@ -104,6 +110,7 @@ func (m *providerDialogCmp) Close() {
 	m.testing = false
 }
 func (m *providerDialogCmp) setFields(labels, values []string) {
+	m.baseline = append([]string(nil), values...)
 	m.labels = labels
 	m.fields = make([]textinput.Model, len(labels))
 	m.focus = 0
@@ -257,6 +264,9 @@ func (m *providerDialogCmp) save() tea.Cmd {
 	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Disabled: disabled})
 }
 func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.noteUpdate(msg) {
+		return m, nil
+	}
 	if cmd, handled := m.experienceUpdate(msg); handled {
 		return m, cmd
 	}
@@ -275,6 +285,22 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.MouseMsg:
+		if m.screen == "list" {
+			if clickedLabel(m.View(), config.Text("[Preferências]", "[Preferences]"), msg) {
+				return m, m.settings()
+			}
+			if clickedLabel(m.View(), config.Text("[Integrações]", "[Integrations]"), msg) {
+				return m, util.CmdHandler(OpenIntegrationDialogMsg{})
+			}
+		}
+		if m.screen == "provider" {
+			for _, a := range []struct{ label, key string }{{config.Text("[Salvar]", "[Save]"), "ctrl+s"}, {config.Text("[Catálogo]", "[Catalog]"), "ctrl+t"}, {config.Text("[Mais]", "[More]"), "ctrl+a"}} {
+				if clickedLabel(m.View(), a.label, msg) {
+					return m.Update(tea.KeyMsg{Type: map[string]tea.KeyType{"ctrl+s": tea.KeyCtrlS, "ctrl+t": tea.KeyCtrlT, "ctrl+a": tea.KeyCtrlA}[a.key]})
+				}
+			}
+		}
+
 		if m.screen == "list" && len(m.rows) > 0 {
 			if msg.Button == tea.MouseButtonWheelUp {
 				m.selected = max(0, m.selected-1)
@@ -312,7 +338,18 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.screen != "list" {
-				return m, m.Open()
+				saved := *m
+				saved.cancel = nil
+				saved.testing = false
+				saved.resumeDraft = nil
+				cmd := m.Open()
+				m.resumeDraft = func() {
+					w, h, request := m.width, m.height, m.request+1
+					*m = saved
+					m.width, m.height, m.request = w, h, request
+				}
+				m.note = config.Text("R retoma a edição preservada", "R resumes preserved edits")
+				return m, cmd
 			}
 			m.Close()
 			return m, util.CmdHandler(CloseProviderDialogMsg{})
@@ -339,6 +376,11 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.edit(&m.rows[m.selected])
 				}
 				return m, m.edit(nil)
+			case "r":
+				if m.resumeDraft != nil {
+					m.resumeDraft()
+					return m, textinput.Blink
+				}
 			case "n":
 				m.screen = "presets"
 				m.selected = 0
@@ -406,6 +448,9 @@ func (m *providerDialogCmp) contentWidth() int {
 	return max(12, min(72, m.width-8))
 }
 func (m *providerDialogCmp) View() string {
+	if m.noteFull {
+		return m.noteView()
+	}
 	if m.screen == "settings" || m.screen == "setting" || m.screen == "effective" || m.screen == "presets" {
 		return m.experienceView()
 	}
@@ -431,7 +476,7 @@ func (m *providerDialogCmp) View() string {
 			row := m.rows[i]
 			label := row.id
 			if row.legacy {
-				label += " · legacy"
+				label = config.Text("Servidor local", "Local server") + " · " + row.id
 			} else {
 				p := config.Get().ProviderProfiles[row.id]
 				label = p.Name + " · " + row.id + " (" + string(p.Backend) + ")"
@@ -449,9 +494,10 @@ func (m *providerDialogCmp) View() string {
 			if i == m.selected {
 				style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
 			}
-			lines = append(lines, style.Render(ansi.Truncate(label, width, "…")))
+			lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+label, width, "…")))
 		}
-		lines = append(lines, line("N add · Enter edit · P preferences · I integrations · Esc close"))
+		lines = append(lines, line(config.Text("N Adicionar · Enter Editar · Esc", "N Add · Enter Edit · Esc")))
+		lines = append(lines, line(config.Text("[Preferências] P · [Integrações] I", "[Preferences] P · [Integrations] I")))
 	} else {
 		// Keep the focused field visible on small terminals; labels remain attached.
 		count := m.formRows()
@@ -468,7 +514,7 @@ func (m *providerDialogCmp) View() string {
 		}
 		hint := "Tab/↑↓ fields · Ctrl+S save · Esc back"
 		if m.screen == "provider" {
-			hint = config.Text("Ctrl+S salvar · Ctrl+T catálogo · Ctrl+A mais · Esc", "Ctrl+S save · Ctrl+T catalog · Ctrl+A more · Esc")
+			hint = config.Text("[Salvar] [Catálogo] [Mais] · Esc", "[Save] [Catalog] [More] · Esc")
 			if m.fields[8].Value() == "false" {
 				hint = config.Text("Ctrl+G salvar e ativar · ", "Ctrl+G save and enable · ") + hint
 			}
@@ -479,7 +525,10 @@ func (m *providerDialogCmp) View() string {
 	if m.testing {
 		note = "Testing connection… Esc cancels."
 	}
-	lines = append(lines, line(note))
+	if m.screen == "provider" && m.dirty() {
+		lines = append(lines, line(config.Text("Alterações não salvas", "Unsaved changes")))
+	}
+	lines = append(lines, m.noteLines(note)...)
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 func (m *providerDialogCmp) BindingKeys() []key.Binding {
@@ -496,7 +545,7 @@ func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {
 		return m.fieldCount()
 	}
-	return max(1, min(m.fieldCount(), (m.height-8)/2))
+	return max(1, min(m.fieldCount(), (m.height-10)/2))
 }
 
 func (m *providerDialogCmp) fieldCount() int {
@@ -517,4 +566,16 @@ func (m *providerDialogCmp) fieldIndices() []int {
 func (m *providerDialogCmp) Setup() {
 	path, _ := config.Paths(config.WorkingDirectory())
 	m.note = config.Text("Configuração · 1/3 · salve o provedor para escolher o modelo. Arquivo: ", "Setup · 1/3 · save a provider to choose a model. File: ") + path
+}
+
+func (m *providerDialogCmp) dirty() bool {
+	if len(m.baseline) != len(m.fields) {
+		return false
+	}
+	for i := range m.fields {
+		if m.fields[i].Value() != m.baseline[i] {
+			return true
+		}
+	}
+	return false
 }

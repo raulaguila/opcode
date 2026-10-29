@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/logging"
@@ -120,12 +121,28 @@ func (f *filepickerCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		f.width = 60
-		f.height = 20
-		f.viewport.Width = 80
-		f.viewport.Height = 22
-		f.cursor = 0
+		f.width = msg.Width
+		f.height = msg.Height
+		f.viewport.Width = max(1, msg.Width/2-8)
+		f.viewport.Height = max(1, msg.Height-8)
 		f.getCurrentFileBelowCursor()
+	case tea.MouseMsg:
+		rows := max(1, f.height-9)
+		start := max(0, f.cursor-rows+1)
+		row := msg.Y - 4
+		if msg.Button == tea.MouseButtonWheelUp {
+			f.cursor = max(0, f.cursor-1)
+			f.getCurrentFileBelowCursor()
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			f.cursor = min(max(0, len(f.dirs)-1), f.cursor+1)
+			f.getCurrentFileBelowCursor()
+		}
+		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.X >= 3 && msg.X < f.listWidth()+3 && row >= 0 && row < rows && start+row < len(f.dirs) {
+			f.cursor = start + row
+			f.getCurrentFileBelowCursor()
+		}
+		return f, nil
 	case tea.KeyMsg:
 		if f.cwd.Focused() {
 			f.cwd, cmd = f.cwd.Update(msg)
@@ -164,6 +181,9 @@ func (f *filepickerCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				isPathDir = fileInfo.IsDir()
 			} else {
+				if f.cursor < 0 || f.cursor >= len(f.dirs) {
+					return f, nil
+				}
 				path = filepath.Join(f.cwdDetails.directory, "/", f.dirs[f.cursor].Name())
 				isPathDir = f.dirs[f.cursor].IsDir()
 			}
@@ -189,7 +209,7 @@ func (f *filepickerCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case key.Matches(msg, filePickerKeyMap.Forward):
 			if !f.cwd.Focused() {
-				if f.dirs[f.cursor].IsDir() {
+				if f.cursor >= 0 && f.cursor < len(f.dirs) && f.dirs[f.cursor].IsDir() {
 					path := filepath.Join(f.cwdDetails.directory, "/", f.dirs[f.cursor].Name())
 					newWorkingDir := DirNode{parent: f.cwdDetails, directory: path}
 					f.cwdDetails.child = &newWorkingDir
@@ -259,97 +279,47 @@ func (f *filepickerCmp) addAttachmentToMessage() (tea.Model, tea.Cmd) {
 }
 
 func (f *filepickerCmp) View() string {
-	t := theme.CurrentTheme()
-	const maxVisibleDirs = 20
-	const maxWidth = 80
-
-	adjustedWidth := maxWidth
-	for _, file := range f.dirs {
-		if len(file.Name()) > adjustedWidth-4 { // Account for padding
-			adjustedWidth = len(file.Name()) + 4
-		}
+	width, height := f.width, f.height
+	if width <= 0 {
+		width = 80
 	}
-	adjustedWidth = max(30, min(adjustedWidth, f.width-15)) + 1
-
-	files := make([]string, 0, maxVisibleDirs)
-	startIdx := 0
-
-	if len(f.dirs) > maxVisibleDirs {
-		halfVisible := maxVisibleDirs / 2
-		if f.cursor >= halfVisible && f.cursor < len(f.dirs)-halfVisible {
-			startIdx = f.cursor - halfVisible
-		} else if f.cursor >= len(f.dirs)-halfVisible {
-			startIdx = len(f.dirs) - maxVisibleDirs
-		}
+	if height <= 0 {
+		height = 24
 	}
-
-	endIdx := min(startIdx+maxVisibleDirs, len(f.dirs))
-
-	for i := startIdx; i < endIdx; i++ {
-		file := f.dirs[i]
-		itemStyle := styles.BaseStyle().Width(adjustedWidth)
-
+	wide := width >= 120
+	listWidth := max(1, width-6)
+	if wide {
+		listWidth = max(1, width/2-6)
+	}
+	rows := max(1, height-9)
+	start := max(0, f.cursor-rows+1)
+	lines := []string{config.Text("Anexar arquivo", "Attach file"), ansi.Truncate(f.cwd.View(), listWidth, "…")}
+	if len(f.dirs) == 0 {
+		lines = append(lines, config.Text("Pasta vazia", "Empty directory"))
+	}
+	for i := start; i < min(len(f.dirs), start+rows); i++ {
+		name := f.dirs[i].Name()
+		if f.dirs[i].IsDir() {
+			name += "/"
+		}
+		mark := "  "
+		style := styles.BaseStyle()
 		if i == f.cursor {
-			itemStyle = itemStyle.
-				Background(t.Primary()).
-				Foreground(t.Background()).
-				Bold(true)
+			mark = "› "
+			style = style.Background(theme.CurrentTheme().Primary()).Foreground(theme.CurrentTheme().Background())
 		}
-		filename := file.Name()
-
-		if len(filename) > adjustedWidth-4 {
-			filename = filename[:adjustedWidth-7] + "..."
-		}
-		if file.IsDir() {
-			filename = filename + "/"
-		}
-		// No need to reassign filename if it's not changing
-
-		files = append(files, itemStyle.Padding(0, 1).Render(filename))
+		lines = append(lines, style.Width(listWidth).Render(ansi.Truncate(mark+name, listWidth, "…")))
 	}
-
-	// Pad to always show exactly 21 lines
-	for len(files) < maxVisibleDirs {
-		files = append(files, styles.BaseStyle().Width(adjustedWidth).Render(""))
+	lines = append(lines, config.Text("Enter anexa/abre · ← volta · I caminho · Esc", "Enter attach/open · ← back · I path · Esc"))
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], listWidth, "…")
 	}
-
-	currentPath := styles.BaseStyle().
-		Height(1).
-		Width(adjustedWidth).
-		Render(f.cwd.View())
-
-	viewportstyle := lipgloss.NewStyle().
-		Width(f.viewport.Width).
-		Background(t.Background()).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.TextMuted()).
-		BorderBackground(t.Background()).
-		Padding(2).
-		Render(f.viewport.View())
-	var insertExitText string
-	if f.IsCWDFocused() {
-		insertExitText = config.Text("Esc volta à seleção de arquivos", "Press esc to exit typing path")
-	} else {
-		insertExitText = config.Text("I permite digitar o caminho", "Press i to start typing path")
+	frame := styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
+	if wide {
+		preview := styles.BaseStyle().Padding(1).Width(max(1, width-lipgloss.Width(frame)-2)).MaxHeight(max(1, height-2)).Render(f.viewport.View())
+		frame = lipgloss.JoinHorizontal(lipgloss.Top, frame, preview)
 	}
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		currentPath,
-		styles.BaseStyle().Width(adjustedWidth).Render(""),
-		styles.BaseStyle().Width(adjustedWidth).Render(lipgloss.JoinVertical(lipgloss.Left, files...)),
-		styles.BaseStyle().Width(adjustedWidth).Render(""),
-		styles.BaseStyle().Foreground(t.TextMuted()).Width(adjustedWidth).Render(insertExitText),
-	)
-
-	f.cwd.SetValue(f.cwd.Value())
-	contentStyle := styles.BaseStyle().Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(t.Background()).
-		BorderForeground(t.TextMuted()).
-		Width(lipgloss.Width(content) + 4)
-
-	return lipgloss.JoinHorizontal(lipgloss.Center, contentStyle.Render(content), viewportstyle)
+	return lipgloss.NewStyle().MaxWidth(width).MaxHeight(height).Render(frame)
 }
 
 type FilepickerCmp interface {
@@ -367,11 +337,7 @@ func (f *filepickerCmp) IsCWDFocused() bool {
 }
 
 func NewFilepickerCmp(app *app.App) FilepickerCmp {
-	homepath, err := os.UserHomeDir()
-	if err != nil {
-		logging.Error("error loading user files")
-		return nil
-	}
+	homepath := config.WorkingDirectory()
 	baseDir := DirNode{parent: nil, directory: homepath}
 	dirs := readDir(homepath, false)
 	viewport := viewport.New(0, 0)
@@ -468,4 +434,11 @@ func IsHidden(file string) (bool, error) {
 func isExtSupported(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return (ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".png")
+}
+
+func (f *filepickerCmp) listWidth() int {
+	if f.width >= 120 {
+		return max(1, f.width/2-6)
+	}
+	return max(1, f.width-6)
 }

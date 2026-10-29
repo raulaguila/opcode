@@ -1,0 +1,88 @@
+{
+  "date": "2026-10-29",
+  "source_base": "f9f087fb333faf4fc095bfc6c243bd74ee15edae",
+  "source_revision": "Accompanying commit",
+  "scope": "Menu crashes, responsive geometry, input focus, shared actions and task items",
+  "binary_sha256": "720f1f32855b5f67e5e4baf8fe89e461b4f18899b607901f76999ae34a02bf62",
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_changed": false,
+    "completion_criteria_changed": false,
+    "comparative_evaluation_criteria_changed": false,
+    "credentials_inherited_by_live_fixture": false
+  },
+  "checks": {
+    "go_test_race_all": "passed: go test -race -p 2 ./...",
+    "go_vet_all": "passed",
+    "go_vet_integration_tui": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "live": {
+    "status": "passed",
+    "provider": "Ollama",
+    "model": "llama3.1:8b",
+    "sandbox": "bubblewrap",
+    "main_flow_seconds": 16.8,
+    "suite_seconds": 19.781,
+    "terminal_sizes": [
+      [
+        60,
+        20
+      ],
+      [
+        80,
+        24
+      ],
+      [
+        120,
+        36
+      ],
+      [
+        180,
+        40
+      ]
+    ],
+    "themes": [
+      "dark",
+      "light",
+      "NO_COLOR"
+    ],
+    "fixture_context_limit": 16384,
+    "source_fixtures_unchanged": true,
+    "overview_sha256": "d992281110b9e2ad34681d13291b3a6fa69d732f95d118a5fcf446fc836c56ba",
+    "approved_bash_commands": 1,
+    "replayed_bash_commands": 0,
+    "checks": [
+      "Factual project explanation with citation",
+      "Permission denial by Esc and default Enter; exact LSP request approved by click",
+      "One exact bash PTY call approved; live output before exit; human stdin delivered",
+      "Queued instruction is persisted after tool completion and answered",
+      "Compact initialization labels; file picker in empty project; Enter and l remain usable",
+      "Draft survives file picker and resize",
+      "Quit cancelled by mouse; theme opens correctly afterward",
+      "Selection is textual in NO_COLOR; source fixtures unchanged"
+    ]
+  },
+  "regressions": [
+    "Preset footer/outside clicks do not index a nonexistent item",
+    "Empty file list does not crash",
+    "File picker and argument form fit 60x20/80x24/120x36",
+    "Argument focus and session selection survive resize",
+    "Mouse keeps the modal instance; mode has no invisible search",
+    "Complete notes scroll and keep asynchronous probe results",
+    "Unsaved form can resume; conditional fields preserve hidden values",
+    "Environment pair editor rejects duplicate names",
+    "Contract list items preserve separators across reopen",
+    "Workspace mouse uses the rendered rows and breadcrumb offset",
+    "Mouse cannot retarget a contract item edit to another field",
+    "Resuming an unsaved form never reaccepts a cancelled probe result"
+  ],
+  "review": "Read-only independent review; actionable findings fixed with regression coverage",
+  "limitations": [
+    "No new Codaro/Crush quality or latency benchmark",
+    "Provider test uses the installed local model; other provider APIs and real OAuth services were not called",
+    "PTY uses isolated HOME/workspace and a controlled noisy LSP fixture",
+    "Computed/component/VT checks do not certify every terminal or assistive technology"
+  ]
+}

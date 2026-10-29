@@ -207,6 +207,9 @@ func (m *integrationDialogCmp) saveIntegration() tea.Cmd {
 	return util.CmdHandler(IntegrationSettingsSavedMsg{Kind: candidate.Kind})
 }
 func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.noteUpdate(msg) {
+		return m, nil
+	}
 	if m.arguments != nil {
 		if size, ok := msg.(tea.WindowSizeMsg); ok {
 			m.width, m.height = size.Width, size.Height
@@ -247,9 +250,13 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
-		if m.screen == "edit" && msg.String() == "enter" && strings.HasPrefix(m.labels[m.focus], "Arguments") {
+		if m.screen == "edit" && msg.String() == "enter" && (strings.HasPrefix(m.labels[m.focus], "Arguments") || strings.HasPrefix(m.labels[m.focus], "Headers from") || strings.HasPrefix(m.labels[m.focus], "Child environment")) {
 			var err error
-			m.arguments, err = newArgumentList(m.fields[m.focus].Value())
+			if strings.HasPrefix(m.labels[m.focus], "Arguments") {
+				m.arguments, err = newArgumentList(m.fields[m.focus].Value())
+			} else {
+				m.arguments, err = newPairList(m.fields[m.focus].Value())
+			}
 			if err != nil {
 				m.note = err.Error()
 				return m, nil
@@ -281,7 +288,18 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.screen != "list" {
-				return m, m.Open()
+				saved := *m
+				saved.cancel = nil
+				saved.testing = false
+				saved.resumeDraft = nil
+				cmd := m.Open()
+				m.resumeDraft = func() {
+					w, h, request := m.width, m.height, m.request+1
+					*m = saved
+					m.width, m.height, m.request = w, h, request
+				}
+				m.note = config.Text("R retoma a edição preservada", "R resumes preserved edits")
+				return m, cmd
 			}
 			m.Close()
 			return m, util.CmdHandler(CloseIntegrationDialogMsg{})
@@ -324,6 +342,11 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.entries) > 0 {
 					return m, m.edit(m.entries[m.selected])
 				}
+			case "r":
+				if m.resumeDraft != nil {
+					m.resumeDraft()
+					return m, textinput.Blink
+				}
 			case "n":
 				return m, m.edit(config.Integration{Kind: "mcp", MCP: config.MCPServer{Type: config.MCPStdio}})
 			case "l":
@@ -342,18 +365,21 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "up" || msg.String() == "shift+tab" {
 				delta = -1
 			}
-			m.focus = (m.focus + delta + len(m.fields)) % len(m.fields)
+			indices := m.visibleFields()
+			index := slices.Index(indices, m.focus)
+			m.focus = indices[(index+delta+len(indices))%len(indices)]
 			return m, m.fields[m.focus].Focus()
 		}
 	case tea.MouseMsg:
 		if m.screen == "edit" && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < m.contentWidth()+3 {
-			count := m.formRows()
-			start := max(0, m.focus-count+1)
+			indices := m.visibleFields()
+			count := min(m.formRows(), len(indices))
+			start := max(0, slices.Index(indices, m.focus)-count+1)
 			i := start + (msg.Y-3)/2
-			if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(m.fields) {
+			if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(indices) {
 				m.fields[m.focus].Blur()
-				m.focus = i
-				return m, m.fields[i].Focus()
+				m.focus = indices[i]
+				return m, m.fields[m.focus].Focus()
 			}
 		}
 		if m.screen == "list" && len(m.entries) > 0 {
@@ -395,6 +421,9 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 func (m *integrationDialogCmp) View() string {
+	if m.noteFull {
+		return m.noteView()
+	}
 	if m.arguments != nil {
 		return m.arguments.view(m.contentWidth(), m.height)
 	}
@@ -432,12 +461,13 @@ func (m *integrationDialogCmp) View() string {
 			if i == m.selected {
 				style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
 			}
-			lines = append(lines, style.Render(ansi.Truncate(config.IntegrationSummary(m.entries[i]), width, "…")))
+			lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+config.IntegrationSummary(m.entries[i]), width, "…")))
 		}
 	} else if m.screen == "edit" {
-		count := m.formRows()
-		start := max(0, m.focus-count+1)
-		for i := start; i < min(len(m.fields), start+count); i++ {
+		indices := m.visibleFields()
+		count := min(m.formRows(), len(indices))
+		start := max(0, slices.Index(indices, m.focus)-count+1)
+		for _, i := range indices[start:min(len(indices), start+count)] {
 			label := fieldLabel(m.labels[i])
 			if strings.HasPrefix(m.labels[i], "Arguments") {
 				label = config.Text("Argumentos · Enter edita lista", "Arguments · Enter edits list")
@@ -459,9 +489,38 @@ func (m *integrationDialogCmp) View() string {
 		}
 	}
 	note := m.note
+	if m.screen == "list" {
+		note = config.Text("N Adicionar MCP · L Adicionar LSP · Enter Editar · Esc", "N Add MCP · L Add LSP · Enter Edit · Esc")
+		if len(m.entries) > 0 && m.entries[m.selected].Kind == "mcp" && m.entries[m.selected].MCP.OAuth != nil {
+			note += " · Ctrl+A Login · Ctrl+D Logout · Ctrl+U Status"
+		}
+	}
 	if m.testing {
 		note = "Testing… approve the connection request if prompted; Esc cancels."
 	}
-	lines = append(lines, line(note))
+	if m.screen == "edit" && m.dirty() {
+		lines = append(lines, line(config.Text("Alterações não salvas", "Unsaved changes")))
+	}
+	lines = append(lines, m.noteLines(note)...)
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+func (m *integrationDialogCmp) visibleFields() []int {
+	if m.current.Kind != "mcp" || len(m.fields) < 13 {
+		r := []int{}
+		for i := range m.fields {
+			r = append(r, i)
+		}
+		return r
+	}
+	r := []int{0, 1}
+	if m.fields[1].Value() == "stdio" {
+		r = append(r, 2, 3, 6, 7)
+	} else {
+		r = append(r, 4, 5, 7, 8)
+		if m.fields[8].Value() == "true" {
+			r = append(r, 9, 10, 11, 12)
+		}
+	}
+	return r
 }

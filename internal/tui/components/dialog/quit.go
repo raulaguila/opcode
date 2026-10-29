@@ -64,7 +64,17 @@ func (q *quitDialogCmp) Init() tea.Cmd {
 
 func (q *quitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		if clickedLabel(q.View(), config.Text("Sair", "Quit"), msg) {
+			return q, util.CmdHandler(ConfirmQuitMsg{})
+		}
+		if clickedLabel(q.View(), config.Text("Continuar", "Continue"), msg) {
+			return q, util.CmdHandler(CloseQuitMsg{})
+		}
 	case tea.KeyMsg:
+		if msg.Type == tea.KeyEsc {
+			return q, util.CmdHandler(CloseQuitMsg{})
+		}
 		switch {
 		case key.Matches(msg, helpKeys.LeftRight) || key.Matches(msg, helpKeys.Tab):
 			q.selectedNo = !q.selectedNo
@@ -99,8 +109,8 @@ func (q *quitDialogCmp) View() string {
 		noStyle = noStyle.Background(t.Background()).Foreground(t.Primary())
 	}
 
-	yesButton := yesStyle.Padding(0, 1).Render(config.Text("Sim", "Yes"))
-	noButton := noStyle.Padding(0, 1).Render(config.Text("Não", "No"))
+	yesButton := yesStyle.Padding(0, 1).Render(selectionMark(!q.selectedNo) + config.Text("Sair", "Quit"))
+	noButton := noStyle.Padding(0, 1).Render(selectionMark(q.selectedNo) + config.Text("Continuar", "Continue"))
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Left, yesButton, spacerStyle.Render("  "), noButton)
 

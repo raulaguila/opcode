@@ -370,3 +370,53 @@ abrem painéis de controle/diagnóstico, sem acrescentar barras permanentes.
 
 
 Veja também a [evolução comparativa](comparative-evolution.md) para perguntas agrupadas, busca aproximada de modelos, citações verificadas e diagnóstico de linguagens.
+
+## Menus consistentes e terminais compactos
+
+O seletor de modo mostra as três opções diretamente. Enter aplica a escolha;
+texto e colagem não criam uma busca invisível. A paleta identifica a categoria
+da ação e o comando correspondente. Listas usam `›` para foco, inclusive sem cores.
+
+O catálogo evita categorias repetidas nos demais modelos e mostra contexto em
+unidades legíveis, mantendo o valor exato e sua origem. Conexões oferecem ações
+clicáveis Salvar, Catálogo e Mais, além dos atalhos. Preferências e Integrações
+ficam acessíveis na lista de conexões. Preferências mostram a categoria selecionada
+como seção e usam nomes humanos no editor.
+
+Provedores e integrações identificam alterações não salvas. Esc retorna à lista;
+`R` retoma a edição preservada enquanto o aplicativo continua aberto. Salvar é
+explícito. Mensagens longas têm resumo e `Ctrl+D` abre detalhes roláveis, sem
+interromper o recebimento de resultados de testes.
+
+Em MCP, os campos acompanham o transporte: processo local mostra comando,
+argumentos e ambiente; remoto mostra URL e cabeçalhos. Os campos OAuth aparecem
+quando habilitados. Enter em cabeçalhos/ambiente abre uma lista `nome=VARIAVEL`;
+os valores continuam sendo referências a variáveis de ambiente. Nomes repetidos
+são recusados. Nenhum teste é disparado ao mudar um campo.
+
+Arquivos começam no diretório do projeto. A prévia aparece quando há largura;
+em telas pequenas, a lista ocupa o espaço disponível. Pasta vazia é um estado
+válido: Enter não causa erro nem envia mensagem. O cursor é preservado no resize.
+Argumentos de comandos personalizados mantêm o campo focado e os valores ao
+redimensionar. Conversas mantêm a seleção visível; clique seleciona a prévia e
+Enter abre. Temas recebem resize e preservam a prévia reversível. Esc ou Continuar
+cancela o diálogo Sair.
+
+Painéis mostram a localização anterior e até três ações por vez. `M` expande ou
+recolhe a lista; as setas continuam alcançando as demais ações. Cliques usam as
+mesmas posições da renderização. Tarefa, contexto, índice, diagnóstico, alterações,
+verificações, fila, permissões, Git, worktrees, fontes e skills compartilham esse
+comportamento. `/skills termo` filtra nomes e descrições; escolher prepara o rascunho.
+
+No resultado esperado, Enter abre a edição de arquivos, critérios ou verificações
+por itens. `Ctrl+N` adiciona, `Alt+Backspace` remove e `Ctrl+S` aplica ao formulário;
+outro `Ctrl+S` salva o contrato completo. Itens existentes com vírgulas ou ponto e
+vírgula são preservados. As validações do contrato continuam sendo aplicadas.
+Perguntas mantêm a opção focada visível em telas baixas. O terminal identifica a
+entrada ativa e, com vários processos, mostra seus identificadores e a seleção.
+A ajuda agrupa conversa/edição, trabalho/terminal e configurações.
+
+A validação inclui testes de componentes, roteamento pelo aplicativo e PTY com
+Ollama em temas claro, escuro e NO_COLOR. A matriz não certifica todos os terminais
+ou tecnologias assistivas. As evidências estão em
+[evidência dos menus](evidence/2026-10-29-menu-ui-validation.json).

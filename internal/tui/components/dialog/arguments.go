@@ -6,6 +6,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
+	"strings"
 
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -75,7 +78,7 @@ func NewMultiArgumentsDialogCmp(commandID, content string, argNames []string) Mu
 		ti.PlaceholderStyle = ti.PlaceholderStyle.Background(t.Background())
 		ti.PromptStyle = ti.PromptStyle.Background(t.Background())
 		ti.TextStyle = ti.TextStyle.Background(t.Background())
-		
+
 		// Only focus the first input initially
 		if i == 0 {
 			ti.Focus()
@@ -89,11 +92,11 @@ func NewMultiArgumentsDialogCmp(commandID, content string, argNames []string) Mu
 	}
 
 	return MultiArgumentsDialogCmp{
-		inputs:    inputs,
-		keys:      argumentsDialogKeyMap{},
-		commandID: commandID,
-		content:   content,
-		argNames:  argNames,
+		inputs:     inputs,
+		keys:       argumentsDialogKeyMap{},
+		commandID:  commandID,
+		content:    content,
+		argNames:   argNames,
 		focusIndex: 0,
 	}
 }
@@ -102,19 +105,22 @@ func NewMultiArgumentsDialogCmp(commandID, content string, argNames []string) Mu
 func (m MultiArgumentsDialogCmp) Init() tea.Cmd {
 	// Make sure only the first input is focused
 	for i := range m.inputs {
-		if i == 0 {
+		if i == m.focusIndex {
 			m.inputs[i].Focus()
 		} else {
 			m.inputs[i].Blur()
 		}
 	}
-	
+
 	return textinput.Blink
 }
 
 // Update implements tea.Model.
 func (m MultiArgumentsDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+	if len(m.inputs) == 0 {
+		return m, nil
+	}
 	t := theme.CurrentTheme()
 
 	switch msg := msg.(type) {
@@ -162,6 +168,15 @@ func (m MultiArgumentsDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.inputs[m.focusIndex].PromptStyle = m.inputs[m.focusIndex].PromptStyle.Foreground(t.Primary())
 			m.inputs[m.focusIndex].TextStyle = m.inputs[m.focusIndex].TextStyle.Foreground(t.Primary())
 		}
+	case tea.MouseMsg:
+		rows := max(1, (m.height-8)/2)
+		start := max(0, m.focusIndex-rows+1)
+		i := start + (msg.Y-3)/2
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.Y >= 3 && msg.Y < 3+rows*2 && i < len(m.inputs) {
+			m.inputs[m.focusIndex].Blur()
+			m.focusIndex = i
+			return m, m.inputs[i].Focus()
+		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -177,72 +192,30 @@ func (m MultiArgumentsDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements tea.Model.
 func (m MultiArgumentsDialogCmp) View() string {
-	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
-
-	// Calculate width needed for content
-	maxWidth := 60 // Width for explanation text
-
-	title := lipgloss.NewStyle().
-		Foreground(t.Primary()).
-		Bold(true).
-		Width(maxWidth).
-		Padding(0, 1).
-		Background(t.Background()).
-		Render("Command Arguments")
-
-	explanation := lipgloss.NewStyle().
-		Foreground(t.Text()).
-		Width(maxWidth).
-		Padding(0, 1).
-		Background(t.Background()).
-		Render("This command requires multiple arguments. Please enter values for each:")
-
-	// Create input fields for each argument
-	inputFields := make([]string, len(m.inputs))
-	for i, input := range m.inputs {
-		// Highlight the label of the focused input
-		labelStyle := lipgloss.NewStyle().
-			Width(maxWidth).
-			Padding(1, 1, 0, 1).
-			Background(t.Background())
-			
-		if i == m.focusIndex {
-			labelStyle = labelStyle.Foreground(t.Primary()).Bold(true)
-		} else {
-			labelStyle = labelStyle.Foreground(t.TextMuted())
-		}
-		
-		label := labelStyle.Render(m.argNames[i] + ":")
-
-		field := lipgloss.NewStyle().
-			Foreground(t.Text()).
-			Width(maxWidth).
-			Padding(0, 1).
-			Background(t.Background()).
-			Render(input.View())
-
-		inputFields[i] = lipgloss.JoinVertical(lipgloss.Left, label, field)
+	width := max(1, min(60, m.width-6))
+	if m.width <= 0 {
+		width = 60
 	}
-
-	maxWidth = min(maxWidth, m.width-10)
-
-	// Join all elements vertically
-	elements := []string{title, explanation}
-	elements = append(elements, inputFields...)
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		elements...,
-	)
-
-	return baseStyle.Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(t.Background()).
-		BorderForeground(t.TextMuted()).
-		Background(t.Background()).
-		Width(lipgloss.Width(content) + 4).
-		Render(content)
+	height := m.height
+	if height <= 0 {
+		height = 24
+	}
+	rows := max(1, (height-8)/2)
+	start := max(0, m.focusIndex-rows+1)
+	lines := []string{config.Text("Argumentos do comando", "Command arguments")}
+	for i := start; i < min(len(m.inputs), start+rows); i++ {
+		mark := "  "
+		if i == m.focusIndex {
+			mark = "› "
+		}
+		m.inputs[i].Width = max(1, width-2)
+		lines = append(lines, mark+m.argNames[i], m.inputs[i].View())
+	}
+	lines = append(lines, config.Text("Tab campo · Enter próxima/envia · Esc cancela", "Tab field · Enter next/send · Esc cancel"))
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], width, "…")
+	}
+	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
 }
 
 // SetSize sets the size of the component.

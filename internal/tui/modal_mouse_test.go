@@ -46,3 +46,22 @@ func TestPermissionClickMatchesRenderedRootAtEverySize(t *testing.T) {
 		})
 	}
 }
+
+func TestQuitMouseDoesNotReplaceThemeDialog(t *testing.T) {
+	status, _ := core.NewStatusCmp(nil).Update(tea.WindowSizeMsg{Width: 80})
+	quit := dialog.NewQuitCmp()
+	themes := dialog.NewThemeDialogCmp()
+	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: &inputPage{}}, status: status.(core.StatusCmp), width: 80, height: 23, quit: quit, themeDialog: themes, showQuit: true}
+	for y, line := range strings.Split(ansi.Strip(a.View()), "\n") {
+		if i := strings.Index(line, "Continue"); i >= 0 {
+			u, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(line[:i]), Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+			after := u.(appModel)
+			require.Same(t, themes, after.themeDialog)
+			require.Same(t, quit, after.quit)
+			require.NotNil(t, cmd)
+			require.IsType(t, dialog.CloseQuitMsg{}, cmd())
+			return
+		}
+	}
+	t.Fatal("Continue button missing")
+}

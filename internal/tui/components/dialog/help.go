@@ -73,9 +73,27 @@ func removeDuplicateBindings(bindings []key.Binding) []key.Binding {
 func (h *helpCmp) render() string {
 	width := max(1, h.width-4)
 	lines := []string{}
+	groups := [][]string{{}, {}, {}}
 	for _, binding := range removeDuplicateBindings(h.keys) {
-		lines = append(lines, ansi.Wrap(binding.Help().Key+"  "+interfaceCopy(binding.Help().Desc), width, ""))
+		d := strings.ToLower(binding.Help().Desc)
+		group := 0
+		if strings.Contains(d, "terminal") || strings.Contains(d, "process") || strings.Contains(d, "plan") || strings.Contains(d, "task") {
+			group = 1
+		}
+		if strings.Contains(d, "model") || strings.Contains(d, "theme") || strings.Contains(d, "settings") || strings.Contains(d, "help") {
+			group = 2
+		}
+		groups[group] = append(groups[group], ansi.Wrap(binding.Help().Key+"  "+interfaceCopy(binding.Help().Desc), width, ""))
 	}
+	for i, group := range groups {
+		if len(group) == 0 {
+			continue
+		}
+		lines = append(lines, []string{config.Text("Conversa e edição", "Conversation and editing"), config.Text("Trabalho e terminal", "Work and terminal"), config.Text("Configurações e ajuda", "Settings and help")}[i])
+		lines = append(lines, group...)
+		lines = append(lines, "")
+	}
+
 	h.viewport.Width = width
 	if h.viewport.Height == 0 {
 		h.viewport.Height = 10

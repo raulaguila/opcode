@@ -71,6 +71,13 @@ func (m InitDialogCmp) Init() tea.Cmd {
 // Update implements tea.Model.
 func (m InitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.MouseMsg:
+		if clickedLabel(m.View(), config.Text("Criar Opcode.md", "Create Opcode.md"), msg) {
+			return m, util.CmdHandler(CloseInitDialogMsg{Initialize: true})
+		}
+		if clickedLabel(m.View(), config.Text("Agora não", "Not now"), msg) {
+			return m, util.CmdHandler(CloseInitDialogMsg{Initialize: false})
+		}
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
@@ -146,8 +153,8 @@ func (m InitDialogCmp) View() string {
 	} else {
 		noMark = "› "
 	}
-	yes := yesStyle.Padding(0, 2).Render(yesMark + config.Text("Sim", "Yes"))
-	no := noStyle.Padding(0, 2).Render(noMark + config.Text("Não", "No"))
+	yes := yesStyle.Padding(0, 2).Render(yesMark + config.Text("Criar Opcode.md", "Create Opcode.md"))
+	no := noStyle.Padding(0, 2).Render(noMark + config.Text("Agora não", "Not now"))
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yes, baseStyle.Render("  "), no)
 	buttons = baseStyle.

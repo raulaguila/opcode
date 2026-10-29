@@ -91,7 +91,18 @@ func (p *chatPage) batchQuestionView(height int) string {
 	if len(rows) > height {
 		// Keep the question and response visible in a short terminal.
 		if height >= 3 {
-			rows = append([]string{rows[0]}, rows[len(rows)-(height-1):]...)
+			if index < len(q.Questions) && len(q.Questions[index].Choices) > 0 && height >= 4 {
+				choiceStart := 1
+				if q.Questions[index].Explanation != "" {
+					choiceStart++
+				}
+				count := max(1, height-3)
+				start := choiceStart + max(0, min(p.workflow.choice-count+1, len(q.Questions[index].Choices)-count))
+				tail := rows[len(rows)-2:]
+				rows = append([]string{rows[0]}, append(rows[start:min(start+count, choiceStart+len(q.Questions[index].Choices))], tail...)...)
+			} else {
+				rows = append([]string{rows[0]}, rows[len(rows)-(height-1):]...)
+			}
 		} else {
 			rows = rows[len(rows)-height:]
 		}

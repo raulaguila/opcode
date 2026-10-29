@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/raulaguila/opcode/internal/tui/commands"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"os"
 	"path/filepath"
@@ -56,12 +57,16 @@ type workspaceAction struct {
 	line                    int
 }
 type workspacePanel struct {
+	itemEditor              *dialog.ItemEditor
+	itemValues              map[int][]string
+	itemText                map[int]string
 	fields                  []textinput.Model
 	focus                   int
 	contractKind            string
 	kind, title, body, note string
 	details                 string
 	showDetails             bool
+	allActions              bool
 	diffMode                string
 	selected                int
 	actions                 []workspaceAction
@@ -192,7 +197,7 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 	case "recalibrate":
 		return p.recalibrateContext()
 	case "skills":
-		return p.openSkills()
+		return p.openSkills(value)
 	case "skill":
 		return p.invokeSkill(value)
 	case "changes", "checks":
@@ -294,7 +299,7 @@ func (p *chatPage) openContext(compact bool) tea.Cmd {
 	})
 }
 
-func (p *chatPage) openSkills() tea.Cmd {
+func (p *chatPage) openSkills(query ...string) tea.Cmd {
 	p.showWorkspace("skills", config.Text("Skills disponíveis", "Available skills"), "")
 	control, ok := p.app.CoderAgent.(agent.ExtensionControl)
 	if !ok {
@@ -305,6 +310,9 @@ func (p *chatPage) openSkills() tea.Cmd {
 		return util.ReportError(err)
 	}
 	for _, skill := range skills {
+		if len(query) > 0 && !commands.Match(query[0], skill.Name, skill.Description) {
+			continue
+		}
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: skill.Name + " · " + skill.Description, kind: "skill", text: skill.Name})
 	}
 	p.workspace.body = config.Text("Enter prepara /skill NOME no rascunho. As skills vêm dos diretórios explícitos da configuração global e não concedem permissões. Hooks before_tool/after_tool são opt-in no JSON global; rodam apenas em Executar com as permissões e sandbox normais.", "Enter prepares /skill NAME in the draft. Skills come from explicitly configured global directories and do not grant permissions. Hooks before_tool/after_tool are opt-in in global JSON; they run only in Execute with normal permissions and sandboxing.")
@@ -515,7 +523,7 @@ func (p *chatPage) openResponseActions(text string) tea.Cmd {
 	}
 	text = tools.RedactCredentials(text)
 	p.showWorkspace("actions", config.Text("Ações da resposta", "Response actions"), "")
-	p.workspace.actions = []workspaceAction{{label: config.Text("Copiar resposta", "Copy response"), kind: "copy", text: text}, {label: "Selecionar texto da resposta", kind: "text", text: text}}
+	p.workspace.actions = []workspaceAction{{label: config.Text("Copiar resposta", "Copy response"), kind: "copy", text: text}, {label: config.Text("Selecionar texto da resposta", "Select response text"), kind: "text", text: text}}
 	for i, match := range regexp.MustCompile("(?s)```[^\\n]*\\n(.*?)```").FindAllStringSubmatch(text, 10) {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf(config.Text("Copiar código %d", "Copy code %d"), i+1), kind: "copy", text: match[1]})
 	}
@@ -543,7 +551,7 @@ func (p *chatPage) openResponseActions(text string) tea.Cmd {
 			continue
 		}
 		seen[path] = true
-		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: "Abrir arquivo · " + path, kind: "file", path: absolute, line: line})
+		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: config.Text("Abrir fonte · ", "Open source · ") + path, kind: "file", path: absolute, line: line})
 	}
 	p.workspace.body = config.Text("Escolha uma ação. Prévia de arquivo é leitura local e não libera alterações para o agente.", "Choose an action. File preview is a local read and does not authorize agent edits.")
 	return nil
@@ -638,6 +646,9 @@ func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch msg.String() {
+	case "m":
+		p.workspace.allActions = !p.workspace.allActions
+		return nil
 	case "d":
 		if p.workspace.details != "" {
 			p.workspace.showDetails = !p.workspace.showDetails
@@ -711,10 +722,13 @@ func (p *chatPage) workspaceView() string {
 	w, h := max(1, p.width-4), max(1, p.height-6)
 	t := theme.CurrentTheme()
 	lines := []string{styles.BaseStyle().Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(safePanel(p.workspace.title), w, "…"))}
+	if len(p.workspaceHistory) > 0 {
+		lines = append(lines, ansi.Truncate(safePanel(p.workspaceHistory[len(p.workspaceHistory)-1].title)+" › "+safePanel(p.workspace.title), w, "…"))
+		h--
+	}
 	help := config.Text("↑↓/PgUp/PgDn rola · Ctrl+R atualiza · Esc volta", "↑↓/PgUp/PgDn scroll · Ctrl+R refresh · Esc back")
 	if len(p.workspace.actions) > 0 {
-		maxRows := max(1, min(10, h-4))
-		start := max(0, min(p.workspace.selected-maxRows+1, len(p.workspace.actions)-maxRows))
+		_, maxRows, start := p.workspaceActionGeometry()
 		for i := start; i < min(len(p.workspace.actions), start+maxRows); i++ {
 			style := styles.BaseStyle().Width(w)
 			mark := " "
@@ -726,6 +740,10 @@ func (p *chatPage) workspaceView() string {
 		}
 		help = config.Text("↑↓ escolhe · Enter abre · Esc volta", "↑↓ choose · Enter open · Esc back")
 		h -= min(maxRows, len(p.workspace.actions))
+		if len(p.workspace.actions) > 3 {
+			lines = append(lines, config.Text("M mais/menos ações", "M more/fewer actions"))
+			h--
+		}
 	}
 	if p.workspace.kind == "queue" {
 		help = config.Text("Enter edita · Delete remove · Ctrl+R atualiza · Esc volta", "Enter edit · Delete remove · Ctrl+R refresh · Esc back")
@@ -810,6 +828,9 @@ func cloneUserAttachments(items []message.Attachment) []message.Attachment {
 }
 func (p *chatPage) workspaceMouse(msg tea.MouseMsg) tea.Cmd {
 	if p.workspace.kind == "contract" {
+		if p.workspace.itemEditor != nil {
+			return nil
+		}
 		if msg.Button == tea.MouseButtonWheelUp {
 			return p.contractKey(tea.KeyMsg{Type: tea.KeyUp})
 		}
@@ -830,11 +851,15 @@ func (p *chatPage) workspaceMouse(msg tea.MouseMsg) tea.Cmd {
 		p.workspace.view, _ = p.workspace.view.Update(msg)
 		return nil
 	}
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.Y >= 2 {
-		h := max(1, min(10, p.height-10))
-		start := max(0, min(p.workspace.selected-h+1, len(p.workspace.actions)-h))
-		index := start + msg.Y - 2
-		if msg.Y < 2+h && index >= 0 && index < len(p.workspace.actions) {
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+		first, rows, start := p.workspaceActionGeometry()
+		shown := min(rows, len(p.workspace.actions))
+		if len(p.workspace.actions) > 3 && msg.Y == first+shown {
+			p.workspace.allActions = !p.workspace.allActions
+			return nil
+		}
+		index := start + msg.Y - first
+		if msg.Y >= first && msg.Y < first+shown && index >= 0 && index < len(p.workspace.actions) {
 			p.workspace.selected = index
 			return p.workspaceChoose()
 		}
@@ -923,4 +948,19 @@ func (p *chatPage) openRuntime() tea.Cmd {
 		summary := fmt.Sprintf(config.Text("Modelo: %v\nProtocolo: %v\nProjeto: %v\n\nDiagnóstico da configuração atual. Credenciais omitidas; não executa inferência. D mostra os detalhes técnicos.", "Model: %v\nProtocol: %v\nProject: %v\n\nCurrent configuration diagnostics. Credentials omitted; no inference is executed. D shows technical details."), report["model"], report["protocol"], report["cwd"])
 		return summary, string(raw), err
 	})
+}
+
+func (p *chatPage) workspaceActionGeometry() (first, rows, start int) {
+	first = 2
+	h := max(1, p.height-6)
+	if len(p.workspaceHistory) > 0 {
+		first++
+		h--
+	}
+	rows = max(1, min(10, h-4))
+	if !p.workspace.allActions {
+		rows = min(rows, 3)
+	}
+	start = max(0, min(p.workspace.selected-rows+1, len(p.workspace.actions)-rows))
+	return
 }

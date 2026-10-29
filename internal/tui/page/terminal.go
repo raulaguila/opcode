@@ -289,6 +289,18 @@ func (p *chatPage) terminalView(full bool) string {
 	}
 	header = ansi.Truncate(header, width, "…")
 	if full {
+		header += " · " + config.Text("Entrada no terminal", "Terminal input")
+		if len(t.processes) > 1 {
+			labels := []string{}
+			for _, process := range t.processes {
+				mark := " "
+				if process.ID == t.selected {
+					mark = "›"
+				}
+				labels = append(labels, mark+process.ID)
+			}
+			header += "\n" + ansi.Truncate(strings.Join(labels, " · "), width, "…")
+		}
 		body := t.logs.View()
 		if t.snapshot.PTY {
 			body = t.snapshot.Screen
@@ -311,7 +323,7 @@ func (p *chatPage) terminalView(full bool) string {
 		if t.selected == "" && !t.starting {
 			body = config.Text("Ctrl+N inicia um terminal após aprovação.", "Ctrl+N starts a terminal after approval.")
 		}
-		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-2)).MaxHeight(max(1, p.height-2)).Render(body)
+		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-1-lipgloss.Height(header))).MaxHeight(max(1, p.height-1-lipgloss.Height(header))).Render(body)
 		footer := ansi.Truncate(config.Text("Ctrl+P conversa • Ctrl+N novo • Alt+←/→ troca • Ctrl+X encerra • Ctrl+C interrompe", "Ctrl+P chat • Ctrl+N new • Alt+←/→ switch • Ctrl+X stop • Ctrl+C interrupt"), width, "…")
 		return style.Render(lipgloss.JoinVertical(lipgloss.Left, header, body, footer))
 	}

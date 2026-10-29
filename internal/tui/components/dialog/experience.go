@@ -98,6 +98,9 @@ func (m *providerDialogCmp) experienceUpdate(msg tea.Msg) (tea.Cmd, bool) {
 			case "down":
 				m.selected = (m.selected + 1) % len(config.ProviderPresets)
 			case "enter":
+				if m.selected < 0 || m.selected >= len(config.ProviderPresets) {
+					return nil, true
+				}
 				p := config.ProviderPresets[m.selected]
 				cmd := m.edit(nil)
 				m.fields[0].SetValue(p.ID)
@@ -167,10 +170,26 @@ func (m *providerDialogCmp) experienceUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		if mouse.Button == tea.MouseButtonWheelDown {
 			m.selected++
+			if m.screen == "presets" {
+				m.selected = min(m.selected, max(0, len(config.ProviderPresets)-1))
+			}
 		}
-		if mouse.Button == tea.MouseButtonLeft && mouse.Action == tea.MouseActionPress && mouse.Y >= 4 {
-			start := max(0, m.selected-max(1, m.height-10)+1)
-			m.selected = max(0, mouse.Y-4+start)
+		if mouse.Button == tea.MouseButtonLeft && mouse.Action == tea.MouseActionPress && mouse.Y >= 4 && mouse.X >= 3 && mouse.X < m.contentWidth()+3 {
+			if m.screen == "setting" {
+				return nil, true
+			}
+			if m.screen == "presets" && mouse.Y-4 >= len(config.ProviderPresets) {
+				return nil, true
+			}
+			offset := 4
+			if m.screen == "settings" {
+				offset = 5
+			}
+			if mouse.Y < offset {
+				return nil, true
+			}
+			start := max(0, m.selected-max(1, m.height-11)+1)
+			m.selected = max(0, mouse.Y-offset+start)
 			return m.experienceUpdate(tea.KeyMsg{Type: tea.KeyEnter})
 		}
 		return nil, true
@@ -215,7 +234,7 @@ func (m *providerDialogCmp) experienceView() string {
 		}
 		m.settingsFilter.Width = max(4, width-10)
 		lines = append(lines, line(m.settingsFilter.View()))
-		rows := max(1, m.height-10)
+		rows := max(1, m.height-11)
 		if m.screen == "settings" {
 			list := m.filteredSettings()
 			effective := map[string]config.EffectiveValue{}
@@ -227,6 +246,9 @@ func (m *providerDialogCmp) experienceView() string {
 			}
 			m.selected = min(m.selected, max(0, len(list)-1))
 			start := max(0, m.selected-rows+1)
+			if len(list) > 0 {
+				lines = append(lines, line(localizedCategory(list[m.selected].Category)))
+			}
 			for i := start; i < min(len(list), start+rows); i++ {
 				s := list[i]
 				v := effective[s.Path]
@@ -234,7 +256,7 @@ func (m *providerDialogCmp) experienceView() string {
 				if i == m.selected {
 					mark = "› "
 				}
-				lines = append(lines, line(mark+localizedCategory(s.Category)+" · "+localizedSettingLabel(s.Label)+" = "+fmt.Sprint(v.Value)))
+				lines = append(lines, line(mark+localizedSettingLabel(s.Label)+" = "+fmt.Sprint(v.Value)))
 			}
 			if m.advanced {
 				lines = append(lines, line(config.Text("Opções avançadas visíveis", "Advanced options visible")))
@@ -255,7 +277,7 @@ func (m *providerDialogCmp) experienceView() string {
 			}
 		}
 	case "setting":
-		title = m.settingPath
+		title = localizedSettingLabel(m.labels[0])
 		v := config.EffectiveSetting(m.settingPath)
 		lines = append(lines, line(config.Text("Origem: ", "Origin: ")+localizedOrigin(v.Origin)), line(localizedSettingLabel(m.labels[0])), line(choiceView(m.fields[0], settingOptions(m.settingPath))))
 	}

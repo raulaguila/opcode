@@ -239,6 +239,33 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			a.help = updated.(dialog.HelpCmp)
 			return a, c
 		}
+		if m, ok := a.mouseModal(); ok && m != nil {
+			if a.pages[a.currentPage] == nil || a.status == nil {
+				return a, nil
+			}
+			x, y := a.dialogOrigin(m.View())
+			msg.X -= x
+			msg.Y -= y
+			if msg.X < 0 || msg.Y < 0 || msg.X >= lipgloss.Width(m.View()) || msg.Y >= lipgloss.Height(m.View()) {
+				return a, nil
+			}
+			updated, c := m.Update(msg)
+			switch {
+			case a.showQuit:
+				a.quit = updated.(dialog.QuitDialog)
+			case a.showCommandDialog:
+				a.commandDialog = updated.(dialog.CommandDialog)
+			case a.showThemeDialog:
+				a.themeDialog = updated.(dialog.ThemeDialog)
+			case a.showFilepicker:
+				a.filepicker = updated.(dialog.FilepickerCmp)
+			case a.showMultiArgumentsDialog:
+				a.multiArgumentsDialog = updated.(dialog.MultiArgumentsDialogCmp)
+			case a.showInitDialog:
+				a.initDialog = updated.(dialog.InitDialogCmp)
+			}
+			return a, c
+		}
 		// Capturing the wheel must not scroll the conversation underneath a
 		// modal dialog. The model picker handles its own mouse navigation.
 		if a.showPermissions || a.showHelp || a.showQuit ||
@@ -299,6 +326,9 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			a.integrationDialog.Update(msg)
 		}
 		a.modelDialog.Update(msg)
+		if a.themeDialog != nil {
+			a.themeDialog.Update(msg)
+		}
 
 		s, _ := a.status.Update(msg)
 		a.status = s.(core.StatusCmp)
@@ -331,7 +361,7 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			a.multiArgumentsDialog.SetSize(msg.Width, msg.Height)
 			args, argsCmd := a.multiArgumentsDialog.Update(msg)
 			a.multiArgumentsDialog = args.(dialog.MultiArgumentsDialogCmp)
-			cmds = append(cmds, argsCmd, a.multiArgumentsDialog.Init())
+			cmds = append(cmds, argsCmd)
 		}
 
 		return a, tea.Batch(cmds...)
@@ -1305,4 +1335,22 @@ func configuredKeys() keyMap {
 	k.SwitchTheme.SetKeys(config.Shortcut("theme"))
 	k.SwitchTheme.SetHelp(config.Shortcut("theme"), "switch theme")
 	return k
+}
+
+func (a appModel) mouseModal() (tea.Model, bool) {
+	switch {
+	case a.showQuit:
+		return a.quit, true
+	case a.showCommandDialog:
+		return a.commandDialog, true
+	case a.showThemeDialog:
+		return a.themeDialog, true
+	case a.showFilepicker:
+		return a.filepicker, true
+	case a.showMultiArgumentsDialog:
+		return a.multiArgumentsDialog, true
+	case a.showInitDialog:
+		return a.initDialog, true
+	}
+	return nil, false
 }

@@ -1,5 +1,7 @@
 package commands
 
+import "github.com/raulaguila/opcode/internal/config"
+
 // Builtins is shared by the slash menu and command palette.
 type Command struct {
 	ID, Title, Description string
@@ -43,4 +45,17 @@ var Builtins = []Command{
 	{ID: "process", Title: "Mostrar/recolher processo", Description: "Revisar as etapas da última interação"},
 	{ID: "latest", Title: "Novas mensagens", Description: "Voltar ao acompanhamento da resposta"},
 	{ID: "cancel", Title: "Interromper atividade", Description: "Solicitar interrupção preservando o progresso"},
+}
+
+func Category(id string) string {
+	switch id {
+	case "settings", "models", "setup", "integrations", "runtime", "local-status":
+		return config.Text("Configurações", "Settings")
+	case "files", "worktrees", "index", "changes", "checks", "undo", "redo":
+		return config.Text("Projeto", "Project")
+	case "task", "plan", "contract", "resume", "terminal", "queue", "cancel", "context", "compact", "recalibrate", "skills":
+		return config.Text("Trabalho", "Work")
+	default:
+		return config.Text("Conversa", "Conversation")
+	}
 }

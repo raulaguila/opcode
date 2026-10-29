@@ -45,6 +45,8 @@ func TestSessionMouseSelectionUsesVisibleOffset(t *testing.T) {
 	d.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
 	require.Equal(t, 1, d.offset)
 	_, cmd := d.Update(tea.MouseMsg{Button: tea.MouseButtonLeft, Action: tea.MouseActionPress, X: 4, Y: 4})
+	require.Equal(t, "two", cmd().(SessionPreviewRequestMsg).ID)
+	_, cmd = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	require.Equal(t, "two", cmd().(SessionSelectedMsg).Session.ID)
 }
 

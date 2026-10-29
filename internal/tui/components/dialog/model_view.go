@@ -155,7 +155,7 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 	}
 	context := config.Text("Contexto: não informado", "Context: not reported")
 	if selected.ContextWindow > 0 {
-		context = fmt.Sprintf(config.Text("Contexto: %d", "Context: %d"), selected.ContextWindow)
+		context = fmt.Sprintf(config.Text("Contexto: %s", "Context: %s"), tokenLabel(selected.ContextWindow))
 		if contextNote != "" {
 			context += " (" + contextNote + ")"
 		}
@@ -208,7 +208,7 @@ func (m *modelDialogCmp) catalogView() string {
 	rows := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(interfaceCopy(m.modelTitle()), g.width, "…"))}
 	label := config.Text("Buscar: ", "Search: ")
 	m.search.Width = max(1, g.width-ansi.StringWidth(label))
-	m.search.Placeholder = config.Text("Buscar modelos", "Search models")
+	m.search.Placeholder = config.Text("Nome ou ID", "Name or ID")
 	rows = append(rows, base.Render(label+m.search.View()))
 	note := m.note
 	if m.loading {
@@ -232,7 +232,7 @@ func (m *modelDialogCmp) catalogView() string {
 		} else if containsModel(prefs.RecentModels, model.ID) {
 			label = "↺ " + label
 		}
-		group := config.Text("Outros", "Other")
+		group := ""
 		if model.ID == active {
 			group = config.Text("Atual", "Current")
 		} else if containsModel(prefs.FavoriteModels, model.ID) {
@@ -241,7 +241,7 @@ func (m *modelDialogCmp) catalogView() string {
 			group = config.Text("Recentes", "Recent")
 		}
 		rendered := fmt.Sprintf("%s %s %s", caret, mark, label)
-		if g.width >= 48 {
+		if g.width >= 48 && group != "" {
 			rendered = ansi.Truncate(rendered, g.width-12, "…")
 			rendered += strings.Repeat(" ", max(1, g.width-11-ansi.StringWidth(rendered))) + group
 		}
@@ -273,7 +273,7 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	position += config.Text(" · ✓ atual", " · ✓ current")
 	rows = append(rows, line(position))
-	hint := config.Text("Enter escolhe · Alt+←/→ provedor · Ctrl+D detalhes · Esc", "Enter choose · Alt+←/→ provider · Ctrl+D details · Esc")
+	hint := config.Text("Enter escolhe · Ctrl+F ★ · Alt+←/→ provedor · Ctrl+D · Esc", "Enter choose · Ctrl+F ★ · Alt+←/→ provider · Ctrl+D · Esc")
 	if g.width < 48 {
 		hint = config.Text("↑↓ · Enter · Esc · Ctrl+D", "↑↓ · Enter · Esc · Ctrl+D")
 	}
@@ -296,4 +296,11 @@ func containsModel(list []models.ModelID, id models.ModelID) bool {
 		}
 	}
 	return false
+}
+
+func tokenLabel(n int64) string {
+	if n >= 1024 && n%1024 == 0 {
+		return fmt.Sprintf("%dk (%d)", n/1024, n)
+	}
+	return fmt.Sprint(n)
 }

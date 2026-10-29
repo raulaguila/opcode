@@ -8,10 +8,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/styles"
+	"sort"
 	"strings"
 )
 
 type argumentList struct {
+	pairs    bool
+	note     string
 	fields   []textinput.Model
 	selected int
 }
@@ -54,6 +57,17 @@ func (a *argumentList) update(msg tea.Msg) (done, save bool, cmd tea.Cmd) {
 		case "esc":
 			return true, false, nil
 		case "ctrl+s":
+			if a.pairs {
+				seen := map[string]bool{}
+				for _, f := range a.fields {
+					k, v, ok := strings.Cut(f.Value(), "=")
+					if !ok || strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" || seen[k] {
+						a.note = config.Text("Use nome=VARIAVEL, sem nomes repetidos", "Use name=VARIABLE, without duplicate names")
+						return false, false, nil
+					}
+					seen[k] = true
+				}
+			}
 			return true, true, nil
 		case "ctrl+n":
 			if len(a.fields) < 64 {
@@ -85,6 +99,15 @@ func (a *argumentList) update(msg tea.Msg) (done, save bool, cmd tea.Cmd) {
 	return
 }
 func (a *argumentList) value() string {
+	if a.pairs {
+		values := map[string]string{}
+		for _, f := range a.fields {
+			k, v, _ := strings.Cut(f.Value(), "=")
+			values[k] = v
+		}
+		raw, _ := json.Marshal(values)
+		return string(raw)
+	}
 	values := make([]string, len(a.fields))
 	for i, f := range a.fields {
 		values[i] = f.Value()
@@ -97,6 +120,9 @@ func (a *argumentList) view(width, height int) string {
 	rows := max(1, height-9)
 	start := max(0, a.selected-rows+1)
 	lines := []string{config.Text("Argumentos · um por linha", "Arguments · one per row"), config.Text("Sem interpretação pelo shell; espaços pertencem ao argumento.", "No shell parsing; spaces belong to the argument.")}
+	if a.pairs {
+		lines = []string{config.Text("Variáveis · nome=VARIAVEL", "Variables · name=VARIABLE"), config.Text("Informe nomes de variáveis de ambiente, sem segredos", "Enter environment variable names, without secrets")}
+	}
 	for i := start; i < min(len(a.fields), start+rows); i++ {
 		a.fields[i].Width = max(1, width-4)
 		mark := "  "
@@ -109,8 +135,56 @@ func (a *argumentList) view(width, height int) string {
 		lines = append(lines, config.Text("Nenhum argumento. Ctrl+N adiciona.", "No arguments. Ctrl+N adds one."))
 	}
 	lines = append(lines, config.Text("Ctrl+N adiciona · Alt+Backspace remove", "Ctrl+N add · Alt+Backspace remove"), config.Text("Tab campo · Ctrl+S aplicar ao formulário · Esc cancelar", "Tab field · Ctrl+S apply to form · Esc cancel"))
+	if a.note != "" {
+		lines = append(lines, a.note)
+	}
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
 }
+
+func newPairList(raw string) (*argumentList, error) {
+	values := map[string]string{}
+	if strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), &values); err != nil {
+			return nil, err
+		}
+	}
+	a := &argumentList{pairs: true}
+	keys := []string{}
+	for k := range values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		a.add(k + "=" + values[k])
+	}
+	a.selected = 0
+	a.focus()
+	return a, nil
+}
+
+// ItemEditor reuses the literal list UI for task targets and acceptance items.
+type ItemEditor struct{ list *argumentList }
+
+func NewItemEditor(items []string) *ItemEditor {
+	a := &argumentList{}
+	for _, v := range items {
+		a.add(v)
+	}
+	a.selected = 0
+	a.focus()
+	return &ItemEditor{a}
+}
+func (e *ItemEditor) Update(msg tea.Msg) (bool, bool, tea.Cmd) { return e.list.update(msg) }
+func (e *ItemEditor) Items() []string {
+	items := []string{}
+	for _, f := range e.list.fields {
+		if v := strings.TrimSpace(f.Value()); v != "" {
+			items = append(items, v)
+		}
+	}
+	return items
+}
+func (e *ItemEditor) View(w, h int) string { return e.list.view(w, h) }

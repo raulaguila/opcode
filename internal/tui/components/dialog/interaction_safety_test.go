@@ -72,7 +72,7 @@ func TestInitializeFitsCompactTerminal(t *testing.T) {
 		view := m.View()
 		require.LessOrEqual(t, lipgloss.Width(view), 60)
 		require.LessOrEqual(t, lipgloss.Height(view), 20)
-		require.Contains(t, ansi.Strip(view), config.Text("Não", "No"))
+		require.Contains(t, ansi.Strip(view), config.Text("Agora não", "Not now"))
 	}
 }
 

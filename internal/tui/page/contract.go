@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
+	"github.com/raulaguila/opcode/internal/tui/components/dialog"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
@@ -61,6 +62,11 @@ func (p *chatPage) editContract(kind string) tea.Cmd {
 		f.SetValue(value)
 		p.workspace.fields = append(p.workspace.fields, f)
 	}
+	p.workspace.itemValues = map[int][]string{0: append([]string(nil), current.Targets...), 1: append([]string(nil), current.Acceptance...), 2: append([]string(nil), current.Checks...)}
+	p.workspace.itemText = map[int]string{}
+	for i, f := range p.workspace.fields {
+		p.workspace.itemText[i] = f.Value()
+	}
 	p.workspace.fields[0].Focus()
 	return tea.Batch(created, textinput.Blink)
 }
@@ -74,7 +80,33 @@ func splitContractField(s, separator string) []string {
 	return result
 }
 func (p *chatPage) contractKey(msg tea.KeyMsg) tea.Cmd {
+	if e := p.workspace.itemEditor; e != nil {
+		done, save, cmd := e.Update(msg)
+		if done {
+			if save {
+				if p.workspace.itemValues == nil {
+					p.workspace.itemValues = map[int][]string{}
+					p.workspace.itemText = map[int]string{}
+				}
+				i := p.workspace.focus
+				separator := ","
+				if i == 1 {
+					separator = ";"
+				}
+				p.workspace.itemValues[i] = e.Items()
+				p.workspace.itemText[i] = strings.Join(e.Items(), separator+" ")
+				p.workspace.fields[i].SetValue(p.workspace.itemText[i])
+			}
+			p.workspace.itemEditor = nil
+		}
+		return cmd
+	}
+
 	switch msg.String() {
+	case "enter":
+		i := p.workspace.focus
+		p.workspace.itemEditor = dialog.NewItemEditor(p.contractItems(i))
+		return textinput.Blink
 	case "esc":
 		p.backWorkspace()
 		return nil
@@ -90,7 +122,7 @@ func (p *chatPage) contractKey(msg tea.KeyMsg) tea.Cmd {
 		if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
 			return util.ReportWarn(config.Text("Aguarde a execução.", "Wait for the current run."))
 		}
-		c := workflow.Contract{Kind: p.workspace.contractKind, Targets: splitContractField(p.workspace.fields[0].Value(), ","), Acceptance: splitContractField(p.workspace.fields[1].Value(), ";"), Checks: splitContractField(p.workspace.fields[2].Value(), ",")}
+		c := workflow.Contract{Kind: p.workspace.contractKind, Targets: p.contractItems(0), Acceptance: p.contractItems(1), Checks: p.contractItems(2)}
 		if err := c.Validate(); err != nil {
 			p.workspace.note = err.Error()
 			return nil
@@ -116,6 +148,9 @@ func (p *chatPage) contractKey(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 func (p *chatPage) contractView() string {
+	if p.workspace.itemEditor != nil {
+		return p.workspace.itemEditor.View(max(1, p.width-8), p.height)
+	}
 	labels := []string{config.Text("Arquivos relativos (vírgula, opcional)", "Relative files (comma separated, optional)"), config.Text("Critérios de aceite (ponto e vírgula)", "Acceptance criteria (semicolon separated)"), config.Text("Verificações configuradas (vírgula)", "Configured checks (comma separated)")}
 	lines := []string{p.workspace.title, config.Text("Não amplia o modo atual nem dispensa aprovações.", "Does not widen the current mode or waive approvals.")}
 	count := max(1, min(len(p.workspace.fields), (p.height-7)/2))
@@ -128,7 +163,7 @@ func (p *chatPage) contractView() string {
 	if p.workspace.note != "" {
 		lines = append(lines, panelText(p.workspace.note))
 	}
-	lines = append(lines, fmt.Sprintf(config.Text("Modo atual: %s · Tab campo · Ctrl+S salva · Esc volta", "Current mode: %s · Tab field · Ctrl+S save · Esc back"), modeLabel(p.mode())))
+	lines = append(lines, fmt.Sprintf(config.Text("Modo atual: %s · Enter edita itens · Tab campo · Ctrl+S salva · Esc volta", "Current mode: %s · Enter edit items · Tab field · Ctrl+S save · Esc back"), modeLabel(p.mode())))
 	for i, line := range lines {
 		lines[i] = ansi.Truncate(line, max(1, p.width-2), "…")
 	}
@@ -147,4 +182,15 @@ func contractLabel(kind string) string {
 		return config.Text("Verificar", "Verify")
 	}
 	return kind
+}
+
+func (p *chatPage) contractItems(i int) []string {
+	if text, ok := p.workspace.itemText[i]; ok && text == p.workspace.fields[i].Value() {
+		return p.workspace.itemValues[i]
+	}
+	separator := ","
+	if i == 1 {
+		separator = ";"
+	}
+	return splitContractField(p.workspace.fields[i].Value(), separator)
 }

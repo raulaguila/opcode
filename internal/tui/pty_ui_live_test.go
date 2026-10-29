@@ -676,7 +676,7 @@ func TestPTYUICompactThemes(t *testing.T) {
 			}
 			h := newPTYUIHarnessAtSize(t, binary, home, workspace, 60, 20, env...)
 			h.wait("compact initialization", 20*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "Initialize Project") && strings.Contains(frame, "Yes") && strings.Contains(frame, "No")
+				return strings.Contains(frame, "Initialize Project") && strings.Contains(frame, "Create Opcode.md") && strings.Contains(frame, "Not now")
 			})
 			h.send("n")
 			h.wait("compact input", 10*time.Second, func(frame string) bool {
@@ -693,6 +693,30 @@ func TestPTYUICompactThemes(t *testing.T) {
 			h.send("\x1b")
 			h.wait("draft restored", 5*time.Second, func(frame string) bool {
 				return !strings.Contains(frame, "Choose model") && strings.Contains(frame, "compact draft ação")
+			})
+			h.send("\x06")
+			h.wait("compact file picker", 5*time.Second, func(frame string) bool {
+				return strings.Contains(frame, "Attach file") && strings.Contains(frame, "Empty directory")
+			})
+			h.send("\rl")
+			h.wait("empty picker stays usable", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Attach file") })
+			h.send("\x1b")
+			h.wait("file picker draft restored", 5*time.Second, func(frame string) bool {
+				return !strings.Contains(frame, "Attach file") && strings.Contains(frame, "compact draft ação")
+			})
+			h.send("\x03")
+			h.wait("quit menu", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Continue") && strings.Contains(frame, "Quit") })
+			h.clickLabel("Continue")
+			h.wait("quit cancelled by mouse", 5*time.Second, func(frame string) bool {
+				return !strings.Contains(frame, "Continue") && strings.Contains(frame, "compact draft ação")
+			})
+			h.send("\x14")
+			h.wait("theme after quit click", 5*time.Second, func(frame string) bool {
+				return strings.Contains(frame, "Select Theme") && strings.Contains(frame, "›")
+			})
+			h.send("\x1b")
+			h.wait("theme dismissed", 5*time.Second, func(frame string) bool {
+				return !strings.Contains(frame, "Select Theme") && strings.Contains(frame, "compact draft ação")
 			})
 			h.resize(80, 24)
 			h.wait("resized draft intact", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })

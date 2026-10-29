@@ -118,6 +118,17 @@ func (t *themeDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, themeKeys.Escape):
 			return t, util.CmdHandler(CloseThemeDialogMsg{RestoreTheme: t.currentTheme})
 		}
+	case tea.MouseMsg:
+		count := len(t.themes)
+		if t.height > 0 {
+			count = max(1, min(count, t.height-8))
+		}
+		start := max(0, t.selectedIdx-count+1)
+		row := msg.Y - 4
+		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.X >= 3 && row >= 0 && row < count && start+row < len(t.themes) {
+			t.selectedIdx = start + row
+			return t, t.preview()
+		}
 	case tea.WindowSizeMsg:
 		t.width = msg.Width
 		t.height = msg.Height
@@ -168,7 +179,7 @@ func (t *themeDialogCmp) View() string {
 				Bold(true)
 		}
 
-		themeItems = append(themeItems, itemStyle.Render(ansi.Truncate(" "+themeName, maxWidth, "…")))
+		themeItems = append(themeItems, itemStyle.Render(ansi.Truncate(selectionMark(i == t.selectedIdx)+themeName, maxWidth, "…")))
 	}
 
 	title := baseStyle.

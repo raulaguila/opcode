@@ -61,6 +61,7 @@ func (s *sessionDialogCmp) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		s.width, s.height = msg.Width, msg.Height
+		s.move(0)
 	case tea.MouseMsg:
 		if s.editing {
 			return s, nil
@@ -74,7 +75,7 @@ func (s *sessionDialogCmp) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		row := msg.Y - 4
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
 			s.selectedIdx = s.offset + row
-			return s, util.CmdHandler(SessionSelectedMsg{s.filtered[s.selectedIdx]})
+			return s, s.requestPreview()
 		}
 	case tea.KeyMsg:
 		if s.editing {
@@ -241,7 +242,7 @@ func (s *sessionDialogCmp) View() string {
 	if s.editing {
 		rows = append(rows, line(config.Text("Novo título: ", "New title: ")+s.rename), line(config.Text("Enter salva · Esc volta", "Enter save · Esc back")))
 	} else {
-		rows = append(rows, line(fmt.Sprintf(config.Text("%d conversas · arquivadas: %t", "%d conversations · archived: %t"), len(s.filtered), s.showArchived)), line(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename")), line(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export")), line(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close")))
+		rows = append(rows, line(fmt.Sprintf(config.Text("%d conversas", "%d conversations"), len(s.filtered))), line(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename")), line(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export")), line(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close")))
 	}
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 }

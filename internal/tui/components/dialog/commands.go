@@ -114,16 +114,40 @@ func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, commandKeys.Escape):
 			return c, util.CmdHandler(CloseCommandDialogMsg{})
 		}
+		if c.activeID != "" && msg.String() != "up" && msg.String() != "down" {
+			return c, nil
+		}
 		if msg.String() != "up" && msg.String() != "down" {
 			var cmd tea.Cmd
 			c.search, cmd = c.search.Update(msg)
 			c.filter()
 			return c, cmd
 		}
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			items := c.listView.GetItems()
+			_, selected := c.listView.GetSelectedItem()
+			count := 8
+			if c.height > 0 {
+				count = max(1, min(8, c.height-10))
+			}
+			start := max(0, selected-count+1)
+			row := msg.Y - 5
+			if c.activeID != "" {
+				row = msg.Y - 3
+			}
+			if msg.X >= 3 && row >= 0 && row < count && start+row < len(items) {
+				return c, util.CmdHandler(CommandSelectedMsg{Command: items[start+row]})
+			}
+		}
+		return c, nil
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
 	default:
+		if c.activeID != "" {
+			return c, nil
+		}
 		before := c.search.Value()
 		var cmd tea.Cmd
 		c.search, cmd = c.search.Update(msg)
@@ -158,6 +182,9 @@ func (c *commandDialogCmp) View() string {
 		Render(c.dialogTitle())
 
 	rows := []string{title, baseStyle.Width(maxWidth).Render(c.search.View()), ""}
+	if c.activeID != "" {
+		rows = []string{title}
+	}
 	items := c.listView.GetItems()
 	_, selected := c.listView.GetSelectedItem()
 	count := 8
@@ -168,6 +195,9 @@ func (c *commandDialogCmp) View() string {
 	for i := start; i < min(len(items), start+count); i++ {
 		item := items[i]
 		name, _ := commands.Presentation(item.ID, item.Title, item.Description)
+		if c.activeID == "" && maxWidth >= 48 {
+			name = commands.Category(item.ID) + " · " + name
+		}
 		if item.ID == c.activeID {
 			name = "✓ " + name
 		}
@@ -185,9 +215,13 @@ func (c *commandDialogCmp) View() string {
 	if selected >= 0 && selected < len(items) && (c.height == 0 || c.height >= 12) {
 		item := items[selected]
 		_, description := commands.Presentation(item.ID, item.Title, item.Description)
-		rows = append(rows, baseStyle.Foreground(t.TextMuted()).Render(ansi.Truncate(description, maxWidth, "…")))
+		rows = append(rows, baseStyle.Foreground(t.TextMuted()).Render(ansi.Truncate("/"+item.ID+" · "+description, maxWidth, "…")))
 	}
-	rows = append(rows, ansi.Truncate(config.Text("↑↓ escolher · Enter executar · Esc voltar", "↑↓ select · Enter run · Esc back"), maxWidth, "…"))
+	hint := config.Text("↑↓ escolher · Enter abrir · Esc voltar", "↑↓ select · Enter open · Esc back")
+	if c.activeID != "" {
+		hint = config.Text("↑↓ escolher · Enter aplicar modo · Esc voltar", "↑↓ select · Enter apply mode · Esc back")
+	}
+	rows = append(rows, ansi.Truncate(hint, maxWidth, "…"))
 	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
 	return baseStyle.Padding(1, 2).

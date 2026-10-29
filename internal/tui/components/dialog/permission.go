@@ -386,7 +386,7 @@ func (p *permissionDialogCmp) render() string {
 		headerContent,
 		contentFinal,
 		buttons,
-		styles.BaseStyle().Width(max(1, p.width-4)).Render(config.Text("T diff · F tela cheia · [ ] arquivo", "T diff · F full screen · [ ] file")),
+		styles.BaseStyle().Width(max(1, p.width-4)).Render(p.permissionHint()),
 		baseStyle.Render(strings.Repeat(" ", max(0, p.width-4))),
 	)
 
@@ -482,5 +482,14 @@ func NewPermissionDialogCmp() PermissionDialogCmp {
 		selectedOption:  2, // A new request never inherits consent.
 		diffCache:       make(map[string]string),
 		markdownCache:   make(map[string]string),
+	}
+}
+
+func (p *permissionDialogCmp) permissionHint() string {
+	switch p.permission.ToolName {
+	case tools.EditToolName, tools.PatchToolName, tools.WriteToolName:
+		return config.Text("T diff · F tela cheia · [ ] arquivo", "T diff · F full screen · [ ] file")
+	default:
+		return config.Text("F tela cheia · escopo exato nesta sessão", "F full screen · exact scope for this session")
 	}
 }

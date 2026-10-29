@@ -82,6 +82,10 @@ Manifesto: `b99e3f53b9b1bf5643993fbe31b09fd87746831d89309c2d21a385f3eedbbea8`.
 Binário testado: `0b2473340a37eb11a5f1a42615d0a32caaa65eed39180d83485b020db32fa885`,
 worktree Opcode baseado em `6e3fcbd` com as alterações desta entrega. Os 12 pares
 caso/tentativa e os hashes de critérios foram conferidos por aplicação.
+Uma correção posterior restrita ao descritor PTY Unix foi validada separadamente
+com race e o fluxo real do Ollama; os fixtures desta comparação não solicitam
+PTY. Os resultados e o hash originais foram preservados, sem repetir o benchmark
+para melhorar o placar. Veja o [registro de validação](validation.md).
 
 No Opcode foram observadas 31 chamadas de provedor, 16 chamadas de ferramentas
 do loop e cinco reparos. A preparação tem contadores separados; esses números

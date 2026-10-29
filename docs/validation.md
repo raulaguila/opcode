@@ -520,3 +520,16 @@ Actions). Caminhos temporários do runner são exportados no primeiro passo, ant
 do setup-go; não usam `runner` no `env` do job, onde esse contexto não existe.
 O script de exportação foi exercitado com caminho Windows contendo espaços.
 Essa correção não alterou código da aplicação nem critérios de avaliação.
+
+A execução nativa do CI expôs ainda a criação do master PTY Darwin sem polling
+do Go e uma fixture que enviava entrada antes de observar prontidão. O master
+agora tem propriedade única e O_NONBLOCK antes de `os.NewFile`; deadline/read e
+interrupção por fechamento possuem regressões. A fixture aguarda READY e mantém
+os cinco segundos originais. Race repetido 20 vezes, processos/permissões e o
+fluxo real Ollama/PTY passaram após o ajuste (25,71 s no caso real).
+
+O CI Linux também instala e verifica Bubblewrap, necessário aos testes de
+recuperação/listagem sob a política de execução; sua ausência continua sendo
+erro, sem fallback. A comparação compartilhada preserva o binário e os dados
+originais: seus casos não solicitam PTY. A correção do descritor foi validada
+separadamente e não motivou uma repetição para mudar o placar.

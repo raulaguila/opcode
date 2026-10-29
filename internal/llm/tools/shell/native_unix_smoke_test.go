@@ -4,9 +4,12 @@ package shell
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -23,17 +26,82 @@ func TestNativeSmokeUnixPTYPrimitive(t *testing.T) {
 	command.Dir = t.TempDir()
 	terminal, err := StartPTY(command, 80, 24)
 	require.NoError(t, err)
-	defer terminal.Close()
-	output := make(chan string, 1)
-	go func() { raw, _ := io.ReadAll(io.LimitReader(terminal, 8192)); output <- string(raw) }()
-	_, err = terminal.Write([]byte("fixture-input\n"))
-	require.NoError(t, err)
-	require.NoError(t, command.Wait())
+	var output Buffer
+	output.Limit = 8192
+	ready := make(chan struct{})
+	readDone := make(chan error, 1)
+	waited, readerFinished := false, false
+	defer func() {
+		cancel()
+		_ = terminal.Close()
+		if !waited {
+			_ = command.Wait()
+		}
+		if !readerFinished {
+			select {
+			case <-readDone:
+			case <-time.After(time.Second):
+				t.Error("PTY reader did not stop during cleanup")
+			}
+		}
+	}()
+	go func() {
+		buffer := make([]byte, 512)
+		total := 0
+		announced := false
+		for total < 8192 {
+			n, readErr := terminal.Read(buffer[:min(len(buffer), 8192-total)])
+			if n > 0 {
+				total += n
+				_, _ = output.Write(buffer[:n])
+				text, _ := output.Snapshot()
+				if !announced && strings.Contains(text, "NATIVE_PTY_READY") {
+					close(ready)
+					announced = true
+				}
+			}
+			if readErr != nil {
+				readDone <- readErr
+				return
+			}
+		}
+		readDone <- fmt.Errorf("PTY fixture output exceeded 8192 bytes")
+	}()
+	snapshot := func() string { text, _ := output.Snapshot(); return text }
+	// Wait for the child to initialize its terminal before sending user input.
+	// Readiness is live output, not inferred from exec.Start completing.
 	select {
-	case data := <-output:
-		require.True(t, strings.Contains(data, "NATIVE_PTY_READY"))
-		require.Contains(t, data, "NATIVE_PTY_ACK:fixture-input")
+	case <-ready:
+	case readErr := <-readDone:
+		readerFinished = true
+		t.Fatalf("PTY reader stopped before READY: %v; output=%q", readErr, snapshot())
 	case <-ctx.Done():
-		t.Fatal("PTY output did not close within fixture timeout")
+		t.Fatalf("PTY never became READY: %v; output=%q", ctx.Err(), snapshot())
 	}
+	input := []byte("fixture-input\n")
+	n, err := terminal.Write(input)
+	require.NoError(t, err, "output=%q", snapshot())
+	require.Equal(t, len(input), n)
+	waitErr := command.Wait()
+	waited = true
+	if waitErr != nil {
+		var readStatus error
+		select {
+		case readStatus = <-readDone:
+			readerFinished = true
+		default:
+			readStatus = fmt.Errorf("reader still active")
+		}
+		t.Fatalf("PTY command failed: %v; reader=%v; output=%q", waitErr, readStatus, snapshot())
+	}
+	select {
+	case readErr := <-readDone:
+		readerFinished = true
+		// Unix PTYs report peer closure as EOF (Darwin) or EIO (Linux).
+		require.True(t, errors.Is(readErr, io.EOF) || errors.Is(readErr, syscall.EIO), "reader=%v; output=%q", readErr, snapshot())
+	case <-ctx.Done():
+		t.Fatalf("PTY output did not close: %v; output=%q", ctx.Err(), snapshot())
+	}
+	require.Contains(t, snapshot(), "NATIVE_PTY_READY")
+	require.Contains(t, snapshot(), "NATIVE_PTY_ACK:fixture-input")
 }

@@ -17,12 +17,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install code-search test prerequisite
+      - name: Install code-search and sandbox test prerequisites
         run: |
-          if ! command -v rg >/dev/null 2>&1; then
+          if ! command -v rg >/dev/null 2>&1 || ! command -v bwrap >/dev/null 2>&1; then
             sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ripgrep
+            sudo apt-get install -y --no-install-recommends ripgrep bubblewrap
           fi
+          bwrap --unshare-all --ro-bind / / --proc /proc --dev /dev --die-with-parent -- /bin/true
       # Keep strict parser deadlines; avoid competing test binaries consuming
       # their wall-clock budget while every package and race check still runs.
       - run: go test -race -p 1 ./...

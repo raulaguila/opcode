@@ -88,5 +88,21 @@
     "Public search availability is not proven by controlled HTTP tests.",
     "Fixed application order, cache state and different policies prevent causal performance or general superiority claims."
   ],
-  "ci_context_fix": "The first push exposed runner.temp being unavailable in job-level env. Runner paths are now exported after job startup, before setup-go. Application code and evaluation criteria unchanged."
+  "ci_context_fix": "The first push exposed runner.temp being unavailable in job-level env. Runner paths are now exported after job startup, before setup-go. Application code and evaluation criteria unchanged.",
+  "post_ci_pty_fix": {
+    "scope": "Unix PTY polling initialization/ownership and READY handshake; no model prompts, citation rules or evaluation criteria changed",
+    "binary_sha256": "06fb188ef34e1d3943906b0270eeee450d05210a103c602c6ed946b34749ec0a",
+    "shell_race_repetitions": 20,
+    "shell_race_status": "passed",
+    "process_permissions_input_resize_cancel_status": "passed",
+    "darwin_compile_status": "passed",
+    "vet_shell_status": "passed",
+    "real_ollama_pty_status": "passed",
+    "real_ollama_pty_seconds": 25.71,
+    "controlled_and_real_pty_suite_seconds": 31.58,
+    "native_fixture_deadline_seconds": 5,
+    "deadline_changed": false,
+    "benchmark_note": "The single shared comparison retains its original binary hash and observations. Its fixtures do not request PTY; the later Unix descriptor fix was validated separately, not used to rerun or improve the score.",
+    "ci_dependency_fix": "Linux full-suite job now installs and probes Bubblewrap; missing sandbox remains a hard error. Linux and Windows native smoke had passed on the previous CI revision; macOS must confirm the polling/handshake correction."
+  }
 }

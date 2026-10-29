@@ -50,6 +50,7 @@ func (m *modelDialogCmp) modelProbeUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		m.probeRunning = false
 		m.cancel = nil
+		m.search.Focus()
 		status := config.Text("Ferramenta estruturada confirmada; nenhuma ferramenta executada.", "Structured tool call confirmed; no tool executed.")
 		if result.err != nil {
 			status = config.Text("Teste não confirmou ferramentas; veja configuração ou tente outro modelo.", "Probe did not confirm tools; check settings or try another model.")
@@ -61,6 +62,7 @@ func (m *modelDialogCmp) modelProbeUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		if m.probeRunning {
 			if key.Type == tea.KeyEsc {
 				m.Close()
+				m.search.Focus()
 				m.note = config.Text("Teste cancelado; seleção preservada.", "Probe cancelled; selection preserved.")
 			}
 			return nil, true
@@ -68,6 +70,7 @@ func (m *modelDialogCmp) modelProbeUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		if m.probeConfirm {
 			if key.Type == tea.KeyEsc {
 				m.probeConfirm = false
+				m.search.Focus()
 				return nil, true
 			}
 			if key.Type == tea.KeyEnter {
@@ -77,6 +80,7 @@ func (m *modelDialogCmp) modelProbeUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		if key.String() == "ctrl+t" && len(m.filtered) > 0 {
 			m.probeConfirm = true
+			m.search.Blur()
 			return nil, true
 		}
 	}
@@ -113,5 +117,6 @@ func (m *modelDialogCmp) probeView() string {
 			rendered = append(rendered, ansi.Wrap(line, width, ""))
 		}
 	}
-	return base.Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(joinLines(rendered))
+	frame := base.Padding(m.geometry().padY, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().BorderNormal()).Render(joinLines(rendered))
+	return lipgloss.NewStyle().MaxWidth(width + 6).MaxHeight(m.geometry().height).Render(frame)
 }

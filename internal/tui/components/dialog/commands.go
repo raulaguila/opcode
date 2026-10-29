@@ -74,6 +74,8 @@ type commandDialogCmp struct {
 	search   textinput.Model
 	width    int
 	height   int
+	title    string
+	activeID string
 }
 
 type commandKeyMap struct {
@@ -144,7 +146,7 @@ func (c *commandDialogCmp) View() string {
 		Bold(true).
 		Width(maxWidth).
 		Padding(0, 1).
-		Render(config.Text("Comandos", "Commands"))
+		Render(c.dialogTitle())
 
 	rows := []string{title, baseStyle.Width(maxWidth).Render(c.search.View()), ""}
 	items := c.listView.GetItems()
@@ -157,6 +159,9 @@ func (c *commandDialogCmp) View() string {
 	for i := start; i < min(len(items), start+count); i++ {
 		item := items[i]
 		name, _ := commands.Presentation(item.ID, item.Title, item.Description)
+		if item.ID == c.activeID {
+			name = "✓ " + name
+		}
 		style := baseStyle.Width(maxWidth)
 		if i == selected {
 			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
@@ -182,10 +187,23 @@ func (c *commandDialogCmp) BindingKeys() []key.Binding {
 }
 
 func (c *commandDialogCmp) SetCommands(commands []Command) {
+	c.title, c.activeID = "", ""
 	c.commands = commands
 	c.search.SetValue("")
 	c.search.Focus()
 	c.filter()
+}
+
+// SetContext distinguishes a focused action from the mode already in use.
+func (c *commandDialogCmp) SetContext(title, activeID string) {
+	c.title, c.activeID = title, activeID
+}
+
+func (c *commandDialogCmp) dialogTitle() string {
+	if c.title != "" {
+		return c.title
+	}
+	return config.Text("Comandos", "Commands")
 }
 
 func (c *commandDialogCmp) filter() {

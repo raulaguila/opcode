@@ -17,6 +17,8 @@ func TestFooterStaysOnOneRowAndMouseMatchesVisibleSegments(t *testing.T) {
 		view := m.ViewFor(state)
 		require.Equal(t, 1, lipgloss.Height(view))
 		require.Equal(t, width, lipgloss.Width(view))
+		require.True(t, strings.HasSuffix(ansi.Strip(view), " "), "last cell protects the control from erase-after-wrap")
+		require.Empty(t, m.ActionAt(width-1, state), "the terminal margin is not a model control")
 		if width >= 36 {
 			plain := ansi.Strip(view)
 			modeEnd := strings.Index(plain, "▾")

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -21,10 +22,15 @@ import (
 )
 
 type Client struct {
-	Cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout *bufio.Reader
-	stderr io.ReadCloser
+	Cmd              *exec.Cmd
+	stdin            io.WriteCloser
+	stdout           *bufio.Reader
+	stderr           io.ReadCloser
+	stderrDone       chan struct{}
+	stderrBytes      atomic.Int64
+	stderrReadFailed atomic.Bool
+	closeOnce        sync.Once
+	closeErr         error
 
 	// Request ID counter
 	nextID        atomic.Int32
@@ -56,6 +62,12 @@ type Client struct {
 }
 
 func NewClient(ctx context.Context, command string, args ...string) (*Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := CheckExecutable(command, config.WorkingDirectory()); err != nil {
+		return nil, err
+	}
 	parts := []string{"exec", quoteCommand(command)}
 	for _, arg := range args {
 		parts = append(parts, quoteCommand(arg))
@@ -85,6 +97,7 @@ func NewClient(ctx context.Context, command string, args ...string) (*Client, er
 		stdin:                 stdin,
 		stdout:                bufio.NewReader(stdout),
 		stderr:                stderr,
+		stderrDone:            make(chan struct{}),
 		handlers:              make(map[int32]chan *Message),
 		notificationHandlers:  make(map[string]NotificationHandler),
 		serverRequestHandlers: make(map[string]ServerRequestHandler),
@@ -97,19 +110,13 @@ func NewClient(ctx context.Context, command string, args ...string) (*Client, er
 
 	// Start the LSP server process
 	if err := cmd.Start(); err != nil {
+		stdin.Close()
+		stdout.Close()
+		stderr.Close()
 		return nil, fmt.Errorf("failed to start LSP server: %w", err)
 	}
 
-	// Handle stderr in a separate goroutine
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			fmt.Fprintf(os.Stderr, "LSP Server: %s\n", scanner.Text())
-		}
-		if err := scanner.Err(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading stderr: %v\n", err)
-		}
-	}()
+	go client.drainStderr(ctx)
 
 	// Start message handling loop
 	go func() {
@@ -239,6 +246,22 @@ func (c *Client) InitializeLSPClient(ctx context.Context, workspaceDir string) (
 }
 
 func (c *Client) Close() error {
+	c.closeOnce.Do(func() { c.closeErr = c.closeProcess() })
+	return c.closeErr
+}
+
+func (c *Client) closeProcess() error {
+	if c.transportDone != nil {
+		defer func() { <-c.transportDone }()
+	}
+	if c.stderr != nil {
+		defer func() {
+			c.stderr.Close()
+			if c.stderrDone != nil {
+				<-c.stderrDone
+			}
+		}()
+	}
 	// Try to close all open files first
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -247,9 +270,9 @@ func (c *Client) Close() error {
 	c.CloseAllFiles(ctx)
 
 	// Close stdin to signal the server
-	if err := c.stdin.Close(); err != nil {
-		return fmt.Errorf("failed to close stdin: %w", err)
-	}
+	// Cancellation or a failed write may already have closed stdin. Always reap
+	// the child and close stderr even in that case.
+	_ = c.stdin.Close()
 
 	// Use a channel to handle the Wait with timeout
 	done := make(chan error, 1)
@@ -263,7 +286,9 @@ func (c *Client) Close() error {
 		return err
 	case <-time.After(2 * time.Second):
 		// If we timeout, try to kill the process
-		if err := c.Cmd.Process.Kill(); err != nil {
+		err := c.Cmd.Process.Kill()
+		<-done // Wait owns the process resources, including its pipe descriptors.
+		if err != nil && !errors.Is(err, os.ErrProcessDone) {
 			return fmt.Errorf("failed to kill process: %w", err)
 		}
 		return fmt.Errorf("process killed after timeout")
@@ -727,12 +752,12 @@ func (c *Client) CloseAllFiles(ctx context.Context) {
 	// Then close them all
 	for _, filePath := range filesToClose {
 		err := c.CloseFile(ctx, filePath)
-		if err != nil && cnf.DebugLSP {
+		if err != nil && cnf != nil && cnf.DebugLSP {
 			logging.Warn("Error closing file", "file", filePath, "error", err)
 		}
 	}
 
-	if cnf.DebugLSP {
+	if cnf != nil && cnf.DebugLSP {
 		logging.Debug("Closed all files", "files", filesToClose)
 	}
 }

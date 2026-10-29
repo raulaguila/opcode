@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/tui/components/dialog"
 	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
@@ -23,19 +25,29 @@ func (a *appModel) footerClick(x int) tea.Cmd {
 		a.showModelDialog = true
 		return a.modelDialog.Open()
 	case "mode", "commands":
-		items := a.commands
 		if action == "mode" {
-			items = nil
-			for _, command := range a.commands {
-				if strings.HasPrefix(command.ID, "mode-") {
-					items = append(items, command)
-				}
-			}
+			return a.openModeChooser()
 		}
+		items := a.commands
 		a.commandDialog.SetCommands(items)
 		a.showCommandDialog = true
 	case "queue":
 		return util.CmdHandler(page.WorkspaceCommandMsg{Command: "queue"})
 	}
+	return nil
+}
+
+func (a *appModel) openModeChooser() tea.Cmd {
+	var items []dialog.Command
+	for _, command := range a.commands {
+		if strings.HasPrefix(command.ID, "mode-") {
+			items = append(items, command)
+		}
+	}
+	a.commandDialog.SetCommands(items)
+	if contextual, ok := a.commandDialog.(interface{ SetContext(string, string) }); ok {
+		contextual.SetContext(config.Text("Modo de trabalho", "Work mode"), "mode-"+a.footerState().Mode)
+	}
+	a.showCommandDialog = true
 	return nil
 }

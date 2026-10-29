@@ -96,6 +96,7 @@ func TestModelDialogMouseSelectionFilteringAndSmallLayout(t *testing.T) {
 	_, cmd := m.Update(tea.MouseMsg{X: 4, Y: 6, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	require.NotNil(t, cmd)
 	require.Equal(t, "qwen:7b", cmd().(ModelSelectedMsg).Model.APIModel)
+	m.Update(m.Open()()) // Selecting closes the dialog; reopen before editing its search.
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("missing")})
 	require.Contains(t, m.View(), "No models found")
 	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})

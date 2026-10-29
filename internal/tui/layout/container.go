@@ -42,6 +42,9 @@ func (c *container) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (c *container) View() string {
+	if c.width <= 0 || c.height <= 0 {
+		return ""
+	}
 	t := theme.CurrentTheme()
 	style := lipgloss.NewStyle()
 	width := c.width
@@ -75,7 +78,7 @@ func (c *container) View() string {
 		PaddingBottom(c.paddingBottom).
 		PaddingLeft(c.paddingLeft)
 
-	return style.Render(c.content.View())
+	return style.MaxWidth(c.width).MaxHeight(c.height).Render(c.content.View())
 }
 
 func (c *container) SetSize(width, height int) tea.Cmd {

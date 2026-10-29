@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,6 +23,22 @@ func TestCommandSearchFindsAdvancedActionsAndResetsWhenReopened(t *testing.T) {
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
 	require.Equal(t, "j", m.search.Value(), "letters must search rather than navigate")
 	require.Empty(t, m.listView.GetItems())
+}
+
+func TestModeChooserDistinguishesActiveModeAndResetsTitleOnPalette(t *testing.T) {
+	m := NewCommandDialogCmp().(*commandDialogCmp)
+	items := []Command{{ID: "mode-ask", Title: "Ask"}, {ID: "mode-plan", Title: "Plan"}, {ID: "mode-execute", Title: "Execute"}}
+	m.SetCommands(items)
+	m.SetContext("Work mode", "mode-execute")
+	view := ansi.Strip(m.View())
+	require.Contains(t, view, "Work mode")
+	require.Contains(t, view, "✓ Execute")
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	require.Equal(t, "mode-ask", cmd().(CommandSelectedMsg).Command.ID, "highlight and active mode are independent")
+	m.SetCommands(items)
+	require.Empty(t, m.title)
+	require.Empty(t, m.activeID)
+	require.NotContains(t, ansi.Strip(m.View()), "✓ Execute")
 }
 
 func TestCommandPickerFitsNarrowAndShortTerminals(t *testing.T) {

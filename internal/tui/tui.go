@@ -193,7 +193,14 @@ func (a appModel) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
+	defer func() {
+		if next, ok := updated.(appModel); ok {
+			if focus := next.syncInputFocus(); focus != nil {
+				result = tea.Batch(result, focus)
+			}
+		}
+	}()
 	if cmd, handled := a.productivityMessage(msg); handled {
 		return a, cmd
 	}
@@ -284,7 +291,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 	case tea.WindowSizeMsg:
-		msg.Height -= 1 // Make space for the status bar
+		msg.Height = max(0, msg.Height-1) // Make space for the status bar
 		a.width, a.height = msg.Width, msg.Height
 		if a.providerDialog != nil {
 			a.providerDialog.Update(msg)
@@ -926,8 +933,19 @@ func (a *appModel) moveToPage(pageID page.PageID) tea.Cmd {
 }
 
 func (a appModel) View() string {
+	pageView := a.pages[a.currentPage].View()
+	if a.width > 0 {
+		if a.height == 0 {
+			pageView = ""
+		} else {
+			pageView = lipgloss.NewStyle().Width(a.width).Height(a.height).MaxWidth(a.width).MaxHeight(a.height).Render(pageView)
+		}
+	}
 	components := []string{
-		a.pages[a.currentPage].View(),
+		pageView,
+	}
+	if pageView == "" {
+		components = nil
 	}
 
 	components = append(components, a.statusView())
@@ -1138,6 +1156,9 @@ func (a appModel) View() string {
 		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
 	}
+	if a.width > 0 {
+		appView = lipgloss.NewStyle().MaxWidth(a.width).MaxHeight(a.height + 1).Render(appView)
+	}
 	return appView
 }
 
@@ -1198,8 +1219,8 @@ func New(app *app.App, initial ...session.Session) tea.Model {
 		model.RegisterCommand(dialog.Command{ID: id, Title: entry.Title, Description: entry.Description, Handler: func(dialog.Command) tea.Cmd { return util.CmdHandler(page.WorkspaceCommandMsg{Command: id}) }})
 	}
 
-	for _, mode := range []struct{ id, title string }{{"ask", "Perguntar — somente leitura"}, {"plan", "Planejar — sem comandos ou edições"}, {"execute", "Executar — com permissões"}} {
-		model.RegisterCommand(dialog.Command{ID: "mode-" + mode.id, Title: mode.title, Description: "Trocar o modo da sessão", Handler: func(dialog.Command) tea.Cmd {
+	for _, mode := range []struct{ id, title string }{{"ask", config.Text("Perguntar — somente leitura", "Ask — read only")}, {"plan", config.Text("Planejar — sem comandos ou edições", "Plan — no commands or edits")}, {"execute", config.Text("Executar — com permissões", "Execute — with permissions")}} {
+		model.RegisterCommand(dialog.Command{ID: "mode-" + mode.id, Title: mode.title, Description: config.Text("Trocar o modo da sessão", "Change the session mode"), Handler: func(dialog.Command) tea.Cmd {
 			return util.CmdHandler(page.WorkflowCommandMsg{Command: "mode", Value: mode.id})
 		}})
 	}

@@ -26,6 +26,7 @@ import (
 var ChatPage PageID = "chat"
 
 type chatPage struct {
+	inputEnabled         bool
 	app                  *app.App
 	editor               layout.Container
 	messages             layout.Container
@@ -79,7 +80,12 @@ func (p *chatPage) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
+	defer func() {
+		if focus := p.syncInputFocus(); focus != nil {
+			result = tea.Batch(result, focus)
+		}
+	}()
 	var cmds []tea.Cmd
 	if !p.sidebarVisible && p.sidebar != nil {
 		switch msg.(type) {
@@ -492,6 +498,7 @@ func NewChatPage(app *app.App) tea.Model {
 		layout.WithBorder(true, false, false, false),
 	)
 	return &chatPage{
+		inputEnabled:     true,
 		app:              app,
 		composer:         composer.(chat.SlashCompleter),
 		transcript:       transcript.(chat.TranscriptControl),

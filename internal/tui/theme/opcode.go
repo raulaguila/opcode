@@ -18,7 +18,7 @@ func NewOpcodeTheme() *OpcodeTheme {
 	darkCurrentLine := "#252525"
 	darkSelection := "#303030"
 	darkForeground := "#e0e0e0"
-	darkComment := "#6a6a6a"
+	darkComment := "#969696"
 	darkPrimary := "#fab283"   // Primary orange/gold
 	darkSecondary := "#5c9cf5" // Secondary blue
 	darkAccent := "#9d7cd8"    // Accent purple
@@ -34,7 +34,7 @@ func NewOpcodeTheme() *OpcodeTheme {
 	lightCurrentLine := "#f0f0f0"
 	lightSelection := "#e5e5e6"
 	lightForeground := "#2a2a2a"
-	lightComment := "#8a8a8a"
+	lightComment := "#626262"
 	lightPrimary := "#3b7dd8"   // Primary blue
 	lightSecondary := "#7b5bb6" // Secondary purple
 	lightAccent := "#d68c27"    // Accent orange/gold
@@ -274,4 +274,3 @@ func init() {
 	// Register the Opcode theme with the theme manager
 	RegisterTheme("opcode", NewOpcodeTheme())
 }
-

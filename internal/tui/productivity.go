@@ -108,6 +108,8 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		a.commandDialog.SetCommands(a.commands)
 		a.showCommandDialog = true
 		return nil, true
+	case page.OpenModeChooserMsg:
+		return a.openModeChooser(), true
 	case dialog.SessionActionMsg:
 		return a.sessionAction(msg), true
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,6 +45,53 @@ func TestComposerAttachmentRowsStayInsideAllocatedHeight(t *testing.T) {
 	require.LessOrEqual(t, lipgloss.Width(m.View()), 36)
 	require.LessOrEqual(t, lipgloss.Height(m.View()), 6)
 	require.Equal(t, 36, m.width)
+}
+
+func TestComposerCanUseEightRowsAtOrdinaryTerminalHeights(t *testing.T) {
+	m := &editorCmp{textarea: CreateTextArea(nil)}
+	draft := strings.Repeat("ação 漢字\n", 7) + "última linha"
+	m.textarea.SetValue(draft)
+	for _, height := range []int{18, 24, 40} {
+		allocated := m.DesiredHeight(80, height)
+		require.Equal(t, 9, allocated)
+		m.SetSize(80, allocated-1)
+		require.Equal(t, 8, m.textarea.Height())
+		require.Contains(t, m.View(), "última linha")
+		require.Equal(t, draft, m.textarea.Value())
+	}
+}
+
+func TestAttachmentRenderingIsBoundedAndUnicodeSafe(t *testing.T) {
+	m := &editorCmp{textarea: CreateTextArea(nil)}
+	for i := 0; i < 30; i++ {
+		m.attachments = append(m.attachments, message.Attachment{FileName: "ação-漢字-um-arquivo-muito-longo.txt"})
+	}
+	for _, width := range []int{20, 36, 80} {
+		view := m.attachmentsContentWidth(width)
+		require.LessOrEqual(t, lipgloss.Height(view), 2)
+		require.LessOrEqual(t, lipgloss.Width(view), width)
+		require.True(t, utf8.ValidString(view))
+	}
+	allocated := m.DesiredHeight(36, 24)
+	m.SetSize(36, allocated-1)
+	require.Equal(t, 3, m.textarea.Height())
+	require.Len(t, m.attachments, 30, "summarizing chips must not drop attachments")
+	m.textarea.SetValue(strings.Repeat("line\n", 7) + "end")
+	for width := 20; width <= 100; width++ {
+		allocated := m.DesiredHeight(width, 30)
+		m.SetSize(width, allocated-1)
+		require.Equal(t, 8, m.textarea.Height(), "attachment measurement must use the allocated panel width")
+	}
+}
+
+func TestComposerFocusChangesPreserveTextAndHideCursor(t *testing.T) {
+	m := &editorCmp{textarea: CreateTextArea(nil)}
+	m.textarea.SetValue("rascunho ação 漢字")
+	m.SetInputFocused(false)
+	require.False(t, m.textarea.Focused())
+	m.SetInputFocused(true)
+	require.True(t, m.textarea.Focused())
+	require.Equal(t, "rascunho ação 漢字", m.textarea.Value())
 }
 
 // Record long-conversation rendering cost separately from correctness tests.

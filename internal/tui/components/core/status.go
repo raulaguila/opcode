@@ -94,7 +94,9 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 
 // Rendering and mouse hits use the same width allocation.
 func (m statusCmp) widths() (left, center, right int) {
-	width := max(0, m.width)
+	// Leave the final terminal cell blank. After a full-width write, an erase
+	// command can otherwise clear the last glyph while autowrap is pending.
+	width := max(0, m.width-1)
 	left = min(12, width/3)
 	right = min(28, width/3)
 	center = width - left - right
@@ -128,11 +130,15 @@ func (m statusCmp) ViewFor(state util.FooterState) string {
 		}
 		middle = styles.BaseStyle().Foreground(color).Background(t.BackgroundSecondary()).Width(cw).MaxWidth(cw).Render(ansi.Truncate(" "+center, cw, "…"))
 	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, segment(right, rw, true, true))
+	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, segment(right, rw, true, true))
+	if m.width > 0 {
+		view += styles.BaseStyle().Background(t.BackgroundSecondary()).Render(" ")
+	}
+	return view
 }
 func (m statusCmp) ActionAt(x int, state util.FooterState) string {
-	lw, cw, _ := m.widths()
-	if x < 0 || x >= m.width {
+	lw, cw, rw := m.widths()
+	if x < 0 || x >= lw+cw+rw {
 		return ""
 	}
 	if x < lw {

@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-29",
+  "scope": "UI rendering, composer, selectors and real PTY acceptance",
+  "source_base": "e30f8d623fa98c595a37d5a0e40d191b7ccfcebc",
+  "source_revision": "Accompanying commit; no changes to evaluation criteria or citation/permission guards",
+  "checks": {
+    "go_test_race_all": "passed",
+    "go_vet_all": "passed",
+    "cgo_disabled_build": "passed",
+    "pty_offline_regressions": "passed",
+    "go_vet_integration_tui": "passed"
+  },
+  "live": {
+    "test": "TestLiveOllamaPTYUI",
+    "status": "passed",
+    "duration_seconds": 16.1,
+    "runs_reported": 1,
+    "provider": "local Ollama",
+    "model": "llama3.1:8b",
+    "protocol": "ollama",
+    "sandbox": "bubblewrap",
+    "fixture_context_limit": 16384,
+    "terminal_sizes": [
+      [
+        80,
+        24
+      ],
+      [
+        120,
+        36
+      ],
+      [
+        180,
+        40
+      ]
+    ],
+    "isolated_home_and_workspace": true,
+    "inherited_credentials": false,
+    "downloaded_models": false,
+    "source_fixtures_unchanged": true,
+    "approved_lsp_probes": 1,
+    "approved_bash_commands": 1,
+    "replayed_bash_commands": 0,
+    "checks": [
+      "Unicode bracketed paste and enhanced Shift+Enter",
+      "Three to eight input rows with one composer/footer",
+      "Draft preservation across resize and model/mode dialogs",
+      "Live catalog, pagination, editable search, no-result state and cancel",
+      "Separately approved noisy LSP fixture, no stderr sentinel on terminal",
+      "Factual final overview with source citation and idle footer",
+      "Command does not start before explicit UI approval",
+      "PTY command output visible before exit",
+      "Instruction queued while command waits for human input",
+      "Human input delivered through focused PTY",
+      "Persisted order: terminal result, queued instruction, final response"
+    ],
+    "overview_sha256": "23a0568e047c5f3d8f8f08a40622127dcd3cfffae4913b2753083a8a5baf7c58"
+  },
+  "limitations": [
+    "One local fixture run is not a general model quality or latency benchmark.",
+    "The noisy language server is a controlled fixture, not validation of every LSP.",
+    "The test-specific context override is not saved to the user configuration.",
+    "Raw LSP stderr is deliberately discarded; only counters and state remain in memory."
+  ]
+}

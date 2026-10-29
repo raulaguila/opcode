@@ -107,3 +107,20 @@ func TestFastSelectionResolvesMetadataAndCancellationDiscardsSelection(t *testin
 	m.Close()
 	require.Nil(t, cancelled())
 }
+
+func TestModelFilteringToEmptyCancelsMetadataAndRejectsLateResult(t *testing.T) {
+	m := catalogDialog(t)
+	_, pending := m.Update(m.Open()())
+	require.NotNil(t, pending)
+	before := append([]models.Model(nil), m.models...)
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("no-such-model")})
+	require.Empty(t, m.filtered)
+	late := pending().(modelMetadataLoadedMsg)
+	require.ErrorIs(t, late.err, context.Canceled)
+	late.err = nil
+	late.model.Name = "Stale replacement"
+	m.Update(late)
+	require.Equal(t, before, m.models)
+	require.Empty(t, m.metadataFor)
+	require.Empty(t, m.metadataNote)
+}

@@ -96,6 +96,8 @@ Consultar o catálogo não baixa
 pesos nem gera respostas. Clique no modelo do rodapé, pressione `Ctrl+O` ou use
 `/models` para buscar, trocar de perfil e escolher. `Ctrl+F` marca favoritos,
 `Ctrl+A` alterna a função principal/auxiliar e `Ctrl+R` atualiza o catálogo.
+`✓` identifica o modelo ativo; `›` marca o destaque. `PgUp`/`PgDn` navegam na
+lista e `Alt+←`/`Alt+→` trocam o provedor; as setas simples editam a busca.
 A escolha é salva; o contexto descoberto fica em memória, sem serializar chaves
 resolvidas do ambiente.
 

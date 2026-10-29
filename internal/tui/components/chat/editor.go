@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
@@ -392,27 +393,41 @@ func (m *editorCmp) GetSize() (int, int) {
 	return m.width, m.height
 }
 
+func (m *editorCmp) SetInputFocused(focused bool) tea.Cmd {
+	if focused && !m.textarea.Focused() {
+		return m.textarea.Focus()
+	}
+	if !focused && m.textarea.Focused() {
+		m.textarea.Blur()
+	}
+	return nil
+}
+
 func (m *editorCmp) attachmentsContent() string {
+	return m.attachmentsContentWidth(m.width)
+}
+
+func (m *editorCmp) attachmentsContentWidth(width int) string {
 	var styledAttachments []string
 	t := theme.CurrentTheme()
 	attachmentStyles := styles.BaseStyle().
 		MarginLeft(1).
-		Background(t.TextMuted()).
+		Background(t.BackgroundSecondary()).
 		Foreground(t.Text())
 	for i, attachment := range m.attachments {
 		var filename string
-		if len(attachment.FileName) > 10 {
-			filename = fmt.Sprintf(" %s %s...", styles.DocumentIcon, attachment.FileName[0:7])
-		} else {
-			filename = fmt.Sprintf(" %s %s", styles.DocumentIcon, attachment.FileName)
-		}
+		filename = fmt.Sprintf(" %s %s", styles.DocumentIcon, ansi.Truncate(ansi.Strip(attachment.FileName), 16, "…"))
 		if m.deleteMode {
 			filename = fmt.Sprintf("%d%s", i, filename)
 		}
 		styledAttachments = append(styledAttachments, attachmentStyles.Render(filename))
 	}
 	content := lipgloss.JoinHorizontal(lipgloss.Left, styledAttachments...)
-	return ansi.Hardwrap(content, max(1, m.width), true)
+	lines := strings.Split(ansi.Hardwrap(content, max(1, width), true), "\n")
+	if len(lines) > 2 {
+		lines = append(lines[:1], ansi.Truncate(fmt.Sprintf(config.Text(" %d anexos · Ctrl+R para remover", " %d attachments · Ctrl+R to remove"), len(m.attachments)), max(1, width), "…"))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m *editorCmp) BindingKeys() []key.Binding {
@@ -464,23 +479,28 @@ func newEditorWithDraftStorage(app *app.App, root, path string) *editorCmp {
 
 // DesiredHeight includes attachment rows and the surrounding editor border.
 func (m *editorCmp) DesiredHeight(width, available int) int {
-	width = max(1, width-3)
+	textWidth := max(1, width-3)
 	rows := 0
 	for _, line := range strings.Split(m.textarea.Value(), "\n") {
-		rows += max(1, (ansi.StringWidth(line)+width-1)/width)
+		rows += max(1, (ansi.StringWidth(line)+textWidth-1)/textWidth)
 	}
 	rows = min(8, max(3, rows))
 	if len(m.attachments) > 0 {
 		rows += m.attachmentRows(width)
 	}
-	return min(max(2, rows+1), max(2, available/3))
+	// Keep useful writing space instead of capping it to a third of the screen.
+	// A short conversation viewport remains available as the input grows.
+	conversationRows := min(6, max(1, available/2))
+	if available < 12 {
+		return min(max(2, rows+1), max(2, available/3))
+	}
+	return min(max(2, rows+1), max(2, available-conversationRows))
 }
 
 func (m *editorCmp) attachmentRows(width int) int {
 	if len(m.attachments) == 0 {
 		return 0
 	}
-	content := strings.ReplaceAll(m.attachmentsContent(), "\n", "")
-	content = ansi.Hardwrap(content, max(1, width), true)
+	content := m.attachmentsContentWidth(width)
 	return max(1, strings.Count(content, "\n")+1)
 }

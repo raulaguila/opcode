@@ -297,3 +297,47 @@ seu schema sob demanda.
 Veja o [resumo sanitizado](evidence/2026-10-28-comparative-validation.json), o
 [resultado completo do Opcode](evidence/2026-10-28-suite-controlled.json) e o
 [guia das mudanças](comparative-evolution.md).
+
+## Renderização, input e seletores — 29/10/2026
+
+As regressões determinísticas cobrem quadro completo e rodapé em resize,
+composer de três a oito linhas, colagem/Unicode, prévia limitada de anexos,
+foco exclusivo em diálogos/perguntas/terminal, catálogo com 16 modelos,
+busca editável, paginação, modelo ativo, mouse e mensagens atrasadas.
+Também verificam contraste auxiliar em temas claro/escuro e duração em segundos.
+O LSP é exercitado com linha de 256 KiB, rajada de dez mil linhas, cancelamento,
+fechamento concorrente e executável ausente, sem imprimir ou reter stderr bruto.
+
+O teste optativo `TestLiveOllamaPTYUI` executa o binário num PTY real, interpreta
+ANSI com VT e usa HOME/projeto descartáveis. Requer Linux, Bubblewrap e um modelo
+já instalado no Ollama local; não herda credenciais nem baixa modelos. O cenário
+inclui 80×24, 120×36 e 180×40, input com Unicode e oito linhas, seletores, probe LSP
+explicitamente aprovado, pergunta sobre arquivos reais, comando com aprovação
+pela interface, saída ao vivo, entrada humana e instrução enviada durante execução.
+O probe e o comando têm aprovações independentes. O LSP ruidoso é uma fixture
+controlada; isso não comprova funcionamento de todos os servidores de linguagem.
+
+Para reproduzir a aceitação completa, com Ollama acessível em loopback:
+
+```sh
+go build -o /tmp/opcode-ui-acceptance .
+OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \
+  OPCODE_EVAL_BINARY=/tmp/opcode-ui-acceptance \
+  go test -tags=integration ./internal/tui \
+  -run '^TestLiveOllamaPTYUI$' -count=1 -timeout=10m -v
+```
+
+`TestPTYUIControlFilterFragmentedUnicode` e `TestPTYUIVTLastColumnErase` rodam
+sem Ollama com `go test -tags=integration ./internal/tui -run '^TestPTYUI'`.
+O segundo reproduz o apagamento da última célula após autowrap e protege a
+margem do rodapé. Esta rodada verifica o fluxo da interface; não substitui a
+avaliação comparativa de qualidade, nem altera seus critérios ou os gates de citações.
+
+Na rodada local de aceite, `TestLiveOllamaPTYUI` passou em **16,10 s** com
+`llama3.1:8b`, incluindo as duas aprovações independentes e um único comando Bash.
+A explicação final teve citação válida e a instrução posterior foi persistida
+após o resultado do terminal, sem repetir o comando. O limite manual de 16.384
+tokens pertence somente à fixture deste teste; não altera a configuração normal.
+Também passaram a suíte completa com `-race`, `go vet ./...`, build com
+`CGO_ENABLED=0`, os testes VT sem Ollama e `go vet -tags=integration ./internal/tui`.
+Veja o [registro sanitizado](evidence/2026-10-29-ui-pty-validation.json).

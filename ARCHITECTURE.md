@@ -383,3 +383,21 @@ parcial/calls publicados e sem reenviar operações concluídas. Parsers, guarda
 de citação e permissões continuam exigidos. A avaliação inclui temperatura
 observada; o driver Codaro fixa zero apenas no codec público, preservando seu
 transporte e execução. Comparação distingue zero de observação ausente.
+
+## Integridade da TUI e processos LSP
+
+O renderer da TUI é o único escritor do terminal durante a conversa. O cliente
+LSP drena stderr com buffer fixo de 4 KiB, inclusive linhas enormes, sem reter
+ou registrar o conteúdo. `StderrStatus()` contém apenas bytes/estado em memória.
+O executável é verificado antes do wrapper de sandbox; avisos de ausência são
+localizados e deduplicados por fingerprint da configuração. O fechamento é
+idempotente e aguarda o processo, o transporte e o dreno.
+
+Foco do composer depende da página, janela, diálogos, perguntas e terminal.
+Atualizações assíncronas continuam sendo processadas com diálogos abertos.
+Container, split e quadro raiz limitam dimensões; o rodapé reserva a última
+célula em branco para evitar que erase com autowrap pendente apague seu botão.
+O input cresce por linhas visuais (3–8 quando há espaço), com prévia de anexos
+limitada e rascunho preservado. Busca do catálogo usa seu próprio textinput e
+geometria compartilhada entre desenho e mouse. Metadados continuam canceláveis,
+sem inferência automática e sem mudar autorizações.

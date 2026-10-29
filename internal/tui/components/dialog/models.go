@@ -7,17 +7,14 @@ import (
 	"slices"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/tui/layout"
-	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
@@ -47,6 +44,7 @@ type modelDialogCmp struct {
 	availableProviders                       []models.ModelProvider
 	selectedIdx, width, height, scrollOffset int
 	query, note                              string
+	search                                   textinput.Model
 	loading                                  bool
 	request                                  uint64
 	cancel                                   context.CancelFunc
@@ -66,8 +64,8 @@ var modelKeys = struct {
 }{
 	key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "previous model")),
 	key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "next model")),
-	key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "previous provider")),
-	key.NewBinding(key.WithKeys("right"), key.WithHelp("→", "next provider")),
+	key.NewBinding(key.WithKeys("alt+left"), key.WithHelp("Alt+←", "previous provider")),
+	key.NewBinding(key.WithKeys("alt+right"), key.WithHelp("Alt+→", "next provider")),
 	key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select model")),
 	key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close")),
 	key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("ctrl+r", "refresh models")),
@@ -93,9 +91,11 @@ func (m *modelDialogCmp) Open() tea.Cmd {
 		}
 	}
 	m.query = ""
+	m.search.SetValue("")
 	return m.load()
 }
 func (m *modelDialogCmp) Close() {
+	m.search.Blur()
 	m.selecting = false
 	if m.metadataCancel != nil {
 		m.metadataCancel()
@@ -114,6 +114,7 @@ func (m *modelDialogCmp) Close() {
 }
 func (m *modelDialogCmp) load() tea.Cmd {
 	m.Close()
+	m.search.Focus()
 	if m.provider == "" || m.catalogProvider != m.provider {
 		m.models = getModelsForProvider(m.provider)
 		m.catalogProvider = m.provider
@@ -121,7 +122,7 @@ func (m *modelDialogCmp) load() tea.Cmd {
 	m.note = config.Text("Catálogo disponível", "Available catalog")
 	m.filter()
 	if m.provider == "" {
-		m.note = "Configure a provider in ~/.opcode/config.json"
+		m.note = config.Text("Configure uma conexão em /settings", "Configure a connection in /settings")
 		return nil
 	}
 	fetch := config.ModelCatalog(m.provider)
@@ -139,6 +140,18 @@ func (m *modelDialogCmp) load() tea.Cmd {
 	}
 }
 func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.selecting {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			if key.Type == tea.KeyEsc {
+				m.Close()
+				return m, util.CmdHandler(CloseModelDialogMsg{})
+			}
+			return m, nil
+		}
+		if _, ok := msg.(tea.MouseMsg); ok {
+			return m, nil
+		}
+	}
 	if result, ok := msg.(modelMetadataLoadedMsg); ok {
 		return m, m.acceptMetadata(result)
 	}
@@ -157,7 +170,7 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.note = fmt.Sprintf(config.Text("Catálogo do provedor · %d modelos", "Provider catalog · %d models"), len(m.models))
 			m.filter()
 		} else if errors.Is(msg.err, models.ErrCatalogUnsupported) {
-			m.note = "Configured catalog · live listing unavailable"
+			m.note = config.Text("Catálogo configurado · consulta indisponível", "Configured catalog · live listing unavailable")
 		} else {
 			m.note = config.Text("Falha ao atualizar; catálogo anterior preservado. Ctrl+R tenta novamente.", "Refresh failed; previous catalog preserved. Ctrl+R retries.")
 		}
@@ -174,6 +187,12 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.move(-1)
 		case key.Matches(msg, modelKeys.Down):
 			m.move(1)
+		case msg.Type == tea.KeyPgUp:
+			m.selectedIdx = max(0, m.selectedIdx-m.visibleRows())
+			m.keepVisible()
+		case msg.Type == tea.KeyPgDown:
+			m.selectedIdx = max(0, min(len(m.filtered)-1, m.selectedIdx+m.visibleRows()))
+			m.keepVisible()
 		case key.Matches(msg, modelKeys.Left):
 			return m, m.switchProvider(-1)
 		case key.Matches(msg, modelKeys.Right):
@@ -202,19 +221,11 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, modelKeys.Escape):
 			m.Close()
 			return m, util.CmdHandler(CloseModelDialogMsg{})
-		case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyCtrlH:
-			_, size := utf8.DecodeLastRuneInString(m.query)
-			if size > 0 {
-				m.query = m.query[:len(m.query)-size]
-				m.filter()
+		default:
+			if cmd := m.updateSearch(msg); cmd != nil {
+				return m, cmd
 			}
-		case msg.Type == tea.KeyRunes && len(m.query) < 256:
-			for _, r := range msg.Runes {
-				if !unicode.IsControl(r) && len(m.query)+utf8.RuneLen(r) <= 256 {
-					m.query += string(r)
-				}
-			}
-			m.filter()
+
 		}
 	case tea.MouseMsg:
 		// The app translates mouse coordinates into this centered dialog.
@@ -224,21 +235,61 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseButtonWheelDown {
 			m.move(1)
 		}
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < 3+m.contentWidth() {
-			if msg.Y == 2 {
-				if msg.X < 3+m.contentWidth()/2 {
+		geometry := m.geometry()
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= geometry.contentX && msg.X < geometry.contentX+geometry.width {
+			if msg.Y == geometry.titleY && len(m.availableProviders) > 1 {
+				if msg.X < geometry.contentX+geometry.width/2 {
 					return m, m.switchProvider(-1)
 				}
 				return m, m.switchProvider(1)
 			}
-			index := msg.Y - 5 + m.scrollOffset
-			if msg.Y >= 5 && msg.Y < 5+m.visibleRows() && index < len(m.filtered) {
+			index := msg.Y - geometry.listY + m.scrollOffset
+			if msg.Y >= geometry.listY && msg.Y < geometry.listY+geometry.rows && index >= 0 && index < len(m.filtered) {
 				m.selectedIdx = index
 				return m, m.choose()
 			}
 		}
+	default:
+		// textinput also receives its asynchronous clipboard result messages.
+		if cmd := m.updateSearch(msg); cmd != nil {
+			return m, cmd
+		}
 	}
 	return m, m.scheduleMetadata()
+}
+
+func (m *modelDialogCmp) updateSearch(msg tea.Msg) tea.Cmd {
+	before := m.search.Value()
+	if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyRunes {
+		key.Runes = []rune(strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return -1
+			}
+			return r
+		}, string(key.Runes)))
+		msg = key
+	}
+	var cmd tea.Cmd
+	m.search, cmd = m.search.Update(msg)
+	value := m.search.Value()
+	bounded := strings.Builder{}
+	for _, r := range value {
+		if unicode.IsControl(r) {
+			continue
+		}
+		if bounded.Len()+len(string(r)) > 256 {
+			break
+		}
+		bounded.WriteRune(r)
+	}
+	m.query = bounded.String()
+	if value != m.query {
+		m.search.SetValue(m.query)
+	}
+	if m.query != before {
+		m.filter()
+	}
+	return cmd
 }
 func (m *modelDialogCmp) choose() tea.Cmd {
 	if len(m.filtered) == 0 || m.selectedIdx < 0 || m.selectedIdx >= len(m.filtered) {
@@ -250,6 +301,7 @@ func (m *modelDialogCmp) choose() tea.Cmd {
 	m.Close()
 	if lookup != nil && (selected.ContextEstimated || selected.ContextSource == "cache") {
 		m.selecting = true
+		m.note = config.Text("Selecionando modelo… Esc cancela", "Selecting model… Esc cancels")
 		ctx, cancel := context.WithCancel(context.Background())
 		m.metadataCancel = cancel
 		return func() tea.Msg {
@@ -273,9 +325,14 @@ func (m *modelDialogCmp) switchProvider(offset int) tea.Cmd {
 	index = (index + offset + len(m.availableProviders)) % len(m.availableProviders)
 	m.provider = m.availableProviders[index]
 	m.query = ""
+	m.search.SetValue("")
 	return m.load()
 }
 func (m *modelDialogCmp) filter() {
+	if m.search.Value() != m.query {
+		m.search.SetValue(m.query)
+		m.search.CursorEnd()
+	}
 	previous := models.ModelID("")
 	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
 		previous = m.filtered[m.selectedIdx].ID
@@ -346,127 +403,13 @@ func (m *modelDialogCmp) keepVisible() {
 		m.scrollOffset = m.selectedIdx - m.visibleRows() + 1
 	}
 }
-func (m *modelDialogCmp) visibleRows() int {
-	if m.height == 0 {
-		return numVisibleModels
-	}
-	reserve := 10
-	if m.details {
-		reserve = 14
-	}
-	return max(1, min(numVisibleModels, m.height-reserve))
-}
-func (m *modelDialogCmp) contentWidth() int {
-	if m.width == 0 {
-		return 68
-	}
-	return max(12, min(68, m.width-8))
-}
+func (m *modelDialogCmp) visibleRows() int  { return m.geometry().rows }
+func (m *modelDialogCmp) contentWidth() int { return m.geometry().width }
 func (m *modelDialogCmp) View() string {
 	if m.probeConfirm || m.probeRunning {
 		return m.probeView()
 	}
-	t := theme.CurrentTheme()
-	width := m.contentWidth()
-	base := styles.BaseStyle().Width(width)
-	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), width, "…")) }
-	provider := string(m.provider)
-	if provider == "" {
-		provider = "No provider"
-	}
-	if id, ok := strings.CutPrefix(provider, "profile:"); ok {
-		p := config.Get().ProviderProfiles[id]
-		provider = p.Name + " [" + id + "]"
-	}
-	role := "main"
-	if m.target != "" && m.target != config.AgentCoder {
-		role = string(m.target)
-	}
-	title := config.Text("Escolher modelo ", "Select ") + role + config.Text(" · ", " model · ") + provider
-	if m.setup {
-		title = config.Text("Configuração · 2/3 · ", "Setup · 2/3 · ") + title
-	}
-	if m.provider == "" {
-		title = "No provider · Ctrl+P settings"
-	}
-	if len(m.availableProviders) > 1 {
-		title = "‹ " + title + " ›"
-	}
-	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(interfaceCopy(title), width, "…")), line(config.Text("Buscar: ", "Search: ") + m.query)}
-	note := m.note
-	if m.loading {
-		note = "Loading provider models…"
-	}
-	lines = append(lines, line(note))
-	if len(m.filtered) == 0 {
-		lines = append(lines, line("No models found"))
-	}
-	for i := m.scrollOffset; i < min(len(m.filtered), m.scrollOffset+m.visibleRows()); i++ {
-		model := m.filtered[i]
-		label := model.Name
-		prefs := config.Get().Preferences
-		if slices.Contains(prefs.FavoriteModels, model.ID) {
-			label = "★ " + label
-		} else if slices.Contains(prefs.RecentModels, model.ID) {
-			label = "↺ " + label
-		}
-		if model.APIModel != model.Name {
-			label += " · " + model.APIModel
-		}
-		row := base
-		if i == m.selectedIdx {
-			row = row.Background(t.Primary()).Foreground(t.Background()).Bold(true)
-		}
-		lines = append(lines, row.Render(ansi.Truncate(label, width, "…")))
-	}
-	if m.details && len(m.filtered) > 0 {
-		selected := m.filtered[m.selectedIdx]
-		contextNote := ""
-		if selected.ContextEstimated {
-			contextNote = config.Text(" (estimativa alternativa)", " (fallback estimate)")
-		} else {
-			switch selected.ContextSource {
-			case "ollama:loaded", "lmstudio:loaded":
-				contextNote = config.Text(" (alocado no servidor)", " (server allocation)")
-			case "ollama:model", "lmstudio:model":
-				contextNote = config.Text(" (máximo do modelo)", " (model maximum)")
-			case "ollama:parameter":
-				contextNote = config.Text(" (parâmetro do servidor)", " (server parameter)")
-			case "configuration":
-				contextNote = config.Text(" (configurado)", " (configured)")
-			case "cache":
-				contextNote = config.Text(" (última consulta)", " (cached metadata)")
-			case "catalog":
-				contextNote = config.Text(" (catálogo interno)", " (built-in catalog)")
-			case "provider":
-				contextNote = config.Text(" (informado pelo provedor)", " (provider metadata)")
-			}
-		}
-		lines = append(lines, line(fmt.Sprintf(config.Text("Contexto: %d%s · saída: %d", "Context: %d%s · output: %d"), selected.ContextWindow, contextNote, selected.DefaultMaxTokens)))
-		caps := []string{}
-		if selected.CanReason {
-			caps = append(caps, config.Text("raciocínio", "reasoning"))
-		}
-		if selected.SupportsAttachments {
-			caps = append(caps, config.Text("anexos", "attachments"))
-		}
-		if len(caps) == 0 {
-			caps = append(caps, config.Text("nenhuma", "none"))
-		}
-		protocol := selected.API
-		if protocol == "" {
-			protocol = config.Text("padrão do provedor", "provider default")
-		}
-		lines = append(lines, line("API: "+protocol+config.Text(" · capacidades declaradas: ", " · capabilities declared: ")+strings.Join(caps, ", ")))
-		if m.metadataNote != "" {
-			lines = append(lines, line(m.metadataNote))
-		}
-	}
-	lines = append(lines, line(config.Text("↑↓ modelos · ←→ provedor · Enter escolhe · Ctrl+D detalhes", "↑↓ models · ←→ provider · Enter choose · Ctrl+D details")))
-	if m.details {
-		lines = append(lines, line("Ctrl+P settings · Ctrl+A role · Ctrl+R catalog · Ctrl+T probe · Esc"))
-	}
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return m.catalogView()
 }
 func (m *modelDialogCmp) BindingKeys() []key.Binding {
 	return append(layout.KeyMapToSlice(modelKeys), key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", config.Text("detalhes", "details"))))
@@ -520,6 +463,13 @@ func getModelsForProvider(provider models.ModelProvider) []models.Model {
 	slices.SortFunc(found, func(a, b models.Model) int { return strings.Compare(a.APIModel, b.APIModel) })
 	return found
 }
-func NewModelDialogCmp() ModelDialog { return &modelDialogCmp{} }
+func NewModelDialogCmp() ModelDialog {
+	search := textinput.New()
+	search.Prompt = ""
+	search.Placeholder = config.Text("Buscar modelos", "Search models")
+	search.CharLimit = 256
+	search.Cursor.SetMode(cursor.CursorStatic)
+	return &modelDialogCmp{search: search}
+}
 
 func (m *modelDialogCmp) SetSetup(enabled bool) { m.setup = enabled }

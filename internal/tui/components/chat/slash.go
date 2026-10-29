@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/commands"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -50,14 +51,14 @@ func slashOptions(value string) ([]slashOption, bool) {
 	}
 	if query == "/mode" || strings.HasPrefix(query, "/mode ") {
 		options = []slashOption{
-			{"/mode ask", "Perguntar · somente leitura", false},
-			{"/mode plan", "Planejar · sem comandos ou edições", false},
-			{"/mode execute", "Executar · com permissões", false},
+			{"/mode ask", config.Text("Perguntar · somente leitura", "Ask · read only"), false},
+			{"/mode plan", config.Text("Planejar · sem comandos ou edições", "Plan · no commands or edits"), false},
+			{"/mode execute", config.Text("Executar · com permissões", "Execute · with permissions"), false},
 		}
 	} else if query == "/task" || strings.HasPrefix(query, "/task ") {
 		options = []slashOption{
-			{"/task", "Ver tarefa e critérios de aceite", false},
-			{"/task new", "Nova tarefa · limpa o plano, mantém arquivos", false},
+			{"/task", config.Text("Ver tarefa e critérios de aceite", "Inspect task and acceptance criteria"), false},
+			{"/task new", config.Text("Nova tarefa · limpa o plano, mantém arquivos", "New task · clear plan, keep files"), false},
 		}
 	} else if strings.ContainsAny(query, " \t") {
 		return nil, false

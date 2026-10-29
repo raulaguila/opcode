@@ -13,6 +13,13 @@ e o clique abre a fila. O menu `/` começa com ações comuns; digite o nome de 
 comando para encontrar os demais ou use `/commands` para pesquisar na paleta.
 `Ctrl+?` mantém a ajuda completa de atalhos.
 
+O campo reserva três linhas úteis e cresce até oito conforme o texto ou a
+colagem. Anexos usam até duas linhas de prévia; todos continuam anexados.
+Telas muito baixas reduzem essa reserva para manter a conversa visível.
+Ao abrir um diálogo, o campo perde o foco e preserva o rascunho; ao fechar,
+o foco retorna. Perguntas e terminal recebem as teclas apenas quando ativos.
+O seletor de modos tem título próprio e marca o modo atual; `/mode` também o abre.
+
 Contexto, custos, integração LSP e Git ficam nos painéis correspondentes. O
 rodapé não repete “Pronto”, custo zero ou ausência de diagnósticos. Avisos,
 erros, resultados parciais e pedidos de aprovação/resposta permanecem visíveis
@@ -24,7 +31,7 @@ quando exigem atenção. O campo mantém três linhas iniciais.
 | --- | --- |
 | Cadastrar/editar conexão e preferências | `/settings` ou `/providers` |
 | Escolher modelo | Clique no modelo do rodapé, `Ctrl+O` ou `/models` |
-| Trocar conexão no seletor | `←`/`→` ou metades do título |
+| Trocar conexão no seletor | `Alt+←`/`Alt+→` ou metades do título |
 | Buscar, marcar favorito, atualizar catálogo | Digitar, `Ctrl+F`, `Ctrl+R` |
 | Busca aproximada de modelos | Digite parte das letras na ordem, por exemplo `llm8b` para `llama3.1:8b` |
 | Mostrar/ocultar detalhes técnicos do modelo | `Ctrl+D` no seletor |

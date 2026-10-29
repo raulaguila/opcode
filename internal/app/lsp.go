@@ -2,6 +2,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -15,10 +18,15 @@ import (
 func (app *App) initLSPClients(parent context.Context) {
 	lifetime, cancel := context.WithCancel(parent)
 	app.lspStop = cancel
+	// Remember only configuration fingerprints, never executable arguments.
+	unavailable := map[string][32]byte{}
 	app.lspUnregister = lsp.RegisterLazyClients(app.LSPClients, func(ctx context.Context, path string) error {
 		app.lspStartMu.Lock()
 		defer app.lspStartMu.Unlock()
 		if err := lifetime.Err(); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
 			return err
 		}
 		cfg := config.Get()
@@ -35,6 +43,16 @@ func (app *App) initLSPClients(parent context.Context) {
 			if lsp.SnapshotClients(app.LSPClients)[name] != nil {
 				continue
 			}
+			if err := lsp.CheckExecutable(entry.Command, cfg.WorkingDir); err != nil {
+				data, _ := json.Marshal(entry)
+				fingerprint := sha256.Sum256(data)
+				if previous, seen := unavailable[name]; !seen || previous != fingerprint {
+					logging.Warn(err.Error())
+					unavailable[name] = fingerprint
+				}
+				return err
+			}
+			delete(unavailable, name)
 			startCtx, stop := context.WithCancel(lifetime)
 			done := context.AfterFunc(ctx, stop)
 			app.createAndStartLSPClient(startCtx, name, entry.Command, entry.Args...)
@@ -49,7 +67,7 @@ func (app *App) initLSPClients(parent context.Context) {
 			}
 			if lsp.SnapshotClients(app.LSPClients)[name] == nil {
 				stop()
-				return fmt.Errorf("configured language server failed to start: %s", name)
+				return fmt.Errorf("%s: %s", lsp.ExecutableLabel(entry.Command), config.Text("falha ao iniciar; veja /integrations", "failed to start; see /integrations"))
 			}
 		}
 		return nil
@@ -59,12 +77,17 @@ func (app *App) initLSPClients(parent context.Context) {
 // createAndStartLSPClient creates a new LSP client, initializes it, and starts its workspace watcher
 func (app *App) createAndStartLSPClient(ctx context.Context, name string, command string, args ...string) {
 	// Create a specific context for initialization with a timeout
-	logging.Info("Creating LSP client", "name", name, "command", command, "args", args)
+	label := lsp.ExecutableLabel(command)
+	logging.Info(config.Text("Iniciando LSP", "Starting LSP"), "server", label)
 
 	// Create the LSP client
 	lspClient, err := lsp.NewClient(ctx, command, args...)
 	if err != nil {
-		logging.Error("Failed to create LSP client for", name, err)
+		if errors.Is(err, lsp.ErrExecutableUnavailable) {
+			logging.Warn(err.Error())
+		} else if ctx.Err() == nil {
+			logging.Warn(config.Text("LSP não iniciou; veja /integrations", "LSP failed to start; see /integrations"), "server", label)
+		}
 		return
 	}
 
@@ -75,7 +98,9 @@ func (app *App) createAndStartLSPClient(ctx context.Context, name string, comman
 	// Initialize with the initialization context
 	_, err = lspClient.InitializeLSPClient(initCtx, config.WorkingDirectory())
 	if err != nil {
-		logging.Error("Initialize failed", "name", name, "error", err)
+		if ctx.Err() == nil {
+			logging.Warn(config.Text("LSP não inicializou; veja /integrations", "LSP initialization failed; see /integrations"), "server", label)
+		}
 		// Clean up the client to prevent resource leaks
 		lspClient.Close()
 		return
@@ -83,11 +108,13 @@ func (app *App) createAndStartLSPClient(ctx context.Context, name string, comman
 
 	// Wait for the server to be ready
 	if err := lspClient.WaitForServerReady(initCtx); err != nil {
-		logging.Error("Server failed to become ready", "name", name, "error", err)
+		if ctx.Err() == nil {
+			logging.Warn(config.Text("LSP ainda indisponível; veja /integrations", "LSP not ready; see /integrations"), "server", label)
+		}
 		// We'll continue anyway, as some functionality might still work
 		lspClient.SetServerState(lsp.StateError)
 	} else {
-		logging.Info("LSP server is ready", "name", name)
+		logging.Info(config.Text("LSP pronto", "LSP ready"), "server", label)
 		lspClient.SetServerState(lsp.StateReady)
 	}
 
@@ -95,7 +122,7 @@ func (app *App) createAndStartLSPClient(ctx context.Context, name string, comman
 		lspClient.Close()
 		return
 	}
-	logging.Info("LSP client initialized", "name", name)
+	logging.Info(config.Text("LSP inicializado", "LSP initialized"), "server", label)
 
 	// Create a child context that can be canceled when the app is shutting down
 	watchCtx, cancelFunc := context.WithCancel(ctx)

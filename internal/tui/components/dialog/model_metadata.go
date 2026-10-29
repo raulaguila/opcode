@@ -22,6 +22,12 @@ func (m *modelDialogCmp) scheduleMetadata() tea.Cmd {
 		return nil
 	}
 	if m.selectedIdx < 0 || m.selectedIdx >= len(m.filtered) {
+		if m.metadataCancel != nil {
+			m.metadataCancel()
+			m.metadataCancel = nil
+		}
+		m.metadataRequest++
+		m.metadataFor, m.metadataNote = "", ""
 		return nil
 	}
 	selected := m.filtered[m.selectedIdx]
@@ -65,6 +71,7 @@ func (m *modelDialogCmp) acceptMetadata(msg modelMetadataLoadedMsg) tea.Cmd {
 	m.metadataCancel = nil
 	if msg.err != nil {
 		m.metadataNote = config.Text("Metadados indisponíveis; valores anteriores preservados.", "Metadata unavailable; previous values preserved.")
+		m.keepVisible()
 		return nil
 	}
 	for i := range m.models {
@@ -78,6 +85,7 @@ func (m *modelDialogCmp) acceptMetadata(msg modelMetadataLoadedMsg) tea.Cmd {
 		}
 	}
 	m.metadataNote = ""
+	m.keepVisible()
 	return nil
 }
 

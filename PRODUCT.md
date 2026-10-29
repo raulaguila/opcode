@@ -33,6 +33,12 @@ A interface deve funcionar por teclado e mouse, preservar rascunhos, manter
 leitura durante streaming e comunicar carregamento, vazio, falha e recuperação.
 Não há metas de latência ou paridade de qualidade entre modelos estabelecidas.
 
+A estabilidade visual inclui um único composer/rodapé, input de três a oito
+linhas conforme o espaço, foco exclusivo dos diálogos e catálogo com busca,
+modelo ativo e paginação visíveis. Redimensionar ou consultar seletores preserva
+o rascunho. Erros de LSP são avisos curtos e acionáveis; stderr bruto não chega
+ao terminal. Durações de respostas usam os timestamps em segundos armazenados.
+
 Identidade pública: **Opcode**, módulo `github.com/raulaguila/opcode`, branch
 `develop`. A instalação documentada usa o checkout ou `go install ...@develop`.
 Distribuições e releases só são anunciadas quando publicadas. A licença original

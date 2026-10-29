@@ -87,6 +87,9 @@ func (s *splitPaneLayout) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (s *splitPaneLayout) View() string {
+	if s.width <= 0 || s.height <= 0 {
+		return ""
+	}
 	var topSection string
 
 	if s.leftPanel != nil && s.rightPanel != nil {
@@ -120,7 +123,7 @@ func (s *splitPaneLayout) View() string {
 			Height(s.height).
 			Background(t.Background())
 
-		return style.Render(finalView)
+		return style.MaxWidth(s.width).MaxHeight(s.height).Render(finalView)
 	}
 
 	return finalView

@@ -125,6 +125,27 @@ checks disponíveis deve permanecer parcial. Backups de configuração pertencem
 
 ## Evolução comparativa — 28/10/2026
 
+### Correção UI/UX autorizada — 28/10/2026
+
+Aceite adicional: saída de LSP/subprocessos não escreve diretamente no terminal
+enquanto a TUI está ativa; mensagens técnicas são limitadas e não vazam segredos.
+Um quadro completo respeita largura/altura, apresenta um único prompt e rodapé,
+preserva rascunho/rolagem em resize e tem apenas um foco visível. O composer
+reserva três linhas úteis quando há espaço e cresce até oito; telas pequenas,
+texto colado, anexos e Unicode mantêm limites e navegação.
+
+Seletor de modelos: busca com cursor, modelo atual distinto do destaque, posição
+na lista, nomes legíveis, detalhes sob demanda, cancelamento e catálogo estável.
+Modos têm título próprio; idioma configurado é consistente; contraste auxiliar
+e mensagens de LSP indisponível são legíveis e acionáveis. Durações usam unidades
+corretas. Permissões, sandbox, gates e validação de fontes permanecem obrigatórios.
+
+Mocks comprovam transições e erros determinísticos. A aceitação em PTY real usa
+Ollama local com aprovação humana simulada pelos controles normais, comandos,
+entrada/novas instruções, resize, seletores e LSP ausente. Comparações capturam
+quadros sem credenciais. Aceite final: suíte race, vet, build, evidência live,
+documentação atualizada, commit e push normal para develop (sem force).
+
 O usuário autorizou implementar as recomendações, priorizando avaliação, citações e recuperação. Os contratos anteriores permanecem aplicáveis.
 
 ### Superfícies e resultados observáveis

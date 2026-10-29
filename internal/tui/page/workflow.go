@@ -21,6 +21,7 @@ import (
 )
 
 type WorkflowCommandMsg struct{ Command, Value string }
+type OpenModeChooserMsg struct{}
 type workflowPanel struct {
 	task            workflow.Task
 	expanded        bool
@@ -52,7 +53,8 @@ func (p *chatPage) refreshWorkflow() {
 	if q.ID != p.workflow.question.ID {
 		input := textinput.New()
 		input.CharLimit = 4000
-		input.Placeholder = "Escreva sua resposta ou escolha com ↑/↓"
+		input.Prompt = config.Text("Resposta: ", "Answer: ")
+		input.Placeholder = config.Text("Escreva sua resposta ou escolha com ↑/↓", "Type your answer or choose with ↑/↓")
 		input.Focus()
 		p.workflow.details = false
 		p.workflow.detailView = viewport.New(max(1, p.width-2), max(1, p.height-8))
@@ -225,8 +227,11 @@ func (p *chatPage) workflowView() string {
 	if len(lines) > height {
 		lines = lines[len(lines)-height:]
 	}
+	for i := range lines {
+		lines[i] = ansi.Truncate(lines[i], max(1, p.width), "…")
+	}
 	t := theme.CurrentTheme()
-	return styles.BaseStyle().Foreground(t.Text()).Width(max(0, p.width)).Render(strings.Join(lines, "\n"))
+	return styles.BaseStyle().Foreground(t.Text()).Width(max(0, p.width)).MaxHeight(height).Render(strings.Join(lines, "\n"))
 }
 func (p *chatPage) questionKey(msg tea.KeyMsg) tea.Cmd {
 	q := p.workflow.question
@@ -300,7 +305,7 @@ func (p *chatPage) applyWorkflowCommand(command, value string) (tea.Cmd, error) 
 		return p.setupRead()
 	case "mode":
 		if value == "" {
-			return util.ReportInfo("Modo: " + modeLabel(p.mode()) + " · /mode ask|plan|execute"), nil
+			return util.CmdHandler(OpenModeChooserMsg{}), nil
 		}
 		if err := p.app.CoderAgent.SetMode(ctx, p.session.ID, workflow.Mode(value)); err != nil {
 			return nil, err

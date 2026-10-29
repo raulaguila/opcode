@@ -71,10 +71,15 @@ quando você escolhe um modelo.
 
 - Clique no nome do modelo com `▾`, no rodapé, ou pressione `Ctrl+O`.
 - O seletor começa no provedor do modelo atual e consulta seu catálogo ao vivo.
-- Use `←`/`→` para alternar entre os provedores habilitados. Também é possível
+- Use `Alt+←`/`Alt+→` para alternar entre os provedores habilitados. Também é possível
   clicar na metade esquerda/direita do título.
-- Digite parte do nome ou ID para filtrar. `Backspace` apaga a busca.
-- Use `↑`/`↓`, a roda do mouse, `Enter` ou clique em uma linha para escolher.
+- Digite parte do nome ou ID para filtrar. A busca tem cursor próprio; `←`/`→`,
+  `Home`, `End` e `Backspace` editam o texto sem alterar o rascunho da conversa.
+- Use `↑`/`↓`, `PgUp`/`PgDn` ou a roda do mouse para navegar; `Enter` ou clique
+  em uma linha confirma. `›` indica o destaque e `✓` identifica o modelo ativo.
+  O contador informa a posição e a quantidade de resultados; setas indicam mais linhas.
+- Nomes longos são abreviados na lista. `Ctrl+D` mostra ID, contexto/origem,
+  protocolo e capacidades; ausência de metadados aparece como não informada.
 - `Ctrl+R` atualiza a lista; `Esc` fecha sem mudar o modelo.
 
 A interface continua respondendo durante a consulta. Fechar, atualizar ou trocar

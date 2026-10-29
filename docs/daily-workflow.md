@@ -37,6 +37,18 @@ formulário. Processo e lateral começam recolhidos, respeitando preferências
 explicitamente salvas. `/plan` mostra o plano quando você precisar consultá-lo;
 perguntas, aprovações e erros continuam aparecendo durante o trabalho.
 
+O input começa com três linhas úteis e cresce até oito; `Shift+Enter` insere
+uma nova linha quando o terminal transmite o atalho. `Ctrl+J` e `Alt+Enter`
+também inserem uma linha. Colagem com múltiplas linhas preserva o texto sem enviar.
+Seletores mantêm o rascunho e recebem o foco enquanto abertos. No catálogo,
+`✓` marca o modelo ativo, `›` o destaque, e `PgUp`/`PgDn` navegam por páginas;
+`Alt+←`/`Alt+→` alternam provedores.
+
+LSP ausente gera um aviso curto com orientação para `/integrations`; não impede
+conversar com o modelo. A saída bruta de erro do servidor LSP é descartada para
+preservar o terminal e evitar expor conteúdo sensível. Durações ao lado das
+respostas usam segundos/minutos e medem aquela resposta, não a tarefa inteira.
+
 Os dois testes opcionais exigem confirmação. O probe faz uma inferência com uma
 ferramenta inerte; nenhuma ferramenta é executada. A tarefa de exemplo muda a
 sessão para Perguntar e pede uma explicação a partir de arquivos reais. Ambos

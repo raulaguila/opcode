@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "id": "team-model-alias",
+      "object": "model",
+      "name": "Team model alias",
+      "max_model_len": 131072,
+      "openai": {
+        "id": "upstream-model",
+        "max_model_len": 131072,
+        "connection_type": "local"
+      },
+      "info": {
+        "meta": {
+          "capabilities": {
+            "vision": true,
+            "builtin_tools": true,
+            "terminal": true,
+            "citations": true
+          }
+        }
+      },
+      "permission": [{"allow_view": true}]
+    }
+  ]
+}

@@ -93,7 +93,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"data":[{"id":"UI_NAVIGATION_ONLY_MODEL"}]}`)
+		io.WriteString(w, `{"models":[{"id":"UI_NAVIGATION_ONLY_MODEL","openai":{"max_model_len":131072}}]}`)
 	}))
 	defer catalog.Close()
 	configuration := map[string]any{
@@ -149,7 +149,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	} {
 		h.send(keys.next)
 		h.wait("second provider and distinct catalog", 10*time.Second, func(frame string) bool {
-			return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+			return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && strings.Contains(frame, "Context: 128k")
 		})
 		h.send(keys.previous)
 		h.wait("Ollama provider restored", 10*time.Second, func(frame string) bool {

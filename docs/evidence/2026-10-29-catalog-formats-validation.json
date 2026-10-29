@@ -1,0 +1,102 @@
+{
+  "date": "2026-10-29",
+  "source_base": "75e9e63",
+  "source_revision": "Accompanying commit",
+  "scope": "Normalize model-list envelopes and token-limit metadata for custom OpenAI-compatible gateways",
+  "binary_sha256": "dfad7baa29b93bff936e90ae57ecefd13582f0ae68116cc614ca3adb61e1741a",
+  "checks": {
+    "go_test_race_all": "passed",
+    "go_vet_all": "passed",
+    "go_vet_integration_tui": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed"
+  },
+  "formats": {
+    "envelopes": [
+      "data array",
+      "models array",
+      "items array",
+      "result array",
+      "bare array",
+      "bounded data/result object wrappers"
+    ],
+    "model_ids": [
+      "id",
+      "model",
+      "model_id",
+      "model_name",
+      "name",
+      "bare string entries"
+    ],
+    "metadata_paths": [
+      "record root",
+      "openai",
+      "limits",
+      "metadata",
+      "model_info",
+      "info",
+      "info.meta"
+    ],
+    "token_values": "positive integers or exact integer strings; fractions, negatives, ambiguous units, booleans and overflow stay unknown",
+    "output_separation": "output-only limit never establishes the context window",
+    "bounds": "existing response byte/time/redirect limits retained; at most 5000 normalized records and 3 envelope levels"
+  },
+  "photo_shape": {
+    "fixture": "internal/llm/models/testdata/gateway-models.json",
+    "anonymized": true,
+    "max_model_len": 131072,
+    "nested_openai_max_model_len": 131072,
+    "context_source": "provider",
+    "context_estimated": false,
+    "ui_display": "128k",
+    "wire_id": "outer gateway alias preserved; nested upstream id does not replace it",
+    "gateway_ui_capabilities": "not interpreted as model tool/vision support or Opcode permission grants"
+  },
+  "regressions": [
+    "Local and OpenAI discovery backends accept the same custom gateway envelopes",
+    "Native provider authentication, model filtering and pagination tests remain passing",
+    "LM Studio loaded-context and native Ollama metadata precedence remain passing",
+    "Named profiles propagate 131072 through model selection",
+    "Positive manual context overrides still take precedence",
+    "No reported output limit is reused as context",
+    "Invalid numeric metadata does not invent a limit",
+    "Unrecognized error objects and excessive nesting fail without exposing body contents"
+  ],
+  "live": {
+    "status": "passed",
+    "provider": "local Ollama and loopback catalog fixture",
+    "model": "llama3.1:8b",
+    "sandbox": "bubblewrap",
+    "main_flow_seconds": 24.88,
+    "suite_seconds": 28.454,
+    "catalog_fixture": "models[].openai.max_model_len = 131072",
+    "context_visible_in_real_pty": true,
+    "coverage": [
+      "provider navigation and 128k context display",
+      "catalog failure/retry",
+      "confirmed connection deletion",
+      "factual project response",
+      "question and user answer",
+      "separate LSP approval",
+      "one exact Bash approval",
+      "live terminal output",
+      "PTY input",
+      "queued instructions",
+      "composer and modal resizing"
+    ]
+  },
+  "guards": {
+    "corporate_api_contacted": false,
+    "corporate_credentials_used": false,
+    "real_user_configuration_modified": false,
+    "permission_engine_changed": false,
+    "citation_validation_changed": false,
+    "evaluation_criteria_changed": false,
+    "dependencies_added": false
+  },
+  "limits": [
+    "Compatibility is based on documented explicit envelopes/field aliases, not arbitrary recursive schema guessing",
+    "Manual positive contextWindow settings continue to override discovery",
+    "Only sanitized fixtures based on the photos were tested for the corporate response; the private corporate endpoint was not contacted"
+  ]
+}

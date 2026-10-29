@@ -374,3 +374,38 @@ Backends legados em `providers` mantêm apenas um marcador `disabled: true`, sem
 chave, URL ou outros dados, para impedir recriação automática por variável de
 ambiente. Esse marcador não aparece na lista de conexões. Perfis nomeados em
 `providerProfiles` são removidos do JSON.
+
+## Formatos de catálogo compatível
+
+Além dos formatos nativos dos provedores, a listagem aceita arrays em `data`,
+`models`, `items` ou `result`, um array na raiz e wrappers de objeto em `data` ou
+`result`. Cada registro pode trazer `id`, `model`, `model_id`, `model_name` ou
+`name`; listas de IDs em strings também são aceitas. O ID externo do gateway é
+preservado: `openai.id` não substitui um alias publicado pelo servidor.
+
+Os limites podem ser números inteiros ou strings numéricas, como `"131072"`.
+A busca considera os campos do registro e, depois, `openai`, `limits`, `metadata`,
+`model_info`, `info` e `info.meta`, nessa ordem.
+
+| Informação | Campos reconhecidos |
+| --- | --- |
+| Contexto | `loaded_context_length`, `context_length`, `context_window`, `max_model_len`, `max_context_length`, `contextLength`, `contextWindow`, `maxModelLen`, `maxContextLength`, `context_size`, `contextSize`, `n_ctx`, `max_seq_len`, `max_sequence_length`, `max_context_tokens` |
+| Entrada | `max_input_tokens`, `input_token_limit`, `inputTokenLimit`, `maxInputTokens` |
+| Saída | `max_output_tokens`, `output_token_limit`, `outputTokenLimit`, `maxOutputTokens`, `max_completion_tokens`, `max_tokens` |
+
+O limite de saída não é usado para deduzir o contexto. Na ausência de uma janela
+explícita, o limite de entrada pode servir como referência conservadora. Limites
+carregados do LM Studio e metadados nativos do Ollama mantêm suas regras de
+precedência. Booleans, frações, valores negativos, overflow e unidades ambíguas
+como `"128k"` são ignorados; na ausência de um limite válido, a interface identifica
+o valor alternativo como estimativa.
+
+Por exemplo, `max_model_len: 131072`, inclusive dentro de `openai`, aparece como
+**128k (informado pelo provedor)**. Para usar descoberta automática, deixe
+`contextWindow` ausente ou em `0`; um valor positivo configurado pelo usuário
+continua tendo precedência. A atualização não fixa o limite descoberto no JSON.
+
+Flags de interface em `info.meta.capabilities`, como `builtin_tools`, `terminal`
+ou `vision`, não comprovam capacidades do modelo nem concedem permissão às
+ferramentas do Opcode. A normalização mantém os limites de tamanho das respostas,
+até 5000 modelos e até três níveis de envelope, com paginação limitada.

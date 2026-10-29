@@ -104,30 +104,8 @@ func DiscoverProviderModels(ctx context.Context, provider ModelProvider, endpoin
 		if readErr != nil || len(body) > 4<<20 {
 			return nil, fmt.Errorf("model catalog response exceeds limit or could not be read")
 		}
-		var result struct {
-			Data []struct {
-				ID             string `json:"id"`
-				Name           string `json:"name"`
-				DisplayName    string `json:"display_name"`
-				ContextWindow  int64  `json:"context_length"`
-				MaxInputTokens int64  `json:"max_input_tokens"`
-				MaxTokens      int64  `json:"max_tokens"`
-				Architecture   struct {
-					Output []string `json:"output_modalities"`
-				} `json:"architecture"`
-			} `json:"data"`
-			Models []struct {
-				Name         string   `json:"name"`
-				DisplayName  string   `json:"displayName"`
-				InputTokens  int64    `json:"inputTokenLimit"`
-				OutputTokens int64    `json:"outputTokenLimit"`
-				Methods      []string `json:"supportedGenerationMethods"`
-			} `json:"models"`
-			HasMore bool   `json:"has_more"`
-			LastID  string `json:"last_id"`
-			Next    string `json:"nextPageToken"`
-		}
-		if json.Unmarshal(body, &result) != nil {
+		result, err := decodeCatalogPage(body)
+		if err != nil {
 			return nil, fmt.Errorf("invalid model catalog response")
 		}
 		add := func(id, name string, contextWindow, maxTokens int64) {
@@ -150,7 +128,28 @@ func DiscoverProviderModels(ctx context.Context, provider ModelProvider, endpoin
 			maxTokens = min(maxTokens, contextWindow/2)
 			found = append(found, Model{ID: ModelID(string(provider) + "." + id), Name: name, Provider: provider, APIModel: id, ContextWindow: contextWindow, ContextAuto: true, ContextSource: source, ContextEstimated: estimated, DefaultMaxTokens: maxTokens})
 		}
-		for _, item := range result.Data {
+		for _, raw := range result.Data {
+			var item struct {
+				ID             string   `json:"id"`
+				Name           string   `json:"name"`
+				DisplayName    string   `json:"display_name"`
+				ContextWindow  int64    `json:"context_length"`
+				MaxInputTokens int64    `json:"max_input_tokens"`
+				MaxTokens      int64    `json:"max_tokens"`
+				Methods        []string `json:"supportedGenerationMethods"`
+				Architecture   struct {
+					Output []string `json:"output_modalities"`
+				} `json:"architecture"`
+			}
+			if json.Unmarshal(raw, &item) != nil {
+				continue
+			}
+			if provider == ProviderGemini {
+				if !slices.Contains(item.Methods, "generateContent") {
+					continue
+				}
+				item.ID = strings.TrimPrefix(item.ID, "models/")
+			}
 			// These endpoints also expose embeddings, audio and image-only models.
 			lower := strings.ToLower(item.ID)
 			if provider == ProviderOpenAI && (strings.Contains(lower, "embedding") || strings.Contains(lower, "whisper") || strings.Contains(lower, "tts") || strings.Contains(lower, "dall-e") || strings.Contains(lower, "moderation") || strings.Contains(lower, "realtime") || strings.Contains(lower, "transcribe") || strings.Contains(lower, "image") || strings.Contains(lower, "audio") || strings.HasPrefix(lower, "sora")) {
@@ -168,11 +167,6 @@ func DiscoverProviderModels(ctx context.Context, provider ModelProvider, endpoin
 				name = item.Name
 			}
 			add(item.ID, name, contextWindow, item.MaxTokens)
-		}
-		for _, item := range result.Models {
-			if slices.Contains(item.Methods, "generateContent") {
-				add(strings.TrimPrefix(item.Name, "models/"), item.DisplayName, item.InputTokens, item.OutputTokens)
-			}
 		}
 		if result.Next != "" {
 			q.Set("pageToken", result.Next)

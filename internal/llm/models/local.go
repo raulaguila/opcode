@@ -89,10 +89,6 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 	return result, nil
 }
 
-type localModelList struct {
-	Data []localModel `json:"data"`
-}
-
 type localModel struct {
 	ID                  string `json:"id"`
 	Object              string `json:"object"`
@@ -104,8 +100,10 @@ type localModel struct {
 	State               string `json:"state"`
 	MaxContextLength    int64  `json:"max_context_length"`
 	LoadedContextLength int64  `json:"loaded_context_length"`
-	ContextSource       string
-	SupportsTools       *bool `json:"supports_tools,omitempty"`
+	ReportedContext     int64  `json:"context_length"`
+	ReportedOutput      int64  `json:"max_tokens"`
+	ContextSource       string `json:"-"`
+	SupportsTools       *bool  `json:"supports_tools,omitempty"`
 }
 
 func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey string, lmStudio bool) ([]localModel, error) {
@@ -132,14 +130,21 @@ func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey 
 	if err != nil || len(raw) > maxBody {
 		return nil, fmt.Errorf("cannot read local model list (maximum 1 MiB)")
 	}
-	var modelList localModelList
-	if err := json.Unmarshal(raw, &modelList); err != nil {
+	page, err := decodeCatalogPage(raw)
+	if err != nil {
 		return nil, fmt.Errorf("local server returned an invalid model list")
 	}
 	var result []localModel
-	for _, model := range modelList.Data {
+	for _, raw := range page.Data {
+		var model localModel
+		if json.Unmarshal(raw, &model) != nil {
+			continue
+		}
 		if !validCatalogID(model.ID) || (model.Type != "" && model.Type != "llm") || (lmStudio && model.Object != "model") {
 			continue
+		}
+		if !lmStudio && (model.LoadedContextLength > 0 || model.MaxContextLength > 0 || model.ReportedContext > 0) {
+			model.ContextSource = "provider"
 		}
 		result = append(result, model)
 	}
@@ -154,11 +159,13 @@ func convertLocalModel(model localModel) Model {
 			source = "lmstudio:loaded"
 		case model.MaxContextLength > 0:
 			source = "lmstudio:model"
+		case model.ReportedContext > 0:
+			source = "provider"
 		default:
 			source = "fallback"
 		}
 	}
-	window := cmp.Or(model.LoadedContextLength, model.MaxContextLength, 4096)
+	window := cmp.Or(model.LoadedContextLength, model.MaxContextLength, model.ReportedContext, 4096)
 	if strings.HasPrefix(source, "ollama:") && model.MaxContextLength > 0 {
 		window = model.MaxContextLength
 	}
@@ -167,11 +174,11 @@ func convertLocalModel(model localModel) Model {
 		Name:                friendlyModelName(model.ID),
 		Provider:            ProviderLocal,
 		APIModel:            model.ID,
-		ContextEstimated:    model.LoadedContextLength == 0 && model.MaxContextLength == 0,
+		ContextEstimated:    model.LoadedContextLength == 0 && model.MaxContextLength == 0 && model.ReportedContext == 0,
 		ContextAuto:         true,
 		ContextSource:       source,
 		ContextWindow:       window,
-		DefaultMaxTokens:    min(4096, window/2),
+		DefaultMaxTokens:    min(cmp.Or(model.ReportedOutput, 4096), window/2),
 		CanReason:           false,
 		SupportsAttachments: false,
 		SupportsTools:       model.SupportsTools,

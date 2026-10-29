@@ -69,10 +69,18 @@ curtas de navegação; `view`, `read_lines` ou `read_symbol` estabelecem leitura
 
 Go usa parser padrão. As gramáticas locais selecionadas cobrem Python, JS, TS,
 TSX, Rust, Java, C, C++, C#, Ruby, PHP, Kotlin, Swift, SQL, Bash, Lua, Dart, Vue,
-Svelte, HCL/Terraform, YAML, TOML, JSON, HTML e CSS: 26 perfis de sintaxe, contando
+Svelte, HCL/Terraform, YAML, TOML, JSON, HTML, CSS, Scala, Elixir, Erlang, Haskell,
+OCaml, R, Julia, Perl, PowerShell, Clojure, F#, Fortran, Zig, Solidity, Protocol
+Buffers e GraphQL: 42 perfis de sintaxe, contando
 TSX e formatos de configuração separadamente. Cada perfil tem fixture de
 declaração e chunk de índice; isso não certifica toda a sintaxe de uma linguagem.
 Os parsers já pertencem à dependência Go existente, sem instalação de runtimes.
+As 16 adições têm fixtures de declaração, intervalo exato de linhas e chunk de
+índice. Formas genéricas como chamadas Elixir, listas Clojure e funções anônimas R
+não são tratadas como declarações. Isso não equivale a cobertura de todos os
+dialetos ou resolução semântica; por exemplo, funções R são reconhecidas em
+atribuições diretas a identificadores, e os bindings de OCaml/F# são navegação
+sintática de valores. Nenhuma gramática é baixada durante a execução.
 
 Vue/Svelte extraem declarações dos scripts JS/TS incorporados, preservando linhas
 do arquivo original. Templates ficam pesquisáveis como texto; não se presume
@@ -85,7 +93,7 @@ continuam aplicados; arquivos com mais de oito scripts usam o fallback textual.
 
 Demais linguagens continuam com texto/filtros e LSP quando configurado.
 Referências por binding, renomeação e hierarquia exigem LSP; resultados textuais
-são candidatos. A política de índice `parser-v4` reconstrói chunks anteriores
+são candidatos. A política de índice `parser-v5` reconstrói chunks anteriores
 mesmo quando os arquivos não mudaram.
 
 ## LSP sob demanda

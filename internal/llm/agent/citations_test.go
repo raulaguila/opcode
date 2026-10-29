@@ -34,6 +34,9 @@ func TestExplanationRepairsMissingCitationWithoutRepeatingRead(t *testing.T) {
 	require.NoError(t, result.Error)
 	require.Contains(t, result.Message.Content().Text, "counter.py:2")
 	require.EqualValues(t, 1, read.count.Load())
+	usage, e := a.Usage(context.Background(), "s")
+	require.NoError(t, e)
+	require.EqualValues(t, 1, usage.Repairs)
 }
 
 func TestInitialSourceReadsPreserveVerifiableReceiptsThroughRepair(t *testing.T) {

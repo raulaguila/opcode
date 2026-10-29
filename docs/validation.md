@@ -378,3 +378,72 @@ mantidas. Nenhum desses ajustes altera os critérios da avaliação comparativa.
 Veja o [registro desta revisão](evidence/2026-10-29-ui-ux-validation.json) e o
 [guia atualizado da interface](workspace-ui.md). O resultado cobre a fixture
 local; não demonstra superioridade geral de qualidade ou latência.
+
+## Linguagens, métricas e conveniência — 29/10/2026
+
+Esta evolução amplia os perfis de linguagens de 26 para 42, com fixtures que
+verificam declaração, linhas e corpo indexado. O índice usa `parser-v5` para
+reconstruir entradas antigas. O suporte de recuperação não instala compiladores
+ou servidores LSP e não equivale a validar programas em todas essas linguagens.
+
+Há uma matriz de 156 cenários de menus, controles de raciocínio somente para
+capacidades declaradas, editor de tema com prévia e rollback, clipboard nativo
+com entrada literal e cópia SSH por OSC 52. O comando `watch` acompanha mensagens
+salvas somente para leitura. `serve` e `attach` já existiam: sua omissão na
+comparação anterior não representava ausência desses recursos no Opcode.
+
+Na avaliação nativa com `llama3.1:8b`, os seis casos originais passaram nas duas
+rodadas: **12/12 casos e 40/40 critérios**. Foram observados 85.042 ms no total,
+86 ms de preparação de contexto, 76.440 ms nas chamadas ao provedor, 40 ms nas
+ferramentas do loop e seis reparos. Leituras de bootstrap pertencem à preparação
+e aos recibos; não são novas chamadas do loop nesse contador. Os tempos não
+formam uma decomposição completa e não provam redução de latência.
+
+O Codaro instalado (`0.2.0+b54a68640ee5`) teve seis casos aprovados, quatro
+reprovados e dois indisponíveis, somando 64.126 ms. Edição não produziu as
+alterações exigidas nas duas rodadas; o caso de erro não registrou a ferramenta
+exigida. A validação nomeada ficou indisponível porque o adaptador não traduz
+shell checks sem vínculo exato de argv. O comparador declarou
+`comparable_conditions: false`: não há observação de temperatura no caso
+indisponível. Esses resultados não sustentam uma comparação global de velocidade
+ou qualidade. O Crush não foi executado: não há binário instalado e o adaptador
+existente não oferece comparação de protocolo idêntico com Ollama nativo.
+
+Foram preservados prompts, critérios, hash da suíte, temperatura zero observada
+nos casos executados, janela de 16.384 tokens e reserva de 2.048 nas fixtures.
+As aplicações mantêm políticas e prompts internos diferentes; cache e tempo de
+carregamento do modelo não foram isolados. Os limites da fixture não são salvos
+na configuração do usuário.
+
+O aceite `TestLiveOllamaPTYUI` passou em **22,13 s**, com build sem CGO, incluindo
+citação válida, aprovações independentes de LSP/comando, uma única execução Bash,
+saída ao vivo, entrada humana, instrução enfileirada e OSC 52 observado na saída
+serializada. Também passaram os três perfis compactos de tema, inclusive edição,
+resize e cancelamento. Isso verifica emissão de OSC 52, não o recebimento pelo
+clipboard de outra máquina.
+
+Um teste adicional pelo endpoint OpenAI compatível do Ollama passou resposta e
+streaming, mas falhou duas vezes no marcador final após o retorno da ferramenta.
+Uma chamada sintética direta também respondeu fora do formato. Essa limitação
+do modelo/protocolo permanece registrada; o teste não foi afrouxado nem marcado
+como aprovado. Ela é distinta do fluxo nativo com ferramentas que passou no PTY.
+
+O aceite encontrou e corrigiu uma asserção de tipo incorreta na ligação da saída
+da TUI e um diálogo inicial que cobria o rodapé em 60×20. A investigação também
+reproduziu um bug de Viper: resolver `apiKeyEnv` via override aninhado escondia
+endpoint e outros campos do provedor. A resolução agora ocorre após o decode,
+sem persistir segredos e preservando a precedência da variável nomeada.
+
+Relatórios sanitizados: [Opcode](evidence/2026-10-29-evolution-opcode.json),
+[Codaro](evidence/2026-10-29-evolution-codaro.json) e
+[comparação com limitações](evidence/2026-10-29-evolution-comparison.json).
+Passaram `go test -race -p 2 ./...`, `go vet ./...`,
+`go vet -tags=integration ./...`, build com CGO desativado e `git diff --check`.
+O [registro consolidado](evidence/2026-10-29-evolution-validation.json) distingue
+esses gates do teste adicional reprovado na API compatível. A avaliação nativa
+foi executada antes das correções finais exclusivas da TUI; o PTY passou com o
+build final sem CGO.
+Consulte também [as métricas](evaluation.md),
+[a matriz de menus](ui-regression-matrix.md),
+[raciocínio e clipboard](model-and-clipboard.md),
+[temas](theme-editor.md) e [observação de sessões](shared-observer.md).

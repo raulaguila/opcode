@@ -28,6 +28,7 @@ type ThemeDialog interface {
 }
 
 type themeDialogCmp struct {
+	editor       *themeEditor
 	themes       []string
 	selectedIdx  int
 	width        int
@@ -88,8 +89,14 @@ func (t *themeDialogCmp) Init() tea.Cmd {
 }
 
 func (t *themeDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if t.editor != nil {
+		return t.editorUpdate(msg)
+	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if msg.String() == "ctrl+e" {
+			return t, t.openEditor()
+		}
 		switch {
 		case key.Matches(msg, themeKeys.Up) || key.Matches(msg, themeKeys.K):
 			if t.selectedIdx > 0 {
@@ -137,6 +144,9 @@ func (t *themeDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (t *themeDialogCmp) View() string {
+	if t.editor != nil {
+		return t.editorView()
+	}
 	currentTheme := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
@@ -194,7 +204,7 @@ func (t *themeDialogCmp) View() string {
 		title,
 		baseStyle.Width(maxWidth).Render(""),
 		baseStyle.Width(maxWidth).Render(lipgloss.JoinVertical(lipgloss.Left, themeItems...)),
-		baseStyle.Width(maxWidth).Render(ansi.Truncate(config.Text("↑↓ prévia · Enter salva · Esc desfaz", "↑↓ preview · Enter save · Esc revert"), maxWidth, "…")),
+		baseStyle.Width(maxWidth).Render(ansi.Truncate(config.Text("↑↓ prévia · Ctrl+E edita · Enter · Esc", "↑↓ preview · Ctrl+E edit · Enter · Esc"), maxWidth, "…")),
 	)
 
 	return baseStyle.Padding(1, 2).

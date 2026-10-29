@@ -197,3 +197,18 @@ Servidor multiworkspace compartilhado fica para uma evolução específica.
 
 Nenhuma impede a implementação. A disponibilidade local de Codaro/Crush e Ollama
 será verificada antes de selecionar quais comparações live podem ser executadas.
+
+
+## Evolução de 29/10 — eficiência e conveniência
+
+
+Existing permissions, citation/completion validation, declared evaluation criteria and credential redaction remain authoritative.
+
+- Usage diagnostics add aggregate phase durations in milliseconds: context_ms, provider_ms, tools_ms, first_token_ms (sum), first_token_samples, and repairs. No prompts, arguments, source contents or credentials in metrics. Existing counters remain compatible. Expose in runtime diagnostics/evaluation where existing usage is shown. Durations are observations, not speedup claims.
+- Language inventory expands only with local bundled grammars and meaningful declaration/index fixtures. Unsupported grammars remain text fallback and cannot be advertised as fixture verified. Increment index policy version when structural extraction changes.
+- Model reasoning choices come from explicit model metadata, never arbitrary names. Empty metadata offers no editable control. Persist selected effort on the existing agent config; changes apply through normal provider reconstruction, are refused during activity, and never grant permission.
+- Clipboard copy uses native backend locally; SSH uses bounded OSC 52 only on explicit copy, reports unconfirmed delivery, and retains manual selection. Never invoke remote clipboard helper or interpolate copied text into shell commands.
+- UI matrix verifies actual routed modal interactions and compact geometries, not just isolated appearance. Provider fixtures cover streaming, cancellation, usage and tool calls without real credentials. Real provider testing uses installed local Ollama only unless separately configured by user.
+- Theme personalization uses validated literal color data, explicit save, reversible preview, and existing private config paths. Shared-client work must preserve one execution owner and per-request authorization; never share permission approval silently across independent agent processes.
+
+Validation: focused regressions, go test -race ./..., go vet, CGO-disabled build, PTY Ollama acceptance. Comparative benchmarks use unchanged criteria, isolated fixtures, identical requested model/context/reserves; report unavailable applications explicitly. No inferred superiority.

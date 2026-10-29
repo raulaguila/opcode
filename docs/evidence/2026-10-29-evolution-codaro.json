@@ -1,0 +1,549 @@
+{
+  "repeats": 2,
+  "version": 1,
+  "mode": "live_provider",
+  "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+  "cases": [
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 4669,
+      "output_tokens": 245,
+      "reported_tool_calls": 4,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 1,
+      "duration_ms": 6444,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view",
+        "search_code_index"
+      ],
+      "native_tool_names": [
+        "read_lines",
+        "search_code"
+      ],
+      "local_tool_names": [
+        "read_lines"
+      ]
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 4290,
+      "output_tokens": 94,
+      "reported_tool_calls": 2,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 1,
+      "duration_ms": 3164,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view"
+      ],
+      "native_tool_names": [
+        "read_lines",
+        "read_symbol"
+      ],
+      "local_tool_names": [
+        "read_lines"
+      ]
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 5489,
+      "output_tokens": 113,
+      "reported_tool_calls": 1,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 1,
+      "duration_ms": 4510,
+      "id": "edit",
+      "status": "failed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": false
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": false
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view"
+      ],
+      "native_tool_names": [
+        "read_symbol"
+      ]
+    },
+    {
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "codaro",
+      "context_window": 16384,
+      "trial": 1,
+      "duration_ms": 103,
+      "id": "validate",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "check_passed",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 3965,
+      "output_tokens": 53,
+      "reported_tool_calls": 1,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 1,
+      "duration_ms": 2459,
+      "id": "error",
+      "status": "failed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": false
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "search_code_index"
+      ],
+      "native_tool_names": [
+        "search_code"
+      ]
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 17864,
+      "output_tokens": 733,
+      "reported_tool_calls": 3,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 1,
+      "duration_ms": 18149,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view",
+        "update_plan",
+        "get_task"
+      ],
+      "native_tool_names": [
+        "read_lines",
+        "update_plan",
+        "get_task"
+      ]
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 4749,
+      "output_tokens": 418,
+      "reported_tool_calls": 4,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 2,
+      "duration_ms": 9119,
+      "id": "overview",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view"
+      ],
+      "native_tool_names": [
+        "read_lines"
+      ],
+      "local_tool_names": [
+        "read_lines"
+      ]
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 4290,
+      "output_tokens": 98,
+      "reported_tool_calls": 2,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 2,
+      "duration_ms": 3266,
+      "id": "localize",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view"
+      ],
+      "native_tool_names": [
+        "read_lines",
+        "read_symbol"
+      ],
+      "local_tool_names": [
+        "read_lines"
+      ]
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 5471,
+      "output_tokens": 101,
+      "reported_tool_calls": 1,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 2,
+      "duration_ms": 4285,
+      "id": "edit",
+      "status": "failed",
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "counter.py",
+          "passed": false
+        },
+        {
+          "kind": "file_not_contains",
+          "path": "counter.py",
+          "passed": false
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view"
+      ],
+      "native_tool_names": [
+        "read_symbol"
+      ]
+    },
+    {
+      "temperature": null,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "application": "codaro",
+      "context_window": 16384,
+      "trial": 2,
+      "duration_ms": 144,
+      "id": "validate",
+      "status": "unavailable",
+      "criteria": [
+        {
+          "kind": "tool_called",
+          "passed": null
+        },
+        {
+          "kind": "check_passed",
+          "passed": null
+        },
+        {
+          "kind": "file_contains",
+          "path": "answer.txt",
+          "passed": null
+        }
+      ],
+      "error": "adapter capability unavailable; see adapter documentation",
+      "model": "llama3.1:8b"
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 3960,
+      "output_tokens": 69,
+      "reported_tool_calls": 1,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 2,
+      "duration_ms": 2739,
+      "id": "error",
+      "status": "failed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": false
+        },
+        {
+          "kind": "file_contains",
+          "path": "main.go",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "search_code_index"
+      ],
+      "native_tool_names": [
+        "search_code"
+      ]
+    },
+    {
+      "temperature": 0,
+      "api_model": "llama3.1:8b",
+      "protocol": "ollama",
+      "output_reserve": 2048,
+      "metrics_unavailable": [
+        "task_receipts",
+        "prompt_profile",
+        "context_budget"
+      ],
+      "application": "codaro",
+      "application_version": "0.2.0+b54a68640ee5",
+      "context_window": 16384,
+      "input_tokens": 13515,
+      "output_tokens": 335,
+      "reported_tool_calls": 7,
+      "metrics_origin": "external adapter report; policy/tool receipts not independently verified",
+      "trial": 2,
+      "duration_ms": 9744,
+      "id": "resume",
+      "status": "passed",
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "passed": true
+        },
+        {
+          "kind": "tool_called",
+          "passed": true
+        },
+        {
+          "kind": "task_status",
+          "passed": true
+        }
+      ],
+      "model": "local.llama3.1:8b",
+      "tool_names": [
+        "view",
+        "update_plan",
+        "finish_task",
+        "get_task",
+        "remember_task"
+      ],
+      "native_tool_names": [
+        "read_lines",
+        "update_plan",
+        "finish_task",
+        "get_task",
+        "remember_task"
+      ]
+    }
+  ],
+  "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+}

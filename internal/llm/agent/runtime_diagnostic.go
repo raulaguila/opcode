@@ -31,5 +31,9 @@ func (a *agent) RuntimeDiagnostic(ctx context.Context, session string) (map[stri
 	if indexErr != nil {
 		indexError = "unavailable; use opcode index status"
 	}
-	return map[string]any{"version": version.Version, "cwd": config.WorkingDirectory(), "model": tools.RedactCredentials(string(model.ID)), "protocol": model.API, "context": status, "prompt_version": prompt.Version, "available_tools": names, "index": index, "index_error": indexError, "credentials": "omitted; endpoint/auth/environment values are never included"}, nil
+	usage, err := a.Usage(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"usage": usage, "version": version.Version, "cwd": config.WorkingDirectory(), "model": tools.RedactCredentials(string(model.ID)), "protocol": model.API, "context": status, "prompt_version": prompt.Version, "available_tools": names, "index": index, "index_error": indexError, "credentials": "omitted; endpoint/auth/environment values are never included"}, nil
 }

@@ -425,11 +425,14 @@ func setDefaults(debug bool) {
 // setProviderDefaults configures LLM provider defaults based on provider provided by
 // environment variables and configuration file.
 func setProviderDefaults() {
-	// Resolve named secrets only in memory, before choosing provider defaults.
-	for id := range viper.GetStringMap("providers") {
+	// Resolve a named credential for default selection without installing a Viper
+	// nested override. An override of providers.<id>.apiKey hides sibling fields
+	// during Unmarshal. configureProviders resolves the actual secret after decode.
+	providerKey := func(id string) string {
 		if name := viper.GetString("providers." + id + ".apiKeyEnv"); name != "" {
-			viper.Set("providers."+id+".apiKey", os.Getenv(name))
+			return Environment(name)
 		}
+		return viper.GetString("providers." + id + ".apiKey")
 	}
 	// Set all API keys we can find in the environment
 	// Note: Viper does not default if the json apiKey is ""
@@ -482,7 +485,7 @@ func setProviderDefaults() {
 	// 9. Google Cloud VertexAI
 
 	// copilot configuration
-	if key := viper.GetString("providers.copilot.apiKey"); strings.TrimSpace(key) != "" {
+	if key := providerKey("copilot"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.CopilotGPT4o)
 		viper.SetDefault("agents.summarizer.model", models.CopilotGPT4o)
 		viper.SetDefault("agents.task.model", models.CopilotGPT4o)
@@ -491,7 +494,7 @@ func setProviderDefaults() {
 	}
 
 	// Anthropic configuration
-	if key := viper.GetString("providers.anthropic.apiKey"); strings.TrimSpace(key) != "" {
+	if key := providerKey("anthropic"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.Claude4Sonnet)
 		viper.SetDefault("agents.summarizer.model", models.Claude4Sonnet)
 		viper.SetDefault("agents.task.model", models.Claude4Sonnet)
@@ -500,7 +503,7 @@ func setProviderDefaults() {
 	}
 
 	// OpenAI configuration
-	if key := viper.GetString("providers.openai.apiKey"); strings.TrimSpace(key) != "" {
+	if key := providerKey("openai"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.GPT41)
 		viper.SetDefault("agents.summarizer.model", models.GPT41)
 		viper.SetDefault("agents.task.model", models.GPT41Mini)
@@ -509,7 +512,7 @@ func setProviderDefaults() {
 	}
 
 	// Google Gemini configuration
-	if key := viper.GetString("providers.gemini.apiKey"); strings.TrimSpace(key) != "" {
+	if key := providerKey("gemini"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.Gemini25)
 		viper.SetDefault("agents.summarizer.model", models.Gemini25)
 		viper.SetDefault("agents.task.model", models.Gemini25Flash)
@@ -518,7 +521,7 @@ func setProviderDefaults() {
 	}
 
 	// Groq configuration
-	if key := viper.GetString("providers.groq.apiKey"); strings.TrimSpace(key) != "" {
+	if key := providerKey("groq"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.QWENQwq)
 		viper.SetDefault("agents.summarizer.model", models.QWENQwq)
 		viper.SetDefault("agents.task.model", models.QWENQwq)
@@ -527,7 +530,7 @@ func setProviderDefaults() {
 	}
 
 	// OpenRouter configuration
-	if key := viper.GetString("providers.openrouter.apiKey"); strings.TrimSpace(key) != "" {
+	if key := providerKey("openrouter"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.OpenRouterClaude37Sonnet)
 		viper.SetDefault("agents.summarizer.model", models.OpenRouterClaude37Sonnet)
 		viper.SetDefault("agents.task.model", models.OpenRouterClaude37Sonnet)
@@ -536,7 +539,7 @@ func setProviderDefaults() {
 	}
 
 	// XAI configuration
-	if key := viper.GetString("providers.xai.apiKey"); strings.TrimSpace(key) != "" {
+	if key := providerKey("xai"); strings.TrimSpace(key) != "" {
 		viper.SetDefault("agents.coder.model", models.XAIGrok3Beta)
 		viper.SetDefault("agents.summarizer.model", models.XAIGrok3Beta)
 		viper.SetDefault("agents.task.model", models.XAIGrok3Beta)
@@ -761,6 +764,21 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 		cfg.Agents[name] = updatedAgent
 	}
 
+	// Explicit capability metadata takes precedence over legacy defaults.
+	if choices := model.ReasoningChoices(); len(choices) > 0 {
+		if agent.ReasoningEffort != "" {
+			valid := false
+			for _, choice := range choices {
+				if agent.ReasoningEffort == choice {
+					valid = true
+				}
+			}
+			if !valid {
+				return fmt.Errorf("agent %s reasoning effort is not advertised by its model", name)
+			}
+		}
+		return nil
+	}
 	// Validate reasoning effort for models that support reasoning
 	if model.CanReason && provider == models.ProviderOpenAI {
 		if agent.ReasoningEffort == "" {

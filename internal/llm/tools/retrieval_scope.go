@@ -41,7 +41,8 @@ func (s *retrievalScope) validate() error {
 		return fmt.Errorf("invalid glob filter")
 	}
 	s.Language = strings.ToLower(strings.TrimSpace(s.Language))
-	aliases := map[string]string{"js": "javascript", "node": "javascript", "nodejs": "javascript", "ts": "typescript", "py": "python", "golang": "go", "c++": "cpp", "c#": "csharp", "rs": "rust", "shell": "bash", "shellscript": "bash", "protobuf": "proto", "rb": "ruby", "kt": "kotlin", "terraform": "hcl", "yml": "yaml", "vuejs": "vue"}
+	aliases := map[string]string{
+		"f#": "fsharp", "fs": "fsharp", "ps1": "powershell", "hs": "haskell", "clj": "clojure", "ex": "elixir", "erl": "erlang", "ml": "ocaml", "js": "javascript", "node": "javascript", "nodejs": "javascript", "ts": "typescript", "py": "python", "golang": "go", "c++": "cpp", "c#": "csharp", "rs": "rust", "shell": "bash", "shellscript": "bash", "protobuf": "proto", "rb": "ruby", "kt": "kotlin", "terraform": "hcl", "yml": "yaml", "vuejs": "vue"}
 	if alias := aliases[s.Language]; alias != "" {
 		s.Language = alias
 	}
@@ -66,6 +67,7 @@ func sourceLanguage(path string) string {
 		return "ruby"
 	}
 	extra := map[string]string{
+		".scala": "scala", ".hs": "haskell", ".r": "r", ".pl": "perl", ".pm": "perl", ".ps1": "powershell", ".psm1": "powershell", ".clj": "clojure", ".fs": "fsharp", ".fsi": "fsharp", ".fsx": "fsharp", ".f": "fortran",
 		".pyi": "python", ".mjs": "javascript", ".cjs": "javascript", ".mts": "typescript", ".cts": "typescript",
 		".h": "c", ".hpp": "cpp", ".hh": "cpp", ".hxx": "cpp", ".kt": "kotlin", ".kts": "kotlin",
 		".zig": "zig", ".vue": "vue", ".svelte": "svelte", ".proto": "proto", ".graphql": "graphql", ".gql": "graphql",

@@ -254,11 +254,20 @@ observados com `llama3.1:8b`, incluindo os critérios reprovados, estão no
 
 ## Recuperação e controle do contexto
 
-Há parsers locais em dez linguagens, listagem e leitura com páginas verificadas,
+Há 42 perfis de linguagens com extração local, listagem e leitura com páginas verificadas,
 índice incremental e memória de projeto. `/index` controla o índice; `/runtime`
 mostra um diagnóstico sem credenciais; `/context` mostra origem e orçamento.
 Embeddings locais são opcionais. Veja [guia de recuperação](docs/retrieval-runtime.md)
 e [o registro desta implementação](docs/implementation-2026-10.md).
+
+O [editor de tema](docs/theme-editor.md) permite personalizar a paleta com prévia
+e salvamento explícito. [Raciocínio e clipboard](docs/model-and-clipboard.md)
+descreve controles por capacidade e cópia por SSH. O comando
+[`watch`](docs/shared-observer.md) acompanha mensagens salvas em outra janela
+somente para leitura; os comandos existentes `serve`/`attach` continuam disponíveis
+para reconectar um cliente à instância ativa. A
+[matriz de regressão da interface](docs/ui-regression-matrix.md) registra a
+cobertura determinística dos menus.
 
 ## Proveniência e licença
 

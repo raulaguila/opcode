@@ -552,6 +552,23 @@
             "description": "Optional named provider connection; backend must match provider.",
             "type": "string"
           },
+          "reasoning_levels": {
+            "description": "Explicit supported reasoning efforts; absent means no UI control.",
+            "items": {
+              "enum": [
+                "none",
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh"
+              ],
+              "type": "string"
+            },
+            "maxItems": 6,
+            "type": "array",
+            "uniqueItems": true
+          },
           "supports_attachments": {
             "type": "boolean"
           },

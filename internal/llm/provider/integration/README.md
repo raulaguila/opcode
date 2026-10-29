@@ -130,3 +130,62 @@ OPCODE_LIVE_TESTS=0 go test -tags=integration ./internal/llm/provider/integratio
 ```
 
 Uma falha de conteúdo pode decorrer de instruções não seguidas pelo modelo, falta de suporte a ferramentas, filtros ou orçamento insuficiente. Uma falha HTTP também pode indicar modelo indisponível, implantação incorreta, falta de permissão ou quota. Os testes não escolhem automaticamente outro modelo nem reenviam uma geração depois que seu streaming começou.
+
+## Matriz de protocolos e resultados observados
+
+A suíte offline cobre os cinco formatos HTTP usados diretamente pelo runtime:
+Chat Completions, Responses, Anthropic Messages, Gemini e Ollama nativo. Além dos
+contratos de serialização e das deltas fragmentadas existentes, a matriz
+`TestProtocolStreamsCancelActiveHTTPBody` mantém a resposta aberta depois da
+primeira delta Unicode e verifica que cancelar encerra a requisição no servidor,
+fecha o canal e não publica conclusão nem repete a geração.
+`TestProtocolToolRoundTripsOverHTTP` verifica dois pedidos HTTP reais locais: o
+segundo carrega o resultado da ferramenta e a resposta final conserva a contagem
+de uso e encerra sem outra chamada de ferramenta. Somente a ferramenta sintética
+é descrita; nenhum comando ou arquivo é acessado por ela.
+
+| Família | Contrato adicional existente |
+| --- | --- |
+| Chat Completions | Fragmentação de várias chamadas, argumentos exatos e uso/cache |
+| Responses | Continuação nativa, estado opaco e separação entre modelos |
+| Anthropic | Assinaturas de raciocínio e replay das ferramentas |
+| Gemini | Assinaturas de pensamento e modelos sem IDs nativos de chamada |
+| Ollama | NDJSON, `num_ctx`, saída limitada, histórico e conclusão privada |
+| Azure, Vertex, Bedrock e Copilot | Rotas, credenciais sintéticas, assinatura/renovação; Bedrock também verifica seu enquadramento EventStream |
+
+Os testes locais não certificam o comportamento de todas as contas, modelos ou
+versões remotas. A matriz de cancelamento HTTP acima cobre os cinco formatos
+diretos; não afirma ter exercitado a autenticação real dos wrappers de nuvem.
+Para executá-la sem escolher ou expor credenciais:
+
+```sh
+go test -race ./internal/llm/provider ./internal/llm/provider/integration
+```
+
+Cada caso da suíte opt-in agora registra uma linha `check_report` com apenas
+estados e contagens observadas:
+
+```json
+{"response":"passed","streaming":"passed","tool_round_trip":"skipped","usage_reported":true,"observed_input_tokens":24,"observed_output_tokens":6}
+```
+
+Esse exemplo é ilustrativo. `passed` significa que a etapa cumpriu o contrato
+sintético naquela execução; `skipped` identifica ferramentas explicitamente
+desativadas; `not_run` identifica uma etapa que não foi alcançada. Uma falha
+continua falhando o teste. Uso zerado/ausente produz `usage_reported: false`, sem
+inventar consumo. Os totais incluem as respostas validadas observadas, não são
+uma estimativa de cobrança nem garantem cobertura de tentativas que falharam.
+O relatório não contém modelo, endpoint, chave, prompt, saída ou estado opaco.
+
+O formato padrão `go test -json` permite arquivar esses resultados mantendo a
+identidade das etapas e os estados de execução:
+
+```sh
+OPCODE_LIVE_TESTS=1 go test -json -tags=integration \
+  ./internal/llm/provider/integration -run '^TestLiveProviders$' \
+  -count=1 -timeout=30m > /caminho/privado/provider-checks.jsonl
+```
+
+Os casos e credenciais continuam sendo resolvidos pelo arquivo privado ou pelas
+variáveis já descritas. Esse comando só deve ser executado depois da seleção
+explícita dos casos; esta documentação não ativa nenhum provedor.

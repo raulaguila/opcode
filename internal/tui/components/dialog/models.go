@@ -39,6 +39,8 @@ type ModelDialog interface {
 }
 
 type modelDialogCmp struct {
+	reasoningOpen                            bool
+	reasoningIndex                           int
 	models, filtered                         []models.Model
 	provider                                 models.ModelProvider
 	availableProviders                       []models.ModelProvider
@@ -76,6 +78,7 @@ func (m *modelDialogCmp) Open() tea.Cmd {
 	m.Close()
 	m.catalogProvider = ""
 	m.details = false
+	m.reasoningOpen = false
 	cfg := config.Get()
 	m.availableProviders = getEnabledProviders(cfg)
 	selected := GetSelectedModel(cfg)
@@ -140,6 +143,9 @@ func (m *modelDialogCmp) load() tea.Cmd {
 	}
 }
 func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.reasoningUpdate(msg); handled {
+		return m, cmd
+	}
 	if m.selecting {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			if key.Type == tea.KeyEsc {
@@ -415,6 +421,9 @@ func (m *modelDialogCmp) keepVisible() {
 func (m *modelDialogCmp) visibleRows() int  { return m.geometry().rows }
 func (m *modelDialogCmp) contentWidth() int { return m.geometry().width }
 func (m *modelDialogCmp) View() string {
+	if m.reasoningOpen {
+		return m.reasoningView()
+	}
 	if m.probeConfirm || m.probeRunning {
 		return m.probeView()
 	}

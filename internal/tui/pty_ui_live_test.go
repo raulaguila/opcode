@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/raulaguila/opcode/internal/clipboard"
 	"io"
 	"net/url"
 	"os"
@@ -89,7 +90,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.NoError(t, err)
 	configPath := filepath.Join(home, ".opcode", "config.json")
 	require.NoError(t, os.WriteFile(configPath, raw, 0600))
-	h := newPTYUIHarness(t, binary, home, workspace)
+	h := newPTYUIHarnessAtSize(t, binary, home, workspace, 80, 24, "SSH_CONNECTION=isolated-acceptance")
 	h.resize(60, 20)
 	h.wait("fresh-project initialization choice", 20*time.Second, func(frame string) bool { return strings.Contains(frame, "Initialize Project") })
 	h.send("n") // decline optional memory-file generation; never authorize mutations in Ask.
@@ -257,6 +258,16 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.NoError(t, os.WriteFile("/tmp/opcode-ui-pty-overview.txt", []byte(overview), 0600))
 	t.Logf("overview SHA-256: %x", sha256.Sum256([]byte(overview)))
 	t.Log("real Ollama project overview finished with factual content and no raw LSP stderr")
+	h.send("\x19")
+	h.wait("response actions for explicit SSH copy", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Copy response") })
+	h.send("\r")
+	expectedOSC, copyErr := clipboard.OSC52(overview)
+	require.NoError(t, copyErr)
+	h.wait("OSC52 emitted while alternate screen is active", 5*time.Second, func(frame string) bool {
+		return strings.Contains(h.rawOutput(), expectedOSC) && strings.Contains(frame, "receipt unconfirmed")
+	})
+	h.send("\x1b")
+	h.wait("SSH copy panel dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Copy response") && ptyUIIdleFooter(frame) })
 
 	h.paste("/mode execute")
 	h.send("\r")
@@ -714,6 +725,16 @@ func TestPTYUICompactThemes(t *testing.T) {
 			h.wait("theme after quit click", 5*time.Second, func(frame string) bool {
 				return strings.Contains(frame, "Select Theme") && strings.Contains(frame, "›")
 			})
+			h.send("\x05")
+			h.wait("compact theme editor", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Edit theme") })
+			h.send("\t")
+			h.resize(80, 24)
+			h.wait("theme editor survives resize", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Edit theme") })
+			h.send("\x1b")
+			h.wait("theme preview cancelled", 5*time.Second, func(frame string) bool {
+				return strings.Contains(frame, "Select Theme") && !strings.Contains(frame, "Edit theme")
+			})
+
 			h.send("\x1b")
 			h.wait("theme dismissed", 5*time.Second, func(frame string) bool {
 				return !strings.Contains(frame, "Select Theme") && strings.Contains(frame, "compact draft ação")

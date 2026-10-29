@@ -171,6 +171,14 @@ func (m InitDialogCmp) View() string {
 		buttons,
 		baseStyle.Width(maxWidth).Render(""),
 	)
+	if m.height > 0 && m.height < 24 {
+		// Keep the decision and both actions visible above the footer in a short
+		// terminal. The longer onboarding prose is unnecessary at this size.
+		explanation = baseStyle.Foreground(t.Text()).Width(maxWidth).Padding(0, 1).
+			Render(config.Text("Cria Opcode.md com orientações do projeto. Você pode editá-lo depois.", "Creates Opcode.md with project guidance. You can edit it later."))
+		buttons = baseStyle.Width(maxWidth).Render(lipgloss.JoinHorizontal(lipgloss.Center, yes, baseStyle.Render("  "), no))
+		content = lipgloss.JoinVertical(lipgloss.Left, title, "", explanation, "", buttons)
+	}
 
 	return baseStyle.Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).

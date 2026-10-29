@@ -59,7 +59,7 @@ func TestLanguageInventoryPaginationFiltersAndCancellation(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal([]byte(result.Content), &page))
 	require.Len(t, page.Languages, 2)
-	require.Equal(t, 26, page.Total)
+	require.Equal(t, 42, page.Total)
 	require.True(t, page.More)
 	require.Equal(t, 2, page.Next)
 	result, err = tool.Run(toolContext(), toolInput(map[string]any{"language": "terraform"}))
@@ -82,5 +82,14 @@ func TestExpandedLanguageFilters(t *testing.T) {
 		scope := retrievalScope{Language: test.language}
 		require.NoError(t, scope.validate())
 		require.True(t, scope.matches(test.path))
+	}
+}
+
+func TestNewLanguageAliasesSelectStructuralProfiles(t *testing.T) {
+	for _, f := range []struct{ alias, path, language string }{{"f#", "ledger.fs", "fsharp"}, {"hs", "ledger.hs", "haskell"}, {"ps1", "ledger.ps1", "powershell"}, {"clj", "ledger.cljc", "clojure"}, {"ex", "ledger.exs", "elixir"}, {"erl", "ledger.hrl", "erlang"}, {"ml", "ledger.mli", "ocaml"}} {
+		scope := retrievalScope{Language: f.alias}
+		require.NoError(t, scope.validate())
+		require.Equal(t, f.language, scope.Language)
+		require.True(t, scope.matches(f.path))
 	}
 }

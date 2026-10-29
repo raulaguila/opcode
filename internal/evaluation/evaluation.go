@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/localstate"
 )
 
@@ -48,42 +49,43 @@ type CriterionResult struct {
 	Passed *bool  `json:"passed"`
 }
 type CaseResult struct {
-	Temperature           *float64          `json:"temperature"`
-	APIModel              string            `json:"api_model,omitempty"`
-	Protocol              string            `json:"protocol,omitempty"`
-	OutputReserve         int64             `json:"output_reserve,omitempty"`
-	PromptVersion         string            `json:"prompt_version,omitempty"`
-	PromptProfile         string            `json:"prompt_profile,omitempty"`
-	ContextMethod         string            `json:"context_method,omitempty"`
-	ContextComponents     map[string]int64  `json:"context_components,omitempty"`
-	MetricsUnavailable    []string          `json:"metrics_unavailable,omitempty"`
-	RetrievalStrategies   []string          `json:"retrieval_strategies,omitempty"`
-	ToolFailures          map[string]int    `json:"tool_failures,omitempty"`
-	AgentFailureKind      string            `json:"agent_failure_kind,omitempty"`
-	Application           string            `json:"application,omitempty"`
-	ApplicationVersion    string            `json:"application_version,omitempty"`
-	ContextWindow         int64             `json:"context_window,omitempty"`
-	InputTokens           *int64            `json:"input_tokens,omitempty"`
-	OutputTokens          *int64            `json:"output_tokens,omitempty"`
-	ReportedToolCalls     *int              `json:"reported_tool_calls,omitempty"`
-	RetrievalRecall       *float64          `json:"retrieval_recall,omitempty"`
-	RetrievalMRR          *float64          `json:"retrieval_mrr,omitempty"`
-	MetricsOrigin         string            `json:"metrics_origin,omitempty"`
-	Trial                 int               `json:"trial,omitempty"`
-	DurationMS            int64             `json:"duration_ms,omitempty"`
-	ID                    string            `json:"id"`
-	Status                string            `json:"status"`
-	Criteria              []CriterionResult `json:"criteria"`
-	Error                 string            `json:"error,omitempty"`
-	Model                 string            `json:"model,omitempty"`
-	ToolCalls             int               `json:"tool_calls,omitempty"`
-	TaskStatus            string            `json:"task_status,omitempty"`
-	RequiresChanges       bool              `json:"requires_changes,omitempty"`
-	ChangesVerified       bool              `json:"changes_verified,omitempty"`
-	NoChangeJustification bool              `json:"no_change_justification,omitempty"`
-	ToolNames             []string          `json:"tool_names,omitempty"`
-	NativeToolNames       []string          `json:"native_tool_names,omitempty"`
-	LocalToolNames        []string          `json:"local_tool_names,omitempty"`
+	PhaseMetrics          *agent.PhaseMetrics `json:"phase_metrics,omitempty"`
+	Temperature           *float64            `json:"temperature"`
+	APIModel              string              `json:"api_model,omitempty"`
+	Protocol              string              `json:"protocol,omitempty"`
+	OutputReserve         int64               `json:"output_reserve,omitempty"`
+	PromptVersion         string              `json:"prompt_version,omitempty"`
+	PromptProfile         string              `json:"prompt_profile,omitempty"`
+	ContextMethod         string              `json:"context_method,omitempty"`
+	ContextComponents     map[string]int64    `json:"context_components,omitempty"`
+	MetricsUnavailable    []string            `json:"metrics_unavailable,omitempty"`
+	RetrievalStrategies   []string            `json:"retrieval_strategies,omitempty"`
+	ToolFailures          map[string]int      `json:"tool_failures,omitempty"`
+	AgentFailureKind      string              `json:"agent_failure_kind,omitempty"`
+	Application           string              `json:"application,omitempty"`
+	ApplicationVersion    string              `json:"application_version,omitempty"`
+	ContextWindow         int64               `json:"context_window,omitempty"`
+	InputTokens           *int64              `json:"input_tokens,omitempty"`
+	OutputTokens          *int64              `json:"output_tokens,omitempty"`
+	ReportedToolCalls     *int                `json:"reported_tool_calls,omitempty"`
+	RetrievalRecall       *float64            `json:"retrieval_recall,omitempty"`
+	RetrievalMRR          *float64            `json:"retrieval_mrr,omitempty"`
+	MetricsOrigin         string              `json:"metrics_origin,omitempty"`
+	Trial                 int                 `json:"trial,omitempty"`
+	DurationMS            int64               `json:"duration_ms,omitempty"`
+	ID                    string              `json:"id"`
+	Status                string              `json:"status"`
+	Criteria              []CriterionResult   `json:"criteria"`
+	Error                 string              `json:"error,omitempty"`
+	Model                 string              `json:"model,omitempty"`
+	ToolCalls             int                 `json:"tool_calls,omitempty"`
+	TaskStatus            string              `json:"task_status,omitempty"`
+	RequiresChanges       bool                `json:"requires_changes,omitempty"`
+	ChangesVerified       bool                `json:"changes_verified,omitempty"`
+	NoChangeJustification bool                `json:"no_change_justification,omitempty"`
+	ToolNames             []string            `json:"tool_names,omitempty"`
+	NativeToolNames       []string            `json:"native_tool_names,omitempty"`
+	LocalToolNames        []string            `json:"local_tool_names,omitempty"`
 }
 type Report struct {
 	Experiment    string       `json:"experiment,omitempty"`

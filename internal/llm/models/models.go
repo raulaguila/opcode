@@ -1,6 +1,8 @@
 package models
 
-import "maps"
+import (
+	"maps"
+)
 
 type (
 	ModelID       string
@@ -9,6 +11,7 @@ type (
 
 type Model struct {
 	API                 string        `json:"api,omitempty" mapstructure:"api"`
+	ReasoningLevels     []string      `json:"reasoning_levels,omitempty" mapstructure:"reasoning_levels"`
 	ThinkingMode        string        `json:"thinking_mode,omitempty" mapstructure:"thinking_mode"`
 	ID                  ModelID       `json:"id" mapstructure:"id"`
 	Name                string        `json:"name" mapstructure:"name"`
@@ -123,4 +126,29 @@ func init() {
 	maps.Copy(SupportedModels, VertexAIGeminiModels)
 	maps.Copy(SupportedModels, CopilotModels)
 	builtinModels = maps.Clone(SupportedModels)
+}
+
+// ReasoningChoices exposes only explicit, supported effort values for adapters
+// which transmit the effort field. Capability names are never inferred from IDs.
+func (m Model) ReasoningChoices() []string {
+	if !m.CanReason || m.API != "" && m.API != "chat_completions" && m.API != "responses" {
+		return nil
+	}
+	switch m.Provider {
+	case ProviderOpenAI, ProviderLocal, ProviderAzure, ProviderGROQ, ProviderOpenRouter, ProviderXAI:
+	default:
+		return nil
+	}
+	choices := []string{}
+	seen := map[string]bool{}
+	for _, level := range m.ReasoningLevels {
+		switch level {
+		case "none", "minimal", "low", "medium", "high", "xhigh":
+			if !seen[level] {
+				choices = append(choices, level)
+				seen[level] = true
+			}
+		}
+	}
+	return choices
 }

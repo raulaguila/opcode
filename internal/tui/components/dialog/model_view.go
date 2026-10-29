@@ -33,6 +33,9 @@ func (m *modelDialogCmp) geometry() modelGeometry {
 	helpRows := 1
 	if m.details && height >= 18 {
 		helpRows += 2
+		if len(m.reasoningModel().ReasoningChoices()) > 0 {
+			helpRows++
+		}
 	}
 	overhead := 3 + 1 + helpRows + 2 + pad*2 + len(m.modelDetailLines())
 	return modelGeometry{width: width, height: height, padY: pad, contentX: 3, titleY: 1 + pad, listY: 4 + pad, rows: max(1, min(numVisibleModels, height-overhead))}
@@ -282,6 +285,9 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	rows = append(rows, line(hint))
 	if m.details && g.height >= 18 {
+		if len(m.reasoningModel().ReasoningChoices()) > 0 {
+			rows = append(rows, line(config.Text("Ctrl+E esforço do modelo ativo", "Ctrl+E active model effort")))
+		}
 		rows = append(rows, line(config.Text("Alt+←/→ provedor · Ctrl+F ★ · Ctrl+R atualiza", "Alt+←/→ provider · Ctrl+F ★ · Ctrl+R refresh")))
 		rows = append(rows, line(config.Text("Ctrl+A função · Ctrl+T testar · Ctrl+P conexão", "Ctrl+A role · Ctrl+T probe · Ctrl+P connection")))
 	}

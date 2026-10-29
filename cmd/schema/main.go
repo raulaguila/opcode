@@ -345,6 +345,7 @@ func generateSchema() map[string]any {
 		"context_window":       map[string]any{"type": "integer", "minimum": 0, "description": "Optional manual override. Omit or use zero to discover context from the provider."},
 		"default_max_tokens":   map[string]any{"type": "integer", "minimum": 1},
 		"can_reason":           map[string]any{"type": "boolean"},
+		"reasoning_levels":     map[string]any{"type": "array", "maxItems": 6, "uniqueItems": true, "items": map[string]any{"type": "string", "enum": []string{"none", "minimal", "low", "medium", "high", "xhigh"}}, "description": "Explicit supported reasoning efforts; absent means no UI control."},
 		"supports_attachments": map[string]any{"type": "boolean"},
 		"supports_tools":       map[string]any{"type": "boolean", "description": "Optional provider-reported tool capability; omitted means unknown. Does not grant tool permissions."},
 	}

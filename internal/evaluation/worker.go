@@ -209,9 +209,12 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 		result.MetricsOrigin += "; effective context differs from requested comparison"
 	}
 	if usage, ok := service.(agent.UsageControl); ok {
-		if measured, e := usage.Usage(ctx, saved.ID); e == nil && measured.InputTokens+measured.OutputTokens > 0 {
-			result.InputTokens = &measured.InputTokens
-			result.OutputTokens = &measured.OutputTokens
+		if measured, e := usage.Usage(ctx, saved.ID); e == nil {
+			result.PhaseMetrics = &measured.PhaseMetrics
+			if measured.InputTokens+measured.OutputTokens > 0 {
+				result.InputTokens = &measured.InputTokens
+				result.OutputTokens = &measured.OutputTokens
+			}
 		}
 	}
 	result.Model = string(service.Model().ID)

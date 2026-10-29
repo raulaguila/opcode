@@ -9,20 +9,35 @@ import (
 	"github.com/odvcencio/gotreesitter/grammars/bash"
 	cgrammar "github.com/odvcencio/gotreesitter/grammars/c"
 	csharp "github.com/odvcencio/gotreesitter/grammars/c_sharp"
+	"github.com/odvcencio/gotreesitter/grammars/clojure"
 	"github.com/odvcencio/gotreesitter/grammars/cpp"
 	"github.com/odvcencio/gotreesitter/grammars/css"
 	"github.com/odvcencio/gotreesitter/grammars/dart"
+	"github.com/odvcencio/gotreesitter/grammars/elixir"
+	"github.com/odvcencio/gotreesitter/grammars/erlang"
+	"github.com/odvcencio/gotreesitter/grammars/fortran"
+	"github.com/odvcencio/gotreesitter/grammars/fsharp"
+	"github.com/odvcencio/gotreesitter/grammars/graphql"
+	"github.com/odvcencio/gotreesitter/grammars/haskell"
 	"github.com/odvcencio/gotreesitter/grammars/hcl"
 	"github.com/odvcencio/gotreesitter/grammars/html"
 	"github.com/odvcencio/gotreesitter/grammars/java"
 	"github.com/odvcencio/gotreesitter/grammars/javascript"
 	"github.com/odvcencio/gotreesitter/grammars/json"
+	"github.com/odvcencio/gotreesitter/grammars/julia"
 	"github.com/odvcencio/gotreesitter/grammars/kotlin"
 	"github.com/odvcencio/gotreesitter/grammars/lua"
+	"github.com/odvcencio/gotreesitter/grammars/ocaml"
+	"github.com/odvcencio/gotreesitter/grammars/perl"
 	"github.com/odvcencio/gotreesitter/grammars/php"
+	"github.com/odvcencio/gotreesitter/grammars/powershell"
+	"github.com/odvcencio/gotreesitter/grammars/proto"
 	"github.com/odvcencio/gotreesitter/grammars/python"
+	"github.com/odvcencio/gotreesitter/grammars/r"
 	"github.com/odvcencio/gotreesitter/grammars/ruby"
 	"github.com/odvcencio/gotreesitter/grammars/rust"
+	"github.com/odvcencio/gotreesitter/grammars/scala"
+	"github.com/odvcencio/gotreesitter/grammars/solidity"
 	"github.com/odvcencio/gotreesitter/grammars/sql"
 	"github.com/odvcencio/gotreesitter/grammars/svelte"
 	"github.com/odvcencio/gotreesitter/grammars/swift"
@@ -31,9 +46,27 @@ import (
 	"github.com/odvcencio/gotreesitter/grammars/typescript"
 	"github.com/odvcencio/gotreesitter/grammars/vue"
 	"github.com/odvcencio/gotreesitter/grammars/yaml"
+	"github.com/odvcencio/gotreesitter/grammars/zig"
 )
 
 var localParsers = map[string]func() *ts.Language{
+	"scala":      scala.Language,
+	"elixir":     elixir.Language,
+	"erlang":     erlang.Language,
+	"haskell":    haskell.Language,
+	"ocaml":      ocaml.Language,
+	"r":          r.Language,
+	"julia":      julia.Language,
+	"perl":       perl.Language,
+	"powershell": powershell.Language,
+	"clojure":    clojure.Language,
+	"fsharp":     fsharp.Language,
+	"fortran":    fortran.Language,
+	"zig":        zig.Language,
+	"solidity":   solidity.Language,
+	"proto":      proto.Language,
+	"graphql":    graphql.Language,
+
 	"python": python.Language, "javascript": javascript.Language, "typescript": typescript.Language, "tsx": tsx.Language,
 	"rust": rust.Language, "java": java.Language, "c": cgrammar.Language, "cpp": cpp.Language, "csharp": csharp.Language,
 	"ruby": ruby.Language, "php": php.Language, "kotlin": kotlin.Language, "swift": swift.Language,
@@ -128,7 +161,7 @@ func localOutlineLanguage(ctx context.Context, language, path string, raw []byte
 			return err
 		}
 		prefix := parent
-		if kind := localDeclarationKind(language, n.Type(lang)); kind != "" {
+		if kind := declarationKindForNode(language, n, lang, raw); kind != "" {
 			name := localDeclarationName(language, n, lang, raw)
 			if name == "" {
 				name = findName(n, 0)

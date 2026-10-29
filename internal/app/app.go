@@ -118,6 +118,9 @@ func (app *App) ConfigureCoderAgent() error {
 
 // initTheme sets the application theme based on the configuration
 func (app *App) initTheme() {
+	if err := theme.LoadCustomTheme(); err != nil {
+		logging.Warn("Custom theme ignored", "error", err)
+	}
 	cfg := config.Get()
 	if cfg == nil || cfg.TUI.Theme == "" {
 		return // Use default theme

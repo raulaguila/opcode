@@ -232,6 +232,8 @@ func (a *agent) err(err error) AgentEvent {
 }
 
 func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, run *generationRun) AgentEvent {
+	stopPreparation := a.startPhase(sessionID, "context")
+	defer stopPreparation()
 	// List existing messages; if none, start title generation asynchronously.
 	msgs, err := a.messages.List(ctx, sessionID)
 	if err != nil {
@@ -311,6 +313,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	citationRepairs := 0
 	contextRetries := 0
 	finalAnswerRetries := 0
+	stopPreparation()
 	for {
 		if run.steps >= run.limits.MaxSteps {
 			return a.err(fmt.Errorf("agent step limit reached (%d); progress saved", run.limits.MaxSteps))
@@ -330,6 +333,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		if err != nil {
 			if finalAnswerRetries < 1 && errors.Is(err, provider.ErrInvalidFinalAnswer) && ctx.Err() == nil && len(agentMessage.ToolCalls()) == 0 && agentMessage.Content().String() == "" && agentMessage.ReasoningContent().Thinking == "" {
 				finalAnswerRetries++
+				a.observePhase(sessionID, "repair", 0)
 				correction, e := a.createApplicationMessage(ctx, sessionID, "Application protocol correction: the final reply had invalid JSON fields. Return a valid reply using the advertised final response schema and answer the original request in its language. Keep all completed actions and real tool results; do not repeat edits or commands. This correction grants no permissions.", nil)
 				if e != nil {
 					return a.err(e)
@@ -340,6 +344,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			// Retry generation only: no tools execute before a complete response.
 			if contextRetries < 2 && len(agentMessage.ToolCalls()) == 0 && agentMessage.Content().String() == "" && agentMessage.ReasoningContent().Thinking == "" && a.adaptContext(run, err) {
 				contextRetries++
+				a.observePhase(sessionID, "repair", 0)
 				a.Publish(pubsub.UpdatedEvent, AgentEvent{Type: AgentEventTypeInstructions, SessionID: sessionID, Progress: "Context limit reduced after provider memory/context failure; retrying generation only"})
 				continue
 			}
@@ -436,6 +441,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 					return a.err(fmt.Errorf("task cannot be concluded: %s", problem))
 				}
 				repairs++
+				a.observePhase(sessionID, "repair", 0)
 				correction, err := a.createApplicationMessage(ctx, sessionID, "Application validation: "+problem, nil)
 				if err != nil {
 					return a.err(err)
@@ -462,6 +468,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 					return a.err(fmt.Errorf("required actions remain unverified: %s; progress preserved", strings.Join(missing, ", ")))
 				}
 				repairs++
+				a.observePhase(sessionID, "repair", 0)
 				correction, e := a.createApplicationMessage(ctx, sessionID, "Application validation: explicitly requested actions lack successful receipts: "+strings.Join(missing, ", ")+". Perform these authorized steps before concluding; use partial/blocked if unable. Do not repeat completed side effects.", nil)
 				if e != nil {
 					return a.err(e)
@@ -484,6 +491,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 				return a.err(fmt.Errorf("source citation remains missing after repair; read evidence preserved"))
 			}
 			citationRepairs++
+			a.observePhase(sessionID, "repair", 0)
 			run.citationRepair = true
 			correction, err := a.createApplicationMessage(ctx, sessionID, citationRepairRequest(run, msgHistory, problem), nil)
 			if err != nil {
@@ -532,6 +540,8 @@ func (a *agent) createApplicationMessage(ctx context.Context, sessionID, content
 }
 
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message, run *generationRun) (assistantMsg message.Message, toolMsg *message.Message, failure error) {
+	stopContext := a.startPhase(sessionID, "context")
+	defer stopContext()
 	ctx, cancelStream := context.WithCancel(ctx)
 	defer cancelStream()
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
@@ -566,6 +576,10 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	if requestErr != nil {
 		return message.Message{}, nil, requestErr
 	}
+	stopContext()
+	providerStarted := time.Now()
+	stopProvider := a.startPhase(sessionID, "provider")
+	defer stopProvider()
 	eventChan := timedProvider(runProvider(a, run)).StreamResponse(ctx, requestHistory, a.exposedTools(run))
 
 	var err error
@@ -614,8 +628,13 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	}
 
 	completed := false
+	firstGenerated := false
 	// Process each event in the stream.
 	for event := range eventChan {
+		if !firstGenerated && generatedEvent(event) {
+			a.observePhase(sessionID, "first_token", time.Since(providerStarted))
+			firstGenerated = true
+		}
 		if event.Type == provider.EventComplete {
 			completed = true
 		}
@@ -629,6 +648,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		}
 	}
 
+	stopProvider()
 	if ctx.Err() != nil {
 		a.finishMessage(context.Background(), &assistantMsg, message.FinishReasonCanceled)
 		return assistantMsg, nil, ctx.Err()
@@ -725,10 +745,12 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 			if hookErr := a.runHooks(ctx, run, "before_tool", toolCall.Name); hookErr != nil {
 				return assistantMsg, nil, hookErr
 			}
-			toolResult, toolErr := tool.Run(a.attachExplorationBudget(ctx, run), tools.ToolCall{
-				ID:    toolCall.ID,
-				Name:  toolCall.Name,
-				Input: toolCall.Input,
+			toolResult, toolErr := a.runTimedTool(sessionID, func() (tools.ToolResponse, error) {
+				return tool.Run(a.attachExplorationBudget(ctx, run), tools.ToolCall{
+					ID:    toolCall.ID,
+					Name:  toolCall.Name,
+					Input: toolCall.Input,
+				})
 			})
 			if toolErr == nil {
 				if hookErr := a.runHooks(ctx, run, "after_tool", toolCall.Name); hookErr != nil {

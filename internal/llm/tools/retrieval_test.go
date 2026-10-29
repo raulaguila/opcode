@@ -262,7 +262,7 @@ func TestExpandedParserPolicyRebuildsUnchangedLegacyChunks(t *testing.T) {
 	require.NoError(t, err)
 	secrets := credentialValues()
 	sort.Strings(secrets)
-	legacy := indexDigest("parser-v3\x00" + strings.Join(secrets, "\x00"))
+	legacy := indexDigest("parser-v4\x00" + strings.Join(secrets, "\x00"))
 	_, err = db.Exec(`UPDATE files SET policy=?`, legacy)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE chunks SET symbol='<file>',kind='text'`)

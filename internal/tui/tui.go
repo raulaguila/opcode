@@ -3,12 +3,14 @@ package tui
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/app"
+	"github.com/raulaguila/opcode/internal/clipboard"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/logging"
@@ -97,6 +99,7 @@ var logsKeyReturnKey = key.NewBinding(
 )
 
 type appModel struct {
+	terminalOutput  io.Writer
 	width, height   int
 	unfocused       bool
 	currentPage     page.PageID
@@ -657,6 +660,16 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		if msg.Type == tea.KeyCtrlV && clipboard.Remote() {
+			terminal := false
+			if p, ok := a.pages[a.currentPage].(interface{ TerminalFocused() bool }); ok {
+				terminal = p.TerminalFocused()
+			}
+			_, modal := a.mouseModal()
+			if !terminal || modal || a.showProviderDialog || a.showIntegrationDialog || a.showModelDialog || a.showSessionDialog || a.showPermissions || a.showHelp {
+				return a, util.ReportInfo(config.Text("Use a colagem do terminal (por exemplo Ctrl+Shift+V). O clipboard do servidor SSH não será lido.", "Use terminal paste (for example Ctrl+Shift+V). The SSH server clipboard will not be read."))
+			}
+		}
 		if msg.String() != "ctrl+c" {
 			if a.showQuit {
 				updated, c := a.quit.Update(msg)
@@ -998,10 +1011,7 @@ func (a appModel) View() string {
 
 	if a.showFilepicker {
 		overlay := a.filepicker.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1024,10 +1034,7 @@ func (a appModel) View() string {
 			Foreground(t.Text())
 
 		overlay := style.Render("Summarizing\n" + a.compactingMessage)
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1052,10 +1059,7 @@ func (a appModel) View() string {
 		a.help.SetBindings(bindings)
 
 		overlay := a.help.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1067,10 +1071,7 @@ func (a appModel) View() string {
 
 	if a.showQuit {
 		overlay := a.quit.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1082,10 +1083,7 @@ func (a appModel) View() string {
 
 	if a.showSessionDialog {
 		overlay := a.sessionDialog.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1109,10 +1107,7 @@ func (a appModel) View() string {
 
 	if a.showCommandDialog {
 		overlay := a.commandDialog.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1124,9 +1119,10 @@ func (a appModel) View() string {
 
 	if a.showInitDialog {
 		overlay := a.initDialog.View()
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
-			a.width/2-lipgloss.Width(overlay)/2,
-			a.height/2-lipgloss.Height(overlay)/2,
+			col,
+			row,
 			overlay,
 			appView,
 			true,
@@ -1135,10 +1131,7 @@ func (a appModel) View() string {
 
 	if a.showThemeDialog {
 		overlay := a.themeDialog.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1150,10 +1143,7 @@ func (a appModel) View() string {
 
 	if a.showMultiArgumentsDialog {
 		overlay := a.multiArgumentsDialog.View()
-		row := lipgloss.Height(appView) / 2
-		row -= lipgloss.Height(overlay) / 2
-		col := lipgloss.Width(appView) / 2
-		col -= lipgloss.Width(overlay) / 2
+		col, row := a.dialogOrigin(overlay)
 		appView = layout.PlaceOverlay(
 			col,
 			row,
@@ -1353,4 +1343,16 @@ func (a appModel) mouseModal() (tea.Model, bool) {
 		return a.initDialog, true
 	}
 	return nil, false
+}
+
+// WithTerminalOutput shares the serialized terminal writer with explicit OSC commands.
+func WithTerminalOutput(model tea.Model, output io.Writer) tea.Model {
+	switch a := model.(type) {
+	case *appModel: // New returns a pointer before Bubble Tea's first Update.
+		a.terminalOutput = output
+	case appModel:
+		a.terminalOutput = output
+		return a
+	}
+	return model
 }

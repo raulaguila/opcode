@@ -329,3 +329,42 @@ Sem esse controle, o padrão Codaro 0,1 seria um fator adicional da comparação
 Outros protocolos não recebem uma temperatura presumida. Mesmo com os fatores
 compartilhados, aplicativos mantêm prompts/políticas diferentes; não há inferência
 de superioridade geral ou de efeito causal de uma mudança isolada.
+
+## Diagnóstico de tempo por fase
+
+O runtime expõe métricas agregadas por sessão em `/runtime` → detalhes, no objeto
+`usage`. Cada caso nativo da avaliação inclui `phase_metrics`, mesmo se o
+provedor falhar sem informar tokens. Os valores são números/counters, sem prompt,
+argumentos de ferramentas, conteúdo de arquivos ou credenciais:
+
+- `context_ms`: preparação inicial de histórico/bootstrap e preparação/orçamento
+  das requisições; não mede todo processamento interno da aplicação.
+- `provider_ms`: duração observada das chamadas de streaming, incluindo espera de
+  transporte/retentativas, tratamento de eventos e persistência das mensagens.
+  Não é tempo puro de inferência do servidor.
+- `tools_ms`: duração das chamadas reais de ferramentas, incluindo aprovação,
+  sandbox e espera por processo quando ocorrem dentro da ferramenta. Uma chamada
+  recusada ou cancelada continua sendo uma observação, sem executar novamente.
+- `first_token_ms` e `first_token_samples`: soma das esperas pelo primeiro evento
+  gerado observável e quantidade de amostras. Dividir a soma pelas amostras dá a
+  média observada; quando não há amostra, a média é indisponível. Um evento pode
+  trazer texto, raciocínio ou chamada de ferramenta; não é uma contagem de tokens.
+- `provider_calls`, `tool_calls` e `repairs`: chamadas observadas e regenerações de
+  protocolo, contexto, conclusão ou citações. Retentativas HTTP internas integram
+  o tempo da chamada lógica e não são novas chamadas nesse contador.
+  O contador de ferramentas considera o loop explícito do agente; leituras de
+  bootstrap pertencem à fase de contexto e podem aparecer separadamente nos
+  recibos históricos. Não confunda esses contadores com o total de recibos.
+
+Os tempos usam relógio monotônico e arredondam para baixo cada observação em
+milissegundos. São acumulados na memória do processo atual; não sobrevivem ao
+reinício nem incluem a geração auxiliar do título. Cancelamentos/erros encerram
+os temporizadores uma única vez. Não se deve somar o primeiro-token ao tempo do
+provedor: ele é um subconjunto desse tempo. As fases não decompõem todo o tempo
+fim a fim do caso e não provam uma melhoria de desempenho.
+
+`evaluate compare` soma fases somente quando todos os casos do relatório incluem
+essas métricas; caso contrário, apresenta `null`. Relatórios antigos e adapters
+sem instrumentação permanecem utilizáveis, sem receber números inventados ou
+alterar os critérios e condições da comparação. Medidas negativas ou com soma
+fora do limite de inteiro são recusadas.

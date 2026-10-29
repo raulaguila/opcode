@@ -202,7 +202,7 @@ to assist developers in writing, debugging, and understanding code directly from
 		keyboard := tui.NewKeyboard(os.Stdout)
 		defer keyboard.Close()
 		program := tea.NewProgram(
-			tui.New(app, initialSessions...),
+			tui.WithTerminalOutput(tui.New(app, initialSessions...), keyboard),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 			tea.WithReportFocus(),

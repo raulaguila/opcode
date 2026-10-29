@@ -15,11 +15,11 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/clipboard"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
 	"github.com/raulaguila/opcode/internal/llm/agent"
@@ -82,7 +82,17 @@ type recoveryState struct {
 	resolved bool
 }
 
-var writeClipboard = clipboard.WriteAll
+var writeClipboard = func(text string) error { _, err := clipboard.Copy(context.Background(), text, nil); return err }
+
+type TerminalClipboardMsg struct {
+	Sequence string
+	Session  string
+	Request  uint64
+}
+
+func (m TerminalClipboardMsg) Result(err error) WorkspaceResultMsg {
+	return WorkspaceResultMsg{session: m.Session, seq: m.Request, err: err, body: config.Text("Cópia enviada ao terminal; recebimento não confirmado. Selecionar texto continua disponível.", "Copy sent to terminal; receipt unconfirmed. Text selection remains available.")}
+}
 
 func (p *chatPage) WorkspaceFocused() bool { return p.workspace.kind != "" }
 func (p *chatPage) closeWorkspace() {
@@ -625,6 +635,15 @@ func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 		return p.openFile(item.path, item.line)
 	case "copy":
 		text := item.text
+		if clipboard.Remote() {
+			sequence, err := clipboard.OSC52(text)
+			if err != nil {
+				return util.ReportError(err)
+			}
+			p.workspace.seq++
+			p.workspace.loading = true
+			return util.CmdHandler(TerminalClipboardMsg{Sequence: sequence, Session: p.session.ID, Request: p.workspace.seq})
+		}
 		return p.workspaceAsync(func(context.Context) (string, bool, error) {
 			if err := writeClipboard(text); err != nil {
 				return "", false, fmt.Errorf(config.Text("clipboard indisponível; escolha Selecionar texto: %w", "clipboard unavailable; choose Select text: %w"), err)
@@ -946,6 +965,9 @@ func (p *chatPage) openRuntime() tea.Cmd {
 		}
 		raw, err := json.MarshalIndent(report, "", "  ")
 		summary := fmt.Sprintf(config.Text("Modelo: %v\nProtocolo: %v\nProjeto: %v\n\nDiagnóstico da configuração atual. Credenciais omitidas; não executa inferência. D mostra os detalhes técnicos.", "Model: %v\nProtocol: %v\nProject: %v\n\nCurrent configuration diagnostics. Credentials omitted; no inference is executed. D shows technical details."), report["model"], report["protocol"], report["cwd"])
+		if usage, ok := report["usage"].(agent.UsageMetrics); ok {
+			summary += "\n\n" + fmt.Sprintf(config.Text("Tempos observados nesta sessão: contexto %d ms · provedor %d ms · ferramentas %d ms\nChamadas: %d · reparos: %d", "Observed session times: context %d ms · provider %d ms · tools %d ms\nCalls: %d · repairs: %d"), usage.ContextMS, usage.ProviderMS, usage.ToolsMS, usage.ProviderCalls, usage.Repairs)
+		}
 		return summary, string(raw), err
 	})
 }

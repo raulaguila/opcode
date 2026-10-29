@@ -189,7 +189,11 @@ func (p *simulatedProvider) StreamResponse(_ context.Context, history []message.
 }
 func TestIntegrationChecksUseOnlyHarmlessProbeAndPreserveState(t *testing.T) {
 	client := &simulatedProvider{t: t, state: &message.ProviderState{API: "synthetic", Data: json.RawMessage(`{"opaque":"signed-context"}`)}}
-	runLiveChecks(t, context.Background(), client, true)
+	report := runLiveChecks(t, context.Background(), client, true)
+	require.Equal(t, "passed", report.Response)
+	require.Equal(t, "passed", report.Streaming)
+	require.Equal(t, "passed", report.ToolRoundTrip)
+	require.False(t, report.UsageReported)
 	require.Equal(t, 2, client.sends)
 	require.Equal(t, 2, client.streams)
 	_, err := (probeTool{}).Run(context.Background(), tools.ToolCall{Input: `{"token":"wrong"}`})
@@ -210,4 +214,24 @@ func TestLegacyIntegrationEnvironmentReferencesRemainUsable(t *testing.T) {
 	cases, _, err = resolveLiveCases(cfg, environment(map[string]string{"OPENCODE_TEST_OPENAI_MODEL": "legacy-model", "OPCODE_TEST_OPENAI_MODEL": "new-model", "OPENAI_API_KEY": "fixture-key"}))
 	require.NoError(t, err)
 	require.Equal(t, "new-model", cases[0].config.Model)
+}
+
+func TestIntegrationReportDoesNotPassDisabledToolStage(t *testing.T) {
+	client := &simulatedProvider{t: t}
+	report := runLiveChecks(t, context.Background(), client, false)
+	require.Equal(t, "passed", report.Response)
+	require.Equal(t, "passed", report.Streaming)
+	require.Equal(t, "skipped", report.ToolRoundTrip)
+	require.Equal(t, 1, client.sends)
+	require.Equal(t, 1, client.streams)
+}
+func TestIntegrationReportContainsOnlyStageAndUsageFacts(t *testing.T) {
+	r := liveCheckReport{}
+	r.observe(&provider.ProviderResponse{Content: "must-not-appear", Usage: provider.TokenUsage{InputTokens: 8, OutputTokens: 3, CacheReadTokens: 4}})
+	raw, err := json.Marshal(r)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "must-not-appear")
+	require.True(t, r.UsageReported)
+	require.EqualValues(t, 12, r.ObservedInputTokens)
+	require.EqualValues(t, 3, r.ObservedOutputTokens)
 }

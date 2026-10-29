@@ -103,7 +103,32 @@ func checkStream(t *testing.T, ctx context.Context, client provider.Provider, hi
 		}
 	}
 }
-func runLiveChecks(t *testing.T, ctx context.Context, client provider.Provider, testTools bool) {
+
+type liveCheckReport struct {
+	Response             string `json:"response"`
+	Streaming            string `json:"streaming"`
+	ToolRoundTrip        string `json:"tool_round_trip"`
+	UsageReported        bool   `json:"usage_reported"`
+	ObservedInputTokens  int64  `json:"observed_input_tokens"`
+	ObservedOutputTokens int64  `json:"observed_output_tokens"`
+}
+
+func (r *liveCheckReport) observe(response *provider.ProviderResponse) {
+	if response == nil {
+		return
+	}
+	u := response.Usage
+	r.UsageReported = r.UsageReported || u.InputTokens > 0 || u.OutputTokens > 0 || u.CacheReadTokens > 0 || u.CacheCreationTokens > 0
+	r.ObservedInputTokens += u.InputTokens + u.CacheReadTokens + u.CacheCreationTokens
+	r.ObservedOutputTokens += u.OutputTokens
+}
+
+// Report fields describe only stages actually exercised. No model name, URL,
+// credential, prompt, response content or opaque provider state is included.
+func runLiveChecks(t *testing.T, ctx context.Context, client provider.Provider, testTools bool) (report liveCheckReport) {
+	report = liveCheckReport{Response: "not_run", Streaming: "not_run", ToolRoundTrip: "not_run"}
+	defer func() { raw, _ := json.Marshal(report); t.Logf("check_report=%s", raw) }()
+
 	t.Helper()
 	if !t.Run("response", func(t *testing.T) {
 		response, err := client.SendMessages(ctx, prompt("Reply with exactly "+responseMarker+". Do not call tools."), nil)
@@ -111,15 +136,22 @@ func runLiveChecks(t *testing.T, ctx context.Context, client provider.Provider, 
 			t.Fatal("request failed:", safeLiveError(err))
 		}
 		checkText(t, response, responseMarker)
+		report.observe(response)
 	}) {
+		report.Response = "failed"
 		return
 	}
+	report.Response = "passed"
 	if !t.Run("stream", func(t *testing.T) {
-		checkText(t, checkStream(t, ctx, client, prompt("Reply with exactly "+responseMarker+". Do not call tools."), nil), responseMarker)
+		response := checkStream(t, ctx, client, prompt("Reply with exactly "+responseMarker+". Do not call tools."), nil)
+		checkText(t, response, responseMarker)
+		report.observe(response)
 	}) {
+		report.Streaming = "failed"
 		return
 	}
-	t.Run("tool_round_trip", func(t *testing.T) {
+	report.Streaming = "passed"
+	passedTools := t.Run("tool_round_trip", func(t *testing.T) {
 		if !testTools {
 			t.Skip("tool test explicitly disabled in integration configuration")
 		}
@@ -133,6 +165,7 @@ func runLiveChecks(t *testing.T, ctx context.Context, client provider.Provider, 
 		if response == nil || response.FinishReason != message.FinishReasonToolUse || len(response.ToolCalls) != 1 {
 			t.Fatal("model did not return exactly one probe call; check model tool support and maxTokens")
 		}
+		report.observe(response)
 		call := response.ToolCalls[0]
 		if call.Name != probeName || call.ID == "" || !call.Finished {
 			t.Fatal("probe call has an invalid name, identifier or completion state; values suppressed")
@@ -146,6 +179,16 @@ func runLiveChecks(t *testing.T, ctx context.Context, client provider.Provider, 
 		assistant.AddFinish(response.FinishReason)
 		assistant.SetProviderState(response.ProviderState)
 		history = append(history, assistant, message.Message{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Name: call.Name, Content: result.Content}}})
-		checkText(t, checkStream(t, ctx, client, history, definitions), toolMarker)
+		final := checkStream(t, ctx, client, history, definitions)
+		checkText(t, final, toolMarker)
+		report.observe(final)
 	})
+	if !testTools {
+		report.ToolRoundTrip = "skipped"
+	} else if passedTools {
+		report.ToolRoundTrip = "passed"
+	} else {
+		report.ToolRoundTrip = "failed"
+	}
+	return
 }

@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-29",
+  "source_base": "bc4721ba43ab73e4c8d588ce31fe5cbe8f4f2564",
+  "source_revision": "Accompanying commit",
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_weakened": false,
+    "evaluation_criteria_changed": false,
+    "models_downloaded": false,
+    "remote_provider_calls": false,
+    "user_config_modified_by_acceptance": false
+  },
+  "checks": {
+    "go_test_race_all": "passed (-p 2)",
+    "go_vet_all": "passed",
+    "go_vet_integration_all": "passed",
+    "cgo_disabled_build": "passed",
+    "routed_modal_matrix": "passed (156 scenarios)",
+    "clipboard_fixture_tests": "passed; no host clipboard touched",
+    "git_diff_check": "passed"
+  },
+  "features": {
+    "language_profiles": 42,
+    "new_language_profiles": 16,
+    "index_parser_policy": "parser-v5",
+    "reasoning_choices": "explicit capabilities only; supported Chat Completions/Responses adapters",
+    "custom_theme": "preview, explicit save, contrast checks, rollback",
+    "ssh_clipboard": "explicit OSC 52 via serialized terminal writer; receipt unconfirmed",
+    "session_observer": "bounded read-only saved snapshots; existing serve/attach unchanged",
+    "phase_metrics": "aggregate observed wall times, not pure inference"
+  },
+  "live_pty": {
+    "status": "passed",
+    "test": "TestLiveOllamaPTYUI",
+    "seconds": 22.13,
+    "model": "llama3.1:8b",
+    "protocol": "ollama",
+    "cgo_enabled": false,
+    "fixture_context": 16384,
+    "fixture_output_reserve": 2048,
+    "terminal_sizes": [
+      [
+        60,
+        20
+      ],
+      [
+        80,
+        24
+      ],
+      [
+        120,
+        36
+      ],
+      [
+        180,
+        40
+      ]
+    ],
+    "separate_lsp_approvals": 1,
+    "approved_bash_commands": 1,
+    "command_replays": 0,
+    "sources_unchanged": true,
+    "citation_validated": true,
+    "live_output": true,
+    "human_pty_input": true,
+    "queued_instruction": true,
+    "ssh_osc52_observed": true,
+    "local_clipboard_receipt_verified": false,
+    "compact_theme_profiles": [
+      "dark",
+      "light",
+      "NO_COLOR"
+    ]
+  },
+  "native_evaluation": {
+    "passed_cases": 12,
+    "failed_cases": 0,
+    "passed_criteria": 40,
+    "repeats": 2,
+    "report": "2026-10-29-evolution-opcode.json",
+    "binary_cgo_enabled": true,
+    "timing_scope": "Runtime validation before final TUI-only startup/compact-dialog fixes; final PTY used CGO-disabled build"
+  },
+  "comparison": {
+    "report": "2026-10-29-evolution-comparison.json",
+    "comparable_conditions": false,
+    "codaro_passed_cases": 6,
+    "codaro_failed_cases": 4,
+    "codaro_unavailable_cases": 2,
+    "crush": "not run; no installed executable and native Ollama protocol unsupported by existing adapter",
+    "conclusion": "No general quality, speed ranking or causal improvement claim"
+  },
+  "additional_openai_compatible_ollama_test": {
+    "status": "failed in two unchanged attempts",
+    "response": "passed",
+    "streaming": "passed",
+    "tool_round_trip": "failed: final synthetic marker absent",
+    "direct_synthetic_probe": "also answered outside requested format",
+    "criteria_weakened": false
+  },
+  "resolved_during_validation": [
+    "Named-env credential override hid sibling provider fields during Viper decode.",
+    "Terminal output helper asserted value model while constructor returned pointer.",
+    "Initial onboarding prose covered footer in 60x20 terminal."
+  ],
+  "limitations": [
+    "Live integration does not certify every endpoint or model.",
+    "OSC 52 emission does not confirm delivery to a remote clipboard.",
+    "Language retrieval support does not install compilers or prove semantic program correctness.",
+    "Observer is not collaborative agent control.",
+    "Phase measurements include processing/permission waits and do not partition all end-to-end latency."
+  ]
+}

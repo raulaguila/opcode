@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"github.com/raulaguila/opcode/internal/clipboard"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/localstate"
 	"github.com/raulaguila/opcode/internal/session"
@@ -22,6 +25,35 @@ import (
 
 func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
+	case page.TerminalClipboardMsg:
+		writer := a.terminalOutput
+		return func() tea.Msg {
+			if !clipboard.ValidOSC52(msg.Sequence) {
+				return msg.Result(fmt.Errorf("invalid clipboard request"))
+			}
+			if writer == nil {
+				return msg.Result(fmt.Errorf("terminal output unavailable; use text selection"))
+			}
+			_, err := io.WriteString(writer, msg.Sequence)
+			if err != nil {
+				return msg.Result(fmt.Errorf("terminal copy failed; use text selection"))
+			}
+			return msg.Result(nil)
+		}, true
+	case dialog.ReasoningSelectedMsg:
+		control, ok := a.app.CoderAgent.(interface {
+			SetReasoning(config.AgentName, models.ModelID, string) error
+		})
+		if !ok {
+			return util.ReportError(fmt.Errorf("reasoning control unavailable")), true
+		}
+		if err := control.SetReasoning(msg.Agent, msg.Model, msg.Effort); err != nil {
+			return util.ReportError(err), true
+		}
+		a.modelDialog.Close()
+		a.showModelDialog = false
+		return util.ReportInfo(config.Text("Esforço salvo para as próximas chamadas", "Reasoning effort saved for subsequent calls")), true
+
 	case dialog.OpenProviderDialogMsg:
 		a.closeSettings()
 		a.modelDialog.Close()

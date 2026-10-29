@@ -3,10 +3,12 @@ package evaluation
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"strings"
 
+	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 )
 
@@ -20,28 +22,29 @@ type Comparison struct {
 	Notice      string       `json:"notice"`
 }
 type RunSummary struct {
-	Application         string    `json:"application"`
-	Version             string    `json:"application_version,omitempty"`
-	Experiment          string    `json:"experiment,omitempty"`
-	Passed              int       `json:"passed_cases"`
-	Failed              int       `json:"failed_cases"`
-	Unavailable         int       `json:"unavailable_cases"`
-	ObservedCriteria    int       `json:"observed_criteria"`
-	PassedCriteria      int       `json:"passed_criteria"`
-	UnavailableCriteria int       `json:"unavailable_criteria"`
-	DurationMS          int64     `json:"duration_ms"`
-	InputTokens         *int64    `json:"input_tokens"`
-	OutputTokens        *int64    `json:"output_tokens"`
-	RetrievalRecall     *float64  `json:"retrieval_recall"`
-	RetrievalMRR        *float64  `json:"retrieval_mrr"`
-	PromptVersions      []string  `json:"prompt_versions"`
-	PromptProfiles      []string  `json:"prompt_profiles"`
-	APIModels           []string  `json:"api_models"`
-	Protocols           []string  `json:"protocols"`
-	ContextWindows      []int64   `json:"context_windows"`
-	OutputReserves      []int64   `json:"output_reserves"`
-	Temperatures        []float64 `json:"temperatures"`
-	ToolCalls           *int      `json:"tool_calls"`
+	PhaseMetrics        *agent.PhaseMetrics `json:"phase_metrics"`
+	Application         string              `json:"application"`
+	Version             string              `json:"application_version,omitempty"`
+	Experiment          string              `json:"experiment,omitempty"`
+	Passed              int                 `json:"passed_cases"`
+	Failed              int                 `json:"failed_cases"`
+	Unavailable         int                 `json:"unavailable_cases"`
+	ObservedCriteria    int                 `json:"observed_criteria"`
+	PassedCriteria      int                 `json:"passed_criteria"`
+	UnavailableCriteria int                 `json:"unavailable_criteria"`
+	DurationMS          int64               `json:"duration_ms"`
+	InputTokens         *int64              `json:"input_tokens"`
+	OutputTokens        *int64              `json:"output_tokens"`
+	RetrievalRecall     *float64            `json:"retrieval_recall"`
+	RetrievalMRR        *float64            `json:"retrieval_mrr"`
+	PromptVersions      []string            `json:"prompt_versions"`
+	PromptProfiles      []string            `json:"prompt_profiles"`
+	APIModels           []string            `json:"api_models"`
+	Protocols           []string            `json:"protocols"`
+	ContextWindows      []int64             `json:"context_windows"`
+	OutputReserves      []int64             `json:"output_reserves"`
+	Temperatures        []float64           `json:"temperatures"`
+	ToolCalls           *int                `json:"tool_calls"`
 }
 
 func Compare(paths []string) (Comparison, error) {
@@ -73,7 +76,15 @@ func Compare(paths []string) (Comparison, error) {
 		input, output, recall, mrr := int64(0), int64(0), 0., 0.
 		allInput, allOutput, allRetrieval := true, true, true
 		toolCalls, allToolCalls := 0, true
+		phases, allPhases := agent.PhaseMetrics{}, true
 		for _, c := range report.Cases {
+			if c.PhaseMetrics == nil {
+				allPhases = false
+			} else {
+				if !addPhaseMetrics(&phases, *c.PhaseMetrics) {
+					return result, fmt.Errorf("comparison report %d contains invalid phase metrics", index+1)
+				}
+			}
 			if c.Temperature != nil && !slices.Contains(summary.Temperatures, *c.Temperature) {
 				summary.Temperatures = append(summary.Temperatures, *c.Temperature)
 			}
@@ -150,6 +161,9 @@ func Compare(paths []string) (Comparison, error) {
 				summary.PromptProfiles = append(summary.PromptProfiles, tools.RedactCredentials(c.PromptProfile))
 			}
 		}
+		if allPhases {
+			summary.PhaseMetrics = &phases
+		}
 		if allInput {
 			summary.InputTokens = &input
 		}
@@ -200,4 +214,18 @@ func fingerprintConditions(report Report) string {
 	}
 	sort.Strings(rows)
 	return strings.Join(rows, "\n")
+}
+
+func addPhaseMetrics(total *agent.PhaseMetrics, sample agent.PhaseMetrics) bool {
+	targets := []*int64{&total.ContextMS, &total.ProviderMS, &total.ToolsMS, &total.FirstTokenMS, &total.FirstTokenSamples, &total.ProviderCalls, &total.ToolCalls, &total.Repairs}
+	values := []int64{sample.ContextMS, sample.ProviderMS, sample.ToolsMS, sample.FirstTokenMS, sample.FirstTokenSamples, sample.ProviderCalls, sample.ToolCalls, sample.Repairs}
+	for i, value := range values {
+		if value < 0 || *targets[i] > math.MaxInt64-value {
+			return false
+		}
+	}
+	for i, value := range values {
+		*targets[i] += value
+	}
+	return true
 }

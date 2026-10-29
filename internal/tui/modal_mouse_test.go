@@ -65,3 +65,12 @@ func TestQuitMouseDoesNotReplaceThemeDialog(t *testing.T) {
 	}
 	t.Fatal("Continue button missing")
 }
+
+func TestSSHPasteNeverInvokesServerClipboard(t *testing.T) {
+	t.Setenv("SSH_CONNECTION", "fixture")
+	p := &inputPage{}
+	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: p}}
+	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
+	require.NotNil(t, cmd)
+	require.Empty(t, p.received)
+}

@@ -7,6 +7,8 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -120,11 +122,13 @@ func TestInvalidStructuredPlanCannotFinishAsOrdinarySuccess(t *testing.T) {
 	require.Equal(t, "blocked", task.Status)
 }
 func TestOrdinaryPlanAdviceDoesNotRequireInventedWorkflow(t *testing.T) {
-	a, p, _, _ := runtimeAgent(t, workflow.Plan)
+	a, p, _, root := runtimeAgent(t, workflow.Plan)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# Project\nA small application.\n"), 0600))
+	a.tools = []tools.BaseTool{tools.NewViewTool(nil)}
 	done, err := a.Run(context.Background(), "s", "Explique as opções para organizar este projeto.")
 	require.NoError(t, err)
 	first := nextGeneration(t, p)
-	first.reply <- provider.ProviderResponse{Content: "Estas são as opções.", FinishReason: message.FinishReasonEndTurn}
+	first.reply <- provider.ProviderResponse{Content: "Estas são as opções para a aplicação de README.md:1-2.", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 	require.False(t, requiresStructuredPlan("Explique como usar update_plan para salvar um plano."))
 }

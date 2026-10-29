@@ -12,7 +12,7 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/models"
 )
 
-const Version = "opcode-2026-10-v4"
+const Version = "opcode-2026-10-v5"
 
 // CoderPrompt is the compatibility entry point for clients without run metadata.
 func CoderPrompt(_ models.ModelProvider) string {
@@ -59,6 +59,12 @@ Before finishing, compare the result with every requested step and saved criteri
 		policy += "\nProtocol: native Ollama. When update_plan advertises steps_text/criteria_text/checks_text, these are strings, one entry per line; do not send quoted arrays or Python literals. Call final_answer only after all tool results have been received; never mix it with other calls."
 	}
 	if len(definitions) > 0 {
+		for _, name := range definitions {
+			if name == "get_language_support" {
+				policy += "\nFor this language question, distinguish implementation language from supported features. get_language_support inventories Opcode's tooling, not another project's supported features; cite the relevant inspected project source."
+				break
+			}
+		}
 		policy += "\nAvailable schemas: " + strings.Join(definitions, ", ") + "."
 	}
 	return fmt.Sprintf("Prompt %s; profile=%s\n%s\n%s", Version, profile, policy, getEnvironmentInfo())

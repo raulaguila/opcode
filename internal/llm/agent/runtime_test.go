@@ -118,7 +118,7 @@ func TestProjectOverviewReceivesActualLocalEvidenceBeforeModel(t *testing.T) {
 	require.NotContains(t, string(raw), "NEVER_PREFETCH_THIS")
 	require.Equal(t, message.User, first.history[0].Role)
 	require.Contains(t, first.history[0].Content().String(), "O que pode me falar do projeto atual?")
-	first.reply <- provider.ProviderResponse{Content: "RioSensor monitora sensores.", FinishReason: message.FinishReasonEndTurn}
+	first.reply <- provider.ProviderResponse{Content: "RioSensor monitora sensores (README.md:1-2).", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 }
 func TestRepeatedCallsStopAndSaveBlockedTask(t *testing.T) {

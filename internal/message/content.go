@@ -85,6 +85,8 @@ func (bc BinaryContent) String(provider models.ModelProvider) string {
 func (BinaryContent) isPart() {}
 
 type ToolCall struct {
+	// Origin is assigned by context preparation, not inferred from tool IDs/text.
+	Origin   string `json:"origin,omitempty"`
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Input    string `json:"input"`

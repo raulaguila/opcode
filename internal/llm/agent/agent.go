@@ -839,7 +839,9 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		assistantMsg.AppendContent(event.Content)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventToolUseStart:
-		assistantMsg.AddToolCall(*event.ToolCall)
+		call := *event.ToolCall
+		call.Origin = "" // Provider payloads cannot assign application-owned provenance.
+		assistantMsg.AddToolCall(call)
 		return a.messages.Update(ctx, *assistantMsg)
 	// TODO: see how to handle this
 	// case provider.EventToolUseDelta:
@@ -861,7 +863,11 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		logging.ErrorPersist(event.Error.Error())
 		return event.Error
 	case provider.EventComplete:
-		assistantMsg.SetToolCalls(event.Response.ToolCalls)
+		calls := append([]message.ToolCall(nil), event.Response.ToolCalls...)
+		for i := range calls {
+			calls[i].Origin = ""
+		}
+		assistantMsg.SetToolCalls(calls)
 		assistantMsg.AddFinish(event.Response.FinishReason)
 		assistantMsg.SetProviderState(event.Response.ProviderState)
 		if err := a.messages.Update(ctx, *assistantMsg); err != nil {

@@ -269,6 +269,34 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("\x1b")
 	h.wait("SSH copy panel dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Copy response") && ptyUIIdleFooter(frame) })
 
+	// A native model question must reach the human, accept a real answer, and
+	// resume once. Encoded choices are additionally injected in runtime tests.
+	beforeQuestion := len(ptyUIMessages(conn))
+	h.paste(`Use ask_user_question exactly once to ask "Qual área você quer revisar?" with choices ["UI","Contexto"]. Wait for the human answer. Then reply with exactly "Resposta recebida: " followed by the chosen option. Do not call other tools or commands.`)
+	h.send("\r")
+	h.wait("real model question with selectable choices", 120*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Decision:") && strings.Contains(frame, "UI") && strings.Contains(frame, "Contexto")
+	})
+	h.send("\x1b[B\r")
+	h.wait("human question answer resumes generation", 120*time.Second, func(frame string) bool {
+		history := ptyUIMessages(conn)
+		return len(history) > beforeQuestion && history[len(history)-1].finished() && strings.Contains(history[len(history)-1].text(), "Resposta recebida:") && !strings.Contains(frame, "Decision:") && ptyUIIdleFooter(frame)
+	})
+	questions := 0
+	for _, msg := range ptyUIMessages(conn)[beforeQuestion:] {
+		for _, part := range msg.Parts {
+			if part.Type != "tool_call" {
+				continue
+			}
+			var call struct{ Name string }
+			require.NoError(t, json.Unmarshal(part.Data, &call))
+			if call.Name == "ask_user_question" {
+				questions++
+			}
+		}
+	}
+	require.Equal(t, 1, questions, "no failed question or repeated question call")
+
 	h.paste("/mode execute")
 	h.send("\r")
 	h.wait("execute mode", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Execute") })

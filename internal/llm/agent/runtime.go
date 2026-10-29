@@ -175,11 +175,18 @@ func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
 }
 func (a *agent) prefetchTools(run *generationRun, content string) {
 	requiredToolCalls(content, run)
-	if run.mode == workflow.Ask {
-		if citationOptOut(content) {
-			run.requiresCitation = false
-		} else if requiresSourceCitation(content) {
-			run.requiresCitation = true
+	if citationOptOut(content) {
+		run.requiresCitation = false
+	} else if requiresSourceCitation(content) {
+		run.requiresCitation = true
+	}
+	if tools.ProjectInquiry(content) {
+		run.requiresProjectEvidence = true
+	}
+	if tools.ProjectInquiry(content) && tools.ProjectEvidenceQuery(content) != "" {
+		run.selected["search_code_index"] = true
+		if strings.Contains(tools.ProjectEvidenceQuery(content), "languages") {
+			run.selected["get_language_support"] = true
 		}
 	}
 	if a.workflow == nil {
@@ -356,9 +363,9 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 	}
 	if a.questions != nil {
 		ask := func(ctx context.Context, call tools.ToolCall) (any, error) {
-			var q interaction.Question
-			if json.Unmarshal([]byte(call.Input), &q) != nil {
-				return nil, fmt.Errorf("invalid question")
+			q, err := interaction.DecodeQuestion(call.Input)
+			if err != nil {
+				return nil, err
 			}
 			q.SessionID = session
 			answer, err := a.questions.Ask(ctx, q)
@@ -407,7 +414,7 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 	}
 	raw, _ := json.Marshal(taskProjection(task))
 	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
-	copyHistory := slices.Clone(history)
+	copyHistory := projectReusedSources(history)
 	for i := len(copyHistory) - 1; i >= 0; i-- {
 		if copyHistory[i].Role == message.User {
 			copyHistory[i].Parts = slices.Clone(copyHistory[i].Parts)
@@ -437,52 +444,6 @@ func namesJSON(commands map[string]string) string {
 	return string(raw)
 }
 
-func (a *agent) bootstrap(ctx context.Context, session, question string, history []message.Message, run *generationRun) ([]message.Message, error) {
-	if a.workflow == nil {
-		return history, nil
-	}
-	var view tools.BaseTool
-	for _, tool := range run.available {
-		if tool.Info().Name == tools.ViewToolName {
-			view = tool
-			break
-		}
-	}
-	if view == nil {
-		return history, nil
-	}
-	for _, path := range tools.ProjectContextPaths(question) {
-		remaining := min(2400, max(0, run.limits.ToolBudget-run.toolBytes))
-		if remaining == 0 {
-			break
-		}
-		input, _ := json.Marshal(tools.ViewParams{FilePath: path, Limit: 80})
-		call := message.ToolCall{ID: fmt.Sprintf("context-%d", time.Now().UnixNano()), Name: tools.ViewToolName, Input: string(input), Finished: true}
-		assistant, err := a.messages.Create(ctx, session, message.CreateMessageParams{Role: message.Assistant, Model: a.Model().ID, Parts: []message.ContentPart{call}})
-		if err != nil {
-			return history, err
-		}
-		toolCtx := context.WithValue(ctx, tools.SessionIDContextKey, session)
-		toolCtx = context.WithValue(toolCtx, tools.MessageIDContextKey, assistant.ID)
-		response, err := view.Run(toolCtx, tools.ToolCall{ID: call.ID, Name: call.Name, Input: call.Input})
-		if err != nil {
-			response = tools.NewTextErrorResponse(err.Error())
-		}
-		response.Content = clip(response.Content, remaining)
-		run.toolBytes += len(response.Content)
-		if len(response.Metadata) > min(4096, max(0, run.limits.ToolBudget-run.toolBytes)) {
-			response.Metadata = ""
-		}
-		run.toolBytes += len(response.Metadata)
-		a.finishMessage(ctx, &assistant, message.FinishReasonToolUse)
-		result, err := a.messages.Create(ctx, session, message.CreateMessageParams{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Content: response.Content, Metadata: response.Metadata, IsError: response.IsError}}})
-		if err != nil {
-			return history, err
-		}
-		history = append(history, assistant, result)
-	}
-	return history, nil
-}
 func toolSignature(calls []message.ToolCall, results *message.Message) [32]byte {
 	var pairs []any
 	if results != nil {

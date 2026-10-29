@@ -139,6 +139,9 @@ func missingRequiredCalls(run *generationRun, history []message.Message) []strin
 	calls := map[string]string{}
 	for i := max(0, latest); i < len(history); i++ {
 		for _, c := range history[i].ToolCalls() {
+			if c.Origin == "context-reused" {
+				continue
+			}
 			calls[c.ID] = c.Name
 		}
 		for _, r := range history[i].ToolResults() {

@@ -332,6 +332,28 @@ de superioridade geral ou de efeito causal de uma mudança isolada.
 
 ## Diagnóstico de tempo por fase
 
+### Regressão de perguntas genéricas e linguagens
+
+Os seis casos originais continuam em `internal/evaluation/testdata/cases.json`,
+sem alteração de prompts ou critérios. O conjunto adicional
+`internal/evaluation/testdata/project_questions.json` verifica a apresentação
+genérica em Executar, capacidades de linguagens distintas da implementação e
+uma continuação em Perguntar. Ele exige fatos e fontes específicos, além de
+preservar os arquivos. Execute separadamente para distinguir seus resultados:
+
+```sh
+opcode evaluate --live --cases internal/evaluation/testdata/project_questions.json \
+  --provider-config /caminho/provedor.json --allow-execution --repeat 2 \
+  --output /caminho/privado/project-questions.json
+```
+
+A pergunta interativa é exercitada no PTY real com o Ollama. A regressão do
+runtime injeta exatamente o formato `choices` codificado como string, verifica
+que a pergunta aguarda a resposta humana e que não há geração de reparo antes
+da resposta. Nenhum teste supõe uma resposta humana para aprovar ferramentas.
+
+### Campos de tempo
+
 O runtime expõe métricas agregadas por sessão em `/runtime` → detalhes, no objeto
 `usage`. Cada caso nativo da avaliação inclui `phase_metrics`, mesmo se o
 provedor falhar sem informar tokens. Os valores são números/counters, sem prompt,

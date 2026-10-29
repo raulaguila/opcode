@@ -169,6 +169,7 @@ func (*languageSupportTool) Info() ToolInfo {
 		"language": map[string]any{"type": "string", "description": "Optional exact language or alias."},
 		"offset":   map[string]any{"type": "integer", "minimum": 0}, "limit": map[string]any{"type": "integer", "minimum": 1, "maximum": 20},
 		"detect_project": map[string]any{"type": "boolean", "description": "Count project languages using shared exclusions; at most 2000 files."},
+		"summary":        map[string]any{"type": "boolean", "description": "Compact Opcode parser inventory: profile_count and paged language names only; no project scan or executable discovery. Cannot combine with detect_project."},
 	}}
 }
 
@@ -178,9 +179,33 @@ func (*languageSupportTool) Run(ctx context.Context, call ToolCall) (ToolRespons
 		Offset   int    `json:"offset"`
 		Limit    int    `json:"limit"`
 		Detect   bool   `json:"detect_project"`
+		Summary  bool   `json:"summary"`
 	}
 	if call.Input != "" && (json.Unmarshal([]byte(call.Input), &p) != nil || p.Offset < 0 || p.Limit < 0 || len(p.Language) > 80) {
 		return NewTextErrorResponse("invalid language inventory parameters"), nil
+	}
+	if p.Summary {
+		if err := ctx.Err(); err != nil {
+			return ToolResponse{}, err
+		}
+		if p.Detect {
+			return NewTextErrorResponse("summary inventories Opcode parsers only; use a separate call for detect_project"), nil
+		}
+		if p.Language != "" {
+			return NewTextErrorResponse("summary returns paged profile names; use the full inventory for language filtering"), nil
+		}
+		names := []string{"go"}
+		for name := range localParsers {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		limit := p.Limit
+		if limit == 0 {
+			limit = 10
+		}
+		start := min(p.Offset, len(names))
+		end := min(start+min(limit, 20), len(names))
+		return jsonToolResult(map[string]any{"scope": "opcode_parser_capabilities", "profile_count": len(names), "supported_languages": names[start:end], "more": end < len(names), "next_offset": end, "note": "Includes the standard Go parser. This inventories Opcode tooling, not a third-party project's features. Detected project file types are not parser profiles."}), nil
 	}
 	report, err := InspectLanguageSupport(ctx, p.Detect)
 	if err != nil {
@@ -200,6 +225,6 @@ func (*languageSupportTool) Run(ctx context.Context, call ToolCall) (ToolRespons
 	}
 	start := min(p.Offset, len(items))
 	end := min(start+min(limit, 20), len(items))
-	return jsonToolResult(map[string]any{"languages": items[start:end], "total": len(items), "next_offset": end, "more": end < len(items), "project_inspected": report.ProjectInspected, "files_inspected": report.FilesInspected, "truncated": report.Truncated, "note": report.Note,
+	return jsonToolResult(map[string]any{"profile_count": 1 + len(localParsers), "languages": items[start:end], "total": len(items), "next_offset": end, "more": end < len(items), "project_inspected": report.ProjectInspected, "files_inspected": report.FilesInspected, "truncated": report.Truncated, "note": report.Note,
 		"other_languages": "text search and optional configured LSP", "parser": fmt.Sprintf("Go standard parser and %d selected pure Go gotreesitter grammars", len(localParsers))}), nil
 }

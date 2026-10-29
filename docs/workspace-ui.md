@@ -109,6 +109,10 @@ Cada interação agrupa a pergunta, o processo e a resposta final. Clique no
 cabeçalho do processo para expandir/recolher. `Ctrl+B` ou `/process` alterna o
 processo da última interação. Ele começa recolhido; uma preferência explícita
 `showProcess: true` mantém a abertura durante a execução.
+O resumo distingue leituras e buscas de contexto, fontes reutilizadas, chamadas
+de terminal, outras ferramentas e reparos. Por exemplo, “3 leituras de contexto”
+descreve a preparação inicial; não significa três comandos ou três chamadas ao
+modelo. Detalhes em [perguntas e evidências](question-and-evidence-recovery.md).
 Reparos internos de protocolo, conclusão e citações ficam identificados como
 validação da aplicação dentro do processo. Não aparecem como perguntas suas,
 não entram no histórico de rascunhos e não substituem as validações. A resposta

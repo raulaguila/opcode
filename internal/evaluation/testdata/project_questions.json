@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "generic_project", "mode": "execute",
+      "files": {"README.md":"# IgarapeWatch\nRecebe sensores por MQTT e guarda medições em SQLite.\n", "go.mod":"module example.test/igarapewatch\n\ngo 1.26\n", "main.go":"package main\nfunc main() {}\n"},
+      "prompts": ["o que pode me falar do projeto atual?"],
+      "criteria": [{"kind":"response_contains","value":"IgarapeWatch"},{"kind":"response_contains","value":"MQTT"},{"kind":"response_contains","value":"SQLite"},{"kind":"response_contains","value":"README.md:"},{"kind":"tool_called","value":"view"},{"kind":"file_contains","path":"main.go","value":"func main() {}"}]
+    },
+    {
+      "id": "language_capabilities", "mode": "execute",
+      "files": {"README.md":"# PolyglotLab\nA aplicação é implementada em Go. Consulte language_registry.py para as linguagens suportadas.\n", "go.mod":"module example.test/polyglot\n\ngo 1.26\n", "main.go":"package main\nfunc main() {}\n", "language_registry.py":"# Supported languages, independent of the implementation language\nlanguages = ['Python', 'Rust']\n"},
+      "prompts": ["qual linguagens o projeto suporta?"],
+      "criteria": [{"kind":"response_contains","value":"Python"},{"kind":"response_contains","value":"Rust"},{"kind":"response_contains","value":"language_registry.py:"},{"kind":"tool_called","value":"view"},{"kind":"file_contains","path":"language_registry.py","value":"languages = ['Python', 'Rust']"}]
+    },
+    {
+      "id": "language_followup", "mode": "ask",
+      "files": {"README.md":"# PolyglotLab\nA aplicação é implementada em Go. Consulte language_registry.py para as linguagens suportadas.\n", "go.mod":"module example.test/polyglot\n\ngo 1.26\n", "language_registry.py":"# Supported languages, independent of the implementation language\nlanguages = ['Python', 'Rust']\n"},
+      "prompts": ["quais linguagens o projeto suporta?", "mas o projeto possui suporte a outras linguagens.. quais estão cadastradas?"],
+      "criteria": [{"kind":"response_contains","value":"Python"},{"kind":"response_contains","value":"Rust"},{"kind":"response_contains","value":"language_registry.py:"},{"kind":"tool_called","value":"view"},{"kind":"file_contains","path":"language_registry.py","value":"languages = ['Python', 'Rust']"}]
+    }
+  ]
+}

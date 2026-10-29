@@ -32,6 +32,9 @@ func requiresSourceCitation(request string) bool {
 	if citationOptOut(request) {
 		return false
 	}
+	if tools.ProjectInquiry(request) {
+		return true
+	}
 	for _, match := range sourceExplanation.FindAllStringIndex(request, 16) {
 		words := strings.Fields(strings.ToLower(request[:match[0]]))
 		if len(words) > 0 {
@@ -53,7 +56,7 @@ func missingSourceCitation(run *generationRun, history []message.Message, answer
 	}
 	receipts, attempted := sourceReadReceipts(run, history)
 	refs := sourceReferences(answer)
-	if !attempted && len(refs) == 0 {
+	if !attempted && len(refs) == 0 && !run.requiresProjectEvidence {
 		return "" // Failed reads and navigation results are not source evidence.
 	}
 	ctx := run.ctx
@@ -74,6 +77,7 @@ func missingSourceCitation(run *generationRun, history []message.Message, answer
 	}
 	invalid := []string{}
 	validCount := 0
+	primaryValid := !run.requiresProjectEvidence || len(run.primaryEvidence) == 0
 	for _, ref := range refs {
 		matched := false
 		for _, receipt := range receipts {
@@ -84,18 +88,19 @@ func missingSourceCitation(run *generationRun, history []message.Message, answer
 		}
 		if matched {
 			validCount++
+			primaryValid = primaryValid || run.primaryEvidence[normalizedToolPath(ref.path)]
 		} else if len(invalid) < 8 {
 			invalid = append(invalid, ref.path+":"+strconv.Itoa(ref.first)+"-"+strconv.Itoa(ref.last))
 		}
 	}
-	if validCount > 0 && len(invalid) == 0 {
+	if validCount > 0 && len(invalid) == 0 && primaryValid {
 		return ""
 	}
 	available := []string{}
 	seen := map[string]bool{}
 	for i := len(receipts) - 1; i >= 0 && len(available) < 8; i-- {
 		r := receipts[i]
-		if !isCurrent(r) {
+		if !isCurrent(r) || (run.requiresProjectEvidence && len(run.primaryEvidence) > 0 && !run.primaryEvidence[normalizedToolPath(r.Path)]) {
 			continue
 		}
 		path := citationDisplayPath(r.Path)
@@ -107,6 +112,9 @@ func missingSourceCitation(run *generationRun, history []message.Message, answer
 	}
 	encoded, _ := json.Marshal(available)
 	problem := "The explanation has missing or invalid source citations. "
+	if !primaryValid {
+		problem += "For this project question, include the relevant topic source supplied by context preparation; a manifest/entry point alone does not establish the requested features. "
+	}
 	if len(invalid) > 0 {
 		bad, _ := json.Marshal(invalid)
 		problem += "Unverified references (unread path, unread lines or changed source): " + string(bad) + ". "
@@ -221,6 +229,9 @@ func currentCitationChoices(run *generationRun, history []message.Message) []str
 			break
 		}
 		if !tools.SourceReadCurrent(ctx, receipt) {
+			continue
+		}
+		if run.requiresProjectEvidence && len(run.primaryEvidence) > 0 && !run.primaryEvidence[normalizedToolPath(receipt.Path)] {
 			continue
 		}
 		choice := fmt.Sprintf("%s:%d-%d", citationDisplayPath(receipt.Path), receipt.StartLine, receipt.EndLine)

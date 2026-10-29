@@ -121,7 +121,7 @@ func (m *messagesCmp) renderTurns() {
 			if expanded {
 				mark = "⌄"
 			}
-			label := fmt.Sprintf(config.Text("%s Processo · %d ações", "%s Process · %d actions"), mark, actions)
+			label := fmt.Sprintf(config.Text("%s Processo · %s", "%s Process · %s"), mark, processSummary(g.messages))
 			if active {
 				label += " · " + config.Text(state, "working")
 			}

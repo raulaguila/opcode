@@ -1,0 +1,199 @@
+{
+  "date": "2026-10-29",
+  "source_base": "bfa61c8fa6833d2eb1f3d4f5d67f346192a7ba68",
+  "source_revision": "Accompanying commit",
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_weakened": false,
+    "original_six_case_prompts_or_criteria_changed": false,
+    "original_suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+    "original_suite_matches_previous_release": true,
+    "automatic_choice_repair_grants_permission": false,
+    "user_config_changed_by_acceptance": false,
+    "credentials_inherited_by_pty_or_source_probe": false,
+    "remote_provider_calls": false,
+    "models_downloaded": false,
+    "dependencies_added": false
+  },
+  "checks": {
+    "race_all": "passed (-p 2)",
+    "vet_all_with_integration": "passed",
+    "cgo_disabled_build": "passed",
+    "git_diff_check": "passed",
+    "encoded_choices_single_and_batch": "passed",
+    "no_regeneration_before_human_answer": "passed",
+    "cache_current_hash_and_transcript_preservation": "passed",
+    "cache_not_counted_as_executed_tool": "passed",
+    "generic_project_sources_all_modes": "passed",
+    "opcode_inventory_profile_count": 42
+  },
+  "live_original_suite": {
+    "report": "2026-10-29-question-recovery-original.json",
+    "passed_cases": 12,
+    "repeats": 2,
+    "passed_criteria": 40
+  },
+  "live_supplemental_suite": {
+    "report": "2026-10-29-question-recovery-generic.json",
+    "passed_cases": 6,
+    "repeats": 2,
+    "passed_criteria": 32,
+    "criteria_unchanged_after_first_run": true
+  },
+  "live_pty": {
+    "status": "passed",
+    "test": "TestLiveOllamaPTYUI",
+    "seconds": 22.01,
+    "model": "llama3.1:8b",
+    "protocol": "ollama",
+    "fixture_context": 16384,
+    "sandbox": "bubblewrap",
+    "human_question_calls": 1,
+    "actual_human_answer_required": true,
+    "question_replays": 0,
+    "separate_lsp_approvals": 1,
+    "approved_bash_commands": 1,
+    "bash_replays": 0,
+    "live_output": true,
+    "human_pty_input": true,
+    "queued_instruction": true,
+    "ssh_osc52_emission": true,
+    "compact_theme_profiles": [
+      "dark",
+      "light",
+      "NO_COLOR"
+    ]
+  },
+  "own_source_probe": {
+    "scope": "Clean copy of current source, private configuration and loopback Ollama; no source edits requested",
+    "process_exit_code": 0,
+    "inventory_received_profile_count": 42,
+    "source_read": "internal/llm/tools/languages.go:50-76",
+    "source_declaration_was_complete": true,
+    "answer_sha256": "732eace1e6664f2a27792b94e86766a37b588387a0f6f5fb5a8d8ae80b857b4b",
+    "answer_contains_truncation_marker": false,
+    "answer_mentions_requested_numeric_total": false,
+    "answer_explicitly_lists_standard_go": false,
+    "response_quality": "partial: lists parser-map languages but omits the requested total and separate standard Go support; verbose despite request for examples",
+    "meaning": "Source delivery and citation provenance are verified; semantic completeness and format compliance are not guaranteed"
+  },
+  "development_failures_preserved": [
+    {
+      "report_origin": "project-questions.json",
+      "suite_sha256": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600",
+      "cases": [
+        {
+          "id": "generic_project",
+          "trial": 1,
+          "status": "failed"
+        },
+        {
+          "id": "language_capabilities",
+          "trial": 1,
+          "status": "passed"
+        },
+        {
+          "id": "language_followup",
+          "trial": 1,
+          "status": "passed"
+        },
+        {
+          "id": "generic_project",
+          "trial": 2,
+          "status": "failed"
+        },
+        {
+          "id": "language_capabilities",
+          "trial": 2,
+          "status": "passed"
+        },
+        {
+          "id": "language_followup",
+          "trial": 2,
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "report_origin": "original-evidence-final.json",
+      "suite_sha256": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+      "cases": [
+        {
+          "id": "overview",
+          "trial": 1,
+          "status": "passed"
+        },
+        {
+          "id": "localize",
+          "trial": 1,
+          "status": "failed"
+        },
+        {
+          "id": "edit",
+          "trial": 1,
+          "status": "passed"
+        },
+        {
+          "id": "validate",
+          "trial": 1,
+          "status": "passed"
+        },
+        {
+          "id": "error",
+          "trial": 1,
+          "status": "passed"
+        },
+        {
+          "id": "resume",
+          "trial": 1,
+          "status": "passed"
+        },
+        {
+          "id": "overview",
+          "trial": 2,
+          "status": "passed"
+        },
+        {
+          "id": "localize",
+          "trial": 2,
+          "status": "failed"
+        },
+        {
+          "id": "edit",
+          "trial": 2,
+          "status": "failed"
+        },
+        {
+          "id": "validate",
+          "trial": 2,
+          "status": "passed"
+        },
+        {
+          "id": "error",
+          "trial": 2,
+          "status": "passed"
+        },
+        {
+          "id": "resume",
+          "trial": 2,
+          "status": "passed"
+        }
+      ]
+    }
+  ],
+  "resolved_during_validation": [
+    "Generic project answers cited a secondary basic file instead of the selected topic source.",
+    "Named counter.py must take precedence over generic README evidence.",
+    "Reused source projections must not satisfy newly requested tool execution.",
+    "Broad language search found the routing helper; own-module lookup now targets localParsers.",
+    "Detected project file types must not inflate the parser profile count.",
+    "Read only the indexed declaration interval; avoid unrelated truncated source after a complete exact match."
+  ],
+  "limitations": [
+    "Topic routing is a bounded PT/EN heuristic, not a universal semantic classifier.",
+    "Source references verify current path/hash/visible line intervals and selected topic source, not the truth of every claim.",
+    "The 8B model still ignored parts of formatting/count instructions in the own-source probe.",
+    "Hash revalidation still reads file bytes; no universal latency reduction is claimed.",
+    "Live fixtures do not establish general quality or superiority over other applications."
+  ]
+}

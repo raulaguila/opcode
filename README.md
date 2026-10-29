@@ -268,6 +268,9 @@ somente para leitura; os comandos existentes `serve`/`attach` continuam disponí
 para reconectar um cliente à instância ativa. A
 [matriz de regressão da interface](docs/ui-regression-matrix.md) registra a
 cobertura determinística dos menus.
+O [guia de perguntas e evidências](docs/question-and-evidence-recovery.md)
+explica a recuperação de opções malformadas, a busca por assunto, as citações
+em todos os modos e o reaproveitamento de fontes revalidadas.
 
 ## Proveniência e licença
 

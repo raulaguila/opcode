@@ -447,3 +447,50 @@ Consulte também [as métricas](evaluation.md),
 [a matriz de menus](ui-regression-matrix.md),
 [raciocínio e clipboard](model-and-clipboard.md),
 [temas](theme-editor.md) e [observação de sessões](shared-observer.md).
+
+## Perguntas malformadas e evidências por assunto — 29/10/2026
+
+O erro do print foi reproduzido: `choices` chegava como string contendo uma lista
+JSON. O decoder agora aceita uma única camada desse formato nas perguntas simples
+e agrupadas, antes da validação existente. Rejeita prosa, CSV, listas inválidas e
+excessos de tamanho. A regressão do runtime verifica a espera pela resposta humana
+sem regeneração de reparo; respostas continuam sem autoridade para aprovar ações.
+
+Perguntas genéricas sobre o projeto passaram a exigir fontes em todos os modos.
+A busca por assunto usa o índice e leituras numeradas, com prioridade para arquivos
+nomeados pelo usuário. Um recibo válido de manifesto não substitui a fonte
+selecionada para explicar uma funcionalidade. Leituras automáticas reaproveitadas
+exigem hash atual e trecho visível; cópias antigas são abreviadas somente na
+projeção do provedor, mantendo o histórico persistido. Elas não contam como nova
+execução de ferramenta nem satisfazem uma instrução explícita de chamada.
+
+O processo distingue essas leituras, buscas, fontes reutilizadas, chamadas de
+terminal e reparos. O inventário oferece resumo paginado e `profile_count`,
+separando os 42 perfis de parser dos tipos de arquivo encontrados no projeto.
+No checkout do próprio Opcode, a busca usa a definição `localParsers`, evitando
+usar o helper de classificação de perguntas como prova do suporte de linguagens.
+
+Passaram os seis casos originais em duas rodadas: **12/12 e 40/40 critérios**.
+O hash da suíte é idêntico ao da versão anterior. O conjunto adicional passou em
+**6/6 execuções e 32/32 critérios**, com apresentação genérica, linguagens e
+continuação. Seus critérios permaneceram intactos após a primeira rodada.
+As falhas intermediárias — duas perguntas genéricas e a prioridade errada de
+README numa localização explícita, entre outras — estão registradas junto dos
+resultados finais, sem serem apresentadas como aprovações.
+
+O PTY com `llama3.1:8b` passou em **22,01 s**, com uma pergunta real pela ferramenta,
+resposta humana e retomada, além do cenário de comandos, aprovações independentes,
+saída ao vivo, entrada de terminal, fila e OSC 52. Passaram também os perfis
+compactos e a suíte completa com `-race -p 2`, vet com integration e build sem CGO.
+
+A consulta numa cópia limpa das fontes recebeu `profile_count: 42` e leu
+`internal/llm/tools/languages.go:50-76`. O modelo passou a citar essa definição,
+mas ainda listou os 41 parsers do mapa sem separar o parser padrão Go, omitiu o
+total solicitado e respondeu além do formato pedido. Esse probe é **parcial em
+qualidade da resposta**; sucesso de leitura e de processo não foi convertido em
+aprovação semântica. A validação de citações não comprova toda interpretação.
+
+Veja o [guia de comportamento](question-and-evidence-recovery.md), o
+[relatório original](evidence/2026-10-29-question-recovery-original.json), o
+[conjunto adicional](evidence/2026-10-29-question-recovery-generic.json) e o
+[registro consolidado com limitações](evidence/2026-10-29-question-recovery-validation.json).

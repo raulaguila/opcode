@@ -129,14 +129,7 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 		return fmt.Errorf("evaluation results unavailable")
 	}
 
-	calls := map[string]bool{}
-	count := 0
-	for _, msg := range history {
-		for _, call := range msg.ToolCalls() {
-			calls[call.Name] = true
-			count++
-		}
-	}
+	calls, count := observedToolCalls(history)
 	retrieved := []string{}
 	strategies := []string{}
 	for _, msg := range history {
@@ -235,6 +228,21 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 	}
 	sort.Strings(result.ToolNames)
 	return json.NewEncoder(out).Encode(result)
+}
+
+func observedToolCalls(history []message.Message) (map[string]bool, int) {
+	calls := map[string]bool{}
+	count := 0
+	for _, msg := range history {
+		for _, call := range msg.ToolCalls() {
+			if call.Origin == "context-reused" {
+				continue
+			}
+			calls[call.Name] = true
+			count++
+		}
+	}
+	return calls, count
 }
 func allowedPermission(root string, execution bool, mode string, request permission.PermissionRequest) bool {
 	if mode != "execute" || !execution {

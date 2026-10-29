@@ -26,27 +26,29 @@ type instruction struct {
 }
 
 type generationRun struct {
-	contract         *workflow.Contract
-	ctx              context.Context
-	cancel           context.CancelFunc
-	done             chan struct{}
-	accepting        bool
-	pending          []instruction
-	queuedBytes      int
-	mode             workflow.Mode
-	selected         map[string]bool
-	toolLeases       map[string]int
-	requiredCalls    map[string]int
-	startMessageID   string
-	turnMessageID    string
-	available        []tools.BaseTool
-	limits           config.RuntimeConfig
-	steps, toolBytes int
-	hookRuns         int
-	provider         provider.Provider
-	requiresPlan     bool
-	requiresCitation bool
-	citationRepair   bool
+	contract                *workflow.Contract
+	ctx                     context.Context
+	cancel                  context.CancelFunc
+	done                    chan struct{}
+	accepting               bool
+	pending                 []instruction
+	queuedBytes             int
+	mode                    workflow.Mode
+	selected                map[string]bool
+	toolLeases              map[string]int
+	requiredCalls           map[string]int
+	startMessageID          string
+	turnMessageID           string
+	available               []tools.BaseTool
+	limits                  config.RuntimeConfig
+	steps, toolBytes        int
+	hookRuns                int
+	provider                provider.Provider
+	requiresPlan            bool
+	requiresCitation        bool
+	requiresProjectEvidence bool
+	primaryEvidence         map[string]bool
+	citationRepair          bool
 }
 
 func (a *agent) Run(ctx context.Context, sessionID, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {

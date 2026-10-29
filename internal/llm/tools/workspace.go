@@ -99,7 +99,7 @@ func ProjectContextPaths(question string) []string {
 	for _, term := range []string{"projeto", "reposit", "codebase", "this project", "current project", "this repo", "estrutura atual", "arquitetura atual"} {
 		project = project || strings.Contains(lower, term)
 	}
-	if !project {
+	if !project && !ProjectInquiry(question) {
 		return nil
 	}
 	root, err := os.OpenRoot(config.WorkingDirectory())
@@ -107,6 +107,16 @@ func ProjectContextPaths(question string) []string {
 		return nil
 	}
 	defer root.Close()
+	var explicit []string
+	for _, path := range ProjectSourcePaths(question) {
+		info, err := root.Lstat(path)
+		if err == nil && info.Mode().IsRegular() && !shell.SensitivePath(filepath.Join(config.WorkingDirectory(), path)) {
+			explicit = append(explicit, path)
+		}
+	}
+	if len(explicit) > 0 {
+		return explicit
+	}
 	groups := [][]string{{"README.md", "readme.md", "README.rst", "README"}, {"go.mod", "package.json", "pyproject.toml", "Cargo.toml", "pom.xml"}, {"main.go", "src/main.rs", "src/main.ts", "src/main.py", "main.py", "src/index.ts", "index.js"}, {"AGENTS.md"}}
 	var paths []string
 	for _, group := range groups {

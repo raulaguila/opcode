@@ -1,9 +1,11 @@
 package page
 
 import (
+	"fmt"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/tui/util"
+	"time"
 )
 
 func (p *chatPage) FooterState() util.FooterState {
@@ -22,6 +24,9 @@ func (p *chatPage) FooterState() util.FooterState {
 	}
 	if state.Activity == "" && p.terminal.snapshot.Running && !state.Terminal {
 		state.Activity = config.Text("Terminal ativo · ", "Terminal running · ") + config.Shortcut("terminal")
+	}
+	if state.Busy && !p.activityStarted.IsZero() {
+		state.Activity += fmt.Sprintf(" · %ds", int(time.Since(p.activityStarted).Seconds()))
 	}
 	return state
 }

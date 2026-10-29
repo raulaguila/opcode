@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,7 +29,7 @@ func (a *appModel) footerClick(x int) tea.Cmd {
 		if action == "mode" {
 			return a.openModeChooser()
 		}
-		items := a.commands
+		items := a.contextualCommands()
 		a.commandDialog.SetCommands(items)
 		a.showCommandDialog = true
 	case "queue":
@@ -50,4 +51,20 @@ func (a *appModel) openModeChooser() tea.Cmd {
 	}
 	a.showCommandDialog = true
 	return nil
+}
+
+func (a *appModel) contextualCommands() []dialog.Command {
+	items := slices.Clone(a.commands)
+	if p, ok := a.pages[page.ChatPage].(interface{ CommandPriorities() []string }); ok {
+		priorities := p.CommandPriorities()
+		rank := func(id string) int {
+			n := slices.Index(priorities, id)
+			if n < 0 {
+				return len(priorities)
+			}
+			return n
+		}
+		slices.SortStableFunc(items, func(a, b dialog.Command) int { return rank(a.ID) - rank(b.ID) })
+	}
+	return items
 }

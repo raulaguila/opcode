@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
+	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
 // Keyboard bridges enhanced terminal keys to Bubble Tea v1's legacy key events.
@@ -100,8 +101,9 @@ func (k *Keyboard) Filter(_ tea.Model, msg tea.Msg) tea.Msg {
 					k.pushed = true
 				}
 			}
+			supported := k.pushed
 			k.mu.Unlock()
-			return nil
+			return util.EnhancedKeyboardMsg{Supported: supported}
 		}
 	}
 	if key, ok := enhancedKey(raw); ok {

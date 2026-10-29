@@ -105,7 +105,7 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		a.filepicker.ToggleFilepicker(true)
 		return nil, true
 	case page.OpenCommandsMsg:
-		a.commandDialog.SetCommands(a.commands)
+		a.commandDialog.SetCommands(a.contextualCommands())
 		a.showCommandDialog = true
 		return nil, true
 	case page.OpenModeChooserMsg:

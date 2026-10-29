@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,6 +27,7 @@ import (
 var ChatPage PageID = "chat"
 
 type chatPage struct {
+	activityStarted      time.Time
 	inputEnabled         bool
 	app                  *app.App
 	editor               layout.Container
@@ -107,6 +109,9 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 	case ActivityMsg:
 		if msg.SessionID == p.session.ID {
 			p.progress = msg.State
+			if p.activityStarted.IsZero() {
+				p.activityStarted = time.Now()
+			}
 		}
 		return p, nil
 	case pubsub.Event[session.Session]:
@@ -119,6 +124,7 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		if msg.SessionID == p.session.ID {
 			p.outcome = msg.Outcome
 			p.progress = ""
+			p.activityStarted = time.Time{}
 			if msg.Error != nil {
 				p.recovery = recoveryState{err: msg.Error}
 			} else if msg.Done && p.recovery.err != nil {
@@ -238,6 +244,7 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		p.recovery = recoveryState{}
 		p.lastRequest = chat.SendMsg{}
 		p.progress = ""
+		p.activityStarted = time.Time{}
 		p.outcome = ""
 		p.resetTerminal()
 		p.session = session.Session{}
@@ -252,6 +259,7 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			p.recovery = recoveryState{}
 			p.lastRequest = chat.SendMsg{}
 			p.progress = ""
+			p.activityStarted = time.Time{}
 			p.outcome = ""
 			p.resetTerminal()
 		}
@@ -409,7 +417,10 @@ func (p *chatPage) submitAgentMessage(text string, attachments []message.Attachm
 		return tea.Batch(util.ReportError(err), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: err}))
 	}
 	p.outcome = ""
-	p.progress = config.Text("Investigando", "Investigating")
+	if !queued {
+		p.progress = config.Text("Consultando modelo", "Contacting model")
+		p.activityStarted = time.Now()
+	}
 	p.lastRequest = chat.SendMsg{Text: text, Attachments: cloneUserAttachments(attachments)}
 	cmds := []tea.Cmd{util.CmdHandler(chat.SubmissionResultMsg{Text: draft})}
 	if queued {

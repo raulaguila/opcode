@@ -6,6 +6,7 @@ import (
 )
 
 var english = map[string][2]string{
+	"cancel":  {"Stop activity", "Request cancellation while preserving progress"},
 	"index":   {"Project index", "Status, update, rebuild, pause or clear derived index"},
 	"runtime": {"Runtime diagnostic", "Model, protocol, context, tools and index; credentials omitted"},
 	"new":     {"New conversation", "Start another conversation"}, "files": {"Files", "Choose files to attach"}, "terminal": {"Terminal", "Open or return to the terminal"}, "commands": {"All commands", "Search actions and tools"},

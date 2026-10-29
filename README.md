@@ -181,11 +181,15 @@ Comece pelo [guia da interface](docs/workspace-ui.md). Os principais controles:
 | `/` e `Ctrl+K` | Sugestões de comandos e paleta |
 | `/mode ask`, `/mode plan`, `/mode execute` | Perguntar, Planejar e Executar |
 | `Ctrl+B`, `/process` | Expandir/recolher o processo da última interação |
-| `Ctrl+End`, `/latest` | Ir às mensagens novas |
+| `Alt+End`, `/latest` | Ir às mensagens novas |
+| `Alt+PgUp` / `Alt+PgDn` | Rolar meia página de conversa |
+| `Ctrl+U`, `Ctrl+End` | Apagar até o início / ir ao final do rascunho |
+| `Alt+Enter`, `Shift+Enter` | Nova linha; o rodapé indica a combinação suportada |
 | `Ctrl+Y`, `/actions` | Copiar resposta/código ou abrir citação |
 | `Ctrl+P` | Mostrar/ocultar terminal |
 | `/queue` | Editar/remover instruções pendentes |
-| `/context` | Ver orçamento; `C` compacta no painel |
+| `/context` | Orçamento, índice, alocação e diagnóstico; `C` solicita compactação |
+| `/task` | Plano, fila, alterações, checks e permissões em um painel |
 | `/changes`, `/checks` | Ver alterações e validações; `U`/`R` prepara undo/redo |
 | `/sessions` | Buscar, renomear, arquivar e exportar conversas |
 | `/settings`, `/models`, `/integrations` | Configurar a aplicação |

@@ -62,12 +62,12 @@ var messageKeys = MessageKeys{
 		key.WithHelp("pgup", "page up"),
 	),
 	HalfPageUp: key.NewBinding(
-		key.WithKeys("ctrl+u"),
-		key.WithHelp("ctrl+u", "½ page up"),
+		key.WithKeys("alt+pgup"),
+		key.WithHelp("alt+pgup", "½ page up"),
 	),
 	HalfPageDown: key.NewBinding(
-		key.WithKeys("ctrl+d"),
-		key.WithHelp("ctrl+d", "½ page down"),
+		key.WithKeys("alt+pgdown"),
+		key.WithHelp("alt+pgdn", "½ page down"),
 	),
 }
 
@@ -108,7 +108,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 		return m, nil
 	case tea.KeyMsg:
-		if msg.String() == "ctrl+end" {
+		if msg.String() == "alt+end" {
 			m.unread = false
 			m.viewport.GotoBottom()
 			return m, nil
@@ -258,7 +258,7 @@ func (m *messagesCmp) View() string {
 
 func (m *messagesCmp) working() string {
 	if m.unread {
-		return styles.BaseStyle().Foreground(theme.CurrentTheme().Primary()).Width(m.width).Render(config.Text(" Novas mensagens ↓ · Ctrl+End acompanha", " New messages ↓ · Ctrl+End to follow"))
+		return styles.BaseStyle().Foreground(theme.CurrentTheme().Primary()).Width(m.width).Render(config.Text(" Novas mensagens ↓ · Alt+End acompanha", " New messages ↓ · Alt+End to follow"))
 	}
 	return ""
 }

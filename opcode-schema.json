@@ -925,9 +925,19 @@
           "default": "off",
           "enum": [
             "off",
-            "bell"
+            "bell",
+            "auto",
+            "native",
+            "osc"
           ],
           "type": "string"
+        },
+        "proseWidth": {
+          "default": 0,
+          "description": "Prose width in columns; 0 uses 72. Fenced code and tables retain terminal width.",
+          "maximum": 240,
+          "minimum": 0,
+          "type": "integer"
         },
         "sidebar": {
           "default": "hidden",

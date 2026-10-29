@@ -55,6 +55,9 @@ func (m *providerDialogCmp) experienceUpdate(msg tea.Msg) (tea.Cmd, bool) {
 			return m.settings(), true
 		}
 		if m.screen == "setting" {
+			if choiceKey(&m.fields[0], settingOptions(m.settingPath), msg) {
+				return nil, true
+			}
 			switch key.String() {
 			case "ctrl+s":
 				if m.allowSave != nil {
@@ -242,7 +245,7 @@ func (m *providerDialogCmp) experienceView() string {
 	case "setting":
 		title = m.settingPath
 		v := config.EffectiveSetting(m.settingPath)
-		lines = append(lines, line(config.Text("Origem: ", "Origin: ")+localizedOrigin(v.Origin)), line(localizedSettingLabel(m.labels[0])), line(m.fields[0].View()))
+		lines = append(lines, line(config.Text("Origem: ", "Origin: ")+localizedOrigin(v.Origin)), line(localizedSettingLabel(m.labels[0])), line(choiceView(m.fields[0], settingOptions(m.settingPath))))
 	}
 	title = styles.BaseStyle().Foreground(theme.CurrentTheme().Primary()).Bold(true).Render(title)
 	lines = append([]string{line(title)}, lines...)

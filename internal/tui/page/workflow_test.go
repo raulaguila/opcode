@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/app"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -153,7 +154,7 @@ func TestPlanRenderingShowsProgressAndRemainsBounded(t *testing.T) {
 	p.workflow.expanded = true
 	p.refreshWorkflow()
 	view := p.workflowView()
-	require.Contains(t, view, "Plano 1/2")
+	require.Contains(t, view, config.Text("Plano 1/2", "Plan 1/2"))
 	require.Contains(t, view, "Validar")
 	p.width, p.height = 24, 10
 	require.LessOrEqual(t, p.workflowHeight(), p.height-5)

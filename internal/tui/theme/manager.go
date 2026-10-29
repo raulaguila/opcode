@@ -61,6 +61,18 @@ func SetTheme(name string) error {
 	return nil
 }
 
+// PreviewTheme updates only the in-memory palette. Saving is explicit via SetTheme.
+func PreviewTheme(name string) error {
+	globalManager.mu.Lock()
+	defer globalManager.mu.Unlock()
+	if _, ok := globalManager.themes[name]; !ok {
+		return fmt.Errorf("unknown theme %q", name)
+	}
+	delete(styles.Registry, "charm")
+	globalManager.currentName = name
+	return nil
+}
+
 // CurrentTheme returns the currently active theme.
 // If no theme is set, it returns nil.
 func CurrentTheme() Theme {

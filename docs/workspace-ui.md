@@ -13,6 +13,11 @@ e o clique abre a fila. O menu `/` começa com ações comuns; digite o nome de 
 comando para encontrar os demais ou use `/commands` para pesquisar na paleta.
 `Ctrl+?` mantém a ajuda completa de atalhos.
 
+A paleta prioriza ações conforme a situação: terminal/fila durante a execução,
+recuperação após uma falha e revisão quando há um plano. Uma descrição explica a
+opção selecionada; escolher uma ação continua passando pelos controles normais
+de modo e permissão. `/cancel` solicita o cancelamento do trabalho atual.
+
 O campo reserva três linhas úteis e cresce até oito conforme o texto ou a
 colagem. Anexos usam até duas linhas de prévia; todos continuam anexados.
 Telas muito baixas reduzem essa reserva para manter a conversa visível.
@@ -46,6 +51,18 @@ O formulário básico mostra nome, URL e variável da chave; `Ctrl+A` revela ID,
 backend, protocolo e limites. MCP usa os ajustes na chamada seguinte, enquanto servidores LSP ativos exigem
 reinício. Testes MCP/LSP pedem aprovação, têm prazo e encerram o cliente.
 
+Sem filtro, o catálogo coloca primeiro o modelo atual daquela função, seguido
+dos favoritos, recentes e demais modelos. Os rótulos aparecem quando há largura;
+os indicadores do atual/favorito/recente permanecem. Uma busca usa a relevância
+do texto. A seleção destacada só vira o modelo ativo após confirmar.
+
+Booleanos e opções conhecidas usam `←`/`→` ou espaço, sem exigir digitar valores
+JSON. Em Argumentos de MCP/LSP, `Enter` abre uma lista: cada linha representa um
+argumento literal, inclusive espaços. `Ctrl+N` adiciona, `Alt+Backspace` remove,
+`Ctrl+S` aplica ao formulário e `Esc` descarta a edição da lista. Salvar o
+formulário continua sendo uma ação separada; editar argumentos não inicia um
+servidor nem concede aprovação.
+
 Os detalhes e exemplos de JSON estão em [provedores e modelos](model-selection.md)
 e [integrações MCP/LSP](integrations-settings.md). Salvar ajustes durante uma
 execução é recusado; o formulário permanece para você tentar depois.
@@ -56,6 +73,8 @@ execução é recusado; o formulário permanece para você tentar depois.
 informam as teclas modificadoras; o Opcode negocia esse suporte ao iniciar e
 restaura o modo do terminal ao sair. `Alt+Enter` e `Ctrl+J` também inserem linhas,
 e a combinação legada `\` seguida de `Enter` continua disponível.
+O rodapé mostra `Alt+Enter` enquanto o terminal não confirmar suporte a teclas
+modificadoras; depois da confirmação, mostra `Shift+Enter`.
 
 Se o terminal enviar `Shift+Enter` como um `Enter` comum, use `Alt+Enter`. No
 terminal integrado do VS Code, você também pode adicionar manualmente esta
@@ -78,14 +97,26 @@ Cada interação agrupa a pergunta, o processo e a resposta final. Clique no
 cabeçalho do processo para expandir/recolher. `Ctrl+B` ou `/process` alterna o
 processo da última interação. Ele começa recolhido; uma preferência explícita
 `showProcess: true` mantém a abertura durante a execução.
+Reparos internos de protocolo, conclusão e citações ficam identificados como
+validação da aplicação dentro do processo. Não aparecem como perguntas suas,
+não entram no histórico de rascunhos e não substituem as validações. A resposta
+provisória rejeitada deixa de ser apresentada como final. Essa identificação
+usa metadados nas mensagens novas; textos antigos sem metadados não são ocultados
+por uma heurística de prefixos.
 Ao rolar para cima, novas mensagens não puxam a leitura para o fim. Use
-`Ctrl+End`, `/latest` ou o indicador de novas mensagens para acompanhar o final.
+`Alt+End`, `/latest` ou o indicador de novas mensagens para acompanhar o final.
+`Alt+PgUp`/`Alt+PgDn` rolam meia página; `Ctrl+U`, `Ctrl+D` e `Ctrl+End` ficam
+com a edição do rascunho, sem mover a conversa.
 
 Clique na resposta, use `Ctrl+Y` ou `/actions` para abrir ações: copiar texto, copiar blocos
 de código, selecionar texto e abrir arquivos citados quando encontrados. A
 prévia de arquivo usa as permissões normais e não conta como leitura do agente
 para permitir uma edição. Se a área de transferência estiver indisponível,
 use a opção de selecionar texto.
+Uma indicação discreta abaixo da última resposta concluída torna essas ações
+visíveis. Respostas só de prosa usam até 72 colunas por padrão; `tui.proseWidth`
+permite ajustar de 1 a 240, com `0` restaurando o padrão. Mensagens com blocos
+de código ou tabelas conservam a largura disponível. O texto copiado é integral.
 
 O terminal mantém os controles existentes: `Ctrl+P` abre/fecha o painel,
 `Ctrl+N` cria um PTY, `Alt+←`/`Alt+→` alterna processos e `Ctrl+X` encerra o processo
@@ -115,10 +146,19 @@ requisições abrevia apenas conteúdos antigos permitidos. A contagem é uma
 estimativa conservadora, não uma medição pelo tokenizer do modelo. Se o pedido
 continuar grande demais, o agente recusa antes da rede.
 
+As teclas `1`–`4` alternam Orçamento, Índice, Alocação e Diagnóstico nos painéis
+de contexto. A aba de orçamento inclui até 12 intervalos lidos recentemente,
+obtidos dos recibos existentes. São histórico de leitura, não garantia de que
+esses trechos estarão na próxima requisição. Consultar o painel não lê novos
+arquivos, não compacta sozinho e não altera a validação das citações.
+
 `/mode ask`, `/mode plan` e `/mode execute` escolhem Perguntar, Planejar e Executar.
-Os dois primeiros não recebem ferramentas de escrita ou comandos. `/plan`,
-`/task` e `/resume` mostram ou retomam o plano persistente, sem restaurar
-aprovações antigas. A troca de modo/modelo é recusada enquanto há execução.
+Os dois primeiros não recebem ferramentas de escrita ou comandos. `/plan` e
+`/resume` mostram ou retomam o plano persistente, sem restaurar aprovações antigas.
+`/task` reúne plano, atividade, fila e atalhos para contrato, alterações, checks,
+permissões, contexto e terminal. `Ctrl+R` atualiza esse retrato; `/task new`
+continua criando uma tarefa explicitamente. A troca de modo/modelo é recusada
+enquanto há execução.
 
 ## Alterações, verificações e permissões
 
@@ -137,6 +177,11 @@ comandos, processos, serviços externos ou alterações manuais.
 `/permissions` mostra autorizações lembradas. `R` revoga autorizações e pedidos
 pendentes; não desfaz arquivos. Descobrir checks não os executa nem registra
 sucesso. Veja [ferramentas e validações](code-tools.md).
+
+Pedidos genéricos de aprovação mostram alvo, escopo e parâmetros, com redação
+de credenciais conhecidas e limite de tamanho na prévia. A apresentação não
+modifica os parâmetros autorizados. Aprovar uma vez ou lembrar na sessão
+continua valendo somente para a solicitação/escopo correspondente.
 
 ## Gerenciar conversas e recuperar falhas
 
@@ -163,6 +208,11 @@ instrução para conferir o estado atual antes de continuar. Não é um reenvio
 automático nem uma garantia de evitar todo efeito repetido: permissões,
 verificações e inspeção do estado continuam necessárias. O plano e os arquivos
 já alterados permanecem disponíveis para revisão.
+
+O aviso junto ao campo usa uma causa curta e ações: orçamento de contexto,
+memória insuficiente no servidor, conexão ou autenticação são situações
+diferentes. Detalhes técnicos ficam em `/error`. Ao resolver a falha, o aviso
+deixa o campo livre; o diagnóstico continua disponível para consulta.
 
 ## Skills, hooks e avaliações
 
@@ -214,6 +264,7 @@ remova essa sobrescrita antes de alterar o valor na interface.
     "sidebar": "hidden",
     "language": "pt",
     "notifications": "off",
+    "proseWidth": 0,
     "keybindings": {
       "commands": "alt+k",
       "terminal": "ctrl+p"
@@ -230,15 +281,26 @@ preferências, permissões, ajuda e recuperação usam essa seleção. Diagnóst
 provedores, servidores, ferramentas e algumas mensagens legadas mantêm seu idioma
 original; conteúdo do usuário e do modelo nunca é traduzido automaticamente.
 
-Notificações são optativas: `bell` emite o sinal do terminal ao receber uma
-aprovação ou conclusão enquanto a aplicação está sem foco; `off` é o padrão.
-A entrega depende de o emulador informar mudanças de foco e permitir o sinal.
-Nenhum conteúdo da conversa é enviado ao sistema de notificações.
+Notificações são optativas e só acontecem quando a aplicação está sem foco:
 
-A barra da tarefa distingue investigação, aprovação, comando, verificação e
+- `off` é o padrão; `bell` emite o sinal do terminal.
+- `native` tenta a notificação do sistema em Linux/macOS, com prazo de três
+  segundos e fallback para `bell` quando indisponível.
+- `auto` usa `native` localmente e `bell` quando detecta SSH.
+- `osc` envia OSC 777 explicitamente; depende do suporte do emulador.
+
+A entrega depende de o emulador informar mudanças de foco e permitir a
+notificação. Só uma frase fixa da aplicação é enviada, sem conteúdo da conversa,
+caminhos ou credenciais. Em Temas, `↑`/`↓` mostra uma prévia, `Enter` salva e
+`Esc` restaura o tema anterior sem gravar a prévia.
+
+A barra da tarefa distingue consulta ao modelo, escrita da resposta, conferência
+de fontes, aprovação, comando, verificação e
 pergunta ao usuário. O resultado pode ser concluído, planejado, parcial ou
 bloqueado. Itens em `/queue` continuam **pendentes** até o agente incorporá-los;
-o aviso de incorporação não transforma a fila em uma segunda execução.
+o aviso de incorporação não transforma a fila em uma segunda execução. O tempo
+decorrido acompanha a execução; adicionar uma instrução não reinicia o relógio
+nem troca o status da operação em andamento.
 
 Nas aprovações, `T` alterna diff automático, unificado e lado a lado; `F` alterna
 tela cheia e `[ ]` navega pelos arquivos. A apresentação automática usa diff

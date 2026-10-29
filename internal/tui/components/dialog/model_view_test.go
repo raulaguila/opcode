@@ -123,8 +123,8 @@ func TestModelPreferencesAndRoleSelectionRemainIndependent(t *testing.T) {
 	config.Get().Preferences.FavoriteModels = []models.ModelID{"model-08"}
 	config.Get().Preferences.RecentModels = []models.ModelID{"model-09"}
 	m.filter()
-	require.Equal(t, models.ModelID("model-08"), m.filtered[0].ID)
-	require.Equal(t, models.ModelID("model-09"), m.filtered[1].ID)
+	require.Equal(t, models.ModelID("model-08"), m.filtered[1].ID)
+	require.Equal(t, models.ModelID("model-09"), m.filtered[2].ID)
 	require.Equal(t, models.ModelID("model-00"), m.filtered[m.selectedIdx].ID)
 	config.Get().Agents[config.AgentTask] = config.Agent{Model: "model-09"}
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})

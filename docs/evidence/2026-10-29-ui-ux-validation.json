@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-29",
+  "scope": "Daily UI/UX, application repair identity, permission visibility, recovery and editing controls",
+  "source_base": "476178bb70b0ef1c5d55cf37f9aa4f44055e3d3d",
+  "source_revision": "Accompanying commit",
+  "guards": {
+    "permission_engine_changed": false,
+    "citation_validation_weakened": false,
+    "completion_criteria_changed": false,
+    "comparative_evaluation_criteria_changed": false,
+    "application_repairs_keep_provider_role_and_text": true,
+    "credentials_redacted_in_permission_display": true
+  },
+  "checks": {
+    "go_test_race_all": "passed (-p 2)",
+    "go_vet_all": "passed",
+    "cgo_disabled_build": "passed",
+    "pty_offline_regressions": "passed",
+    "go_vet_integration_tui": "passed",
+    "git_diff_check": "passed"
+  },
+  "live_acceptance": {
+    "test": "TestLiveOllamaPTYUI",
+    "status": "passed",
+    "final_run_seconds": 15.97,
+    "provider": "local Ollama",
+    "model": "llama3.1:8b",
+    "protocol": "ollama",
+    "binary_cgo_enabled": false,
+    "sandbox": "bubblewrap",
+    "fixture_context_limit": 16384,
+    "terminal_sizes": [[80, 24], [120, 36], [180, 40]],
+    "isolated_home_and_workspace": true,
+    "inherited_credentials": false,
+    "downloaded_models": false,
+    "source_fixtures_unchanged": true,
+    "approved_lsp_probes": 1,
+    "approved_bash_commands": 1,
+    "replayed_bash_commands": 0,
+    "overview_sha256": "d992281110b9e2ad34681d13291b3a6fa69d732f95d118a5fcf446fc836c56ba",
+    "checks": [
+      "Unicode paste, 3–8-row composer and draft preservation across resize/modals",
+      "Model catalog, search, pagination, no-result state and mode selection",
+      "Ctrl+U edits the draft; Task and Context open and close",
+      "Literal argument editor exposes the end of long paths",
+      "LSP approval shows command and target before the probe starts",
+      "No raw noisy LSP stderr on terminal",
+      "Factual project explanation with source citation; repairs remain in process details",
+      "Exact command does not start before UI approval",
+      "Live output appears before exit and human input reaches the PTY",
+      "Queued instruction is persisted after the tool result",
+      "Idle composer returns after completion without a repeated command"
+    ]
+  },
+  "development_failures_resolved": [
+    "Temporary filesystem quota: use workspace build cache and temporary directory.",
+    "Harness synchronization: wait for panel dismissal before sending the next command.",
+    "Long fixture paths: inspect the literal argument editor instead of assuming an untruncated form.",
+    "Test markers counted as unvalidated source changes: move only instrumentation to the existing derived-cache area; preserve completion guard and all source comparisons."
+  ],
+  "limitations": [
+    "A local PTY fixture is not a comparative quality or latency benchmark.",
+    "The noisy LSP is a controlled fixture, not every real language server.",
+    "Desktop notification delivery is covered through routing tests, not visual desktop acceptance.",
+    "Legacy repair messages without origin metadata are not hidden by text heuristics.",
+    "Prose width applies to prose-only messages; messages with fenced code or tables retain terminal width.",
+    "The test-specific context limit is never saved to the user configuration."
+  ]
+}

@@ -59,7 +59,7 @@ func TestQueueEditorDoesNotRemoveInstructionUntilDraftCanBeReplaced(t *testing.T
 	p.openQueue()
 	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEnter})
 	require.Zero(t, a.taken)
-	require.Contains(t, p.workspace.note, "rascunho")
+	require.Contains(t, p.workspace.note, config.Text("rascunho", "draft"))
 	// Removing is explicit and leaves the current draft intact.
 	p.workspaceKey(tea.KeyMsg{Type: tea.KeyDelete})
 	require.Equal(t, 1, a.taken)
@@ -116,9 +116,10 @@ func TestClipboardFailureKeepsSelectableTextAndRecoveryPersists(t *testing.T) {
 	p.Update(AgentOutcomeMsg{SessionID: "s", Error: errors.New("connection failed")})
 	require.Contains(t, p.composerPanel(), "/retry")
 	p.Update(AgentOutcomeMsg{SessionID: "s", Done: true})
-	require.Contains(t, p.composerPanel(), config.Text("Execução retomada", "Run resumed"))
+	require.Empty(t, p.composerPanel(), "resolved errors no longer occupy the composer")
+	require.NotNil(t, p.recovery.err, "technical evidence remains available with /error")
 	// The plan/recovery panel is above the editor, below the conversation.
-	require.Contains(t, p.insertComposerPanel("conversation\ncomposer"), "/retry")
+	require.Equal(t, "conversation\ncomposer", p.insertComposerPanel("conversation\ncomposer"))
 }
 
 func TestRetryProducesOneFailureAcknowledgement(t *testing.T) {
@@ -166,7 +167,7 @@ func TestValidationPanelDistinguishesRecordedPassFromCurrentApproval(t *testing.
 		raw := fmt.Sprintf(`{"task_revision":%d,"task_digest":"digest","configured":{"test":"go test"},"receipts":[{"name":"test","passed":true,"revision":1,"digest":"digest","command_hash":"%x"}]}`, revision, sha256.Sum256([]byte("go test")))
 		text, err := formatValidationReport(raw)
 		require.NoError(t, err)
-		require.Contains(t, text, fmt.Sprintf("aprovação atual: %t", revision == 1))
-		require.Contains(t, text, "resultado registrado: true")
+		require.Contains(t, text, fmt.Sprintf(config.Text("aprovação atual: %t", "current approval: %t"), revision == 1))
+		require.Contains(t, text, config.Text("resultado registrado: true", "recorded result: true"))
 	}
 }

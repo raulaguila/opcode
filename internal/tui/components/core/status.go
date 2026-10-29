@@ -23,15 +23,18 @@ type StatusCmp interface {
 	ActionAt(int, util.FooterState) string
 }
 type statusCmp struct {
-	info       util.InfoMsg
-	width      int
-	messageTTL time.Duration
-	lspClients map[string]*lsp.Client
+	enhancedKeyboard bool
+	info             util.InfoMsg
+	width            int
+	messageTTL       time.Duration
+	lspClients       map[string]*lsp.Client
 }
 
 func (m statusCmp) Init() tea.Cmd { return nil }
 func (m statusCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case util.EnhancedKeyboardMsg:
+		m.enhancedKeyboard = msg.Supported
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 	case util.InfoMsg:
@@ -71,7 +74,10 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 		}
 	}
 	right += " ▾"
-	center = config.Text("/ comandos · Shift+Enter nova linha", "/ commands · Shift+Enter new line")
+	center = config.Text("/ comandos · Alt+Enter nova linha", "/ commands · Alt+Enter new line")
+	if m.enhancedKeyboard {
+		center = config.Text("/ comandos · Shift+Enter nova linha", "/ commands · Shift+Enter new line")
+	}
 	if state.Terminal {
 		center = config.Shortcut("terminal") + config.Text(" conversa", " chat")
 	} else if state.Activity != "" {

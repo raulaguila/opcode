@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
-	"github.com/raulaguila/opcode/internal/llm/tools"
 )
 
 // The plan and recovery actions stay beside the composer, where the next
@@ -22,13 +21,13 @@ func (p *chatPage) composerPanel() string {
 		if p.recovery.resolved {
 			state = config.Text("Execução retomada", "Run resumed")
 		}
-		first := state + " · " + panelText(tools.RedactCredentials(p.recovery.err.Error()))
+		first := state + " · " + config.Text("Rascunho e progresso preservados", "Draft and progress preserved")
 		panels = append(panels, ansi.Truncate(first, max(1, p.width), "…")+"\n"+ansi.Truncate(recoveryActions(p.recovery.err), max(1, p.width), "…"))
 	}
 	return strings.Join(panels, "\n")
 }
 func (p *chatPage) recoveryHeight() int {
-	if p.recovery.err == nil || p.width < 20 || p.height < 12 {
+	if p.recovery.err == nil || p.recovery.resolved || p.width < 20 || p.height < 12 {
 		return 0
 	}
 	return 2
@@ -56,11 +55,15 @@ func (p *chatPage) recoveryMouse(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 	actions := recoveryActions(p.recovery.err)
-	commands := []string{"retry", "error", "settings", "context", "models", "changes"}
+	commands := []string{"retry", "error", "settings", "context", "models", "changes", "local-status"}
 	chosen := "error"
 	best := -1
 	for _, command := range commands {
-		pos := strings.Index(actions, "/"+command)
+		idx := strings.Index(actions, "/"+command)
+		pos := -1
+		if idx >= 0 {
+			pos = ansi.StringWidth(actions[:idx])
+		}
 		if pos >= 0 && pos <= msg.X && pos > best {
 			best = pos
 			chosen = command
@@ -98,14 +101,21 @@ func (p *chatPage) PrepareSessionDraft(id string) error {
 
 // Recovery suggestions never retry automatically or discard a draft.
 func recoveryTitle(err error) string {
+	if err == nil {
+		return ""
+	}
 	s := strings.ToLower(err.Error())
 	switch {
 	case strings.Contains(s, "401") || strings.Contains(s, "403") || strings.Contains(s, "api key") || strings.Contains(s, "unauthorized") || strings.Contains(s, "authentication"):
 		return config.Text("Autenticação necessária", "Authentication required")
-	case strings.Contains(s, "context") || strings.Contains(s, "out of memory") || strings.Contains(s, "memory") || strings.Contains(s, "413"):
-		return config.Text("Limite do modelo atingido", "Model limit reached")
+	case strings.Contains(s, "out of memory") || strings.Contains(s, "insufficient memory") || strings.Contains(s, "requires more system memory"):
+		return config.Text("Memória insuficiente no servidor", "Server memory exhausted")
 	case strings.Contains(s, "cancel"):
 		return config.Text("Execução cancelada", "Run cancelled")
+	case strings.Contains(s, "connection") || strings.Contains(s, "timeout") || strings.Contains(s, "deadline exceeded") || strings.Contains(s, "429") || strings.Contains(s, "503"):
+		return config.Text("Provedor indisponível", "Provider unavailable")
+	case strings.Contains(s, "context") || strings.Contains(s, "413"):
+		return config.Text("Limite do modelo atingido", "Model limit reached")
 	case strings.Contains(s, "conflict") || strings.Contains(s, "modified externally"):
 		return config.Text("Conflito de arquivo", "File conflict")
 	default:
@@ -119,9 +129,18 @@ func recoveryActions(err error) string {
 		return config.Text(" /settings Configurar acesso · /error Detalhes", " /settings Configure access · /error Details")
 	case config.Text("Limite do modelo atingido", "Model limit reached"):
 		return config.Text(" /context Rever contexto · /models Trocar modelo · /error", " /context Review context · /models Change model · /error")
+	case config.Text("Memória insuficiente no servidor", "Server memory exhausted"):
+		return config.Text(" /models Escolher modelo menor · /local-status Alocação · /error Detalhes", " /models Choose smaller model · /local-status Allocation · /error Details")
+	case config.Text("Provedor indisponível", "Provider unavailable"):
+		return config.Text(" /retry Tentar novamente · /models Trocar modelo · /error Detalhes", " /retry Try again · /models Change model · /error Details")
 	case config.Text("Conflito de arquivo", "File conflict"):
 		return config.Text(" /changes Revisar arquivos · /error Detalhes", " /changes Review files · /error Details")
 	default:
 		return config.Text(" /retry Retomar · /error Detalhes · /settings Configuração", " /retry Resume · /error Details · /settings Configuration")
 	}
+}
+
+// RecoverySummary is safe application copy for the footer; raw details stay in /error.
+func RecoverySummary(err error) string {
+	return recoveryTitle(err) + config.Text(" · /error detalhes", " · /error details")
 }

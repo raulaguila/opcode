@@ -341,3 +341,40 @@ tokens pertence somente à fixture deste teste; não altera a configuração nor
 Também passaram a suíte completa com `-race`, `go vet ./...`, build com
 `CGO_ENABLED=0`, os testes VT sem Ollama e `go vet -tags=integration ./internal/tui`.
 Veja o [registro sanitizado](evidence/2026-10-29-ui-pty-validation.json).
+
+## Fluxo diário, permissões e recuperação — 29/10/2026
+
+A revisão posterior prioriza quatro pontos: reparos internos identificados por
+metadados, parâmetros visíveis nas permissões genéricas, erros acionáveis e
+atalhos de edição separados da navegação. As regressões verificam a persistência
+da origem, que texto humano não possa imitar esses metadados, redação de
+credenciais sem modificar a solicitação aprovada, preservação de diagnóstico e
+rascunho, e distinção de timeout/cancelamento frente ao orçamento do modelo.
+
+Também foram exercitados modelos atual/favoritos/recentes, opções tipadas,
+argumentos literais com espaços/Unicode e valores longos, descarte da edição ao
+reabrir integrações, prévia de temas sem gravação, largura de prosa sem truncar
+código, painel de tarefa e abas de contexto. Enfileirar uma instrução preserva
+o status e o relógio da operação em curso. Notificações têm teste de opt-in,
+foco e conteúdo fixo; a entrega pelo desktop não foi validada visualmente.
+
+O aceite final `TestLiveOllamaPTYUI` passou em **15,97 s** com `llama3.1:8b` e o
+build `CGO_ENABLED=0`. Além do cenário anterior, inclui `Ctrl+U` no input,
+abertura/fechamento de Tarefa e Contexto, editor de argumentos e inspeção do alvo
+na aprovação de LSP. Os critérios de conteúdo, citação, nenhuma execução antes
+da aprovação, um único comando e arquivos-fonte inalterados continuam exigidos.
+Passaram também `go test -race -p 2 ./...`, `go vet ./...`, os testes VT sem
+Ollama e `go vet -tags=integration ./internal/tui`.
+
+Durante o desenvolvimento, houve falha de compilação por cota em `/tmp`; os
+temporários/cache foram movidos para a área de trabalho. O harness também foi
+ajustado para aguardar o fechamento real dos painéis e inspecionar argumentos
+longos. Marcadores do próprio teste estavam entrando no digest de fontes e
+produzindo corretamente um resultado parcial sem checks: foram movidos para a
+área de cache da fixture. O gate de conclusão não mudou; a comparação de todos
+os arquivos-fonte e a conferência dos marcadores antes/depois da aprovação foram
+mantidas. Nenhum desses ajustes altera os critérios da avaliação comparativa.
+
+Veja o [registro desta revisão](evidence/2026-10-29-ui-ux-validation.json) e o
+[guia atualizado da interface](workspace-ui.md). O resultado cobre a fixture
+local; não demonstra superioridade geral de qualidade ou latência.

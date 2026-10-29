@@ -36,14 +36,17 @@ func Shortcut(action string) string {
 	return DefaultKeybindings[action]
 }
 func (t TUIConfig) Validate() error {
+	if t.ProseWidth < 0 || t.ProseWidth > 240 {
+		return fmt.Errorf("proseWidth: 0–240 (0 uses 72 columns)")
+	}
 	if t.Sidebar != "" && t.Sidebar != "auto" && t.Sidebar != "shown" && t.Sidebar != "hidden" {
 		return fmt.Errorf("sidebar: auto/shown/hidden")
 	}
 	if t.Language != "" && t.Language != "pt" && t.Language != "en" {
 		return fmt.Errorf("language: pt/en")
 	}
-	if t.Notifications != "" && t.Notifications != "off" && t.Notifications != "bell" {
-		return fmt.Errorf("notifications: off/bell")
+	if t.Notifications != "" && t.Notifications != "off" && t.Notifications != "bell" && t.Notifications != "auto" && t.Notifications != "native" && t.Notifications != "osc" {
+		return fmt.Errorf("notifications: off/bell/auto/native/osc")
 	}
 	seen := map[string]bool{}
 	for action, fallback := range DefaultKeybindings {
@@ -81,9 +84,10 @@ type Setting struct {
 }
 
 var UserSettings = []Setting{
+	{"tui.proseWidth", "interface", "Largura de leitura / Reading width", "0: auto (72); 1–240 columns. Code keeps full width.", 0, false},
 	{"tui.sidebar", "interface", "Lateral / Sidebar", "auto, shown, hidden", "hidden", false},
 	{"tui.language", "interface", "Idioma / Language", "pt, en", "en", false},
-	{"tui.notifications", "interface", "Notificações / Notifications", "off, bell (only when unfocused)", "off", false},
+	{"tui.notifications", "interface", "Notificações / Notifications", "off, bell, auto, native, osc (only when unfocused)", "off", false},
 	{"preferences.resumeLast", "sessions", "Retomar conversa / Resume last session", "true, false", false, false},
 	{"preferences.showProcess", "interface", "Mostrar processo / Show process", "true, false", false, false},
 	{"runtime.mode", "execution", "Modo inicial / Initial mode", "ask, plan, execute", "execute", false},

@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -459,7 +458,7 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			}
 			p, pcmd := a.pages[page.ChatPage].Update(page.AgentOutcomeMsg{SessionID: id, Error: payload.Error, Done: payload.Done, Outcome: payload.Outcome})
 			a.pages[page.ChatPage] = p
-			return a, tea.Batch(pcmd, util.ReportError(payload.Error))
+			return a, tea.Batch(pcmd, util.ReportWarn(page.RecoverySummary(payload.Error)))
 		}
 		if payload.Done {
 			p, pcmd := a.pages[page.ChatPage].Update(page.AgentOutcomeMsg{SessionID: agentEventSession(payload, a.selectedSession.ID), Done: true, Outcome: payload.Outcome})
@@ -485,10 +484,19 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 
 	case dialog.CloseThemeDialogMsg:
 		a.showThemeDialog = false
-		return a, nil
+		if msg.RestoreTheme != "" {
+			if err := theme.PreviewTheme(msg.RestoreTheme); err != nil {
+				return a, util.ReportError(err)
+			}
+			a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(dialog.ThemeChangedMsg{ThemeName: msg.RestoreTheme, Preview: true})
+		}
+		return a, cmd
 
 	case dialog.ThemeChangedMsg:
 		a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(msg)
+		if msg.Preview {
+			return a, cmd
+		}
 		a.showThemeDialog = false
 		return a, tea.Batch(cmd, util.ReportInfo(config.Text("Tema alterado para: ", "Theme changed to: ")+msg.ThemeName))
 
@@ -719,7 +727,7 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 				if len(a.commands) == 0 {
 					return a, util.ReportWarn(config.Text("Nenhum comando disponível", "No commands available"))
 				}
-				a.commandDialog.SetCommands(a.commands)
+				a.commandDialog.SetCommands(a.contextualCommands())
 				a.showCommandDialog = true
 				return a, nil
 			}
@@ -1213,7 +1221,7 @@ func New(app *app.App, initial ...session.Session) tea.Model {
 	}
 	for _, entry := range commands.Builtins {
 		id := strings.TrimSpace(entry.ID)
-		if id == "mode" || id == "plan" || id == "task" || id == "resume" || id == "compact" || id == "skill" {
+		if id == "mode" || id == "plan" || id == "resume" || id == "compact" || id == "skill" {
 			continue
 		}
 		model.RegisterCommand(dialog.Command{ID: id, Title: entry.Title, Description: entry.Description, Handler: func(dialog.Command) tea.Cmd { return util.CmdHandler(page.WorkspaceCommandMsg{Command: id}) }})
@@ -1311,10 +1319,4 @@ func configuredKeys() keyMap {
 	k.SwitchTheme.SetKeys(config.Shortcut("theme"))
 	k.SwitchTheme.SetHelp(config.Shortcut("theme"), "switch theme")
 	return k
-}
-func (a appModel) notify() tea.Cmd {
-	if !a.unfocused || config.Get() == nil || config.Get().TUI.Notifications != "bell" {
-		return nil
-	}
-	return func() tea.Msg { _, _ = os.Stderr.WriteString("\a"); return nil }
 }

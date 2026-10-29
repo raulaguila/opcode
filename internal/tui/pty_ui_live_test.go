@@ -55,15 +55,17 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	}
 	root := t.TempDir()
 	home, workspace, data := filepath.Join(root, "home"), filepath.Join(root, "workspace"), filepath.Join(root, "data")
-	for _, directory := range []string{filepath.Join(home, ".opcode"), filepath.Join(workspace, ".opcode"), filepath.Join(workspace, "ui-acceptance-artifacts")} {
+	for _, directory := range []string{filepath.Join(home, ".opcode"), filepath.Join(workspace, ".opcode"), filepath.Join(workspace, ".cache/ui-acceptance-artifacts")} {
 		require.NoError(t, os.MkdirAll(directory, 0700))
 	}
+	// Instrumentation is derived cache, not a source edit requiring project checks.
+	// Every source fixture is still compared byte-for-byte at the end.
 	fixtures := map[string]string{
 		"README.md":      "# IgarapeWatch\n\nAplicativo em Go para coletar métricas de sensores via MQTT, armazenar os dados em SQLite e gerar relatórios pela linha de comando.\n",
 		"go.mod":         "module example.test/igarapewatch\n\ngo 1.26\n",
 		"main.go":        "package main\n\n// IgarapeWatch collects sensor data in SQLite.\nfunc main() {}\n",
-		"interactive.sh": "[ -t 0 ] || exit 42\nprintf started > ui-acceptance-artifacts/command-started\nprintf 'LIVE_READY\\n'\nIFS= read -r value\nprintf 'LIVE_INPUT:%s\\n' \"$value\"\n",
-		"lsp-stderr.sh":  "printf ran > ui-acceptance-artifacts/lsp-stderr-ran\nfor ((i=0;i<4096;i++)); do printf 'UI_LSP_SECRET_SENTINEL_%s\\n' \"$i\" >&2; done\nexit 1\n",
+		"interactive.sh": "[ -t 0 ] || exit 42\nprintf started > .cache/ui-acceptance-artifacts/command-started\nprintf 'LIVE_READY\\n'\nIFS= read -r value\nprintf 'LIVE_INPUT:%s\\n' \"$value\"\n",
+		"lsp-stderr.sh":  "printf ran > .cache/ui-acceptance-artifacts/lsp-stderr-ran\nfor ((i=0;i<4096;i++)); do printf 'UI_LSP_SECRET_SENTINEL_%s\\n' \"$i\" >&2; done\nexit 1\n",
 	}
 	for name, contents := range fixtures {
 		require.NoError(t, os.WriteFile(filepath.Join(workspace, name), []byte(contents), 0600))
@@ -146,6 +148,23 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	})
 	h.clearDraft()
 	t.Log("PTY draft, Unicode paste, three resizes, model catalog/search and mode chooser passed")
+	h.paste("edit-key-check")
+	h.send("\x15")
+	h.wait("Ctrl+U edits the input", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "edit-key-check") })
+	h.paste("/task")
+	h.send("\r")
+	h.wait("task overview", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Task") && strings.Contains(frame, "Expected outcome")
+	})
+	h.send("\x1b")
+	h.wait("overview dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Expected outcome") && ptyUIHasFooter(frame) })
+	h.paste("/context")
+	h.send("\r")
+	h.wait("unified context panel", 10*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "1 Budget") && strings.Contains(frame, "Window source")
+	})
+	h.send("\x1b")
+	h.wait("context dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "1 Budget") && ptyUIHasFooter(frame) })
 
 	// Exercise the same real LSP NewClient stderr path via an explicit settings
 	// probe. This does not depend on a small model obeying diagnostic arguments,
@@ -157,19 +176,28 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.wait("LSP form", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Configure LSP") })
 	require.Contains(t, h.frame(), "00-ui-acceptance")
 	require.Contains(t, h.frame(), "/bin/bash")
-	require.Contains(t, h.frame(), "lsp-stderr.sh")
+	h.send("\t\t\r") // Open the argument list and inspect the end of a long path.
+	h.wait("argument list", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Arguments · one per row") })
+	h.send("\x1b[F")
+	h.wait("complete argument target", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "lsp-stderr.sh") })
+	h.send("\x1b")
+	h.wait("LSP form restored", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Configure LSP") && !strings.Contains(frame, "one per row")
+	})
 	h.send("\x14") // Ctrl+T requests a connection test, with its own permission.
 	h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })
 	if !strings.Contains(h.frame(), "Tool: test_lsp_connection") {
 		h.send("d")
 		t.Fatal("unexpected integration permission request; denied")
 	}
-	_, err = os.Stat(filepath.Join(workspace, "ui-acceptance-artifacts", "lsp-stderr-ran"))
+	_, err = os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
 	require.True(t, os.IsNotExist(err), "LSP probe must not start before explicit UI approval")
+	require.Contains(t, h.frame(), "/bin/bash")
+	require.Contains(t, h.frame(), "lsp-stderr.sh")
 	h.send("a")
 	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow (a)") })
 	h.wait("LSP stderr fixture executed", 10*time.Second, func(string) bool {
-		_, err := os.Stat(filepath.Join(workspace, "ui-acceptance-artifacts", "lsp-stderr-ran"))
+		_, err := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
 		return err == nil
 	})
 	h.wait("optional LSP probe failed cleanly", 12*time.Second, func(frame string) bool { return strings.Contains(frame, "Test failed:") })
@@ -207,6 +235,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 		text := strings.ToLower(last.text())
 		return last.Role == "assistant" && last.finished() && strings.Contains(text, "igarapewatch") && strings.Contains(text, "sqlite") && strings.Contains(text, "sensor") && sourceCitation.MatchString(text)
 	})
+	require.NotContains(t, h.frame(), "Application validation:", "internal repairs must stay in process details")
 	h.wait("no loading remnants", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Loading conversation") })
 	require.NotContains(t, h.rawOutput(), "UI_LSP_SECRET_SENTINEL", "child stderr must never corrupt the terminal")
 	h.assertComposer()
@@ -222,7 +251,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.paste(`Call bash with these arguments: {"command":"bash interactive.sh","pty":true,"timeout":120000}. Wait for the actual tool result. The human will provide terminal input. Do not execute any other command.`)
 	h.send("\r")
 	h.wait("explicit permission dialog", 120*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })
-	_, err = os.Stat(filepath.Join(workspace, "ui-acceptance-artifacts", "command-started"))
+	_, err = os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "command-started"))
 	require.True(t, os.IsNotExist(err), "command must not execute before UI approval")
 	approved := false
 	for _, msg := range ptyUIMessages(conn) {
@@ -370,8 +399,8 @@ func (h *ptyUIHarness) send(value string) {
 }
 func (h *ptyUIHarness) paste(value string) { h.send("\x1b[200~" + value + "\x1b[201~") }
 func (h *ptyUIHarness) clearDraft() {
-	// Ctrl+U/Ctrl+End belong to conversation scrolling in this application.
-	// The preserved draft cursor is already at its end after dismissing a modal.
+	// Ctrl+End edits the composer. Backspace clears all rows, including Unicode.
+	h.send("\x1b[1;5F")
 	h.send(strings.Repeat("\x7f", 512))
 	h.wait("draft cleared", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "draft-") })
 }

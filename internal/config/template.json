@@ -38,7 +38,8 @@
     "theme": "opcode",
     "sidebar": "hidden",
     "language": "en",
-    "notifications": "off"
+    "notifications": "off",
+    "proseWidth": 0
   },
   "preferences": {
     "resumeLast": false,

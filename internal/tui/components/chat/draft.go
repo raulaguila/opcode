@@ -195,7 +195,7 @@ func (m *editorCmp) historyForSession(id string) ([]string, error) {
 			return nil, fmt.Errorf("load prompt history: %w", err)
 		}
 		for _, msg := range msgs {
-			if msg.Role == message.User && msg.Content().String() != "" {
+			if msg.Role == message.User && !msg.IsApplication() && msg.Content().String() != "" {
 				history = append(history, msg.Content().String())
 			}
 		}

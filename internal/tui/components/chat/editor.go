@@ -294,6 +294,9 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.browsingHistory = false
 		return m, nil
 	case tea.KeyMsg:
+		if msg.String() == "alt+end" || msg.String() == "ctrl+b" || msg.String() == "ctrl+y" {
+			return m, nil
+		}
 		if cmd, handled := m.slashKey(msg); handled {
 			return m, cmd
 		}

@@ -23,7 +23,11 @@ func Markdown(s session.Session, messages []message.Message, redact func(string)
 	for _, msg := range messages {
 		switch msg.Role {
 		case message.User:
-			out.WriteString("## Você\n\n")
+			if msg.IsApplication() {
+				out.WriteString("## Validação da aplicação\n\n")
+			} else {
+				out.WriteString("## Você\n\n")
+			}
 		case message.Assistant:
 			out.WriteString("## Assistente\n\n")
 		case message.Tool:

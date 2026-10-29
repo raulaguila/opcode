@@ -42,4 +42,5 @@ var Builtins = []Command{
 	{ID: "error", Title: "Detalhes do erro", Description: "Ver diagnóstico da execução"},
 	{ID: "process", Title: "Mostrar/recolher processo", Description: "Revisar as etapas da última interação"},
 	{ID: "latest", Title: "Novas mensagens", Description: "Voltar ao acompanhamento da resposta"},
+	{ID: "cancel", Title: "Interromper atividade", Description: "Solicitar interrupção preservando o progresso"},
 }

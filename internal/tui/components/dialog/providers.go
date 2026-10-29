@@ -311,6 +311,13 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Close()
 			return m, util.CmdHandler(CloseProviderDialogMsg{})
 		}
+		if m.screen != "list" && len(m.fields) > m.focus && choiceKey(&m.fields[m.focus], fieldOptions(m.labels[m.focus]), msg) {
+			if m.testing {
+				m.Close()
+				m.note = "Edited; test again to validate these settings."
+			}
+			return m, nil
+		}
 		if m.screen == "list" {
 			switch msg.String() {
 			case "up":
@@ -430,13 +437,13 @@ func (m *providerDialogCmp) View() string {
 		indices := m.fieldIndices()
 		start := max(0, slices.Index(indices, m.focus)-count+1)
 		for _, i := range indices[start:min(len(indices), start+count)] {
-			label := m.labels[i]
+			label := fieldLabel(m.labels[i])
 			if i == m.focus {
 				label = "› " + label
 			}
 			lines = append(lines, line(label))
 			m.fields[i].Width = max(8, width-2)
-			lines = append(lines, line(m.fields[i].View()))
+			lines = append(lines, line(choiceView(m.fields[i], fieldOptions(m.labels[i]))))
 		}
 		hint := "Tab/↑↓ fields · Ctrl+S save · Esc back"
 		if m.screen == "provider" {

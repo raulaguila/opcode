@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -14,10 +15,11 @@ import (
 // ThemeChangedMsg is sent when the theme is changed
 type ThemeChangedMsg struct {
 	ThemeName string
+	Preview   bool
 }
 
 // CloseThemeDialogMsg is sent when the theme dialog is closed
-type CloseThemeDialogMsg struct{}
+type CloseThemeDialogMsg struct{ RestoreTheme string }
 
 // ThemeDialog interface for the theme switching dialog
 type ThemeDialog interface {
@@ -93,15 +95,15 @@ func (t *themeDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if t.selectedIdx > 0 {
 				t.selectedIdx--
 			}
-			return t, nil
+			return t, t.preview()
 		case key.Matches(msg, themeKeys.Down) || key.Matches(msg, themeKeys.J):
 			if t.selectedIdx < len(t.themes)-1 {
 				t.selectedIdx++
 			}
-			return t, nil
+			return t, t.preview()
 		case key.Matches(msg, themeKeys.Enter):
 			if len(t.themes) > 0 {
-				previousTheme := theme.CurrentThemeName()
+				previousTheme := t.currentTheme
 				selectedTheme := t.themes[t.selectedIdx]
 				if previousTheme == selectedTheme {
 					return t, util.CmdHandler(CloseThemeDialogMsg{})
@@ -114,7 +116,7 @@ func (t *themeDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			}
 		case key.Matches(msg, themeKeys.Escape):
-			return t, util.CmdHandler(CloseThemeDialogMsg{})
+			return t, util.CmdHandler(CloseThemeDialogMsg{RestoreTheme: t.currentTheme})
 		}
 	case tea.WindowSizeMsg:
 		t.width = msg.Width
@@ -144,11 +146,19 @@ func (t *themeDialogCmp) View() string {
 		}
 	}
 
-	maxWidth = max(30, min(maxWidth, t.width-15)) // Limit width to avoid overflow
+	if t.width > 0 {
+		maxWidth = max(1, min(maxWidth, t.width-8))
+	} // Limit width to avoid overflow
 
 	// Build the theme list
 	themeItems := make([]string, 0, len(t.themes))
-	for i, themeName := range t.themes {
+	count := len(t.themes)
+	if t.height > 0 {
+		count = max(1, min(count, t.height-8))
+	}
+	start := max(0, t.selectedIdx-count+1)
+	for i := start; i < min(len(t.themes), start+count); i++ {
+		themeName := t.themes[i]
 		itemStyle := baseStyle.Width(maxWidth)
 
 		if i == t.selectedIdx {
@@ -158,7 +168,7 @@ func (t *themeDialogCmp) View() string {
 				Bold(true)
 		}
 
-		themeItems = append(themeItems, itemStyle.Padding(0, 1).Render(themeName))
+		themeItems = append(themeItems, itemStyle.Render(ansi.Truncate(" "+themeName, maxWidth, "…")))
 	}
 
 	title := baseStyle.
@@ -173,7 +183,7 @@ func (t *themeDialogCmp) View() string {
 		title,
 		baseStyle.Width(maxWidth).Render(""),
 		baseStyle.Width(maxWidth).Render(lipgloss.JoinVertical(lipgloss.Left, themeItems...)),
-		baseStyle.Width(maxWidth).Render(""),
+		baseStyle.Width(maxWidth).Render(ansi.Truncate(config.Text("↑↓ prévia · Enter salva · Esc desfaz", "↑↓ preview · Enter save · Esc revert"), maxWidth, "…")),
 	)
 
 	return baseStyle.Padding(1, 2).
@@ -195,4 +205,15 @@ func NewThemeDialogCmp() ThemeDialog {
 		selectedIdx:  0,
 		currentTheme: "",
 	}
+}
+
+func (t *themeDialogCmp) preview() tea.Cmd {
+	if len(t.themes) == 0 {
+		return nil
+	}
+	name := t.themes[t.selectedIdx]
+	if err := theme.PreviewTheme(name); err != nil {
+		return util.ReportError(err)
+	}
+	return util.CmdHandler(ThemeChangedMsg{ThemeName: name, Preview: true})
 }

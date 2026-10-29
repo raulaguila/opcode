@@ -276,14 +276,14 @@ func (p *chatPage) terminalView(full bool) string {
 	t := &p.terminal
 	width := max(1, p.width)
 	style := styles.BaseStyle().Width(width)
-	header := "Terminal • Ctrl+P back to chat"
+	header := config.Text("Terminal • Ctrl+P volta à conversa", "Terminal • Ctrl+P back to chat")
 	if t.snapshot.ID != "" {
 		state := fmt.Sprintf("exit %d", t.snapshot.ExitCode)
 		if t.snapshot.Running {
-			state = "running"
+			state = config.Text("em execução", "running")
 		}
 		if t.snapshot.TimedOut {
-			state = "timed out"
+			state = config.Text("tempo esgotado", "timed out")
 		}
 		header = fmt.Sprintf("Terminal • %s • %s", state, t.snapshot.Command)
 	}
@@ -306,13 +306,13 @@ func (p *chatPage) terminalView(full bool) string {
 			}
 		}
 		if t.starting {
-			body = "Waiting for permission to start the terminal…"
+			body = config.Text("Aguardando aprovação para iniciar o terminal…", "Waiting for permission to start the terminal…")
 		}
 		if t.selected == "" && !t.starting {
-			body = "Ctrl+N starts a terminal after approval."
+			body = config.Text("Ctrl+N inicia um terminal após aprovação.", "Ctrl+N starts a terminal after approval.")
 		}
 		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-2)).MaxHeight(max(1, p.height-2)).Render(body)
-		footer := ansi.Truncate("Ctrl+P chat • Ctrl+N new • Alt+←/→ switch • Ctrl+X stop • Ctrl+C interrupt", width, "…")
+		footer := ansi.Truncate(config.Text("Ctrl+P conversa • Ctrl+N novo • Alt+←/→ troca • Ctrl+X encerra • Ctrl+C interrompe", "Ctrl+P chat • Ctrl+N new • Alt+←/→ switch • Ctrl+X stop • Ctrl+C interrupt"), width, "…")
 		return style.Render(lipgloss.JoinVertical(lipgloss.Left, header, body, footer))
 	}
 	text := strings.TrimRight(t.snapshot.Stdout+t.snapshot.Stderr, "\n")
@@ -323,6 +323,6 @@ func (p *chatPage) terminalView(full bool) string {
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
-	header = ansi.Truncate(header+" • Ctrl+P open", width, "…")
+	header = ansi.Truncate(header+config.Text(" • Ctrl+P abre", " • Ctrl+P open"), width, "…")
 	return style.Foreground(theme.CurrentTheme().TextMuted()).Height(6).MaxHeight(6).Render(lipgloss.JoinVertical(lipgloss.Left, header, strings.Join(lines, "\n")))
 }

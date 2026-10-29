@@ -10,9 +10,15 @@ import (
 type ActivityMsg struct{ SessionID, State string }
 
 func ActivityForMessage(m message.Message) string {
+	if m.IsApplication() {
+		return config.Text("Conferindo resposta e fontes", "Checking answer and sources")
+	}
 	calls := m.ToolCalls()
 	if len(calls) == 0 {
-		return config.Text("Investigando", "Investigating")
+		if m.Content().Text != "" {
+			return config.Text("Preparando resposta", "Writing response")
+		}
+		return config.Text("Consultando modelo", "Contacting model")
 	}
 	name := calls[len(calls)-1].Name
 	switch {

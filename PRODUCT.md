@@ -68,3 +68,13 @@ semântica da resposta. Perguntas agrupadas aceitam seleção múltipla, texto l
 e revisão antes de enviar. O seletor usa busca aproximada, preserva seleção e
 catálogo e consulta metadados individuais com cancelamento, sem inferência.
 `doctor --languages` orienta configuração de LSP sem instalar/iniciar servidores.
+
+A revisão de usabilidade separa reparos da aplicação de mensagens humanas,
+expõe parâmetros em permissões genéricas, reserva diagnósticos técnicos para
+`/error` e separa atalhos de edição e navegação. O catálogo prioriza atual,
+favoritos e recentes; a paleta usa o estado da tarefa. Formulários oferecem
+opções tipadas e argumentos por linha. `/task` reúne o trabalho e `/context`
+oferece acesso ao orçamento, índice, alocação e diagnóstico. A apresentação tem
+prosa limitada, ações visíveis, tempo decorrido, prévia de temas e notificações
+optativas. Essas mudanças não concedem capacidades nem alteram os gates de
+citação, conclusão ou permissão. Ver [interface](docs/workspace-ui.md).

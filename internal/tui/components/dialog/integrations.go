@@ -35,6 +35,7 @@ type IntegrationDialog interface {
 	Close()
 }
 type integrationDialogCmp struct {
+	arguments *argumentList
 	providerDialogCmp
 	entries      []config.Integration
 	current      config.Integration
@@ -54,6 +55,7 @@ func NewIntegrationDialogCmp(probe func(context.Context, config.Integration) ([]
 }
 func (m *integrationDialogCmp) Open() tea.Cmd {
 	m.Close()
+	m.arguments = nil
 	m.screen = "list"
 	m.note = config.Text("N MCP · L LSP · Enter edita · Ctrl+A login · Ctrl+D logout · Ctrl+U status", "N MCP · L LSP · Enter edit · Ctrl+A login · Ctrl+D logout · Ctrl+U status")
 	m.entries = nil
@@ -205,6 +207,21 @@ func (m *integrationDialogCmp) saveIntegration() tea.Cmd {
 	return util.CmdHandler(IntegrationSettingsSavedMsg{Kind: candidate.Kind})
 }
 func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.arguments != nil {
+		if size, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width, m.height = size.Width, size.Height
+		}
+		done, save, cmd := m.arguments.update(msg)
+		if done {
+			if save {
+				m.fields[m.focus].SetValue(m.arguments.value())
+			}
+			m.arguments = nil
+			m.fields[m.focus].Focus()
+		}
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case integrationOAuthMsg:
 		return m, m.updateOAuth(msg)
@@ -230,6 +247,24 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
+		if m.screen == "edit" && msg.String() == "enter" && strings.HasPrefix(m.labels[m.focus], "Arguments") {
+			var err error
+			m.arguments, err = newArgumentList(m.fields[m.focus].Value())
+			if err != nil {
+				m.note = err.Error()
+				return m, nil
+			}
+			m.Close()
+			m.fields[m.focus].Blur()
+			return m, textinput.Blink
+		}
+		if m.screen == "edit" && len(m.fields) > m.focus && choiceKey(&m.fields[m.focus], fieldOptions(m.labels[m.focus]), msg) {
+			if m.testing {
+				m.Close()
+				m.note = "Edited; test again for current settings."
+			}
+			return m, nil
+		}
 		if msg.String() == "esc" {
 			if m.screen == "oauth" {
 				m.Close()
@@ -360,6 +395,9 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 func (m *integrationDialogCmp) View() string {
+	if m.arguments != nil {
+		return m.arguments.view(m.contentWidth(), m.height)
+	}
 	if m.screen == "oauth" {
 		return m.oauthView()
 	}
@@ -400,13 +438,16 @@ func (m *integrationDialogCmp) View() string {
 		count := m.formRows()
 		start := max(0, m.focus-count+1)
 		for i := start; i < min(len(m.fields), start+count); i++ {
-			label := m.labels[i]
+			label := fieldLabel(m.labels[i])
+			if strings.HasPrefix(m.labels[i], "Arguments") {
+				label = config.Text("Argumentos · Enter edita lista", "Arguments · Enter edits list")
+			}
 			if i == m.focus {
 				label = "› " + label
 			}
 			lines = append(lines, line(label))
 			m.fields[i].Width = max(8, width-2)
-			lines = append(lines, line(m.fields[i].View()))
+			lines = append(lines, base.Render(ansi.Truncate(choiceView(m.fields[i], fieldOptions(m.labels[i])), width, "…")))
 		}
 	} else {
 		rows := max(1, m.height-7)

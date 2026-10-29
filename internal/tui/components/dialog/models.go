@@ -352,6 +352,15 @@ func (m *modelDialogCmp) filter() {
 				return sa - sb
 			}
 		}
+		if m.query == "" {
+			aa, bb := a.ID == m.activeModelID(), b.ID == m.activeModelID()
+			if aa != bb {
+				if aa {
+					return -1
+				}
+				return 1
+			}
+		}
 		fa, fb := slices.Contains(prefs.FavoriteModels, a.ID), slices.Contains(prefs.FavoriteModels, b.ID)
 		if fa != fb {
 			if fa {

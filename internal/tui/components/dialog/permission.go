@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -310,7 +311,16 @@ func (p *permissionDialogCmp) renderDefaultContent() string {
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
 
-	content := p.permission.Description
+	content := tools.RedactCredentials(p.permission.Description)
+	if p.permission.Params != nil {
+		if raw, err := json.MarshalIndent(p.permission.Params, "", "  "); err == nil {
+			details := tools.RedactCredentials(string(raw))
+			if len(details) > 16384 {
+				details = string([]rune(details)[:min(len([]rune(details)), 12000)]) + "\n…"
+			}
+			content += "\n\n" + config.Text("Parâmetros da ação", "Action parameters") + "\n\n" + "    " + strings.ReplaceAll(details, "\n", "\n    ")
+		}
+	}
 
 	// Use the cache for markdown rendering
 	renderedContent := p.GetOrSetMarkdown(p.permission.ID, func() (string, error) {

@@ -96,7 +96,7 @@ func TestSendingMessageReturnsToBottom(t *testing.T) {
 func TestPageNavigationPreservesEditorText(t *testing.T) {
 	editor := NewEditorCmp(&app.App{}).(*editorCmp)
 	editor.textarea.SetValue("unfinished question")
-	for _, typ := range []tea.KeyType{tea.KeyPgUp, tea.KeyPgDown, tea.KeyCtrlU, tea.KeyCtrlD} {
+	for _, typ := range []tea.KeyType{tea.KeyPgUp, tea.KeyPgDown} {
 		editor.Update(tea.KeyMsg{Type: typ})
 		require.Equal(t, "unfinished question", editor.textarea.Value())
 	}

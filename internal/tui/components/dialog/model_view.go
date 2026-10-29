@@ -218,7 +218,19 @@ func (m *modelDialogCmp) catalogView() string {
 		} else if containsModel(prefs.RecentModels, model.ID) {
 			label = "↺ " + label
 		}
+		group := config.Text("Outros", "Other")
+		if model.ID == active {
+			group = config.Text("Atual", "Current")
+		} else if containsModel(prefs.FavoriteModels, model.ID) {
+			group = config.Text("Favoritos", "Favorites")
+		} else if containsModel(prefs.RecentModels, model.ID) {
+			group = config.Text("Recentes", "Recent")
+		}
 		rendered := fmt.Sprintf("%s %s %s", caret, mark, label)
+		if g.width >= 48 {
+			rendered = ansi.Truncate(rendered, g.width-12, "…")
+			rendered += strings.Repeat(" ", max(1, g.width-11-ansi.StringWidth(rendered))) + group
+		}
 		row := base
 		if i == m.selectedIdx {
 			row = row.Background(t.Primary()).Foreground(t.Background()).Bold(true)

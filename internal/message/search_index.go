@@ -21,7 +21,7 @@ func WithSearchIndex(directory, project string, redact func(string) string) func
 	return func(s *service) { s.index = &SearchIndexer{Directory: directory, Project: project, Redact: redact} }
 }
 func (s *service) projectMessage(ctx context.Context, msg Message) {
-	if s.index == nil || msg.Role == Assistant && msg.FinishPart() == nil {
+	if s.index == nil || msg.IsApplication() || msg.Role == Assistant && msg.FinishPart() == nil {
 		return
 	}
 	var b strings.Builder

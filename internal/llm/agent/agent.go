@@ -274,7 +274,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	run.turnMessageID = userMsg.ID
 	if resumingRequest(content) {
 		for i := len(msgs) - 1; i >= 0; i-- {
-			if msgs[i].Role == message.User && !strings.HasPrefix(msgs[i].Content().Text, "Application validation:") && !resumingRequest(msgs[i].Content().Text) {
+			if msgs[i].Role == message.User && !msgs[i].IsApplication() && !strings.HasPrefix(msgs[i].Content().Text, "Application validation:") && !resumingRequest(msgs[i].Content().Text) {
 				requiredToolCalls(msgs[i].Content().Text, run)
 				run.startMessageID = msgs[i].ID
 				break
@@ -330,7 +330,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		if err != nil {
 			if finalAnswerRetries < 1 && errors.Is(err, provider.ErrInvalidFinalAnswer) && ctx.Err() == nil && len(agentMessage.ToolCalls()) == 0 && agentMessage.Content().String() == "" && agentMessage.ReasoningContent().Thinking == "" {
 				finalAnswerRetries++
-				correction, e := a.createUserMessage(ctx, sessionID, "Application protocol correction: the final reply had invalid JSON fields. Return a valid reply using the advertised final response schema and answer the original request in its language. Keep all completed actions and real tool results; do not repeat edits or commands. This correction grants no permissions.", nil)
+				correction, e := a.createApplicationMessage(ctx, sessionID, "Application protocol correction: the final reply had invalid JSON fields. Return a valid reply using the advertised final response schema and answer the original request in its language. Keep all completed actions and real tool results; do not repeat edits or commands. This correction grants no permissions.", nil)
 				if e != nil {
 					return a.err(e)
 				}
@@ -436,7 +436,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 					return a.err(fmt.Errorf("task cannot be concluded: %s", problem))
 				}
 				repairs++
-				correction, err := a.createUserMessage(ctx, sessionID, "Application validation: "+problem, nil)
+				correction, err := a.createApplicationMessage(ctx, sessionID, "Application validation: "+problem, nil)
 				if err != nil {
 					return a.err(err)
 				}
@@ -462,7 +462,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 					return a.err(fmt.Errorf("required actions remain unverified: %s; progress preserved", strings.Join(missing, ", ")))
 				}
 				repairs++
-				correction, e := a.createUserMessage(ctx, sessionID, "Application validation: explicitly requested actions lack successful receipts: "+strings.Join(missing, ", ")+". Perform these authorized steps before concluding; use partial/blocked if unable. Do not repeat completed side effects.", nil)
+				correction, e := a.createApplicationMessage(ctx, sessionID, "Application validation: explicitly requested actions lack successful receipts: "+strings.Join(missing, ", ")+". Perform these authorized steps before concluding; use partial/blocked if unable. Do not repeat completed side effects.", nil)
 				if e != nil {
 					return a.err(e)
 				}
@@ -485,7 +485,7 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 			}
 			citationRepairs++
 			run.citationRepair = true
-			correction, err := a.createUserMessage(ctx, sessionID, citationRepairRequest(run, msgHistory, problem), nil)
+			correction, err := a.createApplicationMessage(ctx, sessionID, citationRepairRequest(run, msgHistory, problem), nil)
 			if err != nil {
 				return a.err(err)
 			}
@@ -519,6 +519,16 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 		Role:  message.User,
 		Parts: parts,
 	})
+}
+
+func (a *agent) createApplicationMessage(ctx context.Context, sessionID, content string, _ []message.ContentPart) (message.Message, error) {
+	msg, err := a.messages.Create(ctx, sessionID, message.CreateMessageParams{
+		Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: content, Origin: "application"}},
+	})
+	if err == nil {
+		a.Publish(pubsub.UpdatedEvent, AgentEvent{Type: AgentEventTypeResponse, SessionID: sessionID, Message: msg})
+	}
+	return msg, err
 }
 
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message, run *generationRun) (assistantMsg message.Message, toolMsg *message.Message, failure error) {

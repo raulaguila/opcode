@@ -83,6 +83,7 @@ type LSPConfig struct {
 
 // TUIConfig defines the configuration for the Terminal User Interface.
 type TUIConfig struct {
+	ProseWidth    int               `json:"proseWidth,omitempty"`
 	Theme         string            `json:"theme,omitempty"`
 	Sidebar       string            `json:"sidebar,omitempty"`
 	Language      string            `json:"language,omitempty"`

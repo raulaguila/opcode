@@ -153,7 +153,7 @@ func (c *commandDialogCmp) View() string {
 	_, selected := c.listView.GetSelectedItem()
 	count := 8
 	if c.height > 0 {
-		count = max(1, min(count, c.height-8))
+		count = max(1, min(count, c.height-10))
 	}
 	start := max(0, selected-count+1)
 	for i := start; i < min(len(items), start+count); i++ {
@@ -170,6 +170,11 @@ func (c *commandDialogCmp) View() string {
 	}
 	if len(items) == 0 {
 		rows = append(rows, config.Text("Nenhum comando encontrado", "No commands found"))
+	}
+	if selected >= 0 && selected < len(items) && (c.height == 0 || c.height >= 12) {
+		item := items[selected]
+		_, description := commands.Presentation(item.ID, item.Title, item.Description)
+		rows = append(rows, baseStyle.Foreground(t.TextMuted()).Render(ansi.Truncate(description, maxWidth, "…")))
 	}
 	rows = append(rows, ansi.Truncate(config.Text("↑↓ escolher · Enter executar · Esc voltar", "↑↓ select · Enter run · Esc back"), maxWidth, "…"))
 	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
@@ -197,6 +202,14 @@ func (c *commandDialogCmp) SetCommands(commands []Command) {
 // SetContext distinguishes a focused action from the mode already in use.
 func (c *commandDialogCmp) SetContext(title, activeID string) {
 	c.title, c.activeID = title, activeID
+	for i, item := range c.listView.GetItems() {
+		if item.ID == activeID {
+			for n := 0; n < i; n++ {
+				c.listView.Update(tea.KeyMsg{Type: tea.KeyDown})
+			}
+			break
+		}
+	}
 }
 
 func (c *commandDialogCmp) dialogTitle() string {

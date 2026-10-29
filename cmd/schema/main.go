@@ -116,7 +116,8 @@ func generateSchema() map[string]any {
 		"properties": map[string]any{
 			"sidebar":       map[string]any{"type": "string", "enum": []string{"auto", "shown", "hidden"}, "default": "hidden"},
 			"language":      map[string]any{"type": "string", "enum": []string{"pt", "en"}, "default": "en"},
-			"notifications": map[string]any{"type": "string", "enum": []string{"off", "bell"}, "default": "off"},
+			"proseWidth":    map[string]any{"type": "integer", "minimum": 0, "maximum": 240, "default": 0, "description": "Prose width in columns; 0 uses 72. Fenced code and tables retain terminal width."},
+			"notifications": map[string]any{"type": "string", "enum": []string{"off", "bell", "auto", "native", "osc"}, "default": "off"},
 			"keybindings":   map[string]any{"type": "object", "additionalProperties": false, "properties": keybindingSchema()},
 			"theme": map[string]any{
 				"type":        "string",

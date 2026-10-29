@@ -50,3 +50,10 @@ func TestFooterKeepsWorkQueueAndErrorsVisibleInsteadOfRoutineToasts(t *testing.T
 	m.info = util.InfoMsg{Msg: "routine toast"}
 	require.Contains(t, ansi.Strip(m.ViewFor(state)), "Partial work")
 }
+
+func TestFooterAdvertisesOnlyConfirmedEnhancedNewline(t *testing.T) {
+	m := statusCmp{width: 180}
+	require.Contains(t, ansi.Strip(m.View()), "Alt+Enter")
+	updated, _ := m.Update(util.EnhancedKeyboardMsg{Supported: true})
+	require.Contains(t, ansi.Strip(updated.View()), "Shift+Enter")
+}

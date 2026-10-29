@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/app"
@@ -68,7 +69,11 @@ func TestChatSubmitsInstructionsWhileAgentWorks(t *testing.T) {
 			probe.err = errors.New("instruction queue full")
 		}
 		p := &chatPage{app: &app.App{CoderAgent: probe}, session: session.Session{ID: "session"}}
+		started := time.Now().Add(-10 * time.Second)
+		p.progress, p.activityStarted = "Running command", started
 		messages := flattenCommands(p.sendMessage("new instructions", nil))
+		require.Equal(t, "Running command", p.progress)
+		require.Equal(t, started, p.activityStarted)
 		require.Equal(t, []string{"session:new instructions"}, probe.seen)
 		found := false
 		for _, msg := range messages {

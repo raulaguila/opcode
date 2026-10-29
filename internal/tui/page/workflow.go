@@ -114,15 +114,15 @@ func (p *chatPage) planRows() []string {
 		rows = append(rows, fmt.Sprintf(" %s %d. %s", mark, i+1, panelText(step.Title)))
 	}
 	for _, criterion := range task.Criteria {
-		rows = append(rows, " Critério: "+panelText(criterion))
+		rows = append(rows, config.Text(" Critério: ", " Criterion: ")+panelText(criterion))
 	}
 	if len(task.Checks) > 0 {
-		rows = append(rows, " Verificações: "+strings.Join(task.Checks, ", "))
+		rows = append(rows, config.Text(" Verificações: ", " Checks: ")+strings.Join(task.Checks, ", "))
 	}
 	if task.Summary != "" {
 		rows = append(rows, " "+panelText(task.Summary))
 	}
-	rows = append(rows, " Alt+↑/↓ rola · /plan recolhe · /resume continua")
+	rows = append(rows, config.Text(" Alt+↑/↓ rola · /plan recolhe · /resume continua", " Alt+↑/↓ scroll · /plan collapse · /resume continue"))
 	return rows
 }
 func (p *chatPage) planOffset() int {
@@ -181,7 +181,7 @@ func (p *chatPage) workflowView() string {
 				done++
 			}
 		}
-		line = fmt.Sprintf(" %s · Plano %d/%d · %s · /plan", modeLabel(p.mode()), done, len(task.Steps), task.Status)
+		line = fmt.Sprintf(config.Text(" %s · Plano %d/%d · %s · /plan", " %s · Plan %d/%d · %s · /plan"), modeLabel(p.mode()), done, len(task.Steps), task.Status)
 	}
 	if task.Contract != nil {
 		line = fmt.Sprintf(" %s · %s: %s · /contract · /plan", modeLabel(p.mode()), config.Text("Tarefa", "Task"), contractLabel(task.Contract.Kind))
@@ -198,7 +198,7 @@ func (p *chatPage) workflowView() string {
 
 	q := p.workflow.question
 	if q.ID != "" && p.workflow.details {
-		rows := []string{"Pergunta: " + panelText(q.Question), panelText(q.Explanation)}
+		rows := []string{config.Text("Pergunta: ", "Question: ") + panelText(q.Question), panelText(q.Explanation)}
 		for i, choice := range q.Choices {
 			rows = append(rows, fmt.Sprintf("%d. %s", i+1, panelText(choice)))
 		}
@@ -210,7 +210,7 @@ func (p *chatPage) workflowView() string {
 	if q.ID != "" {
 		// Keep the decision and answer visible even when the plan is expanded.
 		lines = lines[:1]
-		lines = append(lines, ansi.Truncate(" Decisão: "+panelText(q.Question), w, "…"))
+		lines = append(lines, ansi.Truncate(config.Text(" Decisão: ", " Decision: ")+panelText(q.Question), w, "…"))
 		if q.Explanation != "" {
 			lines = append(lines, ansi.Truncate(" "+panelText(q.Explanation), w, "…"))
 		}
@@ -222,7 +222,7 @@ func (p *chatPage) workflowView() string {
 			lines = append(lines, ansi.Truncate(fmt.Sprintf(" %s %d. %s", mark, i+1, panelText(choice)), w, "…"))
 		}
 		p.workflow.answer.Width = max(1, w-4)
-		lines = append(lines, " "+p.workflow.answer.View(), " ↑/↓ escolhe · digitar responde · Enter envia · F2 detalhes · Esc cancela")
+		lines = append(lines, " "+p.workflow.answer.View(), config.Text(" ↑/↓ escolhe · digitar responde · Enter envia · F2 detalhes · Esc cancela", " ↑/↓ choose · type to answer · Enter send · F2 details · Esc cancel"))
 	}
 	if len(lines) > height {
 		lines = lines[len(lines)-height:]
@@ -312,8 +312,11 @@ func (p *chatPage) applyWorkflowCommand(command, value string) (tea.Cmd, error) 
 		}
 		p.resetTerminal()
 		p.refreshWorkflow()
-		return tea.Batch(p.resizeContent(), util.ReportInfo("Modo: "+modeLabel(p.mode()))), nil
+		return tea.Batch(p.resizeContent(), util.ReportInfo(config.Text("Modo: ", "Mode: ")+modeLabel(p.mode()))), nil
 	case "plan", "task":
+		if command == "task" && value == "" {
+			return p.openTask(), nil
+		}
 		if value == "new" {
 			if err := p.app.CoderAgent.SetMode(ctx, p.session.ID, p.mode()); err != nil {
 				return nil, err

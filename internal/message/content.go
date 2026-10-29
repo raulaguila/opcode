@@ -47,6 +47,8 @@ func (ReasoningContent) isPart() {}
 
 type TextContent struct {
 	Text string `json:"text"`
+	// Origin is set only by application code, never inferred from user text.
+	Origin string `json:"origin,omitempty"`
 }
 
 func (tc TextContent) String() string {
@@ -137,6 +139,12 @@ type Message struct {
 	Model     models.ModelID
 	CreatedAt int64
 	UpdatedAt int64
+}
+
+// IsApplication distinguishes repair instructions from human turns without
+// changing their role or text in the provider conversation.
+func (m *Message) IsApplication() bool {
+	return m.Role == User && m.Content().Origin == "application"
 }
 
 func (m *Message) Content() TextContent {
@@ -235,7 +243,8 @@ func (m *Message) AppendContent(delta string) {
 	found := false
 	for i, part := range m.Parts {
 		if c, ok := part.(TextContent); ok {
-			m.Parts[i] = TextContent{Text: c.Text + delta}
+			c.Text += delta
+			m.Parts[i] = c
 			found = true
 		}
 	}

@@ -58,9 +58,19 @@ func renderMessage(msg string, isUser bool, isFocused bool, width int, info ...s
 		style = style.BorderForeground(t.Secondary())
 	}
 
+	// Prose-only messages use a comfortable measure. Fenced code and tables
+	// retain terminal width; no source content or copy payload is rewritten.
+	renderWidth := width
+	if !strings.Contains(msg, "```") && !strings.Contains(msg, "~~~") && !strings.Contains(msg, "| ") {
+		measure := 72
+		if c := config.Get(); c != nil && c.TUI.ProseWidth > 0 {
+			measure = c.TUI.ProseWidth
+		}
+		renderWidth = min(width, measure)
+	}
 	// Apply markdown formatting and handle background color
 	parts := []string{
-		styles.ForceReplaceBackgroundWithLipgloss(toMarkdown(msg, isFocused, width), t.Background()),
+		styles.ForceReplaceBackgroundWithLipgloss(toMarkdown(msg, isFocused, renderWidth), t.Background()),
 	}
 
 	// Remove newline at the end

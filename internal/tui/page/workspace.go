@@ -125,12 +125,19 @@ func (p *chatPage) workspaceResult(msg WorkspaceResultMsg) tea.Cmd {
 	if msg.applied {
 		p.refreshWorkflow()
 		p.workspace.preview = nil
-		return tea.Batch(util.ReportInfo("Revisão aplicada; verificações anteriores invalidadas"), p.resizeContent())
+		return tea.Batch(util.ReportInfo(config.Text("Revisão aplicada; verificações anteriores invalidadas", "Review applied; previous checks invalidated")), p.resizeContent())
 	}
 	return nil
 }
 func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 	switch command {
+	case "task":
+		return p.openTask()
+	case "cancel":
+		if p.app != nil && p.app.CoderAgent != nil {
+			p.app.CoderAgent.Cancel(p.session.ID)
+		}
+		return nil
 	case "new":
 		return p.newConversation()
 	case "files":
@@ -196,7 +203,7 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 	case "permissions":
 		return p.openPermissions()
 	case "error":
-		p.showWorkspace("error", "Detalhes da execução", fmt.Sprint(p.recovery.err))
+		p.showWorkspace("error", config.Text("Detalhes da execução", "Execution details"), fmt.Sprint(p.recovery.err))
 		return nil
 	case "retry":
 		return p.retryRequest("/retry")
@@ -213,7 +220,7 @@ type openModelsMsg = OpenModelsMsg
 type openSessionsMsg = OpenSessionsMsg
 
 func (p *chatPage) openQueue() tea.Cmd {
-	p.showWorkspace("queue", "Instruções pendentes", "")
+	p.showWorkspace("queue", config.Text("Instruções pendentes", "Pending instructions"), "")
 	control, ok := p.app.CoderAgent.(agent.QueueControl)
 	if !ok {
 		p.workspace.body = "Fila indisponível neste agente"
@@ -222,7 +229,7 @@ func (p *chatPage) openQueue() tea.Cmd {
 	for _, item := range control.QueuedInstructions(p.session.ID) {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: panelText(item.Content), kind: "queue", text: item.ID})
 	}
-	p.workspace.body = "As instruções entram entre operações. Enter retira para editar; Delete remove. O rascunho atual é preservado."
+	p.workspace.body = config.Text("As instruções entram entre operações. Enter retira para editar; Delete remove. O rascunho atual é preservado.", "Instructions apply between operations. Enter takes one for editing; Delete removes it. The current draft is preserved.")
 	return nil
 }
 func (p *chatPage) takeQueue(edit bool) tea.Cmd {
@@ -233,7 +240,7 @@ func (p *chatPage) takeQueue(edit bool) tea.Cmd {
 		if draft, ok := p.composer.(chat.DraftControl); ok {
 			text, attachments := draft.Draft()
 			if text != "" || len(attachments) > 0 {
-				p.workspace.note = "Limpe ou envie seu rascunho antes de editar a instrução"
+				p.workspace.note = config.Text("Limpe ou envie seu rascunho antes de editar a instrução", "Clear or send your draft before editing an instruction")
 				return nil
 			}
 		}
@@ -256,11 +263,11 @@ func (p *chatPage) takeQueue(edit bool) tea.Cmd {
 	return cmd
 }
 func (p *chatPage) openContext(compact bool) tea.Cmd {
-	p.showWorkspace("context", "Contexto do modelo", "")
+	p.showWorkspace("context", config.Text("Contexto · orçamento", "Context · budget"), "")
 	usage := fmt.Sprintf(config.Text("Uso acumulado da conversa\nEntrada: %d tokens · saída: %d tokens\nCusto estimado: $%.4f\n\n", "Conversation totals\nInput: %d tokens · output: %d tokens\nEstimated cost: $%.4f\n\n"), p.session.PromptTokens, p.session.CompletionTokens, p.session.Cost)
 	control, ok := p.app.CoderAgent.(agent.ContextControl)
 	if !ok {
-		p.workspace.body = usage + "Este agente não expõe o orçamento de contexto"
+		p.workspace.body = usage + config.Text("Este agente não expõe o orçamento de contexto", "This agent does not expose its context budget")
 		return nil
 	}
 	id := p.session.ID
@@ -273,14 +280,14 @@ func (p *chatPage) openContext(compact bool) tea.Cmd {
 			return "", false, err
 		}
 		total := status.EstimatedInputTokens + status.ReservedOutputTokens + status.SafetyTokens
-		text := fmt.Sprintf("Método: %s\nJanela: %d tokens\nEntrada estimada: %d\nSchemas das ferramentas: %d\nReserva de resposta: %d\nMargem: %d\nTotal previsto: %d\nCabe na janela: %t\nMensagens compactadas: %d\n\nA estimativa inclui instruções, histórico e schemas. R recalibra o limite aprendido. O limite do servidor pode ser menor. Compactar altera apenas a preparação do contexto, preservando a conversa salva.", status.Method, status.ContextWindow, status.EstimatedInputTokens, status.ToolSchemaTokens, status.ReservedOutputTokens, status.SafetyTokens, total, status.Fits, status.CompactedMessages)
+		text := fmt.Sprintf(config.Text("Método: %s\nJanela: %d tokens\nEntrada estimada: %d\nSchemas das ferramentas: %d\nReserva de resposta: %d\nMargem: %d\nTotal previsto: %d\nCabe na janela: %t\nMensagens compactadas: %d\n\nA estimativa inclui instruções, histórico e schemas. R recalibra o limite aprendido. O limite do servidor pode ser menor. Compactar altera apenas a preparação do contexto, preservando a conversa salva.", "Method: %s\nEffective window: %d tokens\nEstimated input: %d\nTool schemas: %d\nOutput reserve: %d\nSafety margin: %d\nEstimated total: %d\nFits window: %t\nCompacted messages: %d\n\nThe estimate includes instructions, history and schemas. R resets the learned limit. The server limit may be smaller. Compaction changes request preparation and preserves the saved conversation."), status.Method, status.ContextWindow, status.EstimatedInputTokens, status.ToolSchemaTokens, status.ReservedOutputTokens, status.SafetyTokens, total, status.Fits, status.CompactedMessages)
 		details, _ := json.MarshalIndent(status.Components, "", "  ")
-		text = fmt.Sprintf("Origem da janela: %s\nÚltima entrada medida: %d tokens · amostras: %d\n", status.ContextSource, status.ActualInputTokens, status.CalibrationSamples) + text + "\n\nComponentes: " + string(details)
-		return usage + text, false, nil
+		text = fmt.Sprintf(config.Text("Origem da janela: %s\nÚltima entrada medida: %d tokens · amostras: %d\n", "Window source: %s\nLast measured input: %d tokens · samples: %d\n"), status.ContextSource, status.ActualInputTokens, status.CalibrationSamples) + text + config.Text("\n\nComponentes: ", "\n\nComponents: ") + string(details)
+		return usage + text + p.contextReceipts(ctx, id), false, nil
 	})
 }
 func (p *chatPage) openSkills() tea.Cmd {
-	p.showWorkspace("skills", "Skills disponíveis", "")
+	p.showWorkspace("skills", config.Text("Skills disponíveis", "Available skills"), "")
 	control, ok := p.app.CoderAgent.(agent.ExtensionControl)
 	if !ok {
 		return nil
@@ -312,7 +319,7 @@ func (p *chatPage) invokeSkill(value string, draft ...string) tea.Cmd {
 	}
 	p.lastRequest = chat.SendMsg{Text: "/skill " + value}
 	if queued {
-		return tea.Batch(util.ReportInfo("Skill adicionada à fila"), util.CmdHandler(chat.SubmissionResultMsg{Text: ackText}))
+		return tea.Batch(util.ReportInfo(config.Text("Skill adicionada à fila", "Skill queued")), util.CmdHandler(chat.SubmissionResultMsg{Text: ackText}))
 	}
 	return util.CmdHandler(chat.SubmissionResultMsg{Text: ackText})
 }
@@ -321,7 +328,7 @@ func (p *chatPage) reviewStore() *review.Store {
 	return review.New(cfg.WorkingDir, cfg.Data.Directory)
 }
 func (p *chatPage) openChanges() tea.Cmd {
-	p.showWorkspace("changes", "Alterações e verificações", "")
+	p.showWorkspace("changes", config.Text("Alterações e verificações", "Changes and checks"), "")
 	turns, err := p.reviewStore().List(p.session.ID)
 	if err != nil {
 		return util.ReportError(err)
@@ -334,7 +341,7 @@ func (p *chatPage) openChanges() tea.Cmd {
 		}
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf("%s · %d arquivos · %s", turn.ID, len(turn.Changes), state), kind: "turn", text: turn.ID})
 	}
-	base := "Snapshots das edições das ferramentas. Comandos, serviços externos e alterações manuais não são desfeitos.\n\n"
+	base := config.Text("Snapshots das edições das ferramentas. Comandos, serviços externos e alterações manuais não são desfeitos.\n\n", "Snapshots of tool edits. Commands, external services and manual changes are not undone.\n\n")
 	p.workspace.body = base
 	if p.app.Workflows == nil {
 		return nil
@@ -367,14 +374,14 @@ func formatValidationReport(body string) (string, error) {
 		return "", fmt.Errorf("relatório de validação inválido")
 	}
 	var out strings.Builder
-	fmt.Fprintf(&out, "Revisão atual: %d · estado conferido ao abrir este painel\n", report.Revision)
+	fmt.Fprintf(&out, config.Text("Revisão atual: %d · estado conferido ao abrir este painel\n", "Current revision: %d · state checked when opening this panel\n"), report.Revision)
 	for _, receipt := range report.Receipts {
 		command := report.Configured[receipt.Name]
 		current := receipt.Passed && receipt.Revision == report.Revision && report.Digest != "" && receipt.Digest == report.Digest && command != "" && fmt.Sprintf("%x", sha256.Sum256([]byte(command))) == receipt.Command
-		fmt.Fprintf(&out, "%s · aprovação atual: %t · resultado registrado: %t · revisão %d\n", receipt.Name, current, receipt.Passed, receipt.Revision)
+		fmt.Fprintf(&out, config.Text("%s · aprovação atual: %t · resultado registrado: %t · revisão %d\n", "%s · current approval: %t · recorded result: %t · revision %d\n"), receipt.Name, current, receipt.Passed, receipt.Revision)
 	}
 	if len(report.Receipts) == 0 {
-		out.WriteString("Nenhuma verificação executada.\n")
+		out.WriteString(config.Text("Nenhuma verificação executada.\n", "No checks executed.\n"))
 	}
 	if report.Problem != "" {
 		fmt.Fprintf(&out, "\nPendente: %s\n", report.Problem)
@@ -407,14 +414,14 @@ func (p *chatPage) showTurn(id string) tea.Cmd {
 			b.WriteByte('\n')
 		}
 	}
-	p.showWorkspace("turn", "Alterações da interação", b.String())
+	p.showWorkspace("turn", config.Text("Alterações da interação", "Turn changes"), b.String())
 	p.workspace.turnID = id
 	p.workspace.actions = files
 	return nil
 }
 func (p *chatPage) previewReversal(redo bool) tea.Cmd {
 	if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
-		return util.ReportWarn("Aguarde ou cancele a execução antes de reverter arquivos")
+		return util.ReportWarn(config.Text("Aguarde ou cancele a execução antes de reverter arquivos", "Wait or cancel execution before reverting files"))
 	}
 	turnID := ""
 	if p.workspace.kind == "turn" {
@@ -424,18 +431,18 @@ func (p *chatPage) previewReversal(redo bool) tea.Cmd {
 	if err != nil {
 		return util.ReportError(err)
 	}
-	title := "Desfazer interação"
+	title := config.Text("Desfazer interação", "Undo turn")
 	if redo {
-		title = "Refazer interação"
+		title = config.Text("Refazer interação", "Redo turn")
 	}
 	p.showWorkspace("review", title, preview.Diff)
 	p.workspace.preview = &preview
-	p.workspace.note = "Ctrl+Enter solicita aprovação dos diffs. Esc cancela."
+	p.workspace.note = config.Text("Ctrl+Enter solicita aprovação dos diffs. Esc cancela.", "Ctrl+Enter requests diff approval. Esc cancels.")
 	return nil
 }
 func (p *chatPage) applyReversal() tea.Cmd {
 	if p.workspace.preview == nil || (p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy()) {
-		return util.ReportWarn("Revisão indisponível durante execução")
+		return util.ReportWarn(config.Text("Revisão indisponível durante execução", "Review unavailable during execution"))
 	}
 	store := p.reviewStore()
 	preview := *p.workspace.preview
@@ -448,11 +455,11 @@ func (p *chatPage) applyReversal() tea.Cmd {
 			changed = func() error { return workflow.Mutated(ctx, id) }
 		}
 		err := store.Apply(ctx, id, preview, perms, changed)
-		return "Revisão aplicada. Confira os arquivos e execute novamente as verificações necessárias.", err == nil, err
+		return config.Text("Revisão aplicada. Confira os arquivos e execute novamente as verificações necessárias.", "Review applied. Inspect the files and rerun required checks."), err == nil, err
 	})
 }
 func (p *chatPage) openPermissions() tea.Cmd {
-	p.showWorkspace("permissions", "Permissões desta sessão", "")
+	p.showWorkspace("permissions", config.Text("Permissões desta sessão", "Session permissions"), "")
 	var b strings.Builder
 	if inspector, ok := p.app.Permissions.(interface {
 		SessionGrants(string) []permission.PermissionRequest
@@ -462,9 +469,9 @@ func (p *chatPage) openPermissions() tea.Cmd {
 		}
 	}
 	if b.Len() == 0 {
-		b.WriteString("Nenhuma autorização lembrada nesta sessão.\n")
+		b.WriteString(config.Text("Nenhuma autorização lembrada nesta sessão.\n", "No remembered approvals in this session.\n"))
 	}
-	b.WriteString("\nR revoga as autorizações lembradas e solicitações pendentes. Isso não desfaz arquivos nem restaura aprovações de sessões anteriores.")
+	b.WriteString(config.Text("\nR revoga as autorizações lembradas e solicitações pendentes. Isso não desfaz arquivos nem restaura aprovações de sessões anteriores.", "\nR revokes remembered approvals and pending requests. It does not undo files or restore approvals from past sessions."))
 	p.workspace.body = b.String()
 	return nil
 }
@@ -496,13 +503,13 @@ func safeExportName(id string) string {
 }
 func (p *chatPage) openResponseActions(text string) tea.Cmd {
 	if text == "" {
-		return util.ReportWarn("Nenhuma resposta disponível")
+		return util.ReportWarn(config.Text("Nenhuma resposta disponível", "No response available"))
 	}
 	text = tools.RedactCredentials(text)
-	p.showWorkspace("actions", "Ações da resposta", "")
-	p.workspace.actions = []workspaceAction{{label: "Copiar resposta", kind: "copy", text: text}, {label: "Selecionar texto da resposta", kind: "text", text: text}}
+	p.showWorkspace("actions", config.Text("Ações da resposta", "Response actions"), "")
+	p.workspace.actions = []workspaceAction{{label: config.Text("Copiar resposta", "Copy response"), kind: "copy", text: text}, {label: "Selecionar texto da resposta", kind: "text", text: text}}
 	for i, match := range regexp.MustCompile("(?s)```[^\\n]*\\n(.*?)```").FindAllStringSubmatch(text, 10) {
-		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf("Copiar código %d", i+1), kind: "copy", text: match[1]})
+		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf(config.Text("Copiar código %d", "Copy code %d"), i+1), kind: "copy", text: match[1]})
 	}
 	seen := map[string]bool{}
 	for _, match := range regexp.MustCompile("`([^`\\n]+)`|([[:alnum:]_./-]+\\.[[:alnum:]]+:[0-9]+)").FindAllStringSubmatch(text, 40) {
@@ -530,11 +537,11 @@ func (p *chatPage) openResponseActions(text string) tea.Cmd {
 		seen[path] = true
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: "Abrir arquivo · " + path, kind: "file", path: absolute, line: line})
 	}
-	p.workspace.body = "Escolha uma ação. Prévia de arquivo é leitura local e não libera alterações para o agente."
+	p.workspace.body = config.Text("Escolha uma ação. Prévia de arquivo é leitura local e não libera alterações para o agente.", "Choose an action. File preview is a local read and does not authorize agent edits.")
 	return nil
 }
 func (p *chatPage) openFile(path string, line int) tea.Cmd {
-	p.showWorkspace("file", "Arquivo · "+filepath.Base(path), "")
+	p.showWorkspace("file", config.Text("Arquivo · ", "File · ")+filepath.Base(path), "")
 	id := p.session.ID
 	perms := p.app.Permissions
 	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
@@ -556,6 +563,8 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 	}
 	item := p.workspace.actions[p.workspace.selected]
 	switch item.kind {
+	case "command":
+		return p.workspaceCommand(item.text, "")
 	case "worktree-open", "worktree-open-confirm", "worktree-create", "worktree-create-confirm", "git-diff", "git-diff-staged", "git-checks":
 		return p.gitChoose(item)
 	case "contract-kind":
@@ -581,7 +590,7 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 	case "turn":
 		return p.showTurn(item.text)
 	case "text":
-		p.showWorkspace("text", "Texto para seleção", item.text)
+		p.showWorkspace("text", config.Text("Texto para seleção", "Selectable text"), item.text)
 		return nil
 	case "file":
 		return p.openFile(item.path, item.line)
@@ -591,12 +600,15 @@ func (p *chatPage) workspaceChoose() tea.Cmd {
 			if err := writeClipboard(text); err != nil {
 				return "", false, fmt.Errorf("clipboard indisponível; escolha Selecionar texto: %w", err)
 			}
-			return "Conteúdo copiado para a área de transferência.", false, nil
+			return config.Text("Conteúdo copiado para a área de transferência.", "Content copied to clipboard."), false, nil
 		})
 	}
 	return nil
 }
 func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
+	if contextPanel(p.workspace.kind) && strings.Contains("1234", msg.String()) && len(msg.String()) == 1 {
+		return p.contextTab(msg.String())
+	}
 	if p.workspace.kind == "contract" {
 		return p.contractKey(msg)
 	}
@@ -672,7 +684,7 @@ func (p *chatPage) workspaceView() string {
 	w, h := max(1, p.width-4), max(1, p.height-6)
 	t := theme.CurrentTheme()
 	lines := []string{styles.BaseStyle().Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(safePanel(p.workspace.title), w, "…"))}
-	help := "↑↓/PgUp/PgDn rola · Ctrl+R atualiza · Esc volta"
+	help := config.Text("↑↓/PgUp/PgDn rola · Ctrl+R atualiza · Esc volta", "↑↓/PgUp/PgDn scroll · Ctrl+R refresh · Esc back")
 	if len(p.workspace.actions) > 0 {
 		maxRows := max(1, min(10, h-4))
 		start := max(0, min(p.workspace.selected-maxRows+1, len(p.workspace.actions)-maxRows))
@@ -685,20 +697,20 @@ func (p *chatPage) workspaceView() string {
 			}
 			lines = append(lines, style.Render(ansi.Truncate(mark+" "+panelText(p.workspace.actions[i].label), w, "…")))
 		}
-		help = "↑↓ escolhe · Enter abre · Esc volta"
+		help = config.Text("↑↓ escolhe · Enter abre · Esc volta", "↑↓ choose · Enter open · Esc back")
 		h -= min(maxRows, len(p.workspace.actions))
 	}
 	if p.workspace.kind == "queue" {
-		help = "Enter edita · Delete remove · Ctrl+R atualiza · Esc volta"
+		help = config.Text("Enter edita · Delete remove · Ctrl+R atualiza · Esc volta", "Enter edit · Delete remove · Ctrl+R refresh · Esc back")
 	}
 	if p.workspace.kind == "review" {
-		help = "Ctrl+Enter aprova · PgUp/PgDn rola · Esc cancela"
+		help = config.Text("Ctrl+Enter aprova · PgUp/PgDn rola · Esc cancela", "Ctrl+Enter approve · PgUp/PgDn scroll · Esc cancel")
 	}
 	if p.workspace.kind == "context" {
-		help = "C compacta · R recalibra · Ctrl+R atualiza · Esc volta"
+		help = config.Text("C compacta · R recalibra · Ctrl+R atualiza · Esc volta", "C compact · R recalibrate · Ctrl+R refresh · Esc back")
 	}
 	if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
-		help = "Enter arquivo · T diff · U desfaz · R refaz · Esc volta"
+		help = config.Text("Enter arquivo · T diff · U desfaz · R refaz · Esc volta", "Enter file · T diff · U undo · R redo · Esc back")
 	}
 	p.workspace.view.Width = w
 	p.workspace.view.Height = max(1, h)
@@ -707,9 +719,13 @@ func (p *chatPage) workspaceView() string {
 	} else {
 		p.workspace.view.SetContent(ansi.Hardwrap(safePanel(p.workspace.body), w, true))
 	}
+	if contextPanel(p.workspace.kind) {
+		lines = append(lines, ansi.Truncate(config.Text("1 Orçamento · 2 Índice · 3 Alocação · 4 Diagnóstico", "1 Budget · 2 Index · 3 Allocation · 4 Diagnostics"), w, "…"))
+		p.workspace.view.Height = max(1, p.workspace.view.Height-1)
+	}
 	lines = append(lines, p.workspace.view.View())
 	if p.workspace.loading {
-		lines = append(lines, "Carregando… · Esc cancela")
+		lines = append(lines, config.Text("Carregando… · Esc cancela", "Loading… · Esc cancels"))
 	}
 	if p.workspace.note != "" {
 		lines = append(lines, ansi.Truncate(safePanel(p.workspace.note), w, "…"))
@@ -725,12 +741,12 @@ func (p *chatPage) handleWorkspaceMessage(text string, attachments []message.Att
 		return nil, false
 	}
 	switch command {
-	case "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "runtime", "index", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
+	case "cancel", "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "queue", "runtime", "index", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
 	default:
 		return nil, false
 	}
 	if len(attachments) > 0 {
-		err := fmt.Errorf("este comando não aceita anexos; o rascunho foi preservado")
+		err := fmt.Errorf("%s", config.Text("este comando não aceita anexos; o rascunho foi preservado", "this command does not accept attachments; the draft was preserved"))
 		return tea.Batch(util.ReportError(err), util.CmdHandler(chat.SubmissionResultMsg{Text: text, Error: err})), true
 	}
 	var cmd tea.Cmd
@@ -820,16 +836,16 @@ func safePanel(text string) string {
 func (p *chatPage) recalibrateContext() tea.Cmd {
 	control, ok := p.app.CoderAgent.(agent.ContextCalibrationControl)
 	if !ok {
-		return util.ReportWarn("Este agente não oferece recalibração")
+		return util.ReportWarn(config.Text("Este agente não oferece recalibração", "This agent does not support recalibration"))
 	}
 	id := p.session.ID
-	p.showWorkspace("context", "Recalibrar contexto", "")
+	p.showWorkspace("context", config.Text("Recalibrar contexto", "Recalibrate context"), "")
 	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
 		status, err := control.RecalibrateContext(ctx, id)
 		if err != nil {
 			return "", false, err
 		}
-		return fmt.Sprintf("Limite aprendido removido. Janela configurada: %d tokens. O próximo turno usará esse limite; nenhuma ferramenta foi repetida.", status.ContextWindow), false, nil
+		return fmt.Sprintf(config.Text("Limite aprendido removido. Janela configurada: %d tokens. O próximo turno usará esse limite; nenhuma ferramenta foi repetida.", "Learned limit removed. Configured window: %d tokens. The next turn will use that limit; no tool was replayed."), status.ContextWindow), false, nil
 	})
 }
 
@@ -837,18 +853,18 @@ func (p *chatPage) openIndex(action string) tea.Cmd {
 	if action == "" {
 		action = "status"
 	}
-	p.showWorkspace("index", "Índice do projeto", "")
+	p.showWorkspace("index", config.Text("Índice do projeto", "Project index"), "")
 	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		verb, path, _ := strings.Cut(strings.TrimSpace(action), " ")
 		text, err := tools.IndexStatusJSON(ctx, verb, strings.TrimSpace(path))
-		return text + "\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain CAMINHO. Nenhuma inferência é executada.", false, err
+		return text + config.Text("\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain CAMINHO. Nenhuma inferência é executada.", "\n\n/index update · rebuild · pause · resume · clear\nCLI: opcode index explain PATH. No inference is executed."), false, err
 	})
 }
 
 func (p *chatPage) openRuntime() tea.Cmd {
-	p.showWorkspace("runtime", "Diagnóstico da execução", "")
+	p.showWorkspace("runtime", config.Text("Diagnóstico da execução", "Execution diagnostics"), "")
 	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
 		c, ok := p.app.CoderAgent.(agent.RuntimeDiagnosticControl)
 		if !ok {

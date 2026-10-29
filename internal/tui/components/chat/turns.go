@@ -42,7 +42,7 @@ func (m *messagesCmp) LatestResponse() string {
 func (m *messagesCmp) groups() []turnGroup {
 	var groups []turnGroup
 	for _, v := range m.messages {
-		if v.Role == message.User {
+		if v.Role == message.User && !v.IsApplication() {
 			copy := v
 			groups = append(groups, turnGroup{user: &copy, key: v.ID})
 			continue
@@ -91,6 +91,10 @@ func (m *messagesCmp) renderTurns() {
 		actions := 0
 		for i, v := range g.messages {
 			actions += len(v.ToolCalls())
+			if v.IsApplication() {
+				actions++
+				finals = nil
+			}
 			if v.Role == message.Assistant && len(v.ToolCalls()) == 0 && v.Content().String() != "" {
 				finals = append(finals, i)
 			}
@@ -126,6 +130,10 @@ func (m *messagesCmp) renderTurns() {
 			m.hits = append(m.hits, transcriptHit{start, start + 1, "process", g.key, ""})
 			if expanded {
 				for i, v := range g.messages {
+					if v.IsApplication() {
+						appendText(v.ID, base.Foreground(t.TextMuted()).Render(config.Text("Validação da aplicação", "Application validation")+"\n"+toMarkdown(tools.RedactCredentials(v.Content().String()), false, m.width)), toolMessageType)
+						continue
+					}
 					if v.Role != message.Assistant {
 						continue
 					}
@@ -173,6 +181,11 @@ func (m *messagesCmp) renderTurns() {
 				appendItem(item)
 			}
 			m.hits = append(m.hits, transcriptHit{start, pos - 1, "actions", v.ID, v.Content().String()})
+			if gi == len(groups)-1 && final == finals[len(finals)-1] && !m.IsAgentWorking() {
+				start = pos
+				appendText(v.ID+":actions", base.Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text("Ctrl+Y · copiar / abrir fontes", "Ctrl+Y · copy / open sources"), m.width, "…")), toolMessageType)
+				m.hits = append(m.hits, transcriptHit{start, pos - 1, "actions", v.ID, v.Content().String()})
+			}
 		}
 	}
 	m.viewport.SetContent(base.Width(m.width).Render(strings.Join(rendered, "\n")))

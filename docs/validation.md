@@ -533,3 +533,12 @@ recuperação/listagem sob a política de execução; sua ausência continua sen
 erro, sem fallback. A comparação compartilhada preserva o binário e os dados
 originais: seus casos não solicitam PTY. A correção do descritor foi validada
 separadamente e não motivou uma repetição para mudar o placar.
+
+O runner Ubuntu 24.04 exigiu também um perfil AppArmor específico para permitir
+user namespaces ao executável root-owned `/usr/bin/bwrap`. O workflow cria esse
+perfil somente no runner descartável e prova `--unshare-all`, inclusive rede
+isolada. Não desativa AppArmor/sysctl global nem troca a aplicação para
+`sandbox=none`. A medida segue o mecanismo descrito nas
+[notas oficiais do Ubuntu](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions).
+Os smokes selecionados Linux, Windows e macOS já executaram seus passos de teste
+e CLI com sucesso no CI; isso não transforma o smoke em suíte integral macOS/Windows.

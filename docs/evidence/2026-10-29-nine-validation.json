@@ -104,5 +104,19 @@
     "deadline_changed": false,
     "benchmark_note": "The single shared comparison retains its original binary hash and observations. Its fixtures do not request PTY; the later Unix descriptor fix was validated separately, not used to rerun or improve the score.",
     "ci_dependency_fix": "Linux full-suite job now installs and probes Bubblewrap; missing sandbox remains a hard error. Linux and Windows native smoke had passed on the previous CI revision; macOS must confirm the polling/handshake correction."
+  },
+  "ci_namespace_profile": {
+    "scope": "Ephemeral Ubuntu CI runner; root-owned /usr/bin/bwrap only",
+    "apparmor_disabled": false,
+    "global_userns_sysctl_changed": false,
+    "network_namespace_disabled": false,
+    "script_syntax": "passed",
+    "reason": "Ubuntu 24.04 AppArmor user namespace capabilities blocked loopback setup after installing bwrap",
+    "native_smoke_test_steps_passed": [
+      "linux",
+      "windows",
+      "macos"
+    ],
+    "run_id": 40964807541
   }
 }

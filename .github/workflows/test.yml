@@ -23,6 +23,20 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y --no-install-recommends ripgrep bubblewrap
           fi
+          # Ubuntu 24.04 restricts capabilities in unprivileged user namespaces.
+          # Permit the root-owned sandbox executable, not every runner process.
+          # Do not disable AppArmor, switch sandbox=none, or share the network.
+          if [ -r /proc/sys/kernel/apparmor_restrict_unprivileged_userns ] &&
+             [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns)" = 1 ]; then
+            sudo tee /etc/apparmor.d/opcode-ci-bwrap >/dev/null <<'PROFILE'
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile opcode-ci-bwrap /usr/bin/bwrap flags=(unconfined) {
+            userns,
+          }
+          PROFILE
+            sudo apparmor_parser -r /etc/apparmor.d/opcode-ci-bwrap
+          fi
           bwrap --unshare-all --ro-bind / / --proc /proc --dev /dev --die-with-parent -- /bin/true
       # Keep strict parser deadlines; avoid competing test binaries consuming
       # their wall-clock budget while every package and race check still runs.

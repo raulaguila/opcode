@@ -177,44 +177,44 @@ func NewOpcodeTheme() *OpcodeTheme {
 		Light: lightForeground,
 	}
 	theme.MarkdownHeadingColor = lipgloss.AdaptiveColor{
-		Dark:  darkSecondary,
-		Light: lightSecondary,
+		Dark:  darkForeground,
+		Light: lightForeground,
 	}
 	theme.MarkdownLinkColor = lipgloss.AdaptiveColor{
-		Dark:  darkPrimary,
-		Light: lightPrimary,
+		Dark:  "#8bc5cf",
+		Light: "#28616d",
 	}
 	theme.MarkdownLinkTextColor = lipgloss.AdaptiveColor{
-		Dark:  darkCyan,
-		Light: lightCyan,
+		Dark:  "#8bc5cf",
+		Light: "#28616d",
 	}
 	theme.MarkdownCodeColor = lipgloss.AdaptiveColor{
-		Dark:  darkGreen,
-		Light: lightGreen,
+		Dark:  "#8bc5cf",
+		Light: "#28616d",
 	}
 	theme.MarkdownBlockQuoteColor = lipgloss.AdaptiveColor{
 		Dark:  darkYellow,
 		Light: lightYellow,
 	}
 	theme.MarkdownEmphColor = lipgloss.AdaptiveColor{
-		Dark:  darkYellow,
-		Light: lightYellow,
+		Dark:  darkForeground,
+		Light: lightForeground,
 	}
 	theme.MarkdownStrongColor = lipgloss.AdaptiveColor{
-		Dark:  darkAccent,
-		Light: lightAccent,
+		Dark:  darkForeground,
+		Light: lightForeground,
 	}
 	theme.MarkdownHorizontalRuleColor = lipgloss.AdaptiveColor{
 		Dark:  darkComment,
 		Light: lightComment,
 	}
 	theme.MarkdownListItemColor = lipgloss.AdaptiveColor{
-		Dark:  darkPrimary,
-		Light: lightPrimary,
+		Dark:  darkForeground,
+		Light: lightForeground,
 	}
 	theme.MarkdownListEnumerationColor = lipgloss.AdaptiveColor{
-		Dark:  darkCyan,
-		Light: lightCyan,
+		Dark:  darkForeground,
+		Light: lightForeground,
 	}
 	theme.MarkdownImageColor = lipgloss.AdaptiveColor{
 		Dark:  darkPrimary,

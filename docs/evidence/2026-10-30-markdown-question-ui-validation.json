@@ -1,0 +1,153 @@
+{
+  "date": "2026-10-30",
+  "baseline": "6cd0611ce8516c23c8e75db46a2ef5cb139d679e",
+  "scope": "Markdown presentation and agent question card matching the approved terminal mockup",
+  "checks": [
+    {
+      "check": "race",
+      "exit_code": 0
+    },
+    {
+      "check": "integration",
+      "exit_code": 0
+    },
+    {
+      "check": "vet",
+      "exit_code": 0
+    },
+    {
+      "check": "staticcheck",
+      "exit_code": 0
+    },
+    {
+      "check": "complexity",
+      "exit_code": 0
+    },
+    {
+      "check": "build",
+      "exit_code": 0
+    },
+    {
+      "check": "pty",
+      "exit_code": 0
+    }
+  ],
+  "pty_scenarios": [
+    "TestLiveOllamaPTYUI",
+    "TestPTYUICompactThemes",
+    "TestPTYUITerminalStartupQueries",
+    "TestPTYStreamingSpeedBeforeCompletion",
+    "TestPTYTranscriptSearchAndKeyboardSelection",
+    "TestPTYConversationChronologyQuitAndResume",
+    "TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer",
+    "TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures",
+    "TestPTYMarkdownProposalAndQuestionDivider"
+  ],
+  "live_model": "llama3.1:8b on local Ollama",
+  "benchmarks": {
+    "records": [
+      {
+        "pair": 0,
+        "side": "before",
+        "ns": 1642541.0,
+        "bytes": 1922644,
+        "allocations": 24661
+      },
+      {
+        "pair": 0,
+        "side": "after",
+        "ns": 1364287.0,
+        "bytes": 1930949,
+        "allocations": 18265
+      },
+      {
+        "pair": 1,
+        "side": "after",
+        "ns": 1398746.0,
+        "bytes": 1930938,
+        "allocations": 18265
+      },
+      {
+        "pair": 1,
+        "side": "before",
+        "ns": 1624069.0,
+        "bytes": 1922651,
+        "allocations": 24661
+      },
+      {
+        "pair": 2,
+        "side": "before",
+        "ns": 1665430.0,
+        "bytes": 1922627,
+        "allocations": 24660
+      },
+      {
+        "pair": 2,
+        "side": "after",
+        "ns": 1397237.0,
+        "bytes": 1930936,
+        "allocations": 18265
+      },
+      {
+        "pair": 3,
+        "side": "after",
+        "ns": 1379027.0,
+        "bytes": 1930941,
+        "allocations": 18265
+      },
+      {
+        "pair": 3,
+        "side": "before",
+        "ns": 1598944.0,
+        "bytes": 1922650,
+        "allocations": 24661
+      },
+      {
+        "pair": 4,
+        "side": "before",
+        "ns": 1599564.0,
+        "bytes": 1922625,
+        "allocations": 24660
+      },
+      {
+        "pair": 4,
+        "side": "after",
+        "ns": 1389390.0,
+        "bytes": 1930938,
+        "allocations": 18265
+      }
+    ],
+    "summary": {
+      "before": {
+        "ns": 1624069.0,
+        "bytes": 1922644,
+        "allocations": 24661
+      },
+      "after": {
+        "ns": 1389390.0,
+        "bytes": 1930938,
+        "allocations": 18265
+      },
+      "percent_change": {
+        "ns": -14.45,
+        "bytes": 0.43,
+        "allocations": -25.94
+      }
+    }
+  },
+  "preserved": [
+    "tool permissions and sandbox",
+    "strict source citation receipts, intervals and hashes",
+    "original stored/copied Markdown",
+    "explicit suggested versus custom answer selection"
+  ],
+  "limitations": [
+    "Lists inside blockquotes retain the native Glamour container layout.",
+    "Normal question choices retain F2 full details when truncated.",
+    "Native provider fixture supplies deterministic layout content; separate Ollama test supplies live inference."
+  ],
+  "test_stability": [
+    "PTY clicks wait for stable label coordinates across two frame reads.",
+    "Index watcher tests configure background refresh and limits before launching the watcher."
+  ]
+}

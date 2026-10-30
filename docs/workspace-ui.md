@@ -214,6 +214,21 @@ em bloco que contêm código/tabelas mantêm sua estrutura e largura. Links de
 referência são resolvidos no documento completo. A ação Copiar resposta usa o
 texto integral; `Ctrl+C` com seleção usa somente o trecho destacado na tela.
 
+Títulos renderizados usam negrito sem os marcadores `#`. No tema Opcode,
+parágrafos e ênfases têm cores neutras; código em linha e links usam ciano
+discreto, com variantes clara e escura. As cores de sintaxe dentro de blocos de
+código continuam distintas. Listas alinham as linhas seguintes ao texto depois
+do marcador, preservam numeração, tarefas e aninhamento, e separam itens longos
+sem espaçar desnecessariamente itens curtos. Listas dentro de citações em bloco
+mantêm a renderização do contêiner do Glamour.
+
+O painel de pergunta usa borda reta, seleção discreta e uma linha divisória
+acima dos atalhos. A pergunta fica separada das opções quando há espaço;
+`F2` mantém acesso a explicações e opções extensas. Em terminais pequenos,
+espaços e divisórias cedem lugar à pergunta, à escolha ativa e à resposta.
+Não há opção pré-selecionada: a confirmação continua dependendo da escolha
+explícita ou do texto digitado no último campo.
+
 O terminal mantém os controles existentes: `Ctrl+P` abre/fecha o painel,
 `Ctrl+N` cria um PTY, `Alt+←`/`Alt+→` alterna processos e `Ctrl+X` encerra o processo
 selecionado. Enquanto o PTY tem foco, suas teclas vão ao processo filho. Iniciar

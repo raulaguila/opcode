@@ -622,14 +622,25 @@ func (m ptyUIMessage) finished() bool {
 
 func (h *ptyUIHarness) clickLabel(label string) {
 	h.t.Helper()
-	for y, line := range strings.Split(h.frame(), "\n") {
-		if before, _, ok := strings.Cut(line, label); ok {
-			x := ansi.StringWidth(before) + 1
-			h.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, y+1, x, y+1))
-			return
-		}
+	x, y := -1, -1
+	waitLabel := "stable click target: " + label
+	if label == "Allow (a)" {
+		waitLabel = "explicit permission dialog"
 	}
-	h.t.Fatalf("click target absent: %s", label)
+	// A VT paint arrives in fragments; do not click a label while its row moves.
+	h.wait(waitLabel, 5*time.Second, func(frame string) bool {
+		for row, line := range strings.Split(frame, "\n") {
+			if before, _, ok := strings.Cut(line, label); ok {
+				column := ansi.StringWidth(before) + 1
+				stable := x == column && y == row+1
+				x, y = column, row+1
+				return stable
+			}
+		}
+		x, y = -1, -1
+		return false
+	})
+	h.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, y, x, y))
 }
 
 func TestPTYUICompactThemes(t *testing.T) {

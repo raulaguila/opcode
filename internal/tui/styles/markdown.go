@@ -61,48 +61,6 @@ func generateMarkdownStyleConfig() ansi.StyleConfig {
 				Bold:        new(true),
 			},
 		},
-		H1: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "# ",
-				Color:  new(adaptiveColorToString(t.MarkdownHeading())),
-				Bold:   new(true),
-			},
-		},
-		H2: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "## ",
-				Color:  new(adaptiveColorToString(t.MarkdownHeading())),
-				Bold:   new(true),
-			},
-		},
-		H3: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "### ",
-				Color:  new(adaptiveColorToString(t.MarkdownHeading())),
-				Bold:   new(true),
-			},
-		},
-		H4: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "#### ",
-				Color:  new(adaptiveColorToString(t.MarkdownHeading())),
-				Bold:   new(true),
-			},
-		},
-		H5: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "##### ",
-				Color:  new(adaptiveColorToString(t.MarkdownHeading())),
-				Bold:   new(true),
-			},
-		},
-		H6: ansi.StyleBlock{
-			StylePrimitive: ansi.StylePrimitive{
-				Prefix: "###### ",
-				Color:  new(adaptiveColorToString(t.MarkdownHeading())),
-				Bold:   new(true),
-			},
-		},
 		Strikethrough: ansi.StylePrimitive{
 			CrossedOut: new(true),
 			Color:      new(adaptiveColorToString(t.TextMuted())),
@@ -138,7 +96,6 @@ func generateMarkdownStyleConfig() ansi.StyleConfig {
 		},
 		LinkText: ansi.StylePrimitive{
 			Color: new(adaptiveColorToString(t.MarkdownLinkText())),
-			Bold:  new(true),
 		},
 		Image: ansi.StylePrimitive{
 			Color:     new(adaptiveColorToString(t.MarkdownImage())),

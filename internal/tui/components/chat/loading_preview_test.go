@@ -150,7 +150,7 @@ func TestLoadingPreviewStoresOnlyBoundedVisibleAssistantText(t *testing.T) {
 		require.LessOrEqual(t, len(m.loadingPreview.text), loadingPreviewBytes)
 		require.LessOrEqual(t, strings.Count(m.loadingPreview.text, "\n"), loadingPreviewLines-1)
 		require.True(t, utf8.ValidString(m.loadingPreview.text))
-		visibleCells := strings.NewReplacer(" ", "", "\n", "", "┃", "").Replace(ansi.Strip(m.View()))
+		visibleCells := strings.NewReplacer(" ", "", "\n", "", "│", "").Replace(ansi.Strip(m.View()))
 		require.Contains(t, visibleCells, "LATEST_VISIBLE_TEXT")
 	}
 }

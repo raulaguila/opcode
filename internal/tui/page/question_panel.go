@@ -26,7 +26,7 @@ func (p *chatPage) questionPanelHeight() int {
 		return min(limit, 18)
 	}
 	c := p.questionPanelContent(max(1, p.width-4))
-	height := 5 + len(c.intro) + len(c.choices)
+	height := 6 + len(c.intro) + len(c.choices)
 	if c.input != "" {
 		height++
 	}
@@ -74,7 +74,7 @@ func (p *chatPage) questionAnswerField(item interaction.QuestionItem, width int)
 		prefix := "  ○ "
 		if p.customQuestionAnswer(len(item.Choices)) {
 			prefix = "› ● "
-			style = style.Foreground(t.Background()).Background(t.Primary())
+			style = style.Foreground(t.Text()).Background(t.BorderDim())
 		}
 		p.workflow.answer.Prompt = prefix + config.Text("Outra resposta: ", "Other answer: ")
 	}
@@ -126,7 +126,7 @@ func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) 
 		line := fmt.Sprintf("%s %s %s", cursor, mark, panelText(choice))
 		if cursor == "›" {
 			t := theme.CurrentTheme()
-			line = styles.BaseStyle().Foreground(t.Background()).Background(t.Primary()).PaddingRight(max(0, width-ansi.StringWidth(line))).Render(line)
+			line = styles.BaseStyle().Foreground(t.Text()).Background(t.BorderDim()).Bold(true).PaddingRight(max(0, width-ansi.StringWidth(line))).Render(line)
 		}
 		rows = append(rows, line)
 	}
@@ -148,7 +148,7 @@ func (p *chatPage) questionReviewContent(width int) questionContent {
 }
 
 // Keep the question, focused choice and answer visible; F2 exposes the full text.
-func (c questionContent) visibleRows(height int) []string {
+func (c questionContent) visibleRows(height int, divider string) []string {
 	if height <= 0 {
 		return nil
 	}
@@ -157,13 +157,23 @@ func (c questionContent) visibleRows(height int) []string {
 		tail = append(tail, c.input)
 	}
 	if height >= 3 {
+		if height >= 5 && divider != "" {
+			tail = append(tail, divider)
+		}
 		tail = append(tail, c.hint)
 	}
 	remaining := height - len(tail)
+	gap := len(c.intro) > 0 && (len(c.choices) > 0 || c.input != "") && remaining > len(c.intro)+len(c.choices)
+	if gap {
+		remaining--
+	}
 	choiceCount := min(len(c.choices), remaining/2)
 	introCount := min(len(c.intro), remaining-choiceCount)
 	choiceCount = min(len(c.choices), remaining-introCount)
 	rows := append([]string{}, c.intro[:introCount]...)
+	if gap {
+		rows = append(rows, "")
+	}
 	start := max(0, min(c.focus-choiceCount+1, len(c.choices)-choiceCount))
 	rows = append(rows, c.choices[start:start+choiceCount]...)
 	return append(rows, tail...)
@@ -175,41 +185,50 @@ func (p *chatPage) questionPanelView(height int) string {
 	t := theme.CurrentTheme()
 	title := config.Text("Pergunta para você", "Question for you")
 	if height < 5 {
-		rows := append([]string{title}, c.visibleRows(height-1)...)
+		rows := append([]string{title}, c.visibleRows(height-1, "")...)
 		for i := range rows {
 			rows[i] = ansi.Truncate(rows[i], max(1, p.width), "…")
 		}
 		return strings.Join(rows, "\n")
 	}
 	rows := []string{styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Primary()).Bold(true).Render(title)}
-	if height >= 7 {
-		rows = append(rows, styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.TextMuted()).Render(config.Text("Aguardando sua resposta", "Waiting for your answer")))
-	}
 	bodyHeight := height - 2 - len(rows)
 	if p.workflow.details {
 		rows = append(rows, p.questionDetailsRows(c, width, bodyHeight)...)
 	} else {
-		rows = append(rows, c.visibleRows(bodyHeight)...)
+		rows = append(rows, c.visibleRows(bodyHeight, questionPanelDivider(width))...)
 	}
 	for i := range rows {
 		rows[i] = ansi.Truncate(rows[i], width, "…")
 	}
 	return styles.BaseStyle().Foreground(t.Text()).Background(t.BackgroundSecondary()).
-		Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderFocused()).
+		Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).
 		BorderBackground(t.BackgroundSecondary()).Padding(0, 1).Width(max(1, p.width-2)).
 		Render(strings.Join(rows, "\n"))
 }
 
+func questionPanelDivider(width int) string {
+	t := theme.CurrentTheme()
+	return styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.TextMuted()).Render(strings.Repeat("─", width))
+}
+
 func (p *chatPage) questionDetailsRows(c questionContent, width, height int) []string {
 	if height < 2 {
-		return c.visibleRows(height)
+		return c.visibleRows(height, "")
 	}
 	full := append([]string{}, c.intro...)
+	if len(full) > 0 && len(c.choices) > 0 {
+		full = append(full, "")
+	}
 	for _, choice := range c.choices {
 		full = append(full, ansi.Wrap(choice, width, ""))
 	}
 	p.workflow.detailView.Width = width
-	p.workflow.detailView.Height = height - 1
+	tail := []string{config.Text("F2/Esc volta · ↑↓/PgUp/PgDn rola", "F2/Esc back · ↑↓/PgUp/PgDn scroll")}
+	if height >= 5 {
+		tail = append([]string{questionPanelDivider(width)}, tail...)
+	}
+	p.workflow.detailView.Height = height - len(tail)
 	p.workflow.detailView.SetContent(strings.Join(full, "\n"))
-	return append(strings.Split(p.workflow.detailView.View(), "\n"), config.Text("F2/Esc volta · ↑↓/PgUp/PgDn rola", "F2/Esc back · ↑↓/PgUp/PgDn scroll"))
+	return append(strings.Split(p.workflow.detailView.View(), "\n"), tail...)
 }

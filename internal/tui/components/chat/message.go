@@ -65,7 +65,7 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 		BorderLeft(true).
 		Foreground(t.TextMuted()).
 		BorderForeground(pipe).
-		BorderStyle(lipgloss.ThickBorder())
+		BorderStyle(lipgloss.NormalBorder())
 
 	measure := width
 	if c := config.Get(); c != nil && c.TUI.ProseWidth > 0 {

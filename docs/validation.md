@@ -1144,3 +1144,31 @@ execução nativa Windows/macOS nesta rodada.
 
 Veja [metodologia](performance.md) e
 [amostras, comparação e limites](evidence/2026-10-30-followup-performance.json).
+
+
+## Markdown e painel de pergunta — 30/10/2026
+
+A proposta visual aceita foi aplicada ao chat: títulos sem marcadores, ênfases
+neutras no tema Opcode, referências/código em ciano discreto, pipe fino e listas
+com recuo de continuação. O painel tem borda reta, seleção discreta e divisória
+antes dos controles. O cursor do campo livre segue a opção ativa. Código dentro
+de listas mantém linhas vazias intencionais, inclusive nas bordas da cerca.
+
+Passaram as suítes normal e com a tag `integration`, ambas com `-race`, além de
+`go vet`, staticcheck, gocognit com limite 15 e build. Nove cenários em PTY
+passaram, incluindo inferência local com `llama3.1:8b`, permissões, bash com
+entrada interativa, instrução durante execução, cópia/seleção, perguntas e
+revisões de citações. Não houve redução dos critérios de validação.
+
+Cinco pares alternados do benchmark de Markdown, com `GOMAXPROCS=2`, mostram
+medianas de 1,624 ms para 1,389 ms (−14,45%) e 24.661 para 18.265 alocações
+(−25,94%). Bytes por operação passaram de 1.922.644 para 1.930.938 (+0,43%).
+A medição refere-se ao fixture de renderização, não à latência do modelo.
+
+A bateria identificou uma corrida na preparação de dois testes do watcher do
+índice. As configurações agora são definidas antes de iniciar a goroutine; o
+código de produção e as verificações foram preservados. Os cenários envolvidos
+passaram dez repetições com `-race`. Cliques dos testes em PTY aguardam a posição
+do controle estabilizar para evitar clicar durante uma pintura parcial.
+
+[Evidências e medições](evidence/2026-10-30-markdown-question-ui-validation.json).

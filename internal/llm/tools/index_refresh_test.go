@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func watchedIndexFixture(t *testing.T, count int) (string, *sql.DB, *IndexWatcher) {
+func watchedIndexFixture(t *testing.T, count int, configure ...func(*config.IndexConfig)) (string, *sql.DB, *IndexWatcher) {
 	t.Helper()
 	root := productivityV2Workspace(t)
 	for i := range count {
@@ -24,6 +24,9 @@ func watchedIndexFixture(t *testing.T, count int) (string, *sql.DB, *IndexWatche
 	previous := config.Get().Index
 	background := false
 	config.Get().Index.Background = &background
+	for _, setup := range configure {
+		setup(&config.Get().Index)
+	}
 	t.Cleanup(func() { config.Get().Index = previous })
 	watcher := StartIndexWatcher(toolContext())
 	t.Cleanup(watcher.Close)
@@ -134,10 +137,9 @@ func TestWatchedIndexPolicyRotationAndExplicitUpdates(t *testing.T) {
 }
 
 func TestWatchedIndexDeltaRetainsTextAndFileLimits(t *testing.T) {
-	root, db, watcher := watchedIndexFixture(t, 2)
-	previous := config.Get().Index
-	t.Cleanup(func() { config.Get().Index = previous })
-	config.Get().Index.MaxTextBytes = 60
+	root, db, watcher := watchedIndexFixture(t, 2, func(index *config.IndexConfig) {
+		index.MaxTextBytes = 60
+	})
 	_, err := refreshSearchCodeIndex(toolContext(), db, root)
 	require.NoError(t, err)
 	path := filepath.Join(root, "source0.txt")
@@ -187,11 +189,11 @@ func TestIndexWatcherUnknownCoverageAndOverflowForceDiscovery(t *testing.T) {
 }
 
 func TestIndexWatcherCoversEmptyDirectoriesAndStops(t *testing.T) {
-	root, _, watcher := watchedIndexFixture(t, 1)
+	root, _, watcher := watchedIndexFixture(t, 1, func(index *config.IndexConfig) {
+		index.Background = new(true)
+	})
 	require.NoError(t, os.Mkdir(filepath.Join(root, "empty"), 0700))
 	require.Eventually(t, func() bool { return !planIndexRefresh(root, true).partial }, 3*time.Second, 5*time.Millisecond)
-	enabled := true
-	config.Get().Index.Background = &enabled
 	require.Eventually(t, func() bool {
 		watcher.mu.Lock()
 		defer watcher.mu.Unlock()

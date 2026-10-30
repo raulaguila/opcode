@@ -29,6 +29,11 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 	var blocks []string
 	for node := doc.FirstChild(); node != nil; {
 		next := node.NextSibling()
+		if list, ok := node.(*ast.List); ok {
+			blocks = append(blocks, markdownListReference(list, content, source, width, proseWidth))
+			node = next
+			continue
+		}
 		wide := false
 		_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 			if entering && (n.Kind() == ast.KindFencedCodeBlock || n.Kind() == ast.KindCodeBlock || n.Kind() == extast.KindTable) {
@@ -57,6 +62,15 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 		node = next
 	}
 	return strings.Join(blocks, "\n\n")
+}
+
+func markdownListReference(list *ast.List, content string, source []byte, width, proseWidth int) string {
+	fresh := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, renderers: map[int]renderer.Renderer{}}
+	result, err := fresh.renderList(list)
+	if err != nil {
+		return ""
+	}
+	return result
 }
 
 func TestMarkdownRendererReuseMatchesFreshBlockRenderers(t *testing.T) {

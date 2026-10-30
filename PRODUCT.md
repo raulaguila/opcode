@@ -44,6 +44,9 @@ o original e seu aviso. Perguntas, mudanças de tarefa e mensagens independentes
 não são agrupadas como revisões por proximidade ou conteúdo.
 Perguntas usam painel com borda, superfície distinta, estado de espera e seleção
 explícita, preservando a distinção entre responder e autorizar uma ferramenta.
+O painel tem borda reta e divisória acima dos controles; o estado de espera
+permanece no rodapé. O chat renderiza títulos sem marcadores Markdown, com
+ênfases neutras no tema Opcode e linhas de listas alinhadas depois do marcador.
 A resposta livre é a última opção selecionável; o foco indica se será enviada
 uma sugestão ou o texto, sem um rascunho inativo substituir a escolha. Após o
 envio, pergunta e resposta ficam juntas, com rótulo e pipe na cor de destaque,

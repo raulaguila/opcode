@@ -73,6 +73,9 @@ func (b *markdownBlockRenderer) render(node ast.Node) (string, error) {
 	return rendered, err
 }
 func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
+	if list, ok := node.(*ast.List); ok {
+		return b.renderList(list)
+	}
 	measure := markdownBlockWidth(node, b.width, b.prose)
 	r, ok := b.renderers[measure]
 	if !ok {

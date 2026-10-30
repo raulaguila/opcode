@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-func TestQuestionPanelSeparatesWaitingStateAndWrapsQuestion(t *testing.T) {
+func TestQuestionPanelSeparatesQuestionChoicesAndControls(t *testing.T) {
 	for _, batch := range []bool{false, true} {
 		p := workflowPage(t)
 		p.SetSize(60, 20)
@@ -27,14 +27,23 @@ func TestQuestionPanelSeparatesWaitingStateAndWrapsQuestion(t *testing.T) {
 		p.workflow.choice = -1
 		p.workflow.batchAnswers = make([]interaction.AnswerItem, 1)
 		view := ansi.Strip(p.workflowView())
-		require.Contains(t, view, "╭", "question needs a boundary without depending on color")
+		require.Contains(t, view, "┌", "question needs a square boundary without depending on color")
 		require.Contains(t, view, config.Text("Pergunta para você", "Question for you"))
-		require.Contains(t, view, config.Text("Aguardando sua resposta", "Waiting for your answer"))
+		require.NotContains(t, view, config.Text("Aguardando sua resposta", "Waiting for your answer"), "the footer already exposes the waiting state")
 		require.Contains(t, view, "repository?", "question wraps instead of silently losing its end")
 		require.Contains(t, view, config.Text("Outra resposta", "Other answer"))
 		require.NotContains(t, view, "› ○", "a choice must not be selected without input")
 		require.LessOrEqual(t, lipgloss.Width(view), 60)
 		require.LessOrEqual(t, lipgloss.Height(view), p.workflowHeight())
+		lines := strings.Split(view, "\n")
+		for i, line := range lines {
+			if strings.Contains(line, "○ Now") {
+				require.Equal(t, "│", strings.TrimSpace(lines[i-1][:strings.LastIndex(lines[i-1], "│")]), "a blank row separates question and choices")
+			}
+			if strings.Contains(line, "↑↓") {
+				require.Contains(t, lines[i-1], strings.Repeat("─", 20), "a rule separates the choices from keyboard controls")
+			}
+		}
 	}
 }
 

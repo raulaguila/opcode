@@ -64,13 +64,10 @@ func (a *agent) Submit(ctx context.Context, sessionID, content string, attachmen
 }
 
 func (a *agent) submit(ctx context.Context, sessionID, content string, allowQueue bool, attachments ...message.Attachment) (<-chan AgentEvent, bool, error) {
-	if err := ctx.Err(); err != nil {
+	if err := a.validateSubmission(ctx, sessionID, content, attachments); err != nil {
 		return nil, false, err
 	}
-	if sessionID == "" || (content == "" && len(attachments) == 0) {
-		return nil, false, fmt.Errorf("session and message content are required")
-	}
-	incoming := generationInstruction(content, a.Model().SupportsAttachments, attachments)
+	incoming := generationInstruction(content, attachments)
 
 	a.runMu.Lock()
 	if err := ctx.Err(); err != nil {
@@ -120,6 +117,19 @@ func (a *agent) submit(ctx context.Context, sessionID, content string, allowQueu
 	return events, false, nil
 }
 
+func (a *agent) validateSubmission(ctx context.Context, sessionID, content string, attachments []message.Attachment) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if sessionID == "" || (content == "" && len(attachments) == 0) {
+		return fmt.Errorf("session and message content are required")
+	}
+	if len(attachments) > 0 && !a.Model().SupportsAttachments {
+		return fmt.Errorf("selected model does not support attachments; choose a compatible model or remove the attachments")
+	}
+	return nil
+}
+
 func (a *agent) runGeneration(sessionID string, incoming instruction, run *generationRun, events chan AgentEvent) {
 	result := a.err(fmt.Errorf("agent did not complete"))
 	defer a.finishGenerationRun(sessionID, run, events, &result)
@@ -149,16 +159,14 @@ func (a *agent) hasInstructions(sessionID string) bool {
 	return a.runs[sessionID] != nil && len(a.runs[sessionID].pending) > 0
 }
 
-func generationInstruction(content string, supportsAttachments bool, attachments []message.Attachment) instruction {
+func generationInstruction(content string, attachments []message.Attachment) instruction {
 	incoming := instruction{id: uuid.NewString(), content: content, bytes: len(content)}
-	if supportsAttachments {
-		for _, attachment := range attachments {
-			incoming.bytes += len(attachment.Content)
-			copyAttachment := attachment
-			copyAttachment.Content = append([]byte(nil), attachment.Content...)
-			incoming.attachments = append(incoming.attachments, copyAttachment)
-			incoming.parts = append(incoming.parts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: append([]byte(nil), attachment.Content...)})
-		}
+	for _, attachment := range attachments {
+		incoming.bytes += len(attachment.Content)
+		copyAttachment := attachment
+		copyAttachment.Content = append([]byte(nil), attachment.Content...)
+		incoming.attachments = append(incoming.attachments, copyAttachment)
+		incoming.parts = append(incoming.parts, message.BinaryContent{Path: attachment.FilePath, MIMEType: attachment.MimeType, Data: append([]byte(nil), attachment.Content...)})
 	}
 
 	return incoming

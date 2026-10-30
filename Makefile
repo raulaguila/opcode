@@ -1,10 +1,14 @@
-.PHONY: test vet build release-local complexity staticcheck quality
+.PHONY: test test-integration vet build release-local complexity staticcheck quality
 
 test:
 	go test ./...
 
+test-integration:
+	OPCODE_LIVE_TESTS= OPCODE_LIVE_OLLAMA= go test -race -p 1 -tags integration ./...
+
 vet:
 	go vet ./...
+	go vet -tags integration ./...
 
 complexity:
 	gocognit -over 15 .
@@ -13,7 +17,7 @@ staticcheck:
 	staticcheck ./...
 	staticcheck -tags integration ./...
 
-quality: complexity staticcheck vet test
+quality: complexity staticcheck vet test test-integration
 
 build:
 	go build -trimpath -o bin/opcode .

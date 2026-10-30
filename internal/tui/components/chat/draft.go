@@ -122,7 +122,10 @@ func (m *editorCmp) persistDraftValue(id string, value editorDraft) error {
 	if size > maxDraftAttachments {
 		return fmt.Errorf("draft attachments exceed 16 MiB; keep the app open or remove attachments before saving")
 	}
-	unlock := localstate.Lock(path)
+	unlock, err := localstate.LockFile(path)
+	if err != nil {
+		return fmt.Errorf("lock composer drafts: %w", err)
+	}
 	defer unlock()
 	document, err := loadDraftDocument(root, path)
 	if err != nil {
@@ -139,10 +142,7 @@ func (m *editorCmp) persistDraftValue(id string, value editorDraft) error {
 	if err := localstate.Write(path, document, maxDraftDocument); err != nil {
 		return fmt.Errorf("save draft: %w", err)
 	}
-	if result0, handled := persistDraftValueIdPath(id, &value, root, path); handled {
-		return result0
-	}
-	return nil
+	return clearLegacyDraft(id, root, path)
 }
 
 func (m *editorCmp) sessionDraft(id string) (editorDraft, error) {
@@ -151,7 +151,10 @@ func (m *editorCmp) sessionDraft(id string) (editorDraft, error) {
 	}
 	root, path := m.draftRoot, m.draftPath
 	if path != "" {
-		unlock := localstate.Lock(path)
+		unlock, err := localstate.LockFile(path)
+		if err != nil {
+			return editorDraft{}, fmt.Errorf("lock composer drafts: %w", err)
+		}
 		document, err := loadDraftDocument(root, path)
 		unlock()
 		if err != nil {
@@ -267,11 +270,14 @@ func sameAttachments(a, b []message.Attachment) bool {
 	})
 }
 
-func persistDraftValueIdPath(id string, value *editorDraft, root string, path string) (extractedResult0 error, handled bool) {
-	if id != "" && path != "" {
-		if err := session.NewCatalog(root, filepath.Dir(path)).SaveDraft(id, value.Text); err != nil {
-			return fmt.Errorf("save session draft index: %w", err), true
-		}
+// The canonical document owns draft contents. Clear the old index only after
+// the complete draft (including attachments) has been saved successfully.
+func clearLegacyDraft(id, root, path string) error {
+	if id == "" || path == "" {
+		return nil
 	}
-	return extractedResult0, false
+	if err := session.NewCatalog(root, filepath.Dir(path)).SaveDraft(id, ""); err != nil {
+		return fmt.Errorf("clear legacy session draft: %w", err)
+	}
+	return nil
 }

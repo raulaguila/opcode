@@ -467,3 +467,34 @@ pertencem à operação; a saída de `SecureTool` captura credenciais novamente.
 Formulários de conexão têm handlers tipados e módulos próprios para campos,
 validação, persistência, navegação e apresentação. Commit/rollback do cofre e
 as permissões permanecem nas camadas que executam essas operações.
+
+## Correções da auditoria de integridade
+
+Inspeções Git neutralizam drivers externos e programas de assinatura antes de
+consultar arquivos, inclusive durante `status` e listagem de nomes. A capacidade
+de inspeção monta a workspace somente leitura no sandbox; a capacidade de
+mutação de worktrees continua separada e dependente de aprovação.
+
+`localstate.LockFile` protege catálogo de sessões, composer e journal de revisão
+entre processos. Usa um arquivo de trava estável e privado, separado do JSON
+substituído por rename, valida os handles e falha explicitamente após cinco
+segundos de disputa. O kernel libera a trava ao fechar o handle ou encerrar o
+processo. Os sidecars `.nome.json.lock` permanecem no diretório privado. O
+`Lock` anterior continua sendo uma exclusão local ao processo para outros usos.
+
+Rascunhos completos têm uma única origem em `composer-drafts.json`. A migração
+lê o texto legado quando necessário e só limpa sua cópia no catálogo depois
+de salvar o documento canônico. Preferências de arquivo/última conversa são
+preservadas. History usa o pipeline cancelável da aplicação; a lateral recebe
+eventos e reconcilia lacunas sem abrir assinaturas adicionais.
+
+O orçamento visual separa os bytes enviados do texto tokenizado e acrescenta
+uma reserva por imagem. O envelope aprovado continua sendo o enviado, com o
+limite HTTP existente. Anexos incompatíveis são recusados antes do ACK. Corpos
+HTTP e IDs de resposta não são mensagens públicas; a classificação interna de
+contexto continua disponível sem expor esses dados em logs.
+
+A indexação mantém cotas separadas de texto e leitura total. A retenção da busca
+de conversas só roda quando ultrapassa o limite e remove apenas os registros
+excedentes, na mesma transação para metadados e FTS. Essas projeções continuam
+sem conceder permissões ou constituir prova para citações.

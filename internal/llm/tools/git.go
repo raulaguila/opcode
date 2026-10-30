@@ -3,7 +3,9 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -32,21 +34,66 @@ func commandString(args []string) string {
 func gitOutput(ctx context.Context, args ...string) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	all := []string{"git", "--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.pager=cat", "-c", "core.worktree=" + config.WorkingDirectory()}
-	all = append(all, args...)
-	cmd, err := shell.GitCommand(ctx, config.WorkingDirectory(), commandString(all))
+	base := []string{"git", "--no-optional-locks", "--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-c", "core.pager=cat", "-c", "log.showSignature=false", "-c", "core.worktree=" + config.WorkingDirectory()}
+	// Reading config names cannot run a filter. Never return configured command
+	// values, and disable drivers before even status/name-only inspects a file.
+	names, truncated, err := runGitInspection(ctx, append(append([]string{}, base...), "config", "--null", "--name-only", "--get-regexp", `^filter\..*\.(clean|process|required)$`))
+	if err != nil && !gitConfigNoMatches(err) || truncated {
+		return "", false, fmt.Errorf("cannot safely inspect Git filter configuration")
+	}
+	overrides, err := disabledGitFilters(names)
+	if err != nil {
+		return "", false, err
+	}
+	base = append(base, overrides...)
+	out, truncated, err := runGitInspection(ctx, append(base, args...))
+	if err != nil {
+		return "", false, fmt.Errorf("git inspection failed (repository unavailable, timeout, sandbox or Git error)")
+	}
+	return out, truncated, nil
+}
+
+func gitConfigNoMatches(err error) bool {
+	var exit *exec.ExitError
+	return errors.As(err, &exit) && exit.ExitCode() == 1
+}
+
+func disabledGitFilters(names string) ([]string, error) {
+	seen := map[string]bool{}
+	var overrides []string
+	for key := range strings.SplitSeq(names, "\x00") {
+		if key == "" {
+			continue
+		}
+		last := strings.LastIndexByte(key, '.')
+		if !strings.HasPrefix(key, "filter.") || last <= len("filter.") || len(key) > 1024 || strings.ContainsAny(key, "=\r\n") {
+			return nil, fmt.Errorf("invalid Git filter configuration")
+		}
+		prefix := key[:last]
+		if seen[prefix] {
+			continue
+		}
+		seen[prefix] = true
+		if len(seen) > 256 {
+			return nil, fmt.Errorf("too many Git filters for safe inspection")
+		}
+		overrides = append(overrides, "-c", prefix+".clean=", "-c", prefix+".process=", "-c", prefix+".required=false")
+	}
+	return overrides, nil
+}
+
+func runGitInspection(ctx context.Context, args []string) (string, bool, error) {
+	cmd, err := shell.GitCommand(ctx, config.WorkingDirectory(), commandString(args))
 	if err != nil {
 		return "", false, err
 	}
 	out, stderr := &shell.Buffer{Limit: 128 << 10}, &shell.Buffer{Limit: 4096}
-	cmd.Stdout = out
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return "", false, fmt.Errorf("git inspection failed (repository unavailable, timeout, sandbox or Git error)")
-	}
+	cmd.Stdout, cmd.Stderr = out, stderr
+	err = cmd.Run()
 	text, truncated := out.Snapshot()
-	return text, truncated, nil
+	return text, truncated, err
 }
+
 func (g *gitTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	var input struct {
 		Path   string

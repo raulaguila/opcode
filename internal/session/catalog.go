@@ -50,7 +50,10 @@ func (c *Catalog) load() (catalogDocument, error) {
 	return d, nil
 }
 func (c *Catalog) Snapshot() (map[string]LocalSession, string, error) {
-	unlock := localstate.Lock(c.path)
+	unlock, err := localstate.LockFile(c.path)
+	if err != nil {
+		return nil, "", err
+	}
 	defer unlock()
 	d, err := c.load()
 	return d.Sessions, d.Last, err
@@ -59,7 +62,10 @@ func (c *Catalog) update(id string, change func(*LocalSession), active bool) err
 	if id == "" || len(id) > 128 || strings.ContainsFunc(id, unicode.IsControl) {
 		return fmt.Errorf("invalid session identifier")
 	}
-	unlock := localstate.Lock(c.path)
+	unlock, err := localstate.LockFile(c.path)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	d, err := c.load()
 	if err != nil {

@@ -286,11 +286,13 @@ func auxiliaryBudgetTools(name config.AgentName, p provider.Provider, history []
 
 func (a *agent) estimateProviderContext(p provider.Provider, history []message.Message, ts []tools.BaseTool) (ContextStatus, error) {
 	status := estimateContext(p.Model(), a.systemPrompt(), history, ts, a.maxOutputTokens)
+	visualTokens := int64(0)
 	if sizer, ok := p.(provider.RequestSizer); ok {
 		footprint, err := sizer.RequestFootprint(history, ts)
 		if err != nil {
 			return status, err
 		}
+		visualTokens = footprint.VisualTokens
 		status.EstimatedInputTokens = (footprint.ASCIIBytes+1)/2 + footprint.OtherBytes + int64(len(history))*32 + 256
 		status.ToolSchemaTokens = (footprint.SchemaASCIIBytes+1)/2 + footprint.SchemaOtherBytes
 		if footprint.CompatibleTokenizer != "" {
@@ -310,6 +312,13 @@ func (a *agent) estimateProviderContext(p provider.Provider, history []message.M
 	}
 	status.uncalibratedInput = status.EstimatedInputTokens
 	status = a.calibratedEstimate(p.Model(), status)
+	// Visual reserves must not shrink with a calibration learned from text.
+	status.EstimatedInputTokens += visualTokens
+	status.uncalibratedInput += visualTokens
+	if visualTokens > 0 {
+		status.Method += "; Base64 excluded from text, conservative image reserve included"
+	}
+	status.Fits = status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens <= status.ContextWindow
 	evidence := int64(0)
 	for _, msg := range history {
 		if msg.Role == message.Tool {

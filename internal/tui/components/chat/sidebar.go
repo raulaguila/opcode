@@ -28,25 +28,8 @@ type sidebarCmp struct {
 }
 
 func (m *sidebarCmp) Init() tea.Cmd {
-	if m.history != nil {
-		ctx := context.Background()
-		// Subscribe to file events
-		filesCh := m.history.Subscribe(ctx)
-
-		// Initialize the modified files map
-		m.modFiles = make(map[string]struct {
-			additions int
-			removals  int
-		})
-
-		// Load initial files and calculate diffs
-		m.loadModifiedFiles(ctx)
-
-		// Return a command that will send file events to the Update method
-		return func() tea.Msg {
-			return <-filesCh
-		}
-	}
+	m.modFiles = make(map[string]struct{ additions, removals int })
+	m.loadModifiedFiles(context.Background())
 	return nil
 }
 
@@ -65,16 +48,15 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case pubsub.Event[history.File]:
-		if msg.Payload.SessionID == m.session.ID {
-			// Process the individual file change instead of reloading all files
-			ctx := context.Background()
-			m.processFileChanges(ctx, msg.Payload)
-
-			// Return a command to continue receiving events
-			return m, func() tea.Msg {
-				ctx := context.Background()
-				filesCh := m.history.Subscribe(ctx)
-				return <-filesCh
+		// One central, cancellable subscription delivers events, including a gap
+		// flagged on another session after this session's events were dropped.
+		if msg.ReconcileRequired {
+			m.loadModifiedFiles(context.Background())
+		} else if msg.Payload.SessionID == m.session.ID {
+			if msg.Type == pubsub.DeletedEvent {
+				m.loadModifiedFiles(context.Background())
+			} else {
+				m.processFileChanges(context.Background(), msg.Payload)
 			}
 		}
 	}

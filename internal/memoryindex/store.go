@@ -85,13 +85,30 @@ func Upsert(ctx context.Context, directory, project string, d Document) error {
 	if _, err := tx.ExecContext(ctx, `INSERT INTO memory(id,text) VALUES(?,?)`, d.ID, d.Text); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM memory WHERE id IN (SELECT id FROM documents ORDER BY stamp DESC,id LIMIT -1 OFFSET 100000)`); err != nil {
-		return err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM documents WHERE id NOT IN (SELECT id FROM documents ORDER BY stamp DESC,id LIMIT 100000)`); err != nil {
+	if err := prune(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+const maxDocuments = 100000
+
+func prune(ctx context.Context, tx *sql.Tx) error {
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM documents`).Scan(&count); err != nil {
+		return err
+	}
+	if count <= maxDocuments {
+		return nil
+	}
+	// Reverse the retention index to visit only the excess oldest documents.
+	oldest := `SELECT id FROM documents ORDER BY stamp ASC,id DESC LIMIT ?`
+	for _, table := range []string{"memory", "documents"} {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE id IN (`+oldest+`)`, count-maxDocuments); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 func Remove(ctx context.Context, directory, project, id string) error {
 	db, err := open(ctx, directory, project)

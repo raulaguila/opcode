@@ -104,7 +104,10 @@ func (s *Store) Record(session, turnID string, changes []tools.FileChange) error
 	if len(changes) == 0 {
 		return nil
 	}
-	unlock := localstate.Lock(s.path)
+	unlock, err := localstate.LockFile(s.path)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	d, err := s.load()
 	if err != nil {
@@ -131,7 +134,10 @@ func (s *Store) Record(session, turnID string, changes []tools.FileChange) error
 	return localstate.Write(s.path, d, maxState)
 }
 func (s *Store) List(session string) ([]Turn, error) {
-	unlock := localstate.Lock(s.path)
+	unlock, err := localstate.LockFile(s.path)
+	if err != nil {
+		return nil, err
+	}
 	defer unlock()
 	d, err := s.load()
 	if err != nil {
@@ -270,7 +276,10 @@ func reviewChangeDiff(change tools.FileChange, path string) string {
 }
 
 func (s *Store) markApplied(session string, p Preview) error {
-	unlock := localstate.Lock(s.path)
+	unlock, err := localstate.LockFile(s.path)
+	if err != nil {
+		return err
+	}
 	defer unlock()
 	d, err := s.load()
 	if err != nil {

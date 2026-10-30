@@ -86,15 +86,16 @@ func (t *apiTransport) postBytes(ctx context.Context, path string, body []byte, 
 	}
 }
 
-// HTTPError deliberately omits request URLs, headers and request bodies, which
-// may contain API keys, prompts or signed URLs.
+// Body and RequestID are untrusted provider data, retained only for internal
+// classification/diagnostics. Error never publishes them to logs or the UI.
 type HTTPError struct {
-	StatusCode      int
-	RequestID, Body string
+	StatusCode int
+	RequestID  string `json:"-"`
+	Body       string `json:"-"`
 }
 
 func (e *HTTPError) Error() string {
-	return fmt.Sprintf("provider HTTP %d (request %s): %s", e.StatusCode, e.RequestID, e.Body)
+	return fmt.Sprintf("provider HTTP %d", e.StatusCode)
 }
 func requestID(h http.Header) string {
 	for _, key := range []string{"x-request-id", "request-id", "x-amzn-requestid"} {

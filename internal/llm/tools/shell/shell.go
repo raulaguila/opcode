@@ -236,7 +236,11 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 	if err != nil {
 		return nil, err
 	}
-	wrapped = append(wrapped, "--bind", cwd, cwd, "--chdir", cwd)
+	workspaceBind := "--bind"
+	if readGit && !writeGit {
+		workspaceBind = "--ro-bind"
+	}
+	wrapped = append(wrapped, workspaceBind, cwd, cwd, "--chdir", cwd)
 	// Hide credential files inside the otherwise writable workspace, too.
 	masks := sandboxCredentialMasks{cwd: cwd, readGit: readGit, writeGit: writeGit}
 	if err := filepath.WalkDir(cwd, masks.visit); err != nil {

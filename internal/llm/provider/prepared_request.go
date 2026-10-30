@@ -35,21 +35,35 @@ type preparedHTTP struct {
 }
 
 func (p *baseProvider) PrepareRequest(history []message.Message, definitions []tools.BaseTool, stream bool) (PreparedRequest, error) {
+	history, err := normalizeImageURLs(p.cleanMessages(history))
+	if err != nil {
+		return nil, err
+	}
 	owner, ok := p.client.(interface{ requestHTTP() *httpProvider })
 	if !ok {
 		return nil, fmt.Errorf("provider does not support prepared requests")
 	}
-	prepared, err := owner.requestHTTP().prepare(p.cleanMessages(history), definitions, stream)
+	prepared, err := owner.requestHTTP().prepare(history, definitions, stream)
 	if err != nil {
 		return nil, err
 	}
-	prepared.footprint = p.serializedFootprint(prepared.body)
+	text, visual, err := imageBudgetProjection(p.options.model, history, prepared.body)
+	if err != nil {
+		return nil, err
+	}
+	prepared.footprint = p.serializedFootprint(text)
+	prepared.footprint.WireBytes = int64(len(prepared.body))
+	prepared.footprint.VisualTokens = visual
 	return prepared, nil
 }
 
 func (p *httpProvider) requestHTTP() *httpProvider { return p }
 
 func (p *httpProvider) prepare(history []message.Message, definitions []tools.BaseTool, stream bool) (*preparedHTTP, error) {
+	history, err := normalizeImageURLs(history)
+	if err != nil {
+		return nil, err
+	}
 	path, payload, err := p.protocol.request(history, definitions, stream)
 	if err != nil {
 		return nil, err
@@ -57,6 +71,9 @@ func (p *httpProvider) prepare(history []message.Message, definitions []tools.Ba
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("encode provider request: %w", err)
+	}
+	if len(body) > maxProviderBytes {
+		return nil, fmt.Errorf("provider request exceeds 32 MiB")
 	}
 	return &preparedHTTP{transport: p.transport, protocol: p.protocol, path: path, body: body, stream: stream}, nil
 }

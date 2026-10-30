@@ -42,6 +42,13 @@ jobs:
       # their wall-clock budget while every package and race check still runs.
       - run: go test -race -p 1 ./...
       - run: go vet ./...
+      - name: Run deterministic integration regressions without live services
+        env:
+          OPCODE_LIVE_TESTS: ""
+          OPCODE_LIVE_OLLAMA: ""
+        run: |
+          go test -race -p 1 -tags integration ./...
+          go vet -tags integration ./...
       - name: Verify complexity and static analysis
         run: |
           go install github.com/uudashr/gocognit/cmd/gocognit@v1.3.0
@@ -89,6 +96,7 @@ jobs:
           LOCAL_ENDPOINT: ""
         run: |
           go test -count=1 ./internal/config -run '^TestNativeVault'
+          go test -count=1 ./internal/localstate ./internal/session
           go test -count=1 ./internal/permission
           go test -count=1 ./internal/llm/tools/shell -run '^TestNativeSmoke'
           go test -count=1 ./internal/tui/components/chat -run '^Test(Composer|NewlineShortcuts|EditorPreservesDraft|KeyboardSelection|TranscriptSearch|ResponseClick|Selection|MouseWheel|MessageUpdates|ProseUses)'

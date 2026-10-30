@@ -258,7 +258,11 @@ func TestInterruptedToolStreamRepairsProtocolAndKeepsAcceptedInstructions(t *tes
 	require.NoError(t, err)
 	require.True(t, queued)
 	close(broken.release)
-	require.ErrorContains(t, finishGeneration(t, done).Error, "connection stopped")
+	failure := finishGeneration(t, done).Error
+	require.ErrorContains(t, failure, "provider response failed")
+	var private *providerEventError
+	require.ErrorAs(t, failure, &private)
+	require.ErrorContains(t, private.cause, "connection stopped")
 	history, err := m.List(context.Background(), "s")
 	require.NoError(t, err)
 	require.Len(t, history, 4)

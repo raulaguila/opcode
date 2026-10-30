@@ -1,0 +1,222 @@
+{
+  "date": "2026-10-30",
+  "baseline_commit": "84632de8e60ce1dce5a904b5e11d37f99dc7ef65",
+  "toolchain": "go1.27.3",
+  "platform": "linux/amd64",
+  "fixes": [
+    {
+      "item": 1,
+      "change": "Read-only Git disables external filters/signature helpers and uses a read-only sandbox workspace",
+      "regression": "git_read_only_test.go"
+    },
+    {
+      "item": 2,
+      "change": "HTTP, streaming and auxiliary errors publish safe categories while retaining private causes",
+      "regression": "provider_error_test.go"
+    },
+    {
+      "item": 3,
+      "change": "Stable OS locks serialize catalog, composer and review state across independent processes",
+      "regression": "catalog_test.go, lock_test.go"
+    },
+    {
+      "item": 4,
+      "change": "Azure clones retain deployment routes, API version, authentication and transport",
+      "regression": "azure_clone_test.go"
+    },
+    {
+      "item": 5,
+      "change": "Unsupported attachments are rejected before accepting or clearing the draft",
+      "regression": "attachments_test.go"
+    },
+    {
+      "item": 6,
+      "change": "One cancellable History subscription; sidebar reconciles gaps/deletes without adding subscribers",
+      "regression": "subscriptions_test.go, sidebar_test.go"
+    },
+    {
+      "item": 7,
+      "change": "Visual reserve uses image dimensions; Base64 is excluded only from image slots; wire remains bounded",
+      "regression": "image_budget_test.go"
+    },
+    {
+      "item": 8,
+      "change": "Canonical composer draft storage with safe legacy text cleanup after successful saves",
+      "regression": "draft_test.go"
+    },
+    {
+      "item": 9,
+      "change": "Metadata snapshots avoid vault access; needed credential lookup runs asynchronously",
+      "regression": "model_metadata_test.go"
+    },
+    {
+      "item": 10,
+      "change": "Binary scan and text quotas are separate, including cached text and bounded background batches",
+      "regression": "index_binary_budget_test.go"
+    },
+    {
+      "item": 11,
+      "change": "CI and make quality run deterministic integration tests with live services disabled",
+      "regression": ".github/workflows/test.yml"
+    },
+    {
+      "item": 12,
+      "change": "Conversation retention skips cleanup below cap and removes only excess rows atomically",
+      "regression": "retention_test.go, retention_bench_test.go"
+    },
+    {
+      "item": 13,
+      "change": "Delete obsolete directory tree implementation and tests with no production callers",
+      "regression": "ls.go, ls_test.go"
+    }
+  ],
+  "permission_approvals_preserved": true,
+  "citation_validator_unchanged": true,
+  "dependencies_changed": false,
+  "benchmark": {
+    "toolchain": "go1.27.3",
+    "fixture": "same versioned BenchmarkMemoryProjection in current repo and external baseline; metadata documents at stamp1 and hot-row FTS only",
+    "samples": 3,
+    "iterations_per_sample": 5,
+    "rows": [
+      {
+        "metadata_documents": 100,
+        "before_samples": [
+          [
+            1207138.0,
+            483627.0,
+            939.0
+          ],
+          [
+            1180795.0,
+            483691.0,
+            941.0
+          ],
+          [
+            3206932.0,
+            483268.0,
+            939.0
+          ]
+        ],
+        "after_samples": [
+          [
+            1004056.0,
+            531332.0,
+            964.0
+          ],
+          [
+            1595060.0,
+            530680.0,
+            962.0
+          ],
+          [
+            4353426.0,
+            531060.0,
+            963.0
+          ]
+        ],
+        "median_before_ns_bytes_allocs": [
+          1207138.0,
+          483627.0,
+          939.0
+        ],
+        "median_after_ns_bytes_allocs": [
+          1595060.0,
+          531060.0,
+          963.0
+        ],
+        "time_change_percent": 32.1356795991842,
+        "bytes_change_percent": 9.807765075150886
+      },
+      {
+        "metadata_documents": 10000,
+        "before_samples": [
+          [
+            14437257.0,
+            483057.0,
+            939.0
+          ],
+          [
+            14145910.0,
+            483614.0,
+            940.0
+          ],
+          [
+            14051276.0,
+            483636.0,
+            940.0
+          ]
+        ],
+        "after_samples": [
+          [
+            1169636.0,
+            530222.0,
+            963.0
+          ],
+          [
+            1260549.0,
+            531169.0,
+            965.0
+          ],
+          [
+            1137005.0,
+            531361.0,
+            966.0
+          ]
+        ],
+        "median_before_ns_bytes_allocs": [
+          14145910.0,
+          483614.0,
+          940.0
+        ],
+        "median_after_ns_bytes_allocs": [
+          1169636.0,
+          531169.0,
+          965.0
+        ],
+        "time_change_percent": -91.73163126302939,
+        "bytes_change_percent": 9.833255447526334
+      }
+    ],
+    "limitation": "100-row timing samples have high variance; no small-workload speed claim. Not end-to-end model latency or full FTS at 100000 rows. Allocation increase reported."
+  },
+  "validation": {
+    "common_race": "passed",
+    "integration_race": "passed",
+    "vet_integration": "passed",
+    "staticcheck_integration": "passed",
+    "exact_complexity_over_15": 0,
+    "actionlint": "passed (v1.7.12)",
+    "language_inventory": "passed",
+    "ollama_pty": {
+      "result": "passed",
+      "model": "llama3.1:8b",
+      "context_window": 16384,
+      "seconds": 25.36,
+      "readiness_ms": 1921,
+      "race": true
+    },
+    "native_linux_build": "passed",
+    "windows_amd64_cross_build": "passed",
+    "darwin_arm64_cross_build": "passed",
+    "windows_macos_native_execution": "not run locally; native CI coverage extended",
+    "integration_attempts": [
+      {
+        "exit_code": 143,
+        "detail": "All package results printed pass; command wrapper terminated. Not recorded as a passing gate."
+      },
+      {
+        "exit_code": 0,
+        "detail": "Same command repeated successfully, without changing tests or criteria."
+      }
+    ]
+  },
+  "limits": [
+    "Benchmarks are synthetic component measurements, not model inference latency.",
+    "Allocation growth is reported; small-history timing samples have high variance.",
+    "No live Azure, company endpoint or paid provider was called.",
+    "Remote image URLs require attaching bytes; no automatic fetch is performed.",
+    "Cross-builds do not prove native Windows/macOS runtime behavior."
+  ],
+  "started": "2026-10-29"
+}

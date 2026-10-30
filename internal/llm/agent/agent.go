@@ -349,8 +349,9 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 			logging.InfoPersist(fmt.Sprintf("Event processing canceled for session: %s", sessionID))
 			return context.Canceled
 		}
-		logging.ErrorPersist(event.Error.Error())
-		return event.Error
+		failure := publicProviderFailure(event.Error, a.provider.Model())
+		logging.ErrorPersist(failure.Error())
+		return failure
 	case provider.EventComplete:
 		calls := append([]message.ToolCall(nil), event.Response.ToolCalls...)
 		for i := range calls {

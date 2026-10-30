@@ -55,5 +55,9 @@ func sendAuxiliaryRequest(ctx context.Context, name config.AgentName, connection
 		connection = &preparedAuxiliaryProvider{Provider: connection, prepared: preparation.prepared}
 	}
 	// The adapter remains inside the usual deadline/cancellation boundary.
-	return timedProvider(connection).SendMessages(ctx, bounded, definitions)
+	response, err := timedProvider(connection).SendMessages(ctx, bounded, definitions)
+	if err != nil {
+		err = publicProviderFailure(err, connection.Model())
+	}
+	return response, err
 }

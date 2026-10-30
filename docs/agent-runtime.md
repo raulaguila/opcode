@@ -34,6 +34,18 @@ os mesmos.
 
 ## Capacidades e contexto
 
+Imagens são orçadas pelas dimensões e por uma reserva visual conservadora,
+separada do texto. A compressão PNG/JPEG e o Base64 não são tokens de texto;
+os bytes completos continuam no pedido e o limite HTTP de 32 MiB permanece.
+A reserva não é uma previsão de cobrança: segue famílias conhecidas e usa uma
+margem maior nas demais. As regras de referência são as documentações de
+[visão da OpenAI](https://developers.openai.com/api/docs/guides/images-vision) e
+[visão da Anthropic](https://platform.claude.com/docs/en/build-with-claude/vision).
+Anexos incompatíveis com o modelo escolhido são recusados antes de aceitar a
+mensagem; o rascunho e a imagem ficam preservados. Data URLs válidas são
+normalizadas em memória. URLs remotas de imagem exigem anexar o arquivo, sem
+download automático para descobrir suas dimensões.
+
 Perguntar disponibiliza leitura, busca, navegação e perguntas ao usuário.
 Planejar acrescenta o registro do plano; não disponibiliza comandos nem edições.
 Executar permite carregar ferramentas mutáveis, mantendo suas permissões e o

@@ -271,8 +271,10 @@ make complexity staticcheck
 
 O limite é 15 por função, incluindo testes e código gerado, sem exclusões.
 Staticcheck cobre também os arquivos com a tag `integration`, sem executar
-as APIs reais. `make quality` reúne complexidade, Staticcheck, vet e a suíte comum. O CI também
-executa a suíte com detector de corridas e verifica o inventário gerado de linguagens.
+as APIs reais. `make quality` reúne complexidade, Staticcheck, vet, a suíte comum
+e `make test-integration`. Este último executa as regressões determinísticas com
+a tag `integration` e detector de corridas, com os opt-ins de serviços reais
+desativados. O CI executa essas duas suítes e verifica o inventário de linguagens.
 Para regenerar o código SQLC, consulte `internal/db/generate.go`: o pós-processador
 reproduzível de prepared statements mantém os métodos gerados dentro do limite.
 

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -174,4 +176,77 @@ func TestPreparedClearAndInitialSubmissionKeepTheirDrafts(t *testing.T) {
 	pending.Update(SessionSelectedMsg(session.Session{ID: "created"}))
 	require.Equal(t, "new submission", pending.textarea.Value())
 	require.True(t, pending.submitting)
+}
+
+func TestManyUnicodeDraftsStayCanonicalAndDoNotFillTheSessionIndex(t *testing.T) {
+	root := t.TempDir()
+	m := draftEditor(root)
+	m.SetSize(80, 8)
+	draft := strings.Repeat("😀", 16000)
+	require.Len(t, []rune(draft), 16000)
+	require.Len(t, draft, 64000)
+	for index := range 17 {
+		id := strconv.Itoa(index)
+		m.Update(SessionSelectedMsg(session.Session{ID: id}))
+		require.Equal(t, id, m.session.ID)
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Paste: true, Runes: []rune(draft)})
+		require.Equal(t, draft, m.textarea.Value())
+		require.NoError(t, m.PersistDraft())
+	}
+	require.NoError(t, m.PrepareSessionDraft("0"))
+	document, err := loadDraftDocument(root, filepath.Join(root, "state", "composer-drafts.json"))
+	require.NoError(t, err)
+	require.Len(t, document.Drafts, 17)
+	metadata, _, err := session.NewCatalog(root, filepath.Join(root, "state")).Snapshot()
+	require.NoError(t, err)
+	require.Len(t, metadata, 17)
+	for _, entry := range metadata {
+		require.Empty(t, entry.Draft, "the index must never duplicate canonical draft text")
+	}
+	fresh := draftEditor(root)
+	fresh.Update(SessionSelectedMsg(session.Session{ID: "0"}))
+	require.Equal(t, draft, fresh.textarea.Value())
+}
+func TestLegacyDraftIsRestoredAndClearedOnlyAfterCanonicalSave(t *testing.T) {
+	root := t.TempDir()
+	catalog := session.NewCatalog(root, filepath.Join(root, "state"))
+	require.NoError(t, catalog.SaveDraft("legacy", "old draft"))
+	require.NoError(t, catalog.Archive("legacy", true))
+	m := draftEditor(root)
+	m.Update(SessionSelectedMsg(session.Session{ID: "legacy"}))
+	require.Equal(t, "old draft", m.textarea.Value())
+	before, _, err := catalog.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, "old draft", before["legacy"].Draft)
+	m.attachments = []message.Attachment{{FileName: "image.png", Content: []byte("image")}}
+	require.NoError(t, m.PersistDraft())
+	after, last, err := catalog.Snapshot()
+	require.NoError(t, err)
+	require.Empty(t, after["legacy"].Draft)
+	require.True(t, after["legacy"].Archived)
+	require.Equal(t, "legacy", last)
+	restored := draftEditor(root)
+	restored.Update(SessionSelectedMsg(session.Session{ID: "legacy"}))
+	require.Equal(t, "old draft", restored.textarea.Value())
+	require.Equal(t, m.attachments, restored.attachments)
+	restored.textarea.Reset()
+	restored.attachments = nil
+	require.NoError(t, restored.PersistDraft())
+	reopened := draftEditor(root)
+	reopened.Update(SessionSelectedMsg(session.Session{ID: "legacy"}))
+	require.Empty(t, reopened.textarea.Value(), "cleared canonical content must not resurrect from the old index")
+}
+func TestFailedCanonicalDraftSaveDoesNotClearLegacyCopy(t *testing.T) {
+	root := t.TempDir()
+	catalog := session.NewCatalog(root, filepath.Join(root, "state"))
+	require.NoError(t, catalog.SaveDraft("legacy", "safe legacy copy"))
+	m := draftEditor(root)
+	m.session = session.Session{ID: "legacy"}
+	m.textarea.SetValue("edited text")
+	require.NoError(t, os.Mkdir(m.draftPath, 0700)) // A non-file destination must be rejected.
+	require.Error(t, m.PersistDraft())
+	entries, _, err := catalog.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, "safe legacy copy", entries["legacy"].Draft)
+	require.Equal(t, "edited text", m.textarea.Value())
 }

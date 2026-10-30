@@ -4,6 +4,19 @@ As ferramentas novas entram no catálogo progressivo do agente. Os modos Pergunt
 e Planejar podem consultar o mapa, símbolos, validações, artefatos e recursos MCP;
 renomear ou substituir símbolos só está disponível em Executar.
 
+As consultas `git_status`, `git_diff` e `git_log` desativam filtros externos
+`clean`/`process` e verificação de assinaturas por programas do repositório.
+Com Bubblewrap, a workspace também fica somente leitura durante a inspeção.
+Filtros permanecem desativados quando o usuário configura `sandbox=none`.
+O diff inspeciona o conteúdo sem executar conversores do repositório; alterações
+de worktrees continuam exigindo aprovação e usam sua capacidade separada.
+
+O índice separa até 20 MiB de texto da leitura total de até 128 MiB por refresh;
+os limites de arquivos e bytes por arquivo continuam ativos. Arquivos binários
+não consomem a cota de texto. Os limites menores de texto configurados pelo
+usuário também se aplicam aos arquivos reutilizados do cache. Exceder a cota
+de leitura requer reduzir a workspace ou excluir assets em `.opcodeignore`.
+
 - `ls`: páginas ordenadas, até 60 caminhos/6.000 bytes, com filtros e `snapshot`.
   Reenvie o snapshot com `next_offset`; mudanças exigem reiniciar em zero.
 - `get_project_map`: até 60 entradas (padrão 30), orçamento de 7.500 bytes, mesmas

@@ -1,11 +1,17 @@
 package session
 
 import (
+	"bufio"
+	"context"
 	"github.com/stretchr/testify/require"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/raulaguila/opcode/internal/localstate"
 )
 
 func TestCatalogPersistsSessionsWithoutRestoringGrants(t *testing.T) {
@@ -27,6 +33,59 @@ func TestCatalogPersistsSessionsWithoutRestoringGrants(t *testing.T) {
 	entries, _, err = store.Snapshot()
 	require.NoError(t, err)
 	require.Equal(t, "unfinished prompt", entries["first"].Draft)
+}
+
+func TestCatalogProcessWriter(t *testing.T) {
+	if os.Getenv("OPCODE_CATALOG_CHILD") != "1" {
+		return
+	}
+	root := os.Getenv("OPCODE_CATALOG_ROOT")
+	// A pipe rendezvous lets the parent hold the actual kernel lock before we
+	// attempt the complete read/change/write, without replacing storage code.
+	os.Stdout.WriteString("ready\n")
+	require.NoError(t, NewCatalog(root, ".opcode").SaveDraft("child", "second draft"))
+}
+
+func TestCatalogSerializesIndependentProcesses(t *testing.T) {
+	root := t.TempDir()
+	catalog := NewCatalog(root, ".opcode")
+	unlock, err := localstate.LockFile(catalog.path)
+	require.NoError(t, err)
+	defer unlock()
+	binary, err := os.Executable()
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	child := exec.CommandContext(ctx, binary, "-test.run=^TestCatalogProcessWriter$")
+	child.Env = append(os.Environ(), "OPCODE_CATALOG_CHILD=1", "OPCODE_CATALOG_ROOT="+root)
+	output, err := child.StdoutPipe()
+	require.NoError(t, err)
+	require.NoError(t, child.Start())
+	defer child.Process.Kill()
+	line, err := bufio.NewReader(output).ReadString('\n')
+	require.NoError(t, err)
+	require.Equal(t, "ready\n", line)
+	done := make(chan error, 1)
+	go func() { done <- child.Wait() }()
+	select {
+	case err := <-done:
+		t.Fatalf("child bypassed the held state lock: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	// Save the first process's document while retaining the transaction lock.
+	require.NoError(t, localstate.Write(catalog.path, catalogDocument{Root: root, Sessions: map[string]LocalSession{"parent": {Archived: true, Draft: "first draft"}}}, 1<<20))
+	unlock()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-ctx.Done():
+		t.Fatal("child did not acquire released state lock")
+	}
+	entries, _, err := catalog.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, "first draft", entries["parent"].Draft)
+	require.True(t, entries["parent"].Archived)
+	require.Equal(t, "second draft", entries["child"].Draft)
 }
 func TestCatalogRefusesCorruptionAndWorkspaceMismatch(t *testing.T) {
 	root := t.TempDir()

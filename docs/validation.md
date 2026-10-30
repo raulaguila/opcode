@@ -5,6 +5,76 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Correções da auditoria — 30/10/2026
+
+As 13 correções partiram de `84632de`, com prioridade para os itens 1–4.
+Não foram adicionadas dependências nem alterados os critérios ou a
+implementação da validação de citações. Aprovações, sandbox e recibos continuam
+ativos. O registro por item está em
+[`2026-10-30-audit-fixes.json`](evidence/2026-10-30-audit-fixes.json).
+
+1. Inspeção Git neutraliza filtros `clean`/`process` e programas de assinatura
+   antes de consultar arquivos; Bubblewrap monta a workspace somente leitura.
+   Casos com sandbox ativo/desativado não executaram os helpers de fixture.
+   A criação autorizada de worktree conservou sua aprovação e gravação.
+2. Erros HTTP, SSE e chamadas auxiliares publicam categoria/status, preservando
+   a causa privada para diagnóstico interno e recuperação de contexto/OOM.
+   Chaves e IDs fictícios ecoados não chegaram aos erros públicos ou logs.
+3. Travas do sistema operacional protegem catálogo, composer e revisão contra
+   gravações concorrentes. Dois processos independentes preservaram rascunhos
+   e preferências; sidecars estáveis não seguem links simbólicos.
+4. Clones Azure preservam deployment, versão, autenticação e transporte, tanto
+   no pedido direto quanto no preparado. Foram testadas APIs chat/responses e
+   rotas versionadas/v1 com transporte controlado, sem conta Azure real.
+5. Anexos incompatíveis são recusados antes de aceitar a mensagem, preservando
+   rascunho e imagem.
+6. History usa uma assinatura central cancelável. Eventos de duas sessões,
+   lacunas e exclusões não acumulam assinantes nem interrompem a lateral.
+7. O orçamento visual usa dimensões e reserva conservadora, sem tokenizar o
+   Base64 como texto. PNGs de pixels iguais têm orçamento igual; os bytes
+   enviados e a cota HTTP permanecem verificados. Data URLs são normalizadas
+   em memória; URLs remotas exigem anexar o arquivo, sem fetch automático.
+8. Rascunhos usam apenas o documento canônico; a cópia legada só é limpa após
+   salvar com sucesso. Dezessete rascunhos Unicode válidos sobreviveram à
+   reinicialização; falha na gravação preservou a origem legada.
+9. Navegar em modelos sem consulta individual suportada não lê o cofre.
+   Credenciais necessárias são resolvidas no comando assíncrono de metadados.
+10. Binários não consomem a cota textual nem esgotam o lote de atualização em
+    segundo plano. Texto reutilizado continua contado; a leitura por refresh
+    tem limite separado de 128 MiB e cada arquivo mantém seu limite próprio.
+11. CI e `make quality` executam as regressões determinísticas com a tag
+    `integration`, sem opt-in de serviços reais. O smoke nativo inclui as
+    travas de estado e o catálogo em Linux, macOS e Windows.
+12. A retenção de conversas só roda acima do limite e remove apenas o excesso.
+    Um teste com 100.001 registros verificou desempates, atualização existente
+    e rollback conjunto dos metadados e FTS quando a segunda exclusão falha.
+13. Foram removidas 165 linhas do caminho antigo de listagem em árvore e 178
+    linhas de seus testes sem chamadores de produção. A listagem paginada
+    atual e suas regressões permaneceram.
+
+O benchmark de atualização da projeção, com o mesmo código de medição nos dois
+lados, Go 1.27.3 e três amostras de cinco operações, teve mediana de
+14,146 ms para 1,170 ms com 10.000 documentos de metadados. Os bytes alocados
+subiram de 483.614 para 531.169 por operação (+9,8%), e as alocações de 940 para
+965. O caso com 100 documentos teve variação alta e não sustenta promessa de
+ganho. É um teste de componente, com apenas a linha quente no FTS, não uma
+medida de inferência ou de desempenho global do produto.
+
+O binário real passou novamente no fluxo PTY com `llama3.1:8b`, contexto
+16.384 e `-race`: 25,36 s totais, incluindo 1,921 s de preparação do modelo.
+A explicação factual foi aceita com citações verificadas; pergunta ao usuário,
+cópia, aprovação única do comando, saída ao vivo, entrada pelo PTY e instrução
+enfileirada passaram. Os critérios e prazos da aceitação ficaram iguais.
+
+Passaram as suítes comum e com tag `integration`, ambas com `-race -p 1`,
+vet e Staticcheck com integração, Gocognit com recursão exata sem funções acima
+de 15, Actionlint 1.7.12 e inventário de linguagens. A primeira execução global
+com integração imprimiu aprovação de todos os pacotes, mas o comando terminou
+com sinal 143; a repetição idêntica encerrou com código zero e é o gate aprovado.
+Build Linux e cross-builds Windows/amd64 e macOS/arm64 passaram. Não houve
+execução nativa local nos dois últimos sistemas nem chamadas a contas Azure ou
+provedores pagos. Não foram alterados `go.mod`, `go.sum` ou as guardas de citação.
+
 ## Recuperação da aceitação PTY/Ollama — 29/10/2026
 
 O timeout registrado na auditoria abaixo foi investigado novamente a partir

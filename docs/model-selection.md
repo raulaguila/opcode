@@ -113,6 +113,11 @@ configurações. O arquivo é substituído atomicamente com permissão `0600`.
 
 ## Catálogos e metadados
 
+A navegação captura apenas a configuração necessária. Modelos sem consulta
+individual suportada não acessam o cofre; quando o Ollama exige uma credencial
+guardada, sua resolução ocorre na operação assíncrona. Trocar a seleção cancela
+a consulta e impede que um resultado atrasado substitua o modelo atual.
+
 Há consulta dinâmica para Ollama/LM Studio, OpenAI, Anthropic, Gemini, Groq,
 OpenRouter e xAI. Azure, Bedrock, Vertex e Copilot continuam mostrando os modelos
 cadastrados; o seletor identifica essa origem como catálogo configurado. Não

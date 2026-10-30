@@ -12,6 +12,8 @@ import (
 // RequestFootprint contains sizes only. It deliberately cannot expose raw
 // prompts, schemas, credentials or provider continuation data to logs or UI.
 type RequestFootprint struct {
+	WireBytes              int64
+	VisualTokens           int64
 	ASCIIBytes             int64
 	OtherBytes             int64
 	SchemaASCIIBytes       int64
@@ -58,7 +60,7 @@ func (p *baseProvider) RequestFootprint(history []message.Message, definitions [
 }
 
 func (p *baseProvider) serializedFootprint(raw []byte) RequestFootprint {
-	footprint := RequestFootprint{ReservedOutputTokens: p.options.maxTokens, ExactSerialization: true}
+	footprint := RequestFootprint{WireBytes: int64(len(raw)), ReservedOutputTokens: p.options.maxTokens, ExactSerialization: true}
 	footprint.ASCIIBytes, footprint.OtherBytes = countBytes(raw)
 	counter := p.footprintTokenizer()
 	footprint.countPayload(counter, raw)

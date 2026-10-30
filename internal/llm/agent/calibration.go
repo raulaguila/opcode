@@ -105,10 +105,14 @@ func contextFailure(err error, model models.Model) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrContextLimit) {
 		return false
 	}
+	err = privateProviderCause(err)
 	text := strings.ToLower(err.Error())
 	var httpError *provider.HTTPError
-	if errors.As(err, &httpError) && httpError.StatusCode != 400 && httpError.StatusCode != 413 && httpError.StatusCode != 500 {
-		return false
+	if errors.As(err, &httpError) {
+		if httpError.StatusCode != 400 && httpError.StatusCode != 413 && httpError.StatusCode != 500 {
+			return false
+		}
+		text = strings.ToLower(httpError.Body)
 	}
 	for _, term := range []string{"context_length_exceeded", "maximum context length", "context window", "context length exceeded", "input is too long", "prompt too long", "too many tokens"} {
 		if strings.Contains(text, term) {

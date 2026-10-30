@@ -34,6 +34,9 @@ func (c *openaiClient) cloneRequest(options providerClientOptions) providerClien
 	clone := *c
 	clone.providerOptions = scopedRequestOptions(c.providerOptions, options)
 	clone.httpProvider = &httpProvider{transport: c.transport, protocol: &clone}
+	if azure, ok := c.protocol.(*azureProtocol); ok {
+		clone.protocol = &azureProtocol{openaiClient: &clone, apiVersion: azure.apiVersion}
+	}
 	return &clone
 }
 

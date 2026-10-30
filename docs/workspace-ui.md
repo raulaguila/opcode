@@ -139,10 +139,20 @@ de validação inferido pelo conteúdo.
 
 Perguntas ao usuário aparecem acima do input em painel com borda, fundo distinto
 e o estado “Aguardando sua resposta”. Setas e marcadores indicam as opções; nada
-é enviado por pré-seleção. O campo “Outra resposta” aceita texto livre. `F2`
+é enviado por pré-seleção. A última opção é o campo vazio “Outra resposta”.
+Use `↑`/`↓` para selecioná-lo ou comece a digitar; o marcador e o foco mudam
+para esse campo. Enter envia somente a opção ativa: a sugestão selecionada ou
+o texto escrito. Voltar para uma sugestão conserva o rascunho da resposta livre,
+mas ele não substitui a sugestão no envio. O campo vazio não pode ser enviado.
+Em seleção múltipla, o texto livre é uma alternativa às opções marcadas. `F2`
 abre o conteúdo completo com rolagem; `F2`/`Esc` volta ao painel. `Esc` no painel
 normal cancela a geração. Perguntas agrupadas mantêm a revisão antes do envio.
-Depois da resposta, a conversa mostra “Você respondeu: …”. Esse painel não
+Depois da resposta, a conversa mantém a pergunta original e “Você respondeu: …”
+juntas, com o rótulo “Pergunta do agente” e pipe na cor de destaque do tema,
+distinta das mensagens comuns. Os rótulos preservam a distinção sem cores.
+Perguntas agrupadas mantêm cada resposta vinculada à sua pergunta. O conjunto
+continua visível com ferramentas recolhidas e ao reabrir a sessão; histórico
+incompleto mostra a resposta real sem inventar uma pergunta. Esse painel não
 concede permissões para executar ferramentas.
 Ao rolar para cima, novas mensagens não puxam a leitura para o fim. Use
 `Alt+End`, `/latest` ou o indicador de novas mensagens para acompanhar o final.

@@ -72,8 +72,6 @@ func (p *chatPage) refreshQuestion() {
 		input := textinput.New()
 		input.CharLimit = 4000
 		input.Prompt = config.Text("Resposta: ", "Answer: ")
-		input.Placeholder = config.Text("Escreva sua resposta ou escolha com ↑/↓", "Type your answer or choose with ↑/↓")
-		input.Focus()
 		p.workflow.details = false
 		p.workflow.detailView = viewport.New(max(1, p.width-2), max(1, p.height-8))
 		p.workflow.answer = input
@@ -83,6 +81,11 @@ func (p *chatPage) refreshQuestion() {
 		p.workflow.selectedChoices = map[int]bool{}
 	}
 	p.workflow.question = q
+	count := len(q.Choices)
+	if len(q.Questions) > 0 && p.workflow.questionIndex < len(q.Questions) {
+		count = len(q.Questions[p.workflow.questionIndex].Choices)
+	}
+	p.focusQuestionInput(count)
 }
 func (p *chatPage) mode() workflow.Mode {
 	if p.workflow.task.Mode.Valid() {
@@ -212,12 +215,12 @@ func (p *chatPage) questionKey(msg tea.KeyMsg) tea.Cmd {
 		p.app.CoderAgent.Cancel(p.session.ID)
 		return nil
 	case "up", "down":
-		questionKeyQChoices(p, &msg, &q)
-		return nil
+		return p.navigateQuestionAnswer(msg.String(), len(q.Choices))
 	case "enter":
-		answer := p.workflow.answer.Value()
-		if strings.TrimSpace(answer) == "" && p.workflow.choice >= 0 {
-			answer = q.Choices[p.workflow.choice]
+		selected := p.selectedQuestionAnswer(interaction.QuestionItem{Choices: q.Choices})
+		answer := selected.Text
+		if len(selected.Choices) > 0 {
+			answer = selected.Choices[0]
 		}
 		if err := p.app.Questions.Answer(p.session.ID, q.ID, answer); err != nil {
 			return util.ReportError(err)
@@ -225,10 +228,7 @@ func (p *chatPage) questionKey(msg tea.KeyMsg) tea.Cmd {
 		p.workflow.question = interaction.Question{}
 		return p.resizeContent()
 	default:
-		p.workflow.choice = -1
-		var cmd tea.Cmd
-		p.workflow.answer, cmd = p.workflow.answer.Update(msg)
-		return cmd
+		return p.editQuestionAnswer(msg, len(q.Choices))
 	}
 }
 
@@ -339,20 +339,6 @@ func workflowViewTaskSteps(p *chatPage, task *workflow.Task, line *string) {
 			}
 		}
 		(*line) = fmt.Sprintf(config.Text(" %s · Plano %d/%d · %s · /plan", " %s · Plan %d/%d · %s · /plan"), modeLabel(p.mode()), done, len(task.Steps), task.Status)
-	}
-}
-
-func questionKeyQChoices(p *chatPage, msg *tea.KeyMsg, q *interaction.Question) {
-	if len(q.Choices) > 0 {
-		if msg.String() == "down" {
-			p.workflow.choice = (p.workflow.choice + 1) % len(q.Choices)
-		} else {
-			if p.workflow.choice < 0 {
-				p.workflow.choice = 0
-			}
-			p.workflow.choice = (p.workflow.choice + len(q.Choices) - 1) % len(q.Choices)
-		}
-		p.workflow.answer.SetValue("")
 	}
 }
 

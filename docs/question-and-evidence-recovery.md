@@ -22,6 +22,14 @@ vazias e codificações recursivas são recusados. Os erros de tipo indicam o ca
 e um exemplo fixo, sem reproduzir o payload. Outros campos não são convertidos.
 IDs, tipos e revisão de respostas agrupadas seguem a validação anterior.
 
+Na interface, a resposta livre é a última opção selecionável, com campo vazio.
+O foco ativo determina o envio; um rascunho de texto inativo não substitui uma
+sugestão selecionada nem se mistura às opções de uma seleção múltipla. Depois
+do envio, pergunta e resposta permanecem juntas no histórico, com pipe e rótulo
+próprios. Esse histórico é uma projeção dos registros existentes: não cria
+mensagens novas, chamadas ao modelo ou autorizações. Respostas agrupadas são
+associadas por ID à pergunta original, incluindo IDs gerados pelo serviço.
+
 ## Buscar o assunto, não apenas o manifesto
 
 Perguntas genéricas sobre o projeto recebem arquivos básicos existentes, como

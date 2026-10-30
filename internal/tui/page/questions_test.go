@@ -66,7 +66,7 @@ func TestQuestionPanelFocusedChoiceAndFullDetailsRemainReachable(t *testing.T) {
 	p.workflow.question.Choices[19] += strings.Repeat(" long option", 12) + " LASTOPTION"
 	p.workflow.choice = 19
 	view := ansi.Strip(p.workflowView())
-	require.Contains(t, view, "› ○ Option 20")
+	require.Contains(t, view, "› ● Option 20")
 	p.questionKey(tea.KeyMsg{Type: tea.KeyF2})
 	_ = p.workflowView()
 	for range 20 {

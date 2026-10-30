@@ -1,0 +1,192 @@
+{
+  "date": "2026-10-30",
+  "previous_commit": "d8ded6fde854b30c7f6158afcf58f7e57e45805a",
+  "changes": [
+    "last selectable row is an empty custom-answer field",
+    "active row determines submitted answer; inactive text draft is retained without overriding suggested choices",
+    "custom response excludes checked choices in grouped questions; review and free-text restore preserve selection",
+    "history displays original question and selected answer together using theme Accent pipe and explicit labels",
+    "batch history maps answers by question ID; legacy results without tool names remain supported",
+    "presentation adds no stored messages or model calls and strips historical terminal controls"
+  ],
+  "checks": [
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet-integration",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "<analysis-tools>/staticcheck",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck-integration",
+      "command": [
+        "<analysis-tools>/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "-exact-recursion",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "languages",
+      "command": [
+        "go",
+        "run",
+        "./scripts/language-docs",
+        "-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "workflows",
+      "command": [
+        "<analysis-tools>/actionlint",
+        ".github/workflows/build.yml",
+        ".github/workflows/test.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/performance.yml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "windows",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode-windows.exe",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "darwin",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode-darwin",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "ollama-pty",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUITerminalStartupQueries|TestPTYStreamingSpeedBeforeCompletion|TestPTYTranscriptSearchAndKeyboardSelection|TestPTYConversationChronologyQuitAndResume|TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer)$",
+        "-count=1",
+        "-v"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "pty_duration_seconds": {
+    "TestPTYConversationChronologyQuitAndResume": 8.15,
+    "TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer": 15.27,
+    "TestPTYStreamingSpeedBeforeCompletion": 3.89,
+    "TestPTYTranscriptSearchAndKeyboardSelection": 2.17,
+    "TestLiveOllamaPTYUI": 26.14,
+    "TestPTYUICompactThemes": 3.41,
+    "TestPTYUITerminalStartupQueries": 0.01
+  },
+  "pty_cases": [
+    "custom row selected with Up; empty submission rejected; exact typed response verified in SQLite",
+    "custom draft retained while suggested answer selected; SQLite confirms only suggestion submitted",
+    "original question and answer visible with tools collapsed and after resume; no additional provider requests",
+    "real llama3.1:8b via native Ollama: citations, question, explicit command permission, live output, PTY input and queued instruction",
+    "stream speed before completion in dark/light/no-color",
+    "transcript search and keyboard copy selection",
+    "compact themes and startup terminal queries"
+  ],
+  "unit_regressions": [
+    "legacy and grouped custom row delivery",
+    "inactive draft never overrides active choice",
+    "multi-choice and custom response remain exclusive",
+    "grouped free-text restores active row on review back",
+    "question/answer pairs bind by IDs including generated qN IDs",
+    "missing historical question falls back to actual answer without inventing a question",
+    "JSON literal single-question answers preserved",
+    "dark/light themes and ASCII labels remain distinct",
+    "historical ANSI and control sequences stripped"
+  ],
+  "limitations": [
+    "Enterprise OpenAI-compatible endpoint was not accessed.",
+    "Historical questions unavailable in the loaded history cannot be reconstructed; the real answer remains visible."
+  ]
+}

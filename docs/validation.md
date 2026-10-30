@@ -5,6 +5,41 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Resposta livre e registro de perguntas — 30/10/2026
+
+Após `d8ded6f`, a última opção das perguntas passou a ser o campo vazio
+“Outra resposta”. Setas ou digitação ativam esse campo; o foco e o marcador
+indicam se Enter enviará o texto ou uma sugestão. Um rascunho inativo fica
+preservado e não substitui a opção selecionada. Texto vazio é recusado, e
+resposta livre não se mistura às opções marcadas em perguntas agrupadas.
+A revisão e o retorno a respostas já preenchidas preservam o modo selecionado.
+
+O histórico agora mostra a pergunta original e a resposta juntas, com o rótulo
+“Pergunta do agente” e pipe na cor `Accent` do tema. Rótulos mantêm a distinção
+sem cores. Lotes são associados por IDs, incluindo IDs gerados. Perguntas
+históricas ausentes não são inventadas; a resposta real permanece disponível.
+A apresentação reaproveita os registros existentes, não grava mensagens novas,
+não chama o modelo e não altera permissões ou validação de citações.
+
+Passaram as suítes completas comum e `integration` com `-race -p 1`, Vet e
+Staticcheck com e sem integração, Gocognit com recursão exata sem funções acima
+de 15, documentação de linguagens, Actionlint e builds Linux/amd64,
+Windows/amd64 e macOS/arm64. Sete cenários principais executaram em PTY.
+Os dois novos casos conferem o `ToolResult.user_response` real no SQLite:
+um envia texto personalizado, outro digita texto e depois envia somente a
+sugestão selecionada. Ambos preservam pergunta e resposta com processos
+recolhidos e após `--resume`, sem novas chamadas ao provedor. Enter vazio
+permanece bloqueado antes de qualquer continuação do modelo.
+
+O fluxo com `llama3.1:8b` no Ollama também passou, incluindo pergunta, citações,
+permissão explícita, saída ao vivo, entrada no PTY e instrução durante a execução.
+Casos unitários cobrem perguntas simples/agrupadas, revisão, pareamento por ID,
+JSON literal em texto livre, histórico incompleto, códigos de terminal e temas
+claros/escuros/sem cores. O provedor empresarial não foi acessado.
+
+Comandos e resultados estão em
+[`2026-10-30-question-selection-validation.json`](evidence/2026-10-30-question-selection-validation.json).
+
 ## Conversa cronológica, perguntas e retomada — 30/10/2026
 
 O estado anterior foi preservado na tag remota

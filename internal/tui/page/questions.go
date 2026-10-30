@@ -1,8 +1,6 @@
 package page
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -14,19 +12,7 @@ func (p *chatPage) saveBatchAnswer() {
 		return
 	}
 	item := p.workflow.question.Questions[i]
-	answer := interaction.AnswerItem{QuestionID: item.ID, Text: p.workflow.answer.Value()}
-	if strings.TrimSpace(answer.Text) == "" {
-		answer.Text = ""
-		for j, c := range item.Choices {
-			if p.workflow.selectedChoices[j] {
-				answer.Choices = append(answer.Choices, c)
-			}
-		}
-		if len(answer.Choices) == 0 && item.Type != "multi_choice" && p.workflow.choice >= 0 {
-			answer.Choices = []string{item.Choices[p.workflow.choice]}
-		}
-	}
-	p.workflow.batchAnswers[i] = answer
+	p.workflow.batchAnswers[i] = p.selectedQuestionAnswer(item)
 }
 
 func (p *chatPage) restoreBatchAnswer() {
@@ -39,6 +25,9 @@ func (p *chatPage) restoreBatchAnswer() {
 	}
 	answer := p.workflow.batchAnswers[i]
 	p.workflow.answer.SetValue(answer.Text)
+	if answer.Text != "" {
+		p.workflow.choice = len(p.workflow.question.Questions[i].Choices)
+	}
 	for j, c := range p.workflow.question.Questions[i].Choices {
 		for _, selected := range answer.Choices {
 			if c == selected {
@@ -47,6 +36,7 @@ func (p *chatPage) restoreBatchAnswer() {
 			}
 		}
 	}
+	p.focusQuestionInput(len(p.workflow.question.Questions[i].Choices))
 }
 
 func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
@@ -78,7 +68,7 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
 	item := q.Questions[index]
 	switch key {
 	case "up", "down":
-		return batchQuestionKeyChatPageUp(p, key, &item)
+		return p.navigateQuestionAnswer(key, len(item.Choices))
 	case " ":
 		if result0, handled := batchQuestionKeyChatPageDefault(p, &item); handled {
 			return result0
@@ -93,28 +83,11 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
 		p.restoreBatchAnswer()
 		return p.resizeContent()
 	}
-	var cmd tea.Cmd
-	p.workflow.answer, cmd = p.workflow.answer.Update(msg)
-	return cmd
-}
-
-func batchQuestionKeyChatPageUp(p *chatPage, key string, item *interaction.QuestionItem) (extractedResult0 tea.Cmd) {
-	if len(item.Choices) > 0 {
-		delta := 1
-		if key == "up" {
-			delta = -1
-			if p.workflow.choice < 0 {
-				p.workflow.choice = 0
-			}
-		}
-		p.workflow.choice = (p.workflow.choice + delta + len(item.Choices)) % len(item.Choices)
-	}
-	return nil
-
+	return p.editQuestionAnswer(msg, len(item.Choices))
 }
 
 func batchQuestionKeyChatPageDefault(p *chatPage, item *interaction.QuestionItem) (extractedResult0 tea.Cmd, handled bool) {
-	if p.workflow.choice >= 0 && p.workflow.answer.Value() == "" {
+	if p.workflow.choice >= 0 && p.workflow.choice < len(item.Choices) {
 		if item.Type != "multi_choice" {
 			p.workflow.selectedChoices = map[int]bool{p.workflow.choice: true}
 		} else {

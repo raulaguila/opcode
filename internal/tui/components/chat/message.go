@@ -50,17 +50,22 @@ func renderMessage(msg string, isUser bool, _ bool, width int, info ...string) s
 
 func renderMessageWithCache(msg string, isUser bool, width int, cache *styles.MarkdownCache, info ...string) string {
 	t := theme.CurrentTheme()
+	pipe := t.Primary()
+	if isUser {
+		pipe = t.Secondary()
+	}
+	return renderMessageWithPipe(msg, width, cache, pipe, info...)
+}
+
+func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, pipe lipgloss.TerminalColor, info ...string) string {
+	t := theme.CurrentTheme()
 
 	style := styles.BaseStyle().
 		Width(width - 1).
 		BorderLeft(true).
 		Foreground(t.TextMuted()).
-		BorderForeground(t.Primary()).
+		BorderForeground(pipe).
 		BorderStyle(lipgloss.ThickBorder())
-
-	if isUser {
-		style = style.BorderForeground(t.Secondary())
-	}
 
 	measure := 72
 	if c := config.Get(); c != nil && c.TUI.ProseWidth > 0 {

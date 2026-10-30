@@ -39,6 +39,10 @@ respostas humanas e reparos internos, com estado de citação associado ao texto
 Uma falha de citação tem categoria própria e não indica contexto esgotado.
 Perguntas usam painel com borda, superfície distinta, estado de espera e seleção
 explícita, preservando a distinção entre responder e autorizar uma ferramenta.
+A resposta livre é a última opção selecionável; o foco indica se será enviada
+uma sugestão ou o texto, sem um rascunho inativo substituir a escolha. Após o
+envio, pergunta e resposta ficam juntas, com rótulo e pipe na cor de destaque,
+inclusive ao reabrir a conversa e sem depender somente de cores.
 `/quit` usa o encerramento protegido; `--resume` sem ID reabre a última conversa
 disponível do projeto, sem continuar ações ou restaurar aprovações. A sintaxe com
 ID e o comando `/resume` para continuar tarefas permanecem disponíveis.

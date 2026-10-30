@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -147,7 +145,7 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	start, first := -1, true
 	lastPublic := lastPublicIndex(group.messages)
 	for index, item := range group.messages {
-		answer := questionAnswer(item, r.messages.renderCache.toolOwners)
+		answer := questionAnswer(item, r.messages.renderCache.toolOwners, r.messages.messages)
 		if publicResponse(item) || answer != "" {
 			if start >= 0 {
 				r.renderProcessRange(group, start, index, first, false)
@@ -179,46 +177,7 @@ func (r *turnRenderer) renderPublicItem(item message.Message, index int, latest 
 		r.renderFinal(item, index, latest)
 		return
 	}
-	answerMessage := message.Message{ID: item.ID + ":answer", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: config.Text("Você respondeu: ", "You answered: ") + answer}}}
-	r.appendItem(renderUserMessage(answerMessage, false, r.messages.width, r.position))
-}
-
-func questionAnswer(item message.Message, owners map[string]toolOwner) string {
-	if item.Role != message.Tool {
-		return ""
-	}
-	for _, result := range item.ToolResults() {
-		name := result.Name
-		if name == "" {
-			name = owners[result.ToolCallID].name
-		}
-		if (name != "ask_user_question" && name != "ask_user_questions") || result.IsError {
-			continue
-		}
-		var decoded struct {
-			Response string `json:"user_response"`
-		}
-		if json.Unmarshal([]byte(result.Content), &decoded) == nil {
-			return tools.RedactCredentials(questionAnswerText(decoded.Response))
-		}
-	}
-	return ""
-}
-
-func questionAnswerText(text string) string {
-	var batch interaction.AnswerBatch
-	if json.Unmarshal([]byte(text), &batch) != nil || len(batch.Answers) == 0 {
-		return text
-	}
-	values := make([]string, 0, len(batch.Answers))
-	for _, item := range batch.Answers {
-		value := item.Text
-		if len(item.Choices) > 0 {
-			value = strings.Join(item.Choices, ", ")
-		}
-		values = append(values, value)
-	}
-	return strings.Join(values, "; ")
+	r.appendItem(uiMessage{ID: item.ID + ":answer", messageType: userMessageType, content: renderMessageWithPipe(answer, r.messages.width, nil, r.theme.Accent())})
 }
 
 func publicResponse(item message.Message) bool {

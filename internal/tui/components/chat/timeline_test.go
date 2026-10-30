@@ -65,8 +65,12 @@ func TestQuestionAnswersRemainVisibleBetweenCollapsedCallsAndAcknowledgment(t *t
 	} {
 		m := NewMessagesCmp(&app.App{}).(*messagesCmp)
 		m.SetSize(80, 40)
+		input := `{"question":"Proceed?"}`
+		if result.Name == "ask_user_questions" {
+			input = `{"questions":[{"question":"Proceed?","type":"single_choice","choices":["Sim","Agora não"]}]}`
+		}
 		m.messages = []message.Message{
-			{ID: "diagnosis", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "Public diagnosis"}, message.ToolCall{ID: "question", Name: result.Name, Input: `{"question":"Proceed?"}`, Finished: true}}},
+			{ID: "diagnosis", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "Public diagnosis"}, message.ToolCall{ID: "question", Name: result.Name, Input: input, Finished: true}}},
 			{ID: "answer", Role: message.Tool, Parts: []message.ContentPart{result}},
 			{ID: "ack", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "Perfeito, fica o diagnóstico."}}},
 		}

@@ -56,27 +56,51 @@ func (p *chatPage) questionPanelContent(width int) questionContent {
 		}
 	}
 	c.choices = p.questionChoiceRows(item, width)
+	input := p.questionAnswerField(item, width)
+	if len(item.Choices) > 0 {
+		c.choices = append(c.choices, input)
+	} else {
+		c.input = input
+	}
+	c.hint = p.questionAnswerHint(item, len(q.Questions) > 0)
+	return c
+}
+
+func (p *chatPage) questionAnswerField(item interaction.QuestionItem, width int) string {
+	t := theme.CurrentTheme()
+	style := styles.BaseStyle().Background(t.BackgroundSecondary())
 	p.workflow.answer.Prompt = config.Text("Resposta: ", "Answer: ")
 	if len(item.Choices) > 0 {
-		p.workflow.answer.Prompt = config.Text("Outra resposta: ", "Other answer: ")
+		prefix := "  ○ "
+		if p.customQuestionAnswer(len(item.Choices)) {
+			prefix = "› ● "
+			style = style.Foreground(t.Background()).Background(t.Primary())
+		}
+		p.workflow.answer.Prompt = prefix + config.Text("Outra resposta: ", "Other answer: ")
 	}
 	p.workflow.answer.Width = max(1, width-lipgloss.Width(p.workflow.answer.Prompt)-1)
-	t := theme.CurrentTheme()
-	p.workflow.answer.TextStyle = styles.BaseStyle().Background(t.BackgroundSecondary())
-	p.workflow.answer.PromptStyle = p.workflow.answer.TextStyle
-	p.workflow.answer.PlaceholderStyle = p.workflow.answer.TextStyle.Foreground(t.TextMuted())
-	c.input = ansi.Truncate(p.workflow.answer.View(), width, "…")
-	c.hint = config.Text("Enter envia · F2 detalhes · Esc cancela", "Enter send · F2 details · Esc cancel")
-	if len(item.Choices) > 0 {
-		c.hint = config.Text("↑↓ opção · Enter envia · F2 detalhes · Esc cancela", "↑↓ option · Enter send · F2 details · Esc cancel")
+	p.workflow.answer.Placeholder = ""
+	p.workflow.answer.TextStyle, p.workflow.answer.PromptStyle = style, style
+	return style.Width(width).Render(ansi.Truncate(p.workflow.answer.View(), width, "…"))
+}
+
+func (p *chatPage) questionAnswerHint(item interaction.QuestionItem, batch bool) string {
+	if len(item.Choices) > 0 && p.workflow.choice < 0 {
+		return config.Text("↑↓ escolha ou escreva outra resposta · F2 · Esc cancela", "↑↓ choose or type another answer · F2 · Esc cancel")
 	}
-	if len(q.Questions) > 0 {
-		c.hint = config.Text("Enter próxima · Shift+Tab volta · F2 · Esc cancela", "Enter next · Shift+Tab back · F2 · Esc cancel")
-		if len(item.Choices) > 0 {
-			c.hint = config.Text("↑↓ opção · Espaço marca · Enter próxima · F2 · Esc", "↑↓ option · Space select · Enter next · F2 · Esc")
+	target := config.Text("opção", "choice")
+	if p.customQuestionAnswer(len(item.Choices)) {
+		target = config.Text("seu texto", "your text")
+	} else if item.Type == "multi_choice" {
+		target = config.Text("opções marcadas", "checked choices")
+	}
+	if batch {
+		if item.Type == "multi_choice" && !p.customQuestionAnswer(len(item.Choices)) {
+			return config.Text("Espaço marca · Enter próxima: opções · F2 · Esc", "Space select · Enter next: choices · F2 · Esc")
 		}
+		return fmt.Sprintf(config.Text("Enter próxima: %s · Shift+Tab volta · F2 · Esc", "Enter next: %s · Shift+Tab back · F2 · Esc"), target)
 	}
-	return c
+	return fmt.Sprintf(config.Text("Enter envia %s · ↑↓ escolhe · F2 · Esc", "Enter sends %s · ↑↓ choose · F2 · Esc"), target)
 }
 
 func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) []string {
@@ -86,7 +110,11 @@ func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) 
 		if item.Type == "multi_choice" {
 			mark = "[ ]"
 		}
-		if p.workflow.selectedChoices[i] {
+		selected := !p.customQuestionAnswer(len(item.Choices)) && p.workflow.selectedChoices[i]
+		if item.Type != "multi_choice" {
+			selected = p.workflow.choice == i
+		}
+		if selected {
 			mark = "●"
 			if item.Type == "multi_choice" {
 				mark = "[✓]"

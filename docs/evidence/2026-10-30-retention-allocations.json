@@ -1,0 +1,405 @@
+{
+  "date": "2026-10-30",
+  "baseline_commit": "d9d010b7c9d00d37645dbceb7c619e219e08385f",
+  "toolchain": "go1.27.3",
+  "platform": "linux/amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i9-12900K",
+  "change": "Probe retention with a prepared SQLite statement on the transaction connection, without database/sql column metadata or value readers; keep below-cap cleanup skipped.",
+  "profile": {
+    "baseline": "200-iteration profile attributed 9.58 MB under prune to scalar result readers, mostly WASM function initialization.",
+    "candidate": "200-iteration allocation profile with metadata-only and populated-FTS fixtures had no sampled allocations under prune or retentionExceeded. Sampling does not prove zero allocation."
+  },
+  "benchmark": {
+    "method": "Five sequential pairs; before/after order alternates per pair. No tests or analysis ran concurrently with benchmark measurement. Both binaries compiled against the same benchmark source; baseline store/test code supplied by go test -overlay from baseline_commit.",
+    "command": "<test-binary> -test.run=^$ -test.bench=^BenchmarkMemoryProjection -test.benchmem -test.benchtime=1000x -test.count=1",
+    "iterations_per_sample": 1000,
+    "samples_per_variant": 5,
+    "fixture": "Upsert includes open/schema checks/transaction/close; 100 or 10000 metadata documents plus hot row. Original benchmark has hot-row FTS only; Indexed variant seeds FTS for every document.",
+    "benchmark_sha256": "77340869db7f7a7d8f4e49fc6c02cd556af78ba398d1182b830cdafd00c23b13",
+    "rows": [
+      {
+        "benchmark": "BenchmarkMemoryProjection",
+        "documents": 100,
+        "before_samples_ns_bytes_allocs": [
+          [
+            1448276,
+            521640,
+            871
+          ],
+          [
+            1395154,
+            521604,
+            871
+          ],
+          [
+            1560112,
+            521609,
+            871
+          ],
+          [
+            1496604,
+            521605,
+            871
+          ],
+          [
+            1381610,
+            521608,
+            871
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1448276,
+          521608,
+          871
+        ],
+        "after_samples_ns_bytes_allocs": [
+          [
+            1515384,
+            474315,
+            846
+          ],
+          [
+            1357796,
+            474318,
+            846
+          ],
+          [
+            1260220,
+            474341,
+            846
+          ],
+          [
+            1668489,
+            474345,
+            846
+          ],
+          [
+            1353941,
+            474327,
+            846
+          ]
+        ],
+        "after_median_ns_bytes_allocs": [
+          1357796,
+          474327,
+          846
+        ],
+        "changes_percent": [
+          -6.247427976435427,
+          -9.064469870094015,
+          -2.870264064293915
+        ]
+      },
+      {
+        "benchmark": "BenchmarkMemoryProjection",
+        "documents": 10000,
+        "before_samples_ns_bytes_allocs": [
+          [
+            1363137,
+            521534,
+            872
+          ],
+          [
+            1242254,
+            521590,
+            872
+          ],
+          [
+            1501443,
+            521556,
+            872
+          ],
+          [
+            1731515,
+            521566,
+            872
+          ],
+          [
+            1449891,
+            521599,
+            872
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1449891,
+          521566,
+          872
+        ],
+        "after_samples_ns_bytes_allocs": [
+          [
+            1732467,
+            474166,
+            846
+          ],
+          [
+            1497775,
+            474174,
+            846
+          ],
+          [
+            1471889,
+            474155,
+            846
+          ],
+          [
+            1327203,
+            474169,
+            846
+          ],
+          [
+            1297088,
+            474187,
+            846
+          ]
+        ],
+        "after_median_ns_bytes_allocs": [
+          1471889,
+          474169,
+          846
+        ],
+        "changes_percent": [
+          1.5172175011776812,
+          -9.08744051567778,
+          -2.9816513761467878
+        ]
+      },
+      {
+        "benchmark": "BenchmarkMemoryProjectionIndexed",
+        "documents": 100,
+        "before_samples_ns_bytes_allocs": [
+          [
+            1408717,
+            521764,
+            870
+          ],
+          [
+            1432740,
+            521775,
+            870
+          ],
+          [
+            1352885,
+            521759,
+            870
+          ],
+          [
+            1329600,
+            521769,
+            870
+          ],
+          [
+            1570773,
+            521745,
+            870
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1408717,
+          521764,
+          870
+        ],
+        "after_samples_ns_bytes_allocs": [
+          [
+            1354596,
+            474500,
+            846
+          ],
+          [
+            1620710,
+            474498,
+            846
+          ],
+          [
+            1439144,
+            474502,
+            846
+          ],
+          [
+            1462087,
+            474501,
+            846
+          ],
+          [
+            1351804,
+            474494,
+            846
+          ]
+        ],
+        "after_median_ns_bytes_allocs": [
+          1439144,
+          474500,
+          846
+        ],
+        "changes_percent": [
+          2.159908626076068,
+          -9.0585015447597,
+          -2.758620689655178
+        ]
+      },
+      {
+        "benchmark": "BenchmarkMemoryProjectionIndexed",
+        "documents": 10000,
+        "before_samples_ns_bytes_allocs": [
+          [
+            4095934,
+            522027,
+            871
+          ],
+          [
+            4059686,
+            521902,
+            871
+          ],
+          [
+            4049723,
+            522046,
+            872
+          ],
+          [
+            4029073,
+            522024,
+            871
+          ],
+          [
+            4034337,
+            521905,
+            871
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          4049723,
+          522024,
+          871
+        ],
+        "after_samples_ns_bytes_allocs": [
+          [
+            4014890,
+            474693,
+            846
+          ],
+          [
+            4004071,
+            474682,
+            846
+          ],
+          [
+            3974529,
+            474686,
+            846
+          ],
+          [
+            4022762,
+            474568,
+            846
+          ],
+          [
+            4029483,
+            474701,
+            846
+          ]
+        ],
+        "after_median_ns_bytes_allocs": [
+          4014890,
+          474686,
+          846
+        ],
+        "changes_percent": [
+          -0.8601329029170657,
+          -9.068165448331877,
+          -2.870264064293915
+        ]
+      }
+    ],
+    "interpretation": "Allocated bytes decrease about 9.1% in all four cases; medians vary from -6.2% to +2.2% for elapsed time. No material latency regression observed in these component samples; this is not proof of equivalence or end-to-end model latency."
+  },
+  "regressions": [
+    "Empty, below, exact and above retention cap",
+    "Stamp/id tie order and updates at cap",
+    "Multiple excess records removed from metadata and FTS",
+    "Failure of second delete rolls back FTS and inserted document",
+    "Canceled raw probe restores interrupt state; same transaction remains usable"
+  ],
+  "permissions_implementation_unchanged": true,
+  "citation_validator_unchanged": true,
+  "dependencies_changed": false,
+  "validation": {
+    "focused_memoryindex_race": "passed",
+    "full_gates": [
+      {
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-p",
+          "1",
+          "./..."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-p",
+          "1",
+          "-tags",
+          "integration",
+          "./..."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "go",
+          "vet",
+          "./..."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "go",
+          "vet",
+          "-tags",
+          "integration",
+          "./..."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "staticcheck",
+          "./..."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "staticcheck",
+          "-tags",
+          "integration",
+          "./..."
+        ],
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "gocognit",
+          "-over",
+          "15",
+          "-exact-recursion",
+          "."
+        ],
+        "exit_code": 0
+      }
+    ],
+    "exact_complexity_over_15": 0,
+    "diff_check": "passed",
+    "live_provider_pty": "not rerun for this storage-only change"
+  },
+  "limits": [
+    "Synthetic component benchmarks, not inference latency.",
+    "No new live-provider or PTY run for this storage-only change."
+  ]
+}

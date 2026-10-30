@@ -5,6 +5,44 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Alocações da retenção — 30/10/2026
+
+A partir de `d9d010b`, a verificação do limite usa uma consulta preparada no
+SQLite, na mesma conexão e transação das exclusões. Ela verifica a existência
+de uma linha sem inicializar os leitores de colunas do `database/sql`/WASM em
+cada abertura. Abaixo do limite, a limpeza continua dispensada. A contagem
+permanece separada da aritmética para conservar a operação rápida do SQLite.
+Não foram criados caches globais ou alteradas dependências, permissões e
+validação de citações.
+
+Cinco pares sequenciais de 1.000 operações, alternando a ordem antes/depois,
+compararam os mesmos benchmarks com Go 1.27.3 em Linux/amd64. O baseline foi
+compilado via overlay do código anterior; a versão do benchmark foi igual nos
+dois binários. Medianas:
+
+| Documentos / FTS | Tempo antes → depois | B/op antes → depois | allocs/op antes → depois |
+| --- | --- | --- | --- |
+| 100 / só linha quente | 1,448 → 1,358 ms | 521.608 → 474.327 | 871 → 846 |
+| 10.000 / só linha quente | 1,450 → 1,472 ms | 521.566 → 474.169 | 872 → 846 |
+| 100 / todos indexados | 1,409 → 1,439 ms | 521.764 → 474.500 | 870 → 846 |
+| 10.000 / todos indexados | 4,050 → 4,015 ms | 522.024 → 474.686 | 871 → 846 |
+
+Os bytes caíram cerca de 9,1%; as medianas de tempo variaram de −6,2% a +2,2%,
+sem regressão relevante observada nessas amostras. Os resultados absolutos não
+são comparáveis diretamente às três amostras curtas da auditoria anterior.
+O caso com FTS preenchido evita esconder uma varredura de texto desnecessária.
+São medições de componente, sem promessa de latência global ou de inferência.
+As amostras e a metodologia estão em
+[`2026-10-30-retention-allocations.json`](evidence/2026-10-30-retention-allocations.json).
+
+As regressões verificam limite, desempates, atualização existente, múltiplos
+excedentes, rollback conjunto dos metadados e FTS e restauração do estado de
+interrupção após cancelamento. Passaram o teste focado e as suítes completas
+comum e `integration`, todos com `-race` (suítes completas com `-p 1`), Vet e
+Staticcheck com/sem integração e Gocognit com recursão exata sem funções acima
+de 15. Não houve nova execução de PTY/provedor real nesta alteração de
+armazenamento.
+
 ## Correções da auditoria — 30/10/2026
 
 As 13 correções partiram de `84632de`, com prioridade para os itens 1–4.

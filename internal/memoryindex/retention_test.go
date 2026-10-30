@@ -43,6 +43,17 @@ func TestRetentionLimitTieBreakersAndAtomicFailure(t *testing.T) {
 	requireRetentionCount(t, db, maxDocuments)
 	requireRetentionID(t, db, "000-oldest", false)
 
+	// A single cleanup must remove the entire excess from both projections.
+	for _, id := range []string{"old-a", "old-b", "old-c"} {
+		insertRetentionDocument(t, db, id, 0)
+	}
+	runRetentionPrune(t, db)
+	requireRetentionCount(t, db, maxDocuments)
+	for _, id := range []string{"old-a", "old-b", "old-c"} {
+		requireRetentionID(t, db, id, false)
+	}
+	requireRetentionID(t, db, "newer", true)
+
 	// Updating an existing document at the cap must not remove another row.
 	require.NoError(t, Upsert(ctx, directory, project, Document{ID: "message:000001", Kind: "conversation", Session: "s", Stamp: 3, Text: "updatedevidence"}))
 	requireRetentionCount(t, db, maxDocuments)
@@ -52,6 +63,28 @@ func TestRetentionLimitTieBreakersAndAtomicFailure(t *testing.T) {
 	require.Equal(t, "message:000001", found[0].ID)
 
 	requireRetentionRollback(t, db, directory, project)
+}
+
+func TestRetentionProbeCancellationAndReuse(t *testing.T) {
+	db, err := open(context.Background(), t.TempDir(), "/retention-cancellation")
+	require.NoError(t, err)
+	defer db.Close()
+	conn, err := db.Conn(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+	tx, err := conn.BeginTx(context.Background(), nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = retentionExceeded(ctx, conn)
+	require.Error(t, err)
+
+	// The raw probe must restore interruption state for the transaction's owner.
+	exceeded, err := retentionExceeded(context.Background(), conn)
+	require.NoError(t, err)
+	require.False(t, exceeded)
+	require.NoError(t, tx.Commit())
 }
 
 func seedRetentionDocuments(t *testing.T, db *sql.DB, count int) {
@@ -78,10 +111,13 @@ func insertRetentionDocument(t *testing.T, db *sql.DB, id string, stamp int64) {
 }
 func runRetentionPrune(t *testing.T, db *sql.DB) {
 	t.Helper()
-	tx, err := db.BeginTx(context.Background(), nil)
+	conn, err := db.Conn(context.Background())
+	require.NoError(t, err)
+	defer conn.Close()
+	tx, err := conn.BeginTx(context.Background(), nil)
 	require.NoError(t, err)
 	defer tx.Rollback()
-	require.NoError(t, prune(context.Background(), tx))
+	require.NoError(t, prune(context.Background(), conn, tx))
 	require.NoError(t, tx.Commit())
 }
 func requireRetentionCount(t *testing.T, db *sql.DB, want int) {

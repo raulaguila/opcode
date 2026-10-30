@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	_ "github.com/ncruces/go-sqlite3/driver"
+	"github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
 	"github.com/raulaguila/opcode/internal/localstate"
 )
@@ -71,7 +71,12 @@ func Upsert(ctx context.Context, directory, project string, d Document) error {
 		return err
 	}
 	defer db.Close()
-	tx, err := db.BeginTx(ctx, nil)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -85,7 +90,7 @@ func Upsert(ctx context.Context, directory, project string, d Document) error {
 	if _, err := tx.ExecContext(ctx, `INSERT INTO memory(id,text) VALUES(?,?)`, d.ID, d.Text); err != nil {
 		return err
 	}
-	if err := prune(ctx, tx); err != nil {
+	if err := prune(ctx, conn, tx); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -93,18 +98,39 @@ func Upsert(ctx context.Context, directory, project string, d Document) error {
 
 const maxDocuments = 100000
 
-func prune(ctx context.Context, tx *sql.Tx) error {
-	var count int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM documents`).Scan(&count); err != nil {
+// Check only for the presence of a row: database/sql's column metadata readers
+// initialize additional WASM functions on every freshly opened connection. Raw
+// holds the same connection's lock; the probe and deletes share the transaction.
+func retentionExceeded(ctx context.Context, conn *sql.Conn) (bool, error) {
+	var exceeded bool
+	err := conn.Raw(func(raw any) error {
+		c := raw.(driver.Conn).Raw()
+		old := c.SetInterrupt(ctx)
+		defer c.SetInterrupt(old)
+		statement, _, err := c.Prepare(`SELECT 1 WHERE (SELECT count(*) FROM documents)>?1`)
+		if err != nil {
+			return err
+		}
+		defer statement.Close()
+		if err := statement.BindInt(1, maxDocuments); err != nil {
+			return err
+		}
+		exceeded = statement.Step()
+		return statement.Err()
+	})
+	return exceeded, err
+}
+
+func prune(ctx context.Context, conn *sql.Conn, tx *sql.Tx) error {
+	exceeded, err := retentionExceeded(ctx, conn)
+	if err != nil || !exceeded {
 		return err
 	}
-	if count <= maxDocuments {
-		return nil
-	}
-	// Reverse the retention index to visit only the excess oldest documents.
-	oldest := `SELECT id FROM documents ORDER BY stamp ASC,id DESC LIMIT ?`
+	// Keep count(*) separate from arithmetic so SQLite uses its fast count.
+	oldest := `SELECT id FROM documents ORDER BY stamp ASC,id DESC
+LIMIT max(0,(SELECT count(*) FROM documents)-?1)`
 	for _, table := range []string{"memory", "documents"} {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE id IN (`+oldest+`)`, count-maxDocuments); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE id IN (`+oldest+`)`, maxDocuments); err != nil {
 			return err
 		}
 	}

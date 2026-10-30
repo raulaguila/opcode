@@ -15,6 +15,18 @@ func BenchmarkMemoryProjection(b *testing.B) {
 	}
 }
 func benchmarkMemoryProjection(b *testing.B, count int) {
+	benchmarkMemoryProjectionFixture(b, count, false)
+}
+
+// Include populated FTS rows so a retention change cannot hide an unnecessary
+// full-text scan behind the metadata-only fixture.
+func BenchmarkMemoryProjectionIndexed(b *testing.B) {
+	for _, count := range []int{100, 10000} {
+		b.Run(fmt.Sprint(count), func(b *testing.B) { benchmarkMemoryProjectionFixture(b, count, true) })
+	}
+}
+
+func benchmarkMemoryProjectionFixture(b *testing.B, count int, indexed bool) {
 	ctx := context.Background()
 	directory := b.TempDir()
 	project := "/audit-fixture"
@@ -36,6 +48,11 @@ func benchmarkMemoryProjection(b *testing.B, count int) {
 		}
 	}
 	statement.Close()
+	if indexed {
+		if _, err := tx.Exec(`INSERT INTO memory(id,text) SELECT id,'retained evidence' FROM documents`); err != nil {
+			b.Fatal(err)
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		b.Fatal(err)
 	}

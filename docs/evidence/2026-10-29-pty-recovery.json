@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-29",
+  "baseline_commit": "fe0c3bff66bf22b74e4a909ee85b06dac0be0e70",
+  "platform": "linux/amd64",
+  "go": "1.27.3",
+  "ollama": "0.33.3",
+  "model": "llama3.1:8b",
+  "model_digest": "46e0c10c039e019119339687c3c1757cc81b9da49709a3b3924863ba87ca666e",
+  "context_window": 16384,
+  "diagnosis": {
+    "previous_load_seconds": 156.371388076,
+    "previous_response_seconds": 159.78184,
+    "manual_readiness_load_seconds": 6.392415908,
+    "unchanged_original_test": {"result": "pass", "seconds": 31.68},
+    "product_failure_reproduced": false,
+    "interpretation": "Model loading consumed the original assertion deadline; a ready server completed the unchanged test. This does not establish the exact cause of the earlier server load delay."
+  },
+  "changes": {
+    "scope": "test infrastructure and documentation only",
+    "readiness": "single neutral native inference before opening PTY; same model and context; 4 output tokens; 180s own deadline; no retry or skip; bounded sanitized response; loopback without proxy or redirects",
+    "synchronization": ["empty composer", "closed delete confirmation", "idle UI after persisted steered response"],
+    "integration_vet": "remove three unreachable returns",
+    "setup_assertions": "match current titles and Git diff Back navigation; verify empty/absent apiKey values instead of rejecting empty JSON fields",
+    "production_code_changed": false,
+    "permissions_changed": false,
+    "citation_validator_changed": false,
+    "fixture_prompts_changed": false,
+    "acceptance_deadlines_changed": false,
+    "factual_criteria_changed": false
+  },
+  "live_pty_runs": [
+    {"race": true, "result": "pass", "seconds": 23.42, "readiness_ms": 239, "load_ms": 1},
+    {"race": true, "result": "pass", "seconds": 17.92, "readiness_ms": 228, "load_ms": 1}
+  ],
+  "setup_reset_pty": {
+    "race": true,
+    "result": "pass",
+    "suite_seconds": 23.710,
+    "first_run_seconds": 11.27,
+    "reset_seconds": 11.35,
+    "credential_absence_regression_cases": 6,
+    "backup_original_bytes_preserved": true,
+    "automatic_context_not_persisted_as_manual_limit": true,
+    "keyboard_restoration_checked": true
+  },
+  "live_stages_passed": [
+    "Unicode paste and 3-8 row composer",
+    "three terminal sizes and modal focus",
+    "provider outage, empty catalog, retry and explicit deletion with Cancel default",
+    "separately approved LSP probe with suppressed stderr",
+    "factual project overview with validated file and line citations",
+    "explicit response copy over OSC52",
+    "native model question, selected human answer and resumed generation",
+    "one exact bash PTY command and no execution before approval",
+    "live output before command exit",
+    "queued instruction while command waits for input",
+    "human input delivered to real PTY",
+    "persisted tool, instruction and final response ordering",
+    "no repeated command and source fixture preservation"
+  ],
+  "deterministic_gates": {
+    "global_go_test_race": "pass",
+    "citation_regressions_race": "pass",
+    "readiness_and_ui_synchronization_regressions_race": "pass",
+    "pty_streaming_speed_search_selection_and_themes_race": "pass",
+    "go_vet_integration": "pass",
+    "staticcheck_integration": "pass",
+    "integration_compile_all_packages": "pass",
+    "gocognit_exact_recursion_over_15": 0
+  },
+  "limitation": "Readiness does not reserve GPU resources. Real inference evaluations should run sequentially. Timings are not a product speed comparison."
+}

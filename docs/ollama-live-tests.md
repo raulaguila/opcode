@@ -1,5 +1,38 @@
 # Validação real do terminal e das instruções com Ollama
 
+## Aceitação do binário em PTY: prontidão do Ollama
+
+`TestLiveOllamaPTYUI` executa o binário de produção em um PTY e usa o modelo
+real. Antes de abrir a aplicação, verifica a prontidão do Ollama com uma
+inferência neutra de até quatro tokens, no mesmo modelo e contexto de 16.384.
+Essa fase tem prazo próprio de 180 s e falha explicitamente se o servidor não
+estiver pronto. Ela não pula o teste, não baixa modelos, não altera a
+configuração do servidor nem descarrega modelos de outros trabalhos. O pedido
+usa a retenção de cinco minutos do Ollama; execute a aceitação sem outras
+avaliações de inferência concorrentes para evitar disputa por memória.
+
+A duração de preparação é registrada separadamente. Os prazos e os critérios
+do fluxo em PTY permanecem iguais, incluindo os 180 s da explicação factual
+com citações verificadas. Preparar o modelo não produz recibos de leitura nem
+respostas usadas para aprovar a tarefa.
+
+```sh
+go build -o /tmp/opcode-pty .
+OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \
+  LOCAL_ENDPOINT=http://127.0.0.1:11434/v1 \
+  OPCODE_LIVE_OLLAMA_MODEL=llama3.1:8b \
+  OPCODE_EVAL_BINARY=/tmp/opcode-pty \
+  go test -tags integration ./internal/tui \
+    -run '^TestLiveOllamaPTYUI$' -count=1 -v -timeout=12m
+```
+
+O teste exige Linux, Bash e Bubblewrap, usa HOME, configuração, banco e projeto
+descartáveis e não herda credenciais. Além da explicação, verifica pergunta ao
+usuário, cópia OSC52, aprovação única do comando exato, saída ao vivo, entrada
+no PTY e instrução enviada enquanto o agente trabalha. Nenhum comando é
+executado antes da aprovação pela interface; os arquivos de fonte da fixture
+devem permanecer idênticos.
+
 ## Contexto automático e primeira pergunta
 
 `TestLiveOllamaFirstQuestionUsesAdvertisedContext` executa o binário de produção

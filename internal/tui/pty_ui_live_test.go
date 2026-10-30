@@ -55,6 +55,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	if model == "" {
 		model = "llama3.1:8b"
 	}
+	prepareLiveOllamaPTY(t, endpoint, model, 16384)
 	root := t.TempDir()
 	home, workspace, data := filepath.Join(root, "home"), filepath.Join(root, "workspace"), filepath.Join(root, "data")
 	for _, directory := range []string{filepath.Join(home, ".opcode"), filepath.Join(workspace, ".opcode"), filepath.Join(workspace, ".cache/ui-acceptance-artifacts")} {
@@ -393,7 +394,29 @@ func (h *ptyUIHarness) clearDraft() {
 	// Ctrl+End edits the composer. Backspace clears all rows, including Unicode.
 	h.send("\x1b[1;5F")
 	h.send(strings.Repeat("\x7f", 512))
-	h.wait("draft cleared", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "draft-") })
+	h.wait("draft cleared", 5*time.Second, ptyUIComposerEmpty)
+}
+func ptyUIComposerEmpty(frame string) bool {
+	if !ptyUIHasFooter(frame) {
+		return false
+	}
+	lines := strings.Split(frame, "\n")
+	for index := len(lines) - 1; index >= 0; index-- {
+		if strings.Count(lines[index], "▾") == 2 {
+			lines = lines[:index]
+			break
+		}
+	}
+	for index := len(lines) - 1; index >= 0; index-- {
+		line := strings.TrimSpace(lines[index])
+		if strings.HasPrefix(line, ">") {
+			return line == ">"
+		}
+		if line != "" {
+			return false
+		}
+	}
+	return false
 }
 func (h *ptyUIHarness) frame() string {
 	h.mu.Lock()
@@ -873,7 +896,10 @@ func testPTYUICompactThemesStructCallback(binary **string, variant *struct {
 	require.NoError(t, os.WriteFile("/tmp/opcode-ui-"+variant.name+"-frame.txt", []byte(h.frame()), 0600))
 }
 
-func testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(conn **sql.DB, callbackArg0 string) bool {
+func testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(conn **sql.DB, frame string) bool {
+	if !ptyUIIdleFooter(frame) {
+		return false
+	}
 	messages := ptyUIMessages((*conn))
 	toolAt, instructionAt, finalAt := -1, -1, -1
 	testLiveOllamaPTYUIMessages(messages, &toolAt, &instructionAt, &finalAt)
@@ -917,7 +943,7 @@ func testLiveOllamaPTYUIDeleteConnectionConfirmation(frame string) bool {
 }
 
 func testLiveOllamaPTYUICancelPreservesConnection(frame string) bool {
-	return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
+	return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture") && !strings.Contains(frame, "Delete connection?")
 }
 
 func testLiveOllamaPTYUIDeletedConnectionDisappears(frame string) bool {

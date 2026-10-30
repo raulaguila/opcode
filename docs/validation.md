@@ -5,6 +5,50 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Recuperação da aceitação PTY/Ollama — 29/10/2026
+
+O timeout registrado na auditoria abaixo foi investigado novamente a partir
+de `fe0c3bf`. Na execução anterior, o Ollama reportou 156,37 s de carga dentro
+de uma resposta de 159,78 s; isso consumiu quase toda a espera de 180 s e o
+reparo de citações foi cancelado. Com o servidor disponível, uma inferência
+neutra no mesmo modelo/contexto carregou em 6,39 s. O teste original, sem
+alterações, passou integralmente em 31,68 s. Não foi reproduzida falha do
+validador de citações nem do adaptador nessa execução.
+
+A correção fica na infraestrutura de aceitação: uma fase explícita de
+prontidão do modelo precede a abertura do PTY e registra carga separadamente.
+Usa uma única inferência neutra de até quatro tokens, sem ferramentas,
+credenciais, proxy ou redirecionamentos, com resposta limitada e prazo próprio
+de 180 s. Se falhar, o teste falha nessa fase; não pula, troca o modelo ou
+repete a aceitação. O prazo original de 180 s para a explicação continua igual.
+As condições do harness também passaram a exigir compositor vazio,
+confirmação de exclusão fechada e interface ociosa após a resposta persistida.
+Foram removidos três retornos inalcançáveis apontados pelo vet na suíte de
+integração. A aceitação de primeira execução/reset foi atualizada para os
+títulos atuais e a navegação de volta do Git diff. A verificação de segredos
+passa a inspecionar os valores de `apiKey`: um campo vazio, presente desde o
+suporte a chave direta, é permitido; credenciais não vazias continuam proibidas
+nessa configuração descartável. Não houve mudança em código de produção,
+dependências, critérios de citações, permissões ou sandbox.
+
+Com `llama3.1:8b`, contexto 16.384 e binário real, duas execuções consecutivas
+com `-race` passaram em 23,42 s e 17,92 s. A prontidão levou 239 ms e 228 ms,
+respectivamente, com o modelo já carregado. Esses tempos não são um benchmark
+de ganho do produto: disponibilidade e cache do servidor eram diferentes da
+tentativa anterior.
+
+Ambas verificaram explicação factual com citações aceitas, pergunta nativa ao
+usuário e retomada, cópia OSC52, comando exato aprovado uma vez pela interface,
+saída antes do término, entrada humana no PTY e instrução enfileirada durante
+a execução. Os arquivos de fonte permaneceram idênticos e stderr do probe LSP
+ficou suprimido. A suíte global com `-race`, as regressões de citações e as
+regressões determinísticas de prontidão/sincronização passaram. A preparação
+não reserva a GPU: outra carga concorrente ainda pode causar falha explícita;
+execute avaliações reais sequencialmente.
+
+Evidências: [`2026-10-29-pty-recovery.json`](evidence/2026-10-29-pty-recovery.json).
+Comando reproduzível em [testes reais com Ollama](ollama-live-tests.md).
+
 ## Redução de alocações e responsabilidades — 29/10/2026
 
 O baseline desta rodada é `0cbda0a`. O erro de `go run .` foi reproduzido como

@@ -113,7 +113,7 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	send("\r")
 	wait("Configure provider")
 	send("\x13")
-	wait("Setup · 2/3")
+	wait("Setup 2/3")
 	wait("Provider catalog")
 	send("llama3.1:8b")
 	wait("llama3.1:8b")
@@ -150,9 +150,9 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	// Acknowledge enhanced-key support, then exercise an encoded Ctrl+O.
 	send("\x1b[?0u")
 	send("\x1b[111;5u")
-	wait("Select main model")
-	require.NotContains(t, snapshot(), "Setup · 2/3", "normal model picker must leave the setup presentation behind")
-	closeDialog("Select main model")
+	wait("Choose model")
+	require.NotContains(t, snapshot(), "Setup 2/3", "normal model picker must leave the setup presentation behind")
+	closeDialog("Choose model")
 	frame := strings.Split(snapshot(), "\n")
 	if path := os.Getenv("OPCODE_UI_SNAPSHOT"); path != "" {
 		require.NoError(t, os.WriteFile(path, []byte(snapshot()), 0600))
@@ -177,8 +177,14 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	wait("Project · Git and worktrees")
 	wait("Branch: main")
 	send("\r")
-	wait("Git diff")
-	closeDialog("Git diff")
+	// The menu action also contains "Git diff"; the breadcrumb identifies the
+	// opened detail view and Escape returns to its parent before closing chat UI.
+	wait("Project · Git and worktrees › Git diff")
+	send("\x1b")
+	wait("Project · Git and worktrees")
+	wait("Branch: main")
+	require.Eventually(t, func() bool { return !strings.Contains(snapshot(), "› Git diff") }, 5*time.Second, 20*time.Millisecond)
+	closeDialog("Project · Git and worktrees")
 	send("first line\x1b[13;2usecond line\x1b\rthird line\nfourth line")
 	wait("fourth line")
 	lines := strings.Split(snapshot(), "\n")
@@ -202,7 +208,10 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	require.NoError(t, json.Unmarshal(data, &configuration))
 	require.Contains(t, string(configuration["agents"]), "llama3.1:8b")
 	require.Contains(t, string(configuration["security"]), "bubblewrap")
-	require.NotContains(t, string(data), `"apiKey":`)
+	// Direct-key configuration may serialize an empty apiKey; it must never
+	// persist a credential when setting up an unauthenticated local provider.
+	testBinaryFirstRunNoCredentials(t, configuration)
+	require.NotContains(t, string(data), "binary-reset-secret")
 	if reset {
 		backups, err := filepath.Glob(filepath.Join(home, ".opcode", "config-backups", "*"))
 		require.NoError(t, err)
@@ -222,7 +231,6 @@ func testBinaryFirstRunState(terminal *os.File, screen vt10x.Terminal, mu *sync.
 			return true
 		}
 	}
-	return false
 }
 
 func testBinaryFirstRunStateN(screen vt10x.Terminal, mu *sync.Mutex, rawOutput *bytes.Buffer, buffer []byte, controls []string, pending *[]byte, n int) {
@@ -252,7 +260,6 @@ func testBinaryFirstRunStateCase(t *testing.T, ctx context.Context, snapshot fun
 			t.Fatal("binary acceptance timed out")
 		}
 	}
-	return false
 }
 
 func testBinaryFirstRunFrame(frame []string, promptRow *int, footerRow *int) {
@@ -304,5 +311,44 @@ func testBinaryFirstRunStateNBufferNPending(controls []string, pending *[]byte, 
 		}
 		(*display) = append((*display), (*pending)[0])
 		(*pending) = (*pending)[1:]
+	}
+}
+
+func testBinaryFirstRunNoCredentials(t *testing.T, configuration map[string]json.RawMessage) {
+	t.Helper()
+	for _, section := range []string{"providers", "providerProfiles"} {
+		if len(configuration[section]) == 0 {
+			continue
+		}
+		var providers map[string]map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(configuration[section], &providers))
+		for name, fields := range providers {
+			require.True(t, testBinaryFirstRunEmptyAPIKey(fields["apiKey"]), "setup must not persist a credential or invalid apiKey in %s/%s", section, name)
+		}
+	}
+}
+
+func testBinaryFirstRunEmptyAPIKey(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	var value any
+	if json.Unmarshal(raw, &value) != nil {
+		return false
+	}
+	secret, stringValue := value.(string)
+	return stringValue && secret == ""
+}
+func TestBinaryFirstRunCredentialAbsenceCheck(t *testing.T) {
+	for _, test := range []struct {
+		name, raw string
+		allowed   bool
+	}{
+		{"omitted", "", true}, {"empty", `""`, true}, {"credential", `"fake-private-key"`, false},
+		{"number", `42`, false}, {"null", `null`, false}, {"object", `{}`, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.allowed, testBinaryFirstRunEmptyAPIKey(json.RawMessage(test.raw)))
+		})
 	}
 }

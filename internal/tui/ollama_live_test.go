@@ -271,7 +271,6 @@ func testLiveOllamaTerminalAndSteeringState(t *testing.T, application *app.App, 
 			t.Fatal("live test deadline exceeded")
 		}
 	}
-	return false
 }
 
 func testLiveOllamaTerminalAndSteeringStateDiagnosticSession(t *testing.T, application *app.App, ctx context.Context, diagnosticSession string) {

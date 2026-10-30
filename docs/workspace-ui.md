@@ -204,8 +204,11 @@ recebimento não é confirmado. Em SSH, usa somente essa rota, sem executar help
 no servidor. Se o terminal também bloquear a cópia, use a seleção nativa com
 `Shift+arrastar` ou a opção de selecionar texto.
 Uma indicação discreta abaixo da última resposta concluída torna essas ações
-visíveis. Blocos de prosa usam até 72 colunas por padrão; `tui.proseWidth`
-permite ajustar de 1 a 240, com `0` restaurando o padrão. Código e tabelas
+visíveis. Blocos de prosa usam a largura disponível da conversa por padrão;
+`tui.proseWidth` permite limitar a leitura de 1 a 240 colunas (por exemplo, 80
+ou 100), com `0` restaurando a largura disponível. Entre blocos de Markdown há
+uma linha vazia, sem acumular o espaçamento do renderizador; quebras e linhas
+vazias dentro dos blocos mantêm sua formatação. Código e tabelas
 conservam a largura disponível, mesmo em respostas mistas. Listas e citações
 em bloco que contêm código/tabelas mantêm sua estrutura e largura. Links de
 referência são resolvidos no documento completo. A ação Copiar resposta usa o

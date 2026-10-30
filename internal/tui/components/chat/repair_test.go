@@ -45,11 +45,16 @@ func TestEditorOwnsEditingKeysAndIgnoresConversationKeys(t *testing.T) {
 	require.Equal(t, "first\nlast!", m.textarea.Value())
 }
 
-func TestProseUsesReadingMeasureAndCodeRetainsWidth(t *testing.T) {
+func TestProseUsesAvailableWidthAndCodeRetainsWidth(t *testing.T) {
 	prose := strings.Repeat("readable words ", 40)
-	view := ansi.Strip(renderMessage(prose, false, false, 160))
-	for line := range strings.SplitSeq(view, "\n") {
-		require.LessOrEqual(t, ansi.StringWidth(strings.TrimRight(line, " ")), 76)
+	for _, width := range []int{40, 80, 120, 160} {
+		view := ansi.Strip(renderMessage(prose, false, false, width))
+		longest := 0
+		for line := range strings.SplitSeq(view, "\n") {
+			longest = max(longest, ansi.StringWidth(strings.TrimRight(line, " ")))
+		}
+		require.LessOrEqual(t, longest, width)
+		require.Greater(t, longest, width-20, "prose should use available columns")
 	}
 	code := "```\n" + strings.Repeat("x", 100) + "\n```"
 	require.Contains(t, ansi.Strip(renderMessage(code, false, false, 160)), strings.Repeat("x", 100))

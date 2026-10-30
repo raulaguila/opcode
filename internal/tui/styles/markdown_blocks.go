@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/lipgloss"
+	terminalansi "github.com/charmbracelet/x/ansi"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -88,7 +89,33 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 	if err := r.Render(&out, b.source, block); err != nil {
 		return "", err
 	}
-	return strings.Trim(out.String(), "\n"), nil
+	return trimMarkdownBlockPadding(out.String()), nil
+}
+
+// Glamour's padding may contain spaces or color resets, not just newlines.
+// Only block boundaries are trimmed; blank lines inside code/lists stay intact.
+func trimMarkdownBlockPadding(rendered string) string {
+	for rendered != "" {
+		line, rest, found := strings.Cut(rendered, "\n")
+		if strings.TrimSpace(terminalansi.Strip(line)) != "" {
+			break
+		}
+		rendered = rest
+		if !found {
+			return ""
+		}
+	}
+	for rendered != "" {
+		end := strings.LastIndexByte(rendered, '\n')
+		if strings.TrimSpace(terminalansi.Strip(rendered[end+1:])) != "" {
+			break
+		}
+		if end < 0 {
+			return ""
+		}
+		rendered = rendered[:end]
+	}
+	return rendered
 }
 
 func markdownBlockWidth(node ast.Node, width, proseWidth int) int {

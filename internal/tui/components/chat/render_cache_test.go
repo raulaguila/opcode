@@ -195,11 +195,11 @@ func TestFrozenSelectionReceivesLatestRenderAfterClearing(t *testing.T) {
 	old := strings.Join(m.transcriptLines, "\n")
 	m.selection = textSelection{anchor: textPoint{0, 0}, focus: textPoint{3, 0}, moved: true}
 	last := m.messages[1]
-	last.AppendContent(" new tail")
+	last.AppendContent(" UPDATED_TAIL")
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: last})
 	require.Equal(t, old, strings.Join(m.transcriptLines, "\n"))
 	m.ClearSelection()
-	require.Contains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "new tail")
+	require.Contains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "UPDATED_TAIL")
 }
 
 func TestTaskHistoryDiscoveryOnUpdatedMessageAndStaleReload(t *testing.T) {

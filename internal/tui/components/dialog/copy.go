@@ -80,7 +80,7 @@ func interfaceCopy(english string) string {
 
 func localizedSettingHelp(help string) string {
 	translations := map[string]string{
-		"0: auto (72); 1–240 columns. Code keeps full width.": "0: automático (72); 1–240 colunas. Código mantém a largura disponível.",
+		"0: available width; 1–240 columns. Code keeps full width.": "0: largura disponível; 1–240 colunas. Código mantém a largura disponível.",
 		"auto, shown, hidden": "automático, visível ou oculto",
 		"pt, en":              "português ou inglês",
 		"off, bell, auto, native, osc (only when unfocused)": "desativadas, sino, automático, nativas ou OSC (somente sem foco)",

@@ -9,6 +9,55 @@ import (
 	"testing"
 )
 
+func TestMarkdownBlockSpacingHasOneBlankLine(t *testing.T) {
+	profile := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
+	for _, color := range []termenv.Profile{termenv.Ascii, termenv.TrueColor} {
+		lipgloss.SetColorProfile(color)
+		for _, source := range []string{
+			"# Title\n\nText.",
+			"First paragraph.\n\nSecond paragraph.",
+			"- Item\n\nText.",
+			"> Quote\n\nText.",
+			"```text\ncode\n```\n\nText.",
+			"| A | B |\n| --- | --- |\n| a | b |\n\nText.",
+			"---\n\nText.",
+		} {
+			view := ansi.Strip(RenderMarkdownBlocks(source, 100, 80))
+			require.NotEmpty(t, strings.TrimSpace(strings.Split(view, "\n")[0]), "no leading padding")
+			require.NotEmpty(t, strings.TrimSpace(view[strings.LastIndexByte(view, '\n')+1:]), "no trailing padding")
+			blanks := 0
+			for line := range strings.SplitSeq(strings.TrimSpace(view), "\n") {
+				if strings.TrimSpace(line) == "" {
+					blanks++
+					require.LessOrEqual(t, blanks, 1, "source %q => %q", source, view)
+				} else {
+					blanks = 0
+				}
+			}
+		}
+	}
+}
+
+func TestMarkdownCompactSpacingPreservesContent(t *testing.T) {
+	view := ansi.Strip(RenderMarkdownBlocks("First\nsecond\n\n```text\n  indented\n\n\n  after\n```\n\n- outer\n  - nested\n\nSee [source][ref].\n\n[ref]: https://example.test/file#L2\n", 100, 80))
+	require.Contains(t, view, "First")
+	require.Contains(t, view, "second")
+	require.Contains(t, view, "  indented")
+	require.Contains(t, view, "  after")
+	lines := strings.Split(view, "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "indented") {
+			require.Empty(t, strings.TrimSpace(lines[i+1]))
+			require.Empty(t, strings.TrimSpace(lines[i+2]))
+			require.Contains(t, lines[i+3], "after")
+		}
+	}
+	require.Contains(t, view, "outer")
+	require.Contains(t, view, "nested")
+	require.Contains(t, view, "https://example.test/file#L2")
+}
+
 func TestMixedMarkdownKeepsProseNarrowAndCodeWide(t *testing.T) {
 	source := strings.Repeat("Narrative explanation ", 20) + "\n\n```text\nREADME.md:1-5 " + strings.Repeat("x", 80) + "\n```\n\n" + strings.Repeat("Further explanation ", 20) + "\n\nSee [source][ref].\n\n[ref]: https://example.test/README.md#L1\n"
 	view := ansi.Strip(RenderMarkdownBlocks(source, 120, 48))

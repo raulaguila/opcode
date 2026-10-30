@@ -20,8 +20,8 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
-// Frozen pre-reuse implementation: exact bytes cover renderer state leaking
-// across documents, in addition to the existing width/citation assertions.
+// Fresh renderers with the current block padding policy: exact bytes cover
+// renderer state leaking, in addition to the width/citation assertions.
 func markdownBlocksReference(content string, width, proseWidth int) string {
 	source := []byte(content)
 	md := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.DefinitionList), goldmark.WithParserOptions(parser.WithAutoHeadingID()))
@@ -51,7 +51,7 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 			result, _ := fallback.Render(content)
 			return result
 		}
-		if rendered := strings.Trim(out.String(), "\n"); rendered != "" {
+		if rendered := trimMarkdownBlockPadding(out.String()); rendered != "" {
 			blocks = append(blocks, rendered)
 		}
 		node = next

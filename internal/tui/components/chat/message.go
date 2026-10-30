@@ -67,7 +67,7 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 		BorderForeground(pipe).
 		BorderStyle(lipgloss.ThickBorder())
 
-	measure := 72
+	measure := width
 	if c := config.Get(); c != nil && c.TUI.ProseWidth > 0 {
 		measure = c.TUI.ProseWidth
 	}

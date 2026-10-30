@@ -37,7 +37,7 @@ func Shortcut(action string) string {
 }
 func (t TUIConfig) Validate() error {
 	if t.ProseWidth < 0 || t.ProseWidth > 240 {
-		return fmt.Errorf("proseWidth: 0–240 (0 uses 72 columns)")
+		return fmt.Errorf("proseWidth: 0–240 (0 uses available width)")
 	}
 	if t.Sidebar != "" && t.Sidebar != "auto" && t.Sidebar != "shown" && t.Sidebar != "hidden" {
 		return fmt.Errorf("sidebar: auto/shown/hidden")
@@ -64,7 +64,7 @@ type Setting struct {
 }
 
 var UserSettings = []Setting{
-	{"tui.proseWidth", "interface", "Largura de leitura / Reading width", "0: auto (72); 1–240 columns. Code keeps full width.", 0, false},
+	{"tui.proseWidth", "interface", "Largura de leitura / Reading width", "0: available width; 1–240 columns. Code keeps full width.", 0, false},
 	{"tui.sidebar", "interface", "Lateral / Sidebar", "auto, shown, hidden", "hidden", false},
 	{"tui.language", "interface", "Idioma / Language", "pt, en", "en", false},
 	{"tui.notifications", "interface", "Notificações / Notifications", "off, bell, auto, native, osc (only when unfocused)", "off", false},

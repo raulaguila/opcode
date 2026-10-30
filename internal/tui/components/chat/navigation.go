@@ -31,11 +31,13 @@ func (m *messagesCmp) TranscriptKey(msg tea.KeyMsg) bool {
 		return false
 	}
 	// Existing custom global shortcuts retain precedence. Slash commands still
-	// expose both actions when these optional defaults are already occupied.
+	// expose search/selection; revision links also remain clickable.
 	if result0, handled := transcriptKeyAltF(&msg); handled {
 		return result0
 	}
 	switch msg.String() {
+	case "alt+v":
+		return m.toggleLatestRevision()
 	case "alt+f":
 		if m.find.open {
 			m.find.open = false
@@ -280,7 +282,7 @@ func (m *messagesCmp) navigationHint() string {
 }
 
 func transcriptKeyAltF(msg *tea.KeyMsg) (extractedResult0 bool, handled bool) {
-	if msg.String() == "alt+f" || msg.String() == "alt+s" {
+	if msg.String() == "alt+f" || msg.String() == "alt+s" || msg.String() == "alt+v" {
 		for action := range config.DefaultKeybindings {
 			if config.Shortcut(action) == msg.String() {
 				return false, true

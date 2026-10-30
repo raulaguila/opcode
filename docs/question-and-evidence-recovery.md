@@ -90,9 +90,13 @@ O reconhecimento dessas confirmações usa frases conservadoras em português e
 inglês; outras formulações continuam sujeitas à validação normal.
 
 A interface mantém o texto visível durante a validação e associa o estado à
-resposta correspondente: “Validando citações…”, “Citações não validadas” ou
-“Resposta substituída”. Reparos internos ficam nos detalhes do processo, sem
-recolher o diagnóstico. A falha de citação é distinta de contexto excedido;
+resposta correspondente. Durante uma correção direta, “Revisando referências…”
+acompanha o original; somente o candidato validado o substitui como principal.
+“Ver versão anterior” expõe o original sem duplicar respostas principais. Se o
+reparo falhar, o original continua com “Citações não validadas” e a tentativa
+fica acessível em detalhes. As mensagens e recibos originais não são apagados.
+Reparos internos ficam nos detalhes do processo, sem recolher diagnósticos ou
+confirmações independentes. A falha de citação é distinta de contexto excedido;
 palavras como “context preparation” no detalhe não mudam a categoria do erro.
 
 Uma leitura automática anterior pode ser reaproveitada somente quando seu

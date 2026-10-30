@@ -2,7 +2,6 @@ package chat
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -32,13 +31,7 @@ type turnGroup struct {
 }
 
 func (m *messagesCmp) LatestResponse() string {
-	for _, v := range slices.Backward(m.messages) {
-
-		if v.Role == message.Assistant && v.Content().String() != "" {
-			return v.Content().String()
-		}
-	}
-	return ""
+	return latestRevisionResponse(m.groups())
 }
 func (m *messagesCmp) groups() []turnGroup {
 	var groups []turnGroup
@@ -65,6 +58,7 @@ type turnRenderer struct {
 	items        []uiMessage
 	hits         []transcriptHit
 	dependencies []string
+	active       bool
 }
 
 func (m *messagesCmp) renderTurns() {
@@ -142,16 +136,19 @@ func (r *turnRenderer) appendText(id, text string) {
 
 func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	r.renderUser(group)
+	r.active = latest && r.messages.IsAgentWorking()
+	revisions := planResponseRevisions(group.messages)
 	start, first := -1, true
-	lastPublic := lastPublicIndex(group.messages)
+	lastPublic := revisions.latest(group.messages)
 	for index, item := range group.messages {
 		answer := questionAnswer(item, r.messages.renderCache.toolOwners, r.messages.messages)
-		if publicResponse(item) || answer != "" {
+		_, hidden := revisions.hidden[index]
+		if !hidden && (publicResponse(item) || answer != "") {
 			if start >= 0 {
 				r.renderProcessRange(group, start, index, first, false)
 				first, start = false, -1
 			}
-			r.renderPublicItem(item, index, latest && index == lastPublic, answer)
+			r.renderTimelineItem(group.messages, index, latest && index == lastPublic, answer, revisions)
 		}
 		if answer == "" && processEvent(item) && start < 0 {
 			start = index
@@ -160,6 +157,20 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	if start >= 0 {
 		r.renderProcessRange(group, start, len(group.messages), first, latest && r.messages.IsAgentWorking())
 	}
+}
+
+func (r *turnRenderer) renderTimelineItem(items []message.Message, index int, latest bool, answer string, revisions responseRevisionPlan) {
+	if revision := revisions.roots[index]; revision != nil {
+		r.renderRevision(items, revision, latest)
+		return
+	}
+	if legacyPreviousVersion(items, index) {
+		if r.renderRevisionToggle(items[index].ID, config.Text("Ver versão anterior", "View previous version")) {
+			r.renderFinal(items[index], index, false)
+		}
+		return
+	}
+	r.renderPublicItem(items[index], index, latest, answer)
 }
 
 func lastPublicIndex(items []message.Message) int {
@@ -328,7 +339,11 @@ func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool)
 	}
 	cached, ok := m.cachedContent[item.ID]
 	if !ok || cached.width != m.width {
-		cached = cacheItem{width: m.width, content: renderAssistantMessage(publicMessage(item), index, m.messages, m.nestedProjection(), m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position, markdown)}
+		display := publicMessage(item)
+		if item.CitationValidation() == message.CitationRevising {
+			display.SetCitationValidation("")
+		}
+		cached = cacheItem{width: m.width, content: renderAssistantMessage(display, index, m.messages, m.nestedProjection(), m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position, markdown)}
 		m.putMessageCache(item.ID, cached)
 	}
 	r.dependencies = append(r.dependencies, item.ID)
@@ -336,6 +351,7 @@ func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool)
 	for _, rendered := range cached.content {
 		r.appendItem(rendered)
 	}
+	r.renderRevisingState(item)
 	r.hits = append(r.hits, transcriptHit{start: start, end: r.position - 1, kind: "actions", id: item.ID})
 	if latest && !m.IsAgentWorking() {
 		r.renderActions(item)
@@ -388,6 +404,10 @@ func (m *messagesCmp) transcriptMouse(msg tea.MouseMsg) tea.Cmd {
 		if row >= hit.start && row < hit.end {
 			if hit.kind == "process" {
 				m.toggleProcess(hit.id)
+				return nil
+			}
+			if hit.kind == "revision" {
+				m.toggleRevision(hit.id)
 				return nil
 			}
 		}

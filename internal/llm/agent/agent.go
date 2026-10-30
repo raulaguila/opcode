@@ -247,7 +247,7 @@ func (a *agent) err(err error) AgentEvent {
 	}
 }
 
-func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, run *generationRun) AgentEvent {
+func (a *agent) processGeneration(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, run *generationRun) (result AgentEvent) {
 	stopPreparation := a.startPhase(sessionID, "context")
 	defer stopPreparation()
 	history, err := a.prepareGenerationHistory(ctx, sessionID, content, attachmentParts, run)
@@ -255,6 +255,11 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 		return a.err(err)
 	}
 	g := generationState{agent: a, ctx: ctx, sessionID: sessionID, run: run, history: history, signatures: make([][32]byte, 0, 10)}
+	defer func() {
+		if err := g.abandonCitationRevision(false); err != nil {
+			result = a.err(errors.Join(result.Error, err))
+		}
+	}()
 	stopPreparation()
 	for {
 		if done, event := g.step(); done {
@@ -304,7 +309,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 		streamProvider = &preparedStreamProvider{Provider: streamProvider, prepared: prepared}
 	}
 	eventChan := timedProvider(streamProvider).StreamResponse(ctx, requestHistory, a.exposedTools(run))
-	assistantMsg, err = a.messages.Create(ctx, sessionID, message.CreateMessageParams{Role: message.Assistant, Parts: []message.ContentPart{}, Model: a.provider.Model().ID})
+	assistantMsg, err = a.messages.Create(ctx, sessionID, message.CreateMessageParams{Role: message.Assistant, Parts: citationRevisionParts(run, msgHistory), Model: a.provider.Model().ID})
 	if err != nil {
 		return assistantMsg, nil, fmt.Errorf("failed to create assistant message: %w", err)
 	}
@@ -315,6 +320,9 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	a.finishStreamUsage(sessionID, streamUsage)
 	if failure != nil {
 		return assistantMsg, nil, failure
+	}
+	if err := a.detachToolRevision(ctx, msgHistory, run, &assistantMsg); err != nil {
+		return assistantMsg, nil, err
 	}
 	if err := a.markAssistantCitation(ctx, msgHistory, run, &assistantMsg); err != nil {
 		return assistantMsg, nil, err

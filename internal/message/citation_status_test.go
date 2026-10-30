@@ -31,11 +31,24 @@ func TestCitationStatePersistsWithoutChangingTextOrLegacyParts(t *testing.T) {
 }
 
 func TestStreamingPreservesCitationPresentationMetadata(t *testing.T) {
-	m := Message{Parts: []ContentPart{TextContent{Text: "prefix", Origin: "application", CitationStatus: CitationPending}}}
+	m := Message{Parts: []ContentPart{TextContent{Text: "prefix", Origin: "application", CitationStatus: CitationPending, RevisionOf: "original"}}}
 	stream := NewStreamBuffer(&m)
 	stream.AppendText(" suffix")
 	stream.Materialize()
 	require.Equal(t, CitationPending, m.CitationValidation())
 	require.Equal(t, "application", m.Content().Origin)
 	require.Equal(t, "prefix suffix", m.Content().Text)
+	require.Equal(t, "original", m.RevisionOf())
+}
+
+func TestRevisionMetadataRoundTripsWithoutChangingText(t *testing.T) {
+	m := Message{Role: Assistant, Parts: []ContentPart{TextContent{Text: "revision"}}}
+	require.True(t, m.SetRevisionOf("original"))
+	require.False(t, m.SetRevisionOf("original"))
+	raw, err := marshallParts(m.Parts)
+	require.NoError(t, err)
+	m.Parts, err = unmarshallParts(raw)
+	require.NoError(t, err)
+	require.Equal(t, "original", m.RevisionOf())
+	require.Equal(t, "revision", m.Content().Text)
 }

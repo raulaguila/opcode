@@ -308,13 +308,14 @@ func (c *sourceReadCollector) message(index int, msg message.Message) {
 }
 func (c *sourceReadCollector) captureCalls(msg message.Message) {
 	for _, call := range msg.ToolCalls() {
-		switch call.Name {
-		case "view", "read_lines", "read_symbol":
-			if call.ID != "" {
-				c.calls[call.ID] = call
-			}
+		if nativeSourceReadToolName(call.Name) && call.ID != "" {
+			c.calls[call.ID] = call
 		}
 	}
+}
+
+func nativeSourceReadToolName(name string) bool {
+	return name == "view" || name == "read_lines" || name == "read_symbol"
 }
 func (c *sourceReadCollector) result(index int, result message.ToolResult) {
 	call, exists := c.calls[result.ToolCallID]

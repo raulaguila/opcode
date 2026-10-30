@@ -12,7 +12,9 @@ func citationStatusLabel(state string) string {
 	case message.CitationInvalid:
 		return config.Text("Citações não validadas", "Citations not validated")
 	case message.CitationSuperseded:
-		return config.Text("Resposta substituída", "Response superseded")
+		return config.Text("Versão anterior", "Previous version")
+	case message.CitationRevising:
+		return config.Text("Revisando referências…", "Revising references…")
 	default:
 		return ""
 	}

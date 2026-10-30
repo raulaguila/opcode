@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
-	"time"
 
 	"github.com/raulaguila/opcode/internal/message"
 )
@@ -42,30 +42,30 @@ func (a *agent) markAssistantCitation(ctx context.Context, history []message.Mes
 }
 
 func (g *generationState) setCitationState(item *message.Message, state string) error {
-	if !item.SetCitationValidation(state) {
+	if item.CitationValidation() == state {
 		return nil
 	}
-	ctx := g.ctx
-	if ctx.Err() != nil {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
+	updated := *item
+	updated.Parts = slices.Clone(updated.Parts)
+	if !updated.SetCitationValidation(state) {
+		return nil
 	}
-	if err := g.agent.messages.Update(ctx, *item); err != nil {
+	if err := g.persistCitationMessage(updated); err != nil {
 		return err
 	}
-	for i := range g.history {
-		if g.history[i].ID == item.ID {
-			g.history[i] = *item
-			break
-		}
-	}
+	*item = updated
 	return nil
 }
 
 // Workflow repair may finish an answer candidate before the citation stage.
 // Resolve its badge independently so a completed attempt never stays pending.
 func (g *generationState) resolvePendingCitation(item message.Message) error {
+	for _, current := range g.history {
+		if current.ID == item.ID {
+			item = current
+			break
+		}
+	}
 	if item.CitationValidation() != message.CitationPending {
 		return nil
 	}
@@ -136,6 +136,7 @@ func (g *generationState) intermediateCitationProblem() (string, error) {
 type citationAssessment struct {
 	problem string
 	state   string
+	direct  bool
 }
 
 func (g *generationState) citationProblem(item message.Message) (citationAssessment, error) {
@@ -150,6 +151,7 @@ func (g *generationState) citationProblem(item message.Message) (citationAssessm
 		assessment.state = message.CitationValid
 		if assessment.problem != "" {
 			assessment.state = message.CitationInvalid
+			assessment.direct = len(item.ToolCalls()) == 0 && priorProblem == ""
 		}
 	}
 	// The earlier diagnosis remains unresolved even when the current message is
@@ -158,25 +160,4 @@ func (g *generationState) citationProblem(item message.Message) (citationAssessm
 		assessment.problem = priorProblem
 	}
 	return assessment, nil
-}
-
-func (g *generationState) supersedeInvalidCitations() error {
-	if !g.run.citationRepair {
-		return nil
-	}
-	for _, id := range g.citationFailures {
-		if err := g.supersedeCitation(id); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (g *generationState) supersedeCitation(id string) error {
-	for _, item := range g.history {
-		if item.ID == id && item.CitationValidation() == message.CitationInvalid {
-			return g.setCitationState(&item, message.CitationSuperseded)
-		}
-	}
-	return nil
 }

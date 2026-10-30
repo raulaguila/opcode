@@ -1,0 +1,197 @@
+{
+  "date": "2026-10-30",
+  "previous_commit": "279850cfe8d7e9ce1f5303cbcbb35ea7a2d55d77",
+  "changes": [
+    "application-owned RevisionOf metadata links a direct citation correction to its original response",
+    "original remains primary while candidate streams; only CitationValid plus EndTurn promotes correction",
+    "previous version remains collapsed and selectable by click or Alt+V without deleting messages",
+    "failed, interrupted or truncated attempts retain original and remain available in revision details",
+    "copy actions use the visible principal response, not an unvalidated candidate",
+    "explicit links stay within one human turn and session; public tool narration remains independent",
+    "native nonopaque source rereads can continue a revision; unrelated tools/questions/steering/workflow detach it",
+    "legacy superseded entries may fold separately without inventing a relationship",
+    "idle persisted revising state displays as unvalidated rather than permanently in progress"
+  ],
+  "checks": [
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet-integration",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "<analysis-tools>/staticcheck",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck-integration",
+      "command": [
+        "<analysis-tools>/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "-exact-recursion",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "languages",
+      "command": [
+        "go",
+        "run",
+        "./scripts/language-docs",
+        "-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "workflows",
+      "command": [
+        "<analysis-tools>/actionlint",
+        ".github/workflows/build.yml",
+        ".github/workflows/test.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/performance.yml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "windows",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode-windows.exe",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "darwin",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode-darwin",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "ollama-pty",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUITerminalStartupQueries|TestPTYStreamingSpeedBeforeCompletion|TestPTYTranscriptSearchAndKeyboardSelection|TestPTYConversationChronologyQuitAndResume|TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer|TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures)$",
+        "-count=1",
+        "-v"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "pty_duration_seconds": {
+    "TestPTYConversationChronologyQuitAndResume": 8.27,
+    "TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer": 15.26,
+    "TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures": 3.56,
+    "TestPTYStreamingSpeedBeforeCompletion": 3.92,
+    "TestPTYTranscriptSearchAndKeyboardSelection": 2.22,
+    "TestLiveOllamaPTYUI": 24.07,
+    "TestPTYUICompactThemes": 3.41,
+    "TestPTYUITerminalStartupQueries": 0.0
+  },
+  "revision_acceptance": [
+    "provider holds partial correction stream: original and Revising references remain visible, candidate is not primary",
+    "valid README.md:1-2 correction replaces principal only after gate; original accessible through explicit expansion",
+    "invalid correction retains original and warning, failed attempt accessible on demand",
+    "exactly two model generations; no expanded repair budget",
+    "resume restores both success and failure without new messages or provider requests"
+  ],
+  "regressions": [
+    "metadata JSON/stream preservation",
+    "same-turn same-session backward links only",
+    "tool-bearing messages excluded from revision grouping",
+    "legacy entries keep content accessible",
+    "interrupted idle status does not stay revising",
+    "changed file hash and failed native read still reject promotion",
+    "opaque read impersonation and mixed batches detach revision",
+    "steering and workflow keep independent responses",
+    "truncated MaxTokens candidate remains a failed attempt; no supersede or additional request",
+    "transient metadata-save failure retries cleanup without mutating saved snapshots"
+  ],
+  "limitations": [
+    "Enterprise OpenAI-compatible endpoint was not accessed.",
+    "Unlinked historical responses are not paired by text similarity or proximity.",
+    "Only the existing native source-read surface can continue an active revision; other task changes retain independent messages.",
+    "Raw conversation history remains available; grouping is a presentation change, not deletion or context pruning."
+  ]
+}

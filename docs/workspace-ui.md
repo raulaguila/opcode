@@ -132,10 +132,25 @@ Reparos internos de protocolo, conclusão e citações ficam identificados como
 validação da aplicação dentro do processo. Não aparecem como perguntas suas,
 não entram no histórico de rascunhos e não substituem as validações. O texto da
 resposta permanece acessível durante “Validando citações…”. Falhas recebem
-“Citações não validadas”; quando houver correção aprovada, a resposta anterior
-recebe “Resposta substituída”. Visibilidade não significa aprovação da resposta.
+“Citações não validadas”. Uma correção direta de referências usa o mesmo bloco:
+o original continua visível com “Revisando referências…” até a nova versão passar
+na validação. Depois, a versão corrigida vira principal e “Ver versão anterior”
+permite abrir a anterior por clique ou `Alt+V`. Uma falha conserva o original
+com aviso e “Ver tentativa de correção” para consultar a tentativa separadamente.
+Quando o original está carregado, copiar a resposta principal segue essa seleção
+e não copia o candidato pendente. Visibilidade não significa aprovação da resposta.
 Esses estados usam metadados; textos antigos sem metadados não recebem um estado
 de validação inferido pelo conteúdo.
+
+O vínculo da revisão é explícito e permanece ao reabrir a sessão. Não altera
+o conteúdo original nem gera chamadas ao modelo ao expandir versões. Mensagens
+de progresso continuam na linha do tempo; releituras nativas de fontes podem
+continuar a mesma revisão. Uma nova instrução, pergunta, mudança de workflow ou
+chamada fora desse conjunto estreito conserva as respostas independentes. Em
+registros antigos já marcados como substituídos, a versão anterior pode ficar
+recolhida separadamente, sem inventar vínculos com outra mensagem. Se a correção
+ou a origem não estiver carregada no histórico, o texto disponível permanece
+acessível. Atalhos globais personalizados mantêm precedência sobre `Alt+V`.
 
 Perguntas ao usuário aparecem acima do input em painel com borda, fundo distinto
 e o estado “Aguardando sua resposta”. Setas e marcadores indicam as opções; nada

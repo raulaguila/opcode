@@ -49,6 +49,8 @@ type generationRun struct {
 	requiresProjectEvidence bool
 	primaryEvidence         map[string]bool
 	citationRepair          bool
+	citationRevisionOf      string
+	citationRevision        *citationRevision
 }
 
 func (a *agent) Run(ctx context.Context, sessionID, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {

@@ -52,6 +52,8 @@ type TextContent struct {
 	Origin string `json:"origin,omitempty"`
 	// CitationStatus is presentation metadata set by application validation.
 	CitationStatus string `json:"citation_status,omitempty"`
+	// RevisionOf links an application-requested correction to its original reply.
+	RevisionOf string `json:"revision_of,omitempty"`
 }
 
 const (
@@ -59,7 +61,24 @@ const (
 	CitationValid      = "valid"
 	CitationInvalid    = "invalid"
 	CitationSuperseded = "superseded"
+	CitationRevising   = "revising"
 )
+
+func (m *Message) RevisionOf() string { return m.Content().RevisionOf }
+
+func (m *Message) SetRevisionOf(id string) bool {
+	for i, part := range m.Parts {
+		if text, ok := part.(TextContent); ok {
+			if text.RevisionOf == id {
+				return false
+			}
+			text.RevisionOf = id
+			m.Parts[i] = text
+			return true
+		}
+	}
+	return false
+}
 
 func (m *Message) CitationValidation() string { return m.Content().CitationStatus }
 

@@ -37,6 +37,11 @@ A conversa mantém a ordem das mensagens públicas e intercala grupos consecutiv
 de ferramentas recolhíveis. Diagnósticos permanecem visíveis após perguntas,
 respostas humanas e reparos internos, com estado de citação associado ao texto.
 Uma falha de citação tem categoria própria e não indica contexto esgotado.
+Correções diretas de referências são versões da mesma resposta. O original
+continua visível durante a revisão; somente uma correção validada vira principal,
+com a versão anterior recolhida e acessível por clique ou `Alt+V`. Falhas mantêm
+o original e seu aviso. Perguntas, mudanças de tarefa e mensagens independentes
+não são agrupadas como revisões por proximidade ou conteúdo.
 Perguntas usam painel com borda, superfície distinta, estado de espera e seleção
 explícita, preservando a distinção entre responder e autorizar uma ferramenta.
 A resposta livre é a última opção selecionável; o foco indica se será enviada

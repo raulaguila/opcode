@@ -60,6 +60,7 @@ func TestQuestionAcknowledgmentCannotConcealUnverifiedDiagnosis(t *testing.T) {
 	history, err := saved.List(context.Background(), "s")
 	require.NoError(t, err)
 	for _, item := range history {
+		require.Empty(t, item.RevisionOf(), "an intermediate diagnosis cannot infer a final-answer revision relationship")
 		if item.Content().Text == "O projeto é um agente para terminal." {
 			require.Equal(t, message.CitationInvalid, item.CitationValidation(), "a new valid answer cannot prove that an earlier diagnosis was corrected")
 		}

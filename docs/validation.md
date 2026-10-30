@@ -5,6 +5,55 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Revisões de respostas sem duplicação — 30/10/2026
+
+Após `279850c`, correções diretas de citações recebem um vínculo explícito com a
+resposta original. Durante “Revisando referências…”, o original continua
+principal e o candidato ainda não validado não aparece como outra resposta
+principal. Somente citação válida e conclusão `EndTurn` promovem a nova versão.
+O original fica disponível em “Ver versão anterior”, por clique ou `Alt+V`.
+Uma tentativa inválida, interrompida ou truncada conserva o original com aviso e
+pode ser consultada separadamente. Copiar a resposta principal segue a mesma
+seleção; não copia um candidato pendente. As mensagens não são apagadas.
+
+O vínculo fica nos metadados textuais existentes, sem migração de banco ou
+mudança no protocolo dos provedores. JSON, streaming e histórico conservam esse
+vínculo. O agrupamento exige origem anterior, mesma sessão e turno humano;
+mensagens com ferramentas não viram versões de outra resposta. Releituras
+nativas `view`, `read_lines` e `read_symbol`, realmente disponíveis e não opacas,
+podem continuar a revisão sem esconder a narração pública. Perguntas, novas
+instruções, mudanças de workflow, ferramentas desconhecidas e lotes mistos com
+outras ferramentas conservam as mensagens independentes. Não há pareamento por
+semelhança textual.
+
+Falhas, cancelamentos, limites de execução e falha temporária de persistência
+resolvem o estado do original sem deixá-lo permanentemente em revisão. Um
+estado antigo `revising` sem execução ativa é mostrado como não validado.
+Registros legados já marcados como substituídos podem ficar recolhidos
+separadamente, sem inventar um vínculo com outro texto. Conteúdo sem substituto
+carregado continua acessível. Recibos, hashes atuais, intervalos lidos,
+permissões, sandbox e limite de uma tentativa de reparo permanecem ativos.
+
+Passaram as suítes completas comum e `integration` com `-race -p 1`, Vet e
+Staticcheck com e sem integração, Gocognit sem funções acima de 15 (também com
+recursão exata), documentação de linguagens, Actionlint e builds Linux/amd64,
+Windows/amd64 e macOS/arm64. Oito cenários principais executaram em PTY,
+incluindo o fluxo com `llama3.1:8b` no Ollama e os controles anteriores.
+
+A regressão nova bloqueia o provedor após transmitir bytes da correção: exige
+original visível, estado de revisão e candidato ainda não promovido. Ao liberar
+uma resposta com `README.md:1-2`, exige uma única resposta principal e acesso ao
+original. Uma correção sem citação deve falhar mantendo original, aviso e
+acesso à tentativa. Ambos reabrem com `--resume` sem mensagens ou inferência
+adicionais, e conservam exatamente duas gerações. Testes de unidade também
+cobrem arquivo alterado, leitura falha, impersonação de ferramenta opaca,
+resposta truncada, mudança de instrução, workflow e falha de gravação.
+
+Comandos e resultados estão em
+[`2026-10-30-response-revisions-validation.json`](evidence/2026-10-30-response-revisions-validation.json).
+O provedor empresarial não foi acessado. A organização visual não remove o
+histórico enviado ao modelo nem substitui os controles de orçamento de contexto.
+
 ## Resposta livre e registro de perguntas — 30/10/2026
 
 Após `d8ded6f`, a última opção das perguntas passou a ser o campo vazio

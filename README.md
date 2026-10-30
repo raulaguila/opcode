@@ -269,6 +269,10 @@ go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
 make complexity staticcheck
 ```
 
+Benchmarks de componente e comparação de alocações estão em
+[medição de desempenho](docs/performance.md) (`make bench-performance` e
+`make bench-compare`).
+
 O limite é 15 por função, incluindo testes e código gerado, sem exclusões.
 Staticcheck cobre também os arquivos com a tag `integration`, sem executar
 as APIs reais. `make quality` reúne complexidade, Staticcheck, vet, a suíte comum

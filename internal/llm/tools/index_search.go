@@ -22,7 +22,7 @@ func captureIndexSearch(ctx context.Context, db *sql.DB, root, scope string, inp
 		return s, err
 	}
 	if !s.paused {
-		s.stats, err = refreshCodeIndex(ctx, db, root)
+		s.stats, err = refreshSearchCodeIndex(ctx, db, root)
 		if err != nil {
 			return s, err
 		}

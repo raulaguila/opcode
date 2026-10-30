@@ -51,20 +51,20 @@ func TestIncrementalTranscriptMatchesFullRenderingAndHitPositions(t *testing.T) 
 		reference.renderGroup(g, i == len(groups)-1)
 	}
 	expected := reference.base.Width(m.width).Render(strings.Join(reference.rendered, "\n"))
-	require.Equal(t, expected, m.renderCache.content)
+	require.Equal(t, expected, strings.Join(m.transcriptLines, "\n"))
 	require.Equal(t, reference.hits, m.hits)
 	require.Equal(t, reference.items, m.uiMessages)
-	content := m.renderCache.content
+	content := strings.Join(m.transcriptLines, "\n")
 	first := m.renderCache.frames["0"]
 	last := m.messages[len(m.messages)-1]
 	last.AppendContent(" updated")
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: last})
-	require.NotEqual(t, content, m.renderCache.content)
+	require.NotEqual(t, content, strings.Join(m.transcriptLines, "\n"))
 	cached := m.renderCache.frames["0"]
 	first.used = cached.used
 	require.Equal(t, first, cached, "the immutable prefix should be reused")
 	require.Same(t, &first.items[0], &cached.items[0])
-	require.Contains(t, ansi.Strip(m.renderCache.content), "updated")
+	require.Contains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "updated")
 }
 func TestRenderCacheSessionThemeAndResizeIdentity(t *testing.T) {
 	old := theme.CurrentThemeName()
@@ -74,15 +74,15 @@ func TestRenderCacheSessionThemeAndResizeIdentity(t *testing.T) {
 		"B": {{ID: "same", SessionID: "B", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "session B"}}}}}}
 	m := NewMessagesCmp(&app.App{Messages: history}).(*messagesCmp)
 	m.SetSize(40, 20)
-	m.SetSession(session.Session{ID: "A"})
-	require.Contains(t, ansi.Strip(m.renderCache.content), "session A")
-	m.SetSession(session.Session{ID: "B"})
-	require.NotContains(t, ansi.Strip(m.renderCache.content), "session A")
+	m.Update(m.SetSession(session.Session{ID: "A"})())
+	require.Contains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "session A")
+	m.Update(m.SetSession(session.Session{ID: "B"})())
+	require.NotContains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "session A")
 	require.NoError(t, theme.PreviewTheme("gruvbox"))
 	m.rerender()
-	m.SetSession(session.Session{ID: "A"})
+	m.Update(m.SetSession(session.Session{ID: "A"})())
 	require.Equal(t, theme.CurrentThemeName(), m.renderCache.visual.name)
-	require.NotContains(t, ansi.Strip(m.renderCache.content), "session B")
+	require.NotContains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "session B")
 	m.SetSize(20, 20)
 	require.Equal(t, 20, m.renderCache.visual.width)
 	for _, line := range m.transcriptLines {
@@ -134,7 +134,7 @@ func TestRendererNeverReadsPersistenceAndProjectionTerminatesCycles(t *testing.T
 	m.nested.snapshots = map[string][]message.Message{"child": {{ID: "nested", SessionID: "child", Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: "nested-tool", Name: "bash", Input: `{"command":"echo projection"}`, Finished: true}}}}}
 	m.rerender()
 	m.toggleProcess("0")
-	require.Contains(t, ansi.Strip(m.renderCache.content), "echo projection")
+	require.Contains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "echo projection")
 	require.Zero(t, history.calls)
 	projection := &nestedMessageProjection{snapshots: map[string][]message.Message{"a": m.messages}, visited: map[string]bool{}, remaining: 2}
 	messages, err := projection.List(context.Background(), "a")
@@ -187,19 +187,19 @@ func TestExpandedProcessCacheInvalidatesOnToolResponse(t *testing.T) {
 	require.NotEmpty(t, cached.content)
 	result := message.Message{ID: "tool-result", SessionID: "A", Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: "tool", Content: "new evidence from repository", Metadata: `{"content":"new evidence from repository","file_path":"README.md"}`}}}
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.CreatedEvent, Payload: result})
-	require.Contains(t, ansi.Strip(m.renderCache.content), "new evidence from repository")
+	require.Contains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "new evidence from repository")
 	require.NotEqual(t, cached.content, m.cachedContent[processCacheKey("call")].content)
 }
 func TestFrozenSelectionReceivesLatestRenderAfterClearing(t *testing.T) {
 	m := renderFixture(2)
-	old := m.renderCache.content
+	old := strings.Join(m.transcriptLines, "\n")
 	m.selection = textSelection{anchor: textPoint{0, 0}, focus: textPoint{3, 0}, moved: true}
 	last := m.messages[1]
 	last.AppendContent(" new tail")
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: last})
-	require.Equal(t, old, m.renderCache.content)
+	require.Equal(t, old, strings.Join(m.transcriptLines, "\n"))
 	m.ClearSelection()
-	require.Contains(t, ansi.Strip(m.renderCache.content), "new tail")
+	require.Contains(t, ansi.Strip(strings.Join(m.transcriptLines, "\n")), "new tail")
 }
 
 func TestTaskHistoryDiscoveryOnUpdatedMessageAndStaleReload(t *testing.T) {

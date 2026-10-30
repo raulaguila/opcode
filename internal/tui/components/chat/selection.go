@@ -42,6 +42,7 @@ func (m *messagesCmp) ClearSelection() {
 func (m *messagesCmp) selectionMouse(msg tea.MouseMsg) {
 	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 		m.ClearSelection()
+		m.loadEarlierHistory(true)
 		row := msg.Y - 1 + m.viewport.YOffset // Container padding.
 		if m.rendering || len(m.messages) == 0 || row < 0 || row >= len(m.transcriptLines) || msg.Y < 1 || msg.Y > m.viewport.Height {
 			return

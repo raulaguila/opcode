@@ -1,0 +1,1840 @@
+{
+  "date": "2026-10-30",
+  "baseline_commit": "ffc07bbbddf85e0a840b8aca2fdbec678d3f06a0",
+  "toolchain": "go1.27.3",
+  "platform": "linux/amd64",
+  "cpu": "12th Gen Intel(R) Core(TM) i9-12900K",
+  "items": [
+    {
+      "item": 1,
+      "change": "Fair background pending order: new/changed paths before oldest expired verification",
+      "regression": "index_progress_test.go"
+    },
+    {
+      "item": 2,
+      "change": "One buffer per workspace fingerprint operation",
+      "regression": "workspace_test.go; BenchmarkWorkspaceDigest"
+    },
+    {
+      "item": 3,
+      "change": "Watcher-owned bounded dirty paths; trusted coverage required; full fallback on policy/errors/gaps/periodic reconciliation",
+      "regression": "index_refresh_test.go"
+    },
+    {
+      "item": 4,
+      "change": "Installed transcript blocks and line viewport update only the changed suffix",
+      "regression": "transcript_blocks_test.go; transcript_viewport_test.go"
+    },
+    {
+      "item": 5,
+      "change": "Bounded streaming source hash/line count and at most 32 ephemeral per-validation observations",
+      "regression": "source_receipt_test.go; citation history/native/compatible regressions"
+    },
+    {
+      "item": 6,
+      "change": "Serialized footprint remains authoritative; remove duplicate history/tool-body JSON from planning shares; decode only tools when sizing schemas",
+      "regression": "context_allocation_test.go; prepared_request_test.go; image_budget_test.go"
+    },
+    {
+      "item": 7,
+      "change": "Cancelable generation-guarded async conversation load; initial visual64turn page, full local selection/search; bounded loading preview and error handling",
+      "regression": "transcript_history_test.go; loading_preview_test.go"
+    },
+    {
+      "item": 8,
+      "change": "Message-owned reusable projection DB with private path/identity validation, cancellation and shutdown",
+      "regression": "owner_test.go; search_index_test.go; message_projection_test.go"
+    },
+    {
+      "item": 9,
+      "change": "Pure source interval parsing and direct resize command contract replace multi-output pointer helpers",
+      "regression": "source_receipt_test.go; TUI layout/resize integration"
+    },
+    {
+      "item": 10,
+      "change": "One Markdown style config and renderer per used width per call, without mutable global cache",
+      "regression": "markdown_reuse_test.go"
+    },
+    {
+      "item": 11,
+      "change": "Growing response, cache overflow, image/context, session load, delta/policy/periodic index fixtures; standard-library paired allocation comparison gate",
+      "regression": "scripts/bench-compare/main_test.go; benchmark fixtures"
+    }
+  ],
+  "benchmark": {
+    "method": "Three sequential before/after pairs, alternating order. No other test/build/inference commands ran concurrently. Same versioned compatible fixtures copied into an archived baseline; no production baseline changes.",
+    "samples_per_variant": 3,
+    "iterations": {
+      "tools": 10,
+      "agent": 20,
+      "image": 10,
+      "message": 100,
+      "chat": 20,
+      "overflow": 2,
+      "markdown": 10
+    },
+    "fixture_sha256": {
+      "internal/llm/tools/allocation_benchmark_test.go": "a6a5cab91b27d31d86187703ce25d69f5a750e8921c6e98ad5386570a9a4ba20",
+      "internal/llm/agent/context_allocation_test.go": "8ad44c4cf8ba50482c171847a5dffc6328a62ffb02ef65a7a22d88bef93793e5",
+      "internal/llm/provider/image_benchmark_test.go": "fe2f1e9b26750eabec8f9adba2c578d30a4d5ea71420b0594cef1b84a172943e",
+      "internal/message/search_index_bench_test.go": "ccac468b0b7c9b153615d5aa10f453327ccdeb37acee4c1ed861f92348dc4a70",
+      "internal/tui/components/chat/streaming_benchmark_test.go": "e600a3a2ccc59d140c31674347dd16827d6a112cf8100f6236a00b6f466c7684",
+      "internal/tui/components/chat/session_benchmark_test.go": "aa938408bc91df6dff59dcf0975ce27b7108b4ea92cf2fc63f19e14a6778d954",
+      "internal/tui/styles/markdown_benchmark_test.go": "a3ea2a0e1b8ba9b93b2bcd72aa99b7168c5f3ae8820f97397caa9660789ffd4d"
+    },
+    "samples": {
+      "BenchmarkContextPreparation/prepare_only": {
+        "before": [
+          [
+            363239.0,
+            393622.0,
+            454.0
+          ],
+          [
+            459636.0,
+            430734.0,
+            457.0
+          ],
+          [
+            1617803.0,
+            358120.0,
+            454.0
+          ]
+        ],
+        "after": [
+          [
+            435063.0,
+            229588.0,
+            445.0
+          ],
+          [
+            456240.0,
+            229073.0,
+            445.0
+          ],
+          [
+            1076107.0,
+            264855.0,
+            446.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          459636.0,
+          393622.0,
+          454.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          456240.0,
+          229588.0,
+          445.0
+        ],
+        "changes_percent": [
+          -0.7388455212385403,
+          -41.67297559587625,
+          -1.982378854625555
+        ]
+      },
+      "BenchmarkContextPreparation/agent_estimate": {
+        "before": [
+          [
+            1209397.0,
+            597683.0,
+            495.0
+          ],
+          [
+            625381.0,
+            632846.0,
+            495.0
+          ],
+          [
+            1969741.0,
+            669827.0,
+            498.0
+          ]
+        ],
+        "after": [
+          [
+            1177232.0,
+            230673.0,
+            457.0
+          ],
+          [
+            411904.0,
+            230616.0,
+            456.0
+          ],
+          [
+            928720.0,
+            230666.0,
+            457.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1209397.0,
+          632846.0,
+          495.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          928720.0,
+          230666.0,
+          457.0
+        ],
+        "changes_percent": [
+          -23.208011926604744,
+          -63.55100608994921,
+          -7.676767676767682
+        ]
+      },
+      "BenchmarkAuditChatEvent/100": {
+        "before": [
+          [
+            574811.0,
+            132306.0,
+            922.0
+          ],
+          [
+            337206.0,
+            132312.0,
+            922.0
+          ],
+          [
+            184638.0,
+            132306.0,
+            922.0
+          ]
+        ],
+        "after": [
+          [
+            81245.0,
+            89970.0,
+            920.0
+          ],
+          [
+            128179.0,
+            89972.0,
+            920.0
+          ],
+          [
+            117083.0,
+            307378.0,
+            921.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          337206.0,
+          132306.0,
+          922.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          117083.0,
+          89972.0,
+          920.0
+        ],
+        "changes_percent": [
+          -65.2784944514629,
+          -31.997037171405683,
+          -0.2169197396963085
+        ]
+      },
+      "BenchmarkAuditChatEvent/1000": {
+        "before": [
+          [
+            1028171.0,
+            501921.0,
+            922.0
+          ],
+          [
+            1023844.0,
+            932358.0,
+            924.0
+          ],
+          [
+            1005714.0,
+            716816.0,
+            923.0
+          ]
+        ],
+        "after": [
+          [
+            84542.0,
+            89984.0,
+            920.0
+          ],
+          [
+            82808.0,
+            89970.0,
+            920.0
+          ],
+          [
+            94206.0,
+            89970.0,
+            920.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1023844.0,
+          716816.0,
+          923.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          84542.0,
+          89970.0,
+          920.0
+        ],
+        "changes_percent": [
+          -91.74268736252789,
+          -87.44866186022632,
+          -0.325027085590468
+        ]
+      },
+      "BenchmarkTranscriptRenderWarm": {
+        "before": [
+          [
+            126.7,
+            0.0,
+            0.0
+          ],
+          [
+            145.2,
+            0.0,
+            0.0
+          ],
+          [
+            145.3,
+            0.0,
+            0.0
+          ]
+        ],
+        "after": [
+          [
+            411.6,
+            0.0,
+            0.0
+          ],
+          [
+            141.9,
+            0.0,
+            0.0
+          ],
+          [
+            180.9,
+            0.0,
+            0.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          145.2,
+          0.0,
+          0.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          180.9,
+          0.0,
+          0.0
+        ],
+        "changes_percent": [
+          24.586776859504145,
+          null,
+          null
+        ]
+      },
+      "BenchmarkTranscriptRenderTailInvalidated": {
+        "before": [
+          [
+            262096.0,
+            616339.0,
+            904.0
+          ],
+          [
+            288133.0,
+            616339.0,
+            904.0
+          ],
+          [
+            281872.0,
+            400802.0,
+            903.0
+          ]
+        ],
+        "after": [
+          [
+            87858.0,
+            89666.0,
+            903.0
+          ],
+          [
+            121638.0,
+            303334.0,
+            903.0
+          ],
+          [
+            127920.0,
+            305203.0,
+            904.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          281872.0,
+          616339.0,
+          904.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          121638.0,
+          303334.0,
+          903.0
+        ],
+        "changes_percent": [
+          -56.84636998353862,
+          -50.78455200790475,
+          -0.11061946902655162
+        ]
+      },
+      "BenchmarkTranscriptRenderStreaming": {
+        "before": [
+          [
+            1096470.0,
+            499350.0,
+            927.0
+          ],
+          [
+            1272140.0,
+            716758.0,
+            929.0
+          ],
+          [
+            1211700.0,
+            499993.0,
+            927.0
+          ]
+        ],
+        "after": [
+          [
+            221705.0,
+            89910.0,
+            925.0
+          ],
+          [
+            148412.0,
+            89910.0,
+            925.0
+          ],
+          [
+            125065.0,
+            89910.0,
+            925.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1211700.0,
+          499993.0,
+          927.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          148412.0,
+          89910.0,
+          925.0
+        ],
+        "changes_percent": [
+          -87.7517537344227,
+          -82.01774824847547,
+          -0.21574973031284195
+        ]
+      },
+      "BenchmarkAuditChatSessionLoad/100": {
+        "before": [
+          [
+            13734526.0,
+            15257844.0,
+            93435.0
+          ],
+          [
+            11799877.0,
+            15693194.0,
+            93437.0
+          ],
+          [
+            13130565.0,
+            14411899.0,
+            93434.0
+          ]
+        ],
+        "after": [
+          [
+            10837124.0,
+            13439806.0,
+            93491.0
+          ],
+          [
+            7764773.0,
+            14510652.0,
+            93495.0
+          ],
+          [
+            9643886.0,
+            14302465.0,
+            93494.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          13130565.0,
+          15257844.0,
+          93435.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          9643886.0,
+          14302465.0,
+          93494.0
+        ],
+        "changes_percent": [
+          -26.553914473596528,
+          -6.261559627952673,
+          0.06314550222079607
+        ]
+      },
+      "BenchmarkAuditChatSessionLoad/1000": {
+        "before": [
+          [
+            105437618.0,
+            140868788.0,
+            933002.0
+          ],
+          [
+            110863876.0,
+            142147398.0,
+            933001.0
+          ],
+          [
+            121973703.0,
+            142388633.0,
+            933012.0
+          ]
+        ],
+        "after": [
+          [
+            19370744.0,
+            19400974.0,
+            119656.0
+          ],
+          [
+            13944128.0,
+            19200952.0,
+            119658.0
+          ],
+          [
+            15325971.0,
+            18967310.0,
+            119652.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          110863876.0,
+          142147398.0,
+          933002.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          15325971.0,
+          19200952.0,
+          119656.0
+        ],
+        "changes_percent": [
+          -86.17586579780054,
+          -86.49222407855824,
+          -87.17516146803544
+        ]
+      },
+      "BenchmarkAuditChatGrowingReply/100": {
+        "before": [
+          [
+            2099312.0,
+            829955.0,
+            12983.0
+          ],
+          [
+            2079077.0,
+            1045485.0,
+            12984.0
+          ],
+          [
+            1413903.0,
+            1044265.0,
+            12984.0
+          ]
+        ],
+        "after": [
+          [
+            1552944.0,
+            987283.0,
+            12982.0
+          ],
+          [
+            2508829.0,
+            1202823.0,
+            12983.0
+          ],
+          [
+            1841866.0,
+            985416.0,
+            12982.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          2079077.0,
+          1044265.0,
+          12984.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          1841866.0,
+          987283.0,
+          12982.0
+        ],
+        "changes_percent": [
+          -11.40943793808502,
+          -5.4566609050384685,
+          -0.015403573629080292
+        ]
+      },
+      "BenchmarkAuditChatGrowingReply/1000": {
+        "before": [
+          [
+            4040888.0,
+            2317010.0,
+            12987.0
+          ],
+          [
+            4227333.0,
+            1673562.0,
+            12985.0
+          ],
+          [
+            2834658.0,
+            1460527.0,
+            12985.0
+          ]
+        ],
+        "after": [
+          [
+            1101530.0,
+            769877.0,
+            12980.0
+          ],
+          [
+            1498740.0,
+            771745.0,
+            12981.0
+          ],
+          [
+            1732337.0,
+            1200312.0,
+            12982.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          4040888.0,
+          1673562.0,
+          12985.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          1498740.0,
+          771745.0,
+          12981.0
+        ],
+        "changes_percent": [
+          -62.91062756503025,
+          -53.886082499483145,
+          -0.03080477474008969
+        ]
+      },
+      "BenchmarkPreparedImageBudget": {
+        "before": [
+          [
+            8072057.0,
+            8157338.0,
+            217.0
+          ],
+          [
+            9399352.0,
+            8153692.0,
+            208.0
+          ],
+          [
+            3534603.0,
+            8294981.0,
+            213.0
+          ]
+        ],
+        "after": [
+          [
+            12552438.0,
+            8295199.0,
+            206.0
+          ],
+          [
+            4419109.0,
+            7873469.0,
+            198.0
+          ],
+          [
+            8033246.0,
+            8435564.0,
+            207.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          8072057.0,
+          8157338.0,
+          213.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          8033246.0,
+          8295199.0,
+          206.0
+        ],
+        "changes_percent": [
+          -0.4808068129350418,
+          1.6900243682436589,
+          -3.2863849765258246
+        ]
+      },
+      "BenchmarkAuditMarkdownManyBlocks": {
+        "before": [
+          [
+            3672020.0,
+            3525132.0,
+            34983.0
+          ],
+          [
+            3585628.0,
+            3524606.0,
+            34976.0
+          ],
+          [
+            3054020.0,
+            3523920.0,
+            34976.0
+          ]
+        ],
+        "after": [
+          [
+            5639041.0,
+            1910166.0,
+            24373.0
+          ],
+          [
+            4224058.0,
+            1911096.0,
+            24375.0
+          ],
+          [
+            2145344.0,
+            1911260.0,
+            24375.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          3585628.0,
+          3524606.0,
+          34976.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          4224058.0,
+          1911096.0,
+          24375.0
+        ],
+        "changes_percent": [
+          17.805249178107708,
+          -45.77845013031244,
+          -30.309354986276304
+        ]
+      },
+      "BenchmarkConversationProjection": {
+        "before": [
+          [
+            1869076.0,
+            487085.0,
+            951.0
+          ],
+          [
+            2202858.0,
+            486888.0,
+            951.0
+          ],
+          [
+            2097137.0,
+            487080.0,
+            951.0
+          ]
+        ],
+        "after": [
+          [
+            430273.0,
+            16184.0,
+            206.0
+          ],
+          [
+            493807.0,
+            16254.0,
+            206.0
+          ],
+          [
+            423594.0,
+            16196.0,
+            206.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          2097137.0,
+          487080.0,
+          951.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          430273.0,
+          16196.0,
+          206.0
+        ],
+        "changes_percent": [
+          -79.48283779266686,
+          -96.67487887000082,
+          -78.33859095688749
+        ]
+      },
+      "BenchmarkAuditChatCacheOverflow": {
+        "before": [
+          [
+            1014613501.0,
+            568035804.0,
+            11379585.0
+          ],
+          [
+            1024828380.0,
+            572218160.0,
+            11379568.0
+          ],
+          [
+            1013446337.0,
+            570156356.0,
+            11379579.0
+          ]
+        ],
+        "after": [
+          [
+            1416186.0,
+            816040.0,
+            9824.0
+          ],
+          [
+            1295040.0,
+            816040.0,
+            9824.0
+          ],
+          [
+            1316246.0,
+            816040.0,
+            9824.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1014613501.0,
+          570156356.0,
+          11379579.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          1316246.0,
+          816040.0,
+          9824.0
+        ],
+        "changes_percent": [
+          -99.8702711920645,
+          -99.85687434834104,
+          -99.91366991696266
+        ]
+      },
+      "BenchmarkWorkspaceDigest/200": {
+        "before": [
+          [
+            4217701.0,
+            6838266.0,
+            5249.0
+          ],
+          [
+            10121644.0,
+            6838122.0,
+            5247.0
+          ],
+          [
+            3648818.0,
+            6837880.0,
+            5247.0
+          ]
+        ],
+        "after": [
+          [
+            2017574.0,
+            300686.0,
+            5029.0
+          ],
+          [
+            3777101.0,
+            301818.0,
+            5030.0
+          ],
+          [
+            1854778.0,
+            300124.0,
+            5028.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          4217701.0,
+          6838122.0,
+          5247.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          2017574.0,
+          300686.0,
+          5029.0
+        ],
+        "changes_percent": [
+          -52.164129225850765,
+          -95.60279854615054,
+          -4.15475509815132
+        ]
+      },
+      "BenchmarkWorkspaceDigest/2000": {
+        "before": [
+          [
+            60759669.0,
+            68258242.0,
+            52171.0
+          ],
+          [
+            42211621.0,
+            68260532.0,
+            52173.0
+          ],
+          [
+            83256291.0,
+            68258152.0,
+            52171.0
+          ]
+        ],
+        "after": [
+          [
+            14230550.0,
+            2688779.0,
+            50038.0
+          ],
+          [
+            13498293.0,
+            2686667.0,
+            50039.0
+          ],
+          [
+            14781910.0,
+            2687247.0,
+            50038.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          60759669.0,
+          68258242.0,
+          52171.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          14230550.0,
+          2687247.0,
+          50038.0
+        ],
+        "changes_percent": [
+          -76.57895404268908,
+          -96.06311718370948,
+          -4.088478273370266
+        ]
+      },
+      "BenchmarkWarmCodeIndexSearch/200": {
+        "before": [
+          [
+            24793788.0,
+            3269688.0,
+            43667.0
+          ],
+          [
+            21576041.0,
+            3256292.0,
+            43663.0
+          ],
+          [
+            30910392.0,
+            3261871.0,
+            43661.0
+          ]
+        ],
+        "after": [
+          [
+            3417712.0,
+            294056.0,
+            2996.0
+          ],
+          [
+            3516248.0,
+            290288.0,
+            2995.0
+          ],
+          [
+            2966044.0,
+            294110.0,
+            2996.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          24793788.0,
+          3261871.0,
+          43663.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          3417712.0,
+          294056.0,
+          2996.0
+        ],
+        "changes_percent": [
+          -86.21545041846773,
+          -90.98505121753742,
+          -93.13835512905663
+        ]
+      },
+      "BenchmarkWarmCodeIndexSearch/2000": {
+        "before": [
+          [
+            121093507.0,
+            29275458.0,
+            407333.0
+          ],
+          [
+            132434889.0,
+            29277391.0,
+            407333.0
+          ],
+          [
+            133628201.0,
+            29278216.0,
+            407337.0
+          ]
+        ],
+        "after": [
+          [
+            23477475.0,
+            289712.0,
+            2995.0
+          ],
+          [
+            23536418.0,
+            289682.0,
+            2994.0
+          ],
+          [
+            23002022.0,
+            294075.0,
+            2996.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          132434889.0,
+          29277391.0,
+          407333.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          23477475.0,
+          289712.0,
+          2995.0
+        ],
+        "changes_percent": [
+          -82.27243955329627,
+          -99.01045827478275,
+          -99.26472934920568
+        ]
+      },
+      "BenchmarkCitationCurrent": {
+        "before": [
+          [
+            1654827.0,
+            5411528.0,
+            443.0
+          ],
+          [
+            1478037.0,
+            5411528.0,
+            443.0
+          ],
+          [
+            2305298.0,
+            5411464.0,
+            443.0
+          ]
+        ],
+        "after": [
+          [
+            683701.0,
+            71056.0,
+            420.0
+          ],
+          [
+            655108.0,
+            71120.0,
+            420.0
+          ],
+          [
+            603068.0,
+            71056.0,
+            420.0
+          ]
+        ],
+        "before_median_ns_bytes_allocs": [
+          1654827.0,
+          5411528.0,
+          443.0
+        ],
+        "after_median_ns_bytes_allocs": [
+          655108.0,
+          71056.0,
+          420.0
+        ],
+        "changes_percent": [
+          -60.41229687453733,
+          -98.68695126404225,
+          -5.191873589164786
+        ]
+      }
+    },
+    "focused_followup": {
+      "reason": "Short-run Markdown elapsed time and image allocation/warm-cache timing varied; repeat only these cases at larger counts, without implementation changes.",
+      "pairs": 5,
+      "iterations": {
+        "markdown": 200,
+        "image": 100,
+        "warm": 200000
+      },
+      "samples": {
+        "markdown": {
+          "before": [
+            [
+              9423602.0,
+              3523320.0,
+              34976.0
+            ],
+            [
+              6568072.0,
+              3523267.0,
+              34976.0
+            ],
+            [
+              9829998.0,
+              3523351.0,
+              34976.0
+            ],
+            [
+              8589222.0,
+              3523386.0,
+              34976.0
+            ],
+            [
+              9755790.0,
+              3523326.0,
+              34975.0
+            ]
+          ],
+          "before_median": [
+            9423602.0,
+            3523326.0,
+            34976.0
+          ],
+          "after": [
+            [
+              4315232.0,
+              1910383.0,
+              24374.0
+            ],
+            [
+              5398355.0,
+              1910345.0,
+              24375.0
+            ],
+            [
+              2614897.0,
+              1910428.0,
+              24375.0
+            ],
+            [
+              5873572.0,
+              1910412.0,
+              24375.0
+            ],
+            [
+              5776296.0,
+              1910348.0,
+              24375.0
+            ]
+          ],
+          "after_median": [
+            5398355.0,
+            1910383.0,
+            24375.0
+          ],
+          "changes_percent": [
+            -42.714526780736286,
+            -45.77898837632396,
+            -30.309354986276304
+          ]
+        },
+        "image": {
+          "before": [
+            [
+              8936422.0,
+              8252763.0,
+              213.0
+            ],
+            [
+              7495695.0,
+              7943878.0,
+              208.0
+            ],
+            [
+              9712445.0,
+              8126382.0,
+              210.0
+            ],
+            [
+              5197112.0,
+              8196376.0,
+              211.0
+            ],
+            [
+              10685123.0,
+              8239155.0,
+              214.0
+            ]
+          ],
+          "before_median": [
+            8936422.0,
+            8196376.0,
+            211.0
+          ],
+          "after": [
+            [
+              9563416.0,
+              8167894.0,
+              203.0
+            ],
+            [
+              10264501.0,
+              8153501.0,
+              202.0
+            ],
+            [
+              7725488.0,
+              7830833.0,
+              198.0
+            ],
+            [
+              9315023.0,
+              8167569.0,
+              202.0
+            ],
+            [
+              4708531.0,
+              8195597.0,
+              202.0
+            ]
+          ],
+          "after_median": [
+            9315023.0,
+            8167569.0,
+            202.0
+          ],
+          "changes_percent": [
+            4.236606104769902,
+            -0.35146020631556807,
+            -4.265402843601896
+          ]
+        },
+        "warm": {
+          "before": [
+            [
+              59.14,
+              0.0,
+              0.0
+            ],
+            [
+              71.09,
+              0.0,
+              0.0
+            ],
+            [
+              112.2,
+              0.0,
+              0.0
+            ],
+            [
+              60.78,
+              0.0,
+              0.0
+            ],
+            [
+              58.79,
+              0.0,
+              0.0
+            ]
+          ],
+          "before_median": [
+            60.78,
+            0.0,
+            0.0
+          ],
+          "after": [
+            [
+              58.34,
+              0.0,
+              0.0
+            ],
+            [
+              62.78,
+              0.0,
+              0.0
+            ],
+            [
+              58.4,
+              0.0,
+              0.0
+            ],
+            [
+              94.58,
+              0.0,
+              0.0
+            ],
+            [
+              57.17,
+              0.0,
+              0.0
+            ]
+          ],
+          "after_median": [
+            58.4,
+            0.0,
+            0.0
+          ],
+          "changes_percent": [
+            -3.9157617637380793,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    "allocation_gate": {
+      "passed": true,
+      "max_increase_percent": 10,
+      "minimum_samples": 3,
+      "time_is_advisory": true,
+      "comparison": [
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/agent_estimate",
+          "before": {
+            "ns_per_op": 1209397,
+            "bytes_per_op": 632846,
+            "allocs_per_op": 495
+          },
+          "after": {
+            "ns_per_op": 928720,
+            "bytes_per_op": 230666,
+            "allocs_per_op": 457
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/prepare_only",
+          "before": {
+            "ns_per_op": 459636,
+            "bytes_per_op": 393622,
+            "allocs_per_op": 454
+          },
+          "after": {
+            "ns_per_op": 456240,
+            "bytes_per_op": 229588,
+            "allocs_per_op": 445
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkPreparedImageBudget",
+          "before": {
+            "ns_per_op": 8072057,
+            "bytes_per_op": 8157338,
+            "allocs_per_op": 213
+          },
+          "after": {
+            "ns_per_op": 8033246,
+            "bytes_per_op": 8295199,
+            "allocs_per_op": 206
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkCitationCurrent",
+          "before": {
+            "ns_per_op": 1654827,
+            "bytes_per_op": 5411528,
+            "allocs_per_op": 443
+          },
+          "after": {
+            "ns_per_op": 655108,
+            "bytes_per_op": 71056,
+            "allocs_per_op": 420
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/200",
+          "before": {
+            "ns_per_op": 24793788,
+            "bytes_per_op": 3261871,
+            "allocs_per_op": 43663
+          },
+          "after": {
+            "ns_per_op": 3417712,
+            "bytes_per_op": 294056,
+            "allocs_per_op": 2996
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/2000",
+          "before": {
+            "ns_per_op": 132434889,
+            "bytes_per_op": 29277391,
+            "allocs_per_op": 407333
+          },
+          "after": {
+            "ns_per_op": 23477475,
+            "bytes_per_op": 289712,
+            "allocs_per_op": 2995
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/200",
+          "before": {
+            "ns_per_op": 4217701,
+            "bytes_per_op": 6838122,
+            "allocs_per_op": 5247
+          },
+          "after": {
+            "ns_per_op": 2017574,
+            "bytes_per_op": 300686,
+            "allocs_per_op": 5029
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/2000",
+          "before": {
+            "ns_per_op": 60759669,
+            "bytes_per_op": 68258242,
+            "allocs_per_op": 52171
+          },
+          "after": {
+            "ns_per_op": 14230550,
+            "bytes_per_op": 2687247,
+            "allocs_per_op": 50038
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/message/BenchmarkConversationProjection",
+          "before": {
+            "ns_per_op": 2097137,
+            "bytes_per_op": 487080,
+            "allocs_per_op": 951
+          },
+          "after": {
+            "ns_per_op": 430273,
+            "bytes_per_op": 16196,
+            "allocs_per_op": 206
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatCacheOverflow",
+          "before": {
+            "ns_per_op": 1014613501,
+            "bytes_per_op": 570156356,
+            "allocs_per_op": 11379579
+          },
+          "after": {
+            "ns_per_op": 1316246,
+            "bytes_per_op": 816040,
+            "allocs_per_op": 9824
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/100",
+          "before": {
+            "ns_per_op": 337206,
+            "bytes_per_op": 132306,
+            "allocs_per_op": 922
+          },
+          "after": {
+            "ns_per_op": 117083,
+            "bytes_per_op": 89972,
+            "allocs_per_op": 920
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/1000",
+          "before": {
+            "ns_per_op": 1023844,
+            "bytes_per_op": 716816,
+            "allocs_per_op": 923
+          },
+          "after": {
+            "ns_per_op": 84542,
+            "bytes_per_op": 89970,
+            "allocs_per_op": 920
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/100",
+          "before": {
+            "ns_per_op": 2079077,
+            "bytes_per_op": 1044265,
+            "allocs_per_op": 12984
+          },
+          "after": {
+            "ns_per_op": 1841866,
+            "bytes_per_op": 987283,
+            "allocs_per_op": 12982
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/1000",
+          "before": {
+            "ns_per_op": 4040888,
+            "bytes_per_op": 1673562,
+            "allocs_per_op": 12985
+          },
+          "after": {
+            "ns_per_op": 1498740,
+            "bytes_per_op": 771745,
+            "allocs_per_op": 12981
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/100",
+          "before": {
+            "ns_per_op": 13130565,
+            "bytes_per_op": 15257844,
+            "allocs_per_op": 93435
+          },
+          "after": {
+            "ns_per_op": 9643886,
+            "bytes_per_op": 14302465,
+            "allocs_per_op": 93494
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/1000",
+          "before": {
+            "ns_per_op": 110863876,
+            "bytes_per_op": 142147398,
+            "allocs_per_op": 933002
+          },
+          "after": {
+            "ns_per_op": 15325971,
+            "bytes_per_op": 19200952,
+            "allocs_per_op": 119656
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderStreaming",
+          "before": {
+            "ns_per_op": 1211700,
+            "bytes_per_op": 499993,
+            "allocs_per_op": 927
+          },
+          "after": {
+            "ns_per_op": 148412,
+            "bytes_per_op": 89910,
+            "allocs_per_op": 925
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderTailInvalidated",
+          "before": {
+            "ns_per_op": 281872,
+            "bytes_per_op": 616339,
+            "allocs_per_op": 904
+          },
+          "after": {
+            "ns_per_op": 121638,
+            "bytes_per_op": 303334,
+            "allocs_per_op": 903
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderWarm",
+          "before": {
+            "ns_per_op": 145.2,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          "after": {
+            "ns_per_op": 180.9,
+            "bytes_per_op": 0,
+            "allocs_per_op": 0
+          },
+          "allocation_regression": false
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/styles/BenchmarkAuditMarkdownManyBlocks",
+          "before": {
+            "ns_per_op": 3585628,
+            "bytes_per_op": 3524606,
+            "allocs_per_op": 34976
+          },
+          "after": {
+            "ns_per_op": 4224058,
+            "bytes_per_op": 1911096,
+            "allocs_per_op": 24375
+          },
+          "allocation_regression": false
+        }
+      ]
+    },
+    "new_index_cases": "BenchmarkIndexRefreshChanges: one changed path, policy rebuild and periodic reconciliation; candidate only, not a paired speed claim."
+  },
+  "permissions_preserved": true,
+  "citation_criteria_preserved": true,
+  "dependencies_changed": false,
+  "validation": [
+    {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "staticcheck",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "gocognit",
+        "-over",
+        "15",
+        "-exact-recursion",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "run",
+        "./scripts/language-docs",
+        "-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "build",
+        "-race",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-audit-implementation/opcode",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "opcode-production",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "env",
+        "CGO_ENABLED=0",
+        "GOOS=windows",
+        "GOARCH=amd64",
+        "go",
+        "build",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "env",
+        "CGO_ENABLED=0",
+        "GOOS=darwin",
+        "GOARCH=arm64",
+        "go",
+        "build",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "stage": "after startup-query regression"
+    },
+    {
+      "command": [
+        "staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "stage": "after startup-query regression"
+    },
+    {
+      "command": [
+        "gocognit",
+        "-over",
+        "15",
+        "-exact-recursion",
+        "."
+      ],
+      "exit_code": 0,
+      "stage": "after startup-query regression"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "stage": "after startup-query regression"
+    }
+  ],
+  "live_ollama_pty": {
+    "status": "passed",
+    "model": "llama3.1:8b",
+    "provider": "local Ollama",
+    "context": 16384,
+    "application_binary": "go build (production, no race instrumentation)",
+    "test_runner": "go test -race -tags integration ./internal/tui -run ^(TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUITerminalStartupQueries)$ -count=1 -v",
+    "full_flow_seconds": 24.04,
+    "compact_theme_seconds": 3.44,
+    "themes": [
+      "dark",
+      "light",
+      "no-color"
+    ],
+    "coverage": [
+      "Unicode paste, 3–8-row composer and resize",
+      "provider outage, empty list, retry and explicit deletion",
+      "Ask repository evidence and source citation",
+      "approved LSP probe and suppressed child stderr",
+      "OSC52 response copy",
+      "human question answered and generation resumed",
+      "exact PTY command not run until UI approval",
+      "live output before exit, human terminal input",
+      "instruction queued during execution without command replay",
+      "unchanged fixture sources"
+    ],
+    "overview_sha256": "5ba572e38b3b04b1f60af6b30499ebb24f89a804cd0276da5999b89fc20ded6d",
+    "diagnosis": {
+      "initial_attempts": "Race-instrumented application exceeded the unchanged five-second first-frame acceptance deadline before the first prompt.",
+      "observations": [
+        "Terminal OSC11 and cursor replies delivered in 77 ms; no missing terminal response.",
+        "SIGQUIT at one second found main goroutine compiling SQLite/Wasm in wazero.",
+        "Later diagnostic showed active rendering and correct footer, not a render deadlock."
+      ],
+      "resolution": "Run UI acceptance against the normal production binary. Functional and integration suites, plus PTY test runner, retain -race. No production timeout, test deadline, citation criterion or permission was changed.",
+      "regression": "TestPTYUITerminalStartupQueries verifies OSC11 and cursor replies after resize across every split boundary."
+    }
+  },
+  "limits": [
+    "Component allocations are not resident memory or model inference latency.",
+    "Warm index measurements exclude open/schema and final hit verification.",
+    "Complete persisted history remains; initial presentation is paged. Search/selection can materialize full local transcript.",
+    "Image preparation showed no conclusive latency/allocation gain; Markdown timing varied across short and longer samples.",
+    "Live verification used local Ollama only; no company/cloud credentials or paid APIs were used.",
+    "Cold first-frame latency of a race-instrumented application remains above the five-second acceptance deadline on this host; UI acceptance used the production build."
+  ]
+}

@@ -118,6 +118,7 @@ func (m *messagesCmp) ToggleKeyboardSelection() {
 		m.ClearSelection()
 		return
 	}
+	m.loadEarlierHistory(true)
 	var point textPoint
 	found := false
 	if m.find.open && len(m.find.matches) > 0 {
@@ -144,6 +145,7 @@ func (m *messagesCmp) ToggleKeyboardSelection() {
 }
 func (m *messagesCmp) StartSearch(query string) {
 	m.ClearSelection()
+	m.loadEarlierHistory(true)
 	m.find = transcriptFind{open: true, query: boundedQuery(query)}
 	m.updateSearch()
 	m.jumpSearch(0)

@@ -3,6 +3,7 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -998,4 +999,20 @@ func testLiveOllamaPTYUIExecuteModeAndAcknowledgedCommandSubmission(frame string
 	// The workflow mode update precedes the editor submission receipt. Do
 	// not append the next prompt to a draft still awaiting that receipt.
 	return strings.HasPrefix(strings.TrimSpace(ptyUIFooter(frame)), "Execute") && !strings.Contains(frame, "/mode execute")
+}
+
+func TestPTYUITerminalStartupQueries(t *testing.T) {
+	input := []byte("\x1b]11;?\x1b\\\x1b[6n")
+	for split := 0; split <= len(input); split++ {
+		var response bytes.Buffer
+		screen := vt10x.New(vt10x.WithSize(80, 24), vt10x.WithWriter(&response))
+		screen.Resize(60, 20)
+		filter := ptyUIControlFilter{}
+		_, err := screen.Write(filter.write(input[:split]))
+		require.NoError(t, err)
+		_, err = screen.Write(filter.write(input[split:]))
+		require.NoError(t, err)
+		require.Contains(t, response.String(), "\x1b]11;rgb:", "split %d", split)
+		require.Contains(t, response.String(), "\x1b[1;1R", "split %d", split)
+	}
 }

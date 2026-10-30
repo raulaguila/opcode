@@ -40,6 +40,7 @@ func currentVisualIdentity(width int) visualIdentity {
 
 type turnCacheItem struct {
 	text                     string
+	lines                    []string
 	items                    []uiMessage
 	hits                     []transcriptHit
 	dependencies             []string
@@ -49,9 +50,16 @@ type turnCacheItem struct {
 	bytes, height            int
 	used                     uint64
 }
+type installedTurn struct {
+	key             string
+	frame           turnCacheItem
+	line, item, hit int
+}
+
 type transcriptCache struct {
 	visual                            visualIdentity
 	groups                            []turnGroup
+	groupIndex                        map[string]int
 	first                             *message.Message
 	count                             int
 	versions                          map[string]uint64
@@ -60,7 +68,7 @@ type transcriptCache struct {
 	frames                            map[string]turnCacheItem
 	frameBytes, messageBytes, entries int
 	clock                             uint64
-	content                           string
+	blocks                            []installedTurn
 	dirty                             bool
 }
 
@@ -182,6 +190,7 @@ func (m *messagesCmp) renderGroups() []turnGroup {
 	}
 	c.first, c.count = first, len(m.messages)
 	c.groups = nil
+	c.groupIndex = map[string]int{}
 	c.messageTurn = map[string]string{}
 	c.toolOwners = map[string]string{}
 	start := 0
@@ -207,6 +216,7 @@ func (m *messagesCmp) appendRenderGroup(start, end int) {
 		g.user = &items[0]
 		g.messages = items[1:]
 	}
+	c.groupIndex[g.key] = len(c.groups)
 	c.groups = append(c.groups, g)
 	for _, item := range items {
 		c.messageTurn[item.ID] = g.key
@@ -219,11 +229,6 @@ func (m *messagesCmp) frameValid(frame turnCacheItem, g turnGroup, active, expan
 	if frame.latest != latest || frame.version != m.renderCache.versions[g.key] || frame.active != active || frame.expanded != expanded || frame.summary != m.session.SummaryMessageID {
 		return false
 	}
-	for _, id := range frame.dependencies {
-		if _, ok := m.cachedContent[id]; !ok {
-			return false
-		}
-	}
 	return true
 }
 func (m *messagesCmp) storeTurnFrame(key string, frame turnCacheItem) {
@@ -232,7 +237,7 @@ func (m *messagesCmp) storeTurnFrame(key string, frame turnCacheItem) {
 		c.frameBytes -= old.bytes
 		delete(c.frames, key)
 	}
-	frame.bytes = len(frame.text) + cacheContentBytes(frame.items) + len(frame.hits)*64 + len(key) + 128
+	frame.bytes = len(frame.text) + len(frame.lines)*16 + cacheContentBytes(frame.items) + len(frame.hits)*64 + len(key) + 128
 	for _, id := range frame.dependencies {
 		frame.bytes += len(id) + 16
 	}
@@ -271,17 +276,36 @@ func (m *messagesCmp) appendTurnFrame(frame turnCacheItem, offset int) {
 		m.hits = append(m.hits, hit)
 	}
 }
-func (m *messagesCmp) installTranscript(content string) {
-	c := &m.renderCache
-	if content == c.content {
-		return
+
+// The flattened slice contains line references, never a second transcript string.
+func (m *messagesCmp) truncateTranscript(blocks []installedTurn, index int) {
+	line, item, hit := len(m.transcriptLines), len(m.uiMessages), len(m.hits)
+	if index == 0 {
+		line, item, hit = 0, 0, 0
+	} else if index < len(blocks) {
+		line, item, hit = blocks[index].line, blocks[index].item, blocks[index].hit
 	}
-	c.content = content
-	m.transcriptLines = strings.Split(content, "\n")
+	clear(m.transcriptLines[line:])
+	m.transcriptLines = m.transcriptLines[:line]
+	clear(m.uiMessages[item:])
+	m.uiMessages = m.uiMessages[:item]
+	clear(m.hits[hit:])
+	m.hits = m.hits[:hit]
+	m.renderCache.blocks = m.renderCache.blocks[:min(index, len(m.renderCache.blocks))]
+}
+
+func (m *messagesCmp) installTurnFrame(key string, frame turnCacheItem) {
+	block := installedTurn{key, frame, len(m.transcriptLines), len(m.uiMessages), len(m.hits)}
+	m.transcriptLines = append(m.transcriptLines, frame.lines...)
+	m.appendTurnFrame(frame, block.line)
+	m.renderCache.blocks = append(m.renderCache.blocks, block)
+}
+
+func (m *messagesCmp) installTranscriptLines() {
 	if m.find.open {
 		m.updateSearch()
 	}
-	m.viewport.SetContent(content)
+	m.viewport.SetLines(m.transcriptLines)
 }
 
 func processCacheKey(id string) string { return id + "\x00process" }

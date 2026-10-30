@@ -1,9 +1,13 @@
 package tools
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -65,9 +69,11 @@ func VisibleSourceReadReceipt(name, content, metadata string) (SourceReadReceipt
 		first = page.Offset + 1
 		last = first + strings.Count(strings.TrimSuffix(page.Content, "\n"), "\n")
 	case "view", "read_symbol":
-		if result0, result1, handled := visibleSourceReadReceiptView(name, &content, &r, &ok, &first, &last); handled {
-			return result0, result1
+		interval, visible := visibleSourceReadReceiptView(name, content)
+		if !visible {
+			return r, false
 		}
+		first, last = interval.first, interval.last
 	default:
 		return r, false
 	}
@@ -83,57 +89,140 @@ func VisibleSourceReadReceipt(name, content, metadata string) (SourceReadReceipt
 // external/sensitive reads retain their original receipt but are not certified
 // as current. No permission prompt, integration or model invocation occurs.
 func SourceReadCurrent(ctx context.Context, receipt SourceReadReceipt) bool {
+	return NewSourceReadVerifier(ctx).Current(receipt)
+}
+
+// SourceReadVerifier belongs to one validation phase. Its observations are never
+// reused across turns, repairs or calls to SourceReadCurrent.
+type SourceReadVerifier struct {
+	ctx       context.Context
+	buffer    []byte
+	snapshots map[string]sourceReadSnapshot
+}
+type sourceReadSnapshot struct {
+	lines int
+	hash  string
+	valid bool
+}
+
+func NewSourceReadVerifier(ctx context.Context) *SourceReadVerifier {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if ctx.Err() != nil {
+	ctx = context.WithValue(ctx, accessKey{}, &accessPolicy{tool: "citation_validation", approved: map[string]bool{}})
+	return &SourceReadVerifier{ctx: ctx}
+}
+
+func (v *SourceReadVerifier) Current(receipt SourceReadReceipt) bool {
+	if v.ctx.Err() != nil || receipt.StartLine < 1 || receipt.EndLine < receipt.StartLine {
 		return false
 	}
-	root, err := canonicalPath(config.WorkingDirectory())
+	path, err := currentSourcePath(v.ctx, receipt.Path)
 	if err != nil {
 		return false
 	}
-	path, err := canonicalPath(receipt.Path)
-	if err != nil || !inside(root, path) || path != absolutePath(receipt.Path) {
-		return false
+	snapshot, ok := v.snapshots[path]
+	if !ok {
+		snapshot = v.read(path)
+		if v.snapshots == nil {
+			v.snapshots = map[string]sourceReadSnapshot{}
+		}
+		if len(v.snapshots) < 32 {
+			v.snapshots[path] = snapshot
+		}
 	}
-	// A policy with no permission service fails closed for sensitive paths. Root
-	// handles and the regular-file check below preserve the existing I/O boundary.
-	ctx = context.WithValue(ctx, accessKey{}, &accessPolicy{tool: "citation_validation", approved: map[string]bool{}})
-	checked, err := authorizeFile(ctx, path, "read")
-	if err != nil || filepath.Clean(checked) != filepath.Clean(path) {
-		return false
-	}
-	raw, err := readFile(ctx, path)
-	return err == nil && ctx.Err() == nil && receipt.StartLine > 0 && receipt.EndLine >= receipt.StartLine && receipt.EndLine <= strings.Count(string(raw), "\n")+1 && indexDigest(string(raw)) == receipt.Hash
+	return snapshot.valid && snapshot.hash == receipt.Hash && receipt.EndLine <= snapshot.lines && v.ctx.Err() == nil
 }
 
-func visibleSourceReadReceiptView(name string, content *string, r *SourceReadReceipt, ok *bool, first *int, last *int) (extractedResult0 SourceReadReceipt, extractedResult1 bool, handled bool) {
+func currentSourcePath(ctx context.Context, input string) (string, error) {
+	root, err := canonicalPath(config.WorkingDirectory())
+	if err != nil {
+		return "", err
+	}
+	path, err := canonicalPath(input)
+	if err != nil || !inside(root, path) || path != absolutePath(input) {
+		return "", fmt.Errorf("source is not a regular workspace path")
+	}
+	checked, err := authorizeFile(ctx, path, "read")
+	if err != nil {
+		return "", err
+	}
+	if filepath.Clean(checked) != filepath.Clean(path) {
+		return "", fmt.Errorf("source path changed")
+	}
+	return path, nil
+}
+
+func (v *SourceReadVerifier) read(path string) sourceReadSnapshot {
+	file, err := openFile(v.ctx, path)
+	if err != nil {
+		return sourceReadSnapshot{}
+	}
+	defer file.Close()
+	if v.buffer == nil {
+		v.buffer = make([]byte, 32<<10)
+	}
+	digest := sha256.New()
+	reader := io.LimitReader(file, 16<<20+1)
+	var total int64
+	lines := 1
+	for {
+		if v.ctx.Err() != nil {
+			return sourceReadSnapshot{}
+		}
+		n, err := reader.Read(v.buffer)
+		total += int64(n)
+		if total > 16<<20 {
+			return sourceReadSnapshot{}
+		}
+		digest.Write(v.buffer[:n])
+		lines += bytes.Count(v.buffer[:n], []byte{'\n'})
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return sourceReadSnapshot{}
+		}
+	}
+	return sourceReadSnapshot{lines: lines, hash: hex.EncodeToString(digest.Sum(nil)), valid: true}
+}
+
+type sourceReadInterval struct{ first, last int }
+
+func visibleSourceReadReceiptView(name, content string) (sourceReadInterval, bool) {
+	source, ok := sourceReadViewContent(name, content)
+	if !ok {
+		return sourceReadInterval{}, false
+	}
+	var interval sourceReadInterval
+	for _, match := range numberedSourceLine.FindAllStringSubmatch(source, 2001) {
+		line, _ := strconv.Atoi(match[1])
+		if interval.first == 0 {
+			interval.first = line
+		}
+		if line != interval.first && line != interval.last+1 {
+			return sourceReadInterval{}, false
+		}
+		interval.last = line
+	}
+	return interval, interval.first > 0
+}
+
+func sourceReadViewContent(name, content string) (string, bool) {
 	if name == "read_symbol" {
 		var page struct {
 			Content string `json:"content"`
 		}
-		if json.Unmarshal([]byte((*content)), &page) != nil {
-			return (*r), false, true
+		if json.Unmarshal([]byte(content), &page) != nil {
+			return "", false
 		}
-		(*content) = page.Content
-	} else {
-		// Diagnostics/notes outside the source cannot enlarge the interval.
-		_, (*content), (*ok) = strings.Cut((*content), "<file>\n")
-		if !(*ok) {
-			return (*r), false, true
-		}
-		(*content), _, _ = strings.Cut((*content), "\n</file>")
+		return page.Content, true
 	}
-	for _, match := range numberedSourceLine.FindAllStringSubmatch((*content), 2001) {
-		line, _ := strconv.Atoi(match[1])
-		if (*first) == 0 {
-			(*first) = line
-		}
-		if line != (*first) && line != (*last)+1 {
-			return (*r), false, true
-		}
-		(*last) = line
+	// Diagnostics and notes outside the native source cannot enlarge its interval.
+	_, source, ok := strings.Cut(content, "<file>\n")
+	if !ok {
+		return "", false
 	}
-	return extractedResult0, extractedResult1, false
+	source, _, _ = strings.Cut(source, "\n</file>")
+	return source, true
 }

@@ -1,4 +1,4 @@
-.PHONY: test test-integration vet build release-local complexity staticcheck quality
+.PHONY: test test-integration vet build release-local complexity staticcheck quality bench-performance bench-compare
 
 test:
 	go test ./...
@@ -18,6 +18,13 @@ staticcheck:
 	staticcheck -tags integration ./...
 
 quality: complexity staticcheck vet test test-integration
+
+# Offline component fixtures only. Compare logs from the same fixture/toolchain.
+bench-performance:
+	OPCODE_LIVE_TESTS= OPCODE_LIVE_OLLAMA= go test -p 1 -run '^$$' -bench 'Benchmark(WorkspaceDigest|WarmCodeIndexSearch|CitationCurrent|IndexRefreshChanges|ContextPreparation|PreparedImageBudget|ConversationProjection|AuditChat|TranscriptRender|AuditMarkdown)' -benchmem -benchtime=10x -count=3 ./internal/llm/tools ./internal/llm/agent ./internal/llm/provider ./internal/message ./internal/tui/components/chat ./internal/tui/styles
+
+bench-compare:
+	go run ./scripts/bench-compare -before '$(BEFORE)' -after '$(AFTER)'
 
 build:
 	go build -trimpath -o bin/opcode .

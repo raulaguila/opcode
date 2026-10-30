@@ -57,7 +57,7 @@ func estimateTokens(raw []byte) int64 {
 	}
 	return (ascii+1)/2 + other
 }
-func estimateContext(model models.Model, system string, history []message.Message, ts []tools.BaseTool, reserve int64) ContextStatus {
+func contextDefaults(model models.Model, reserve int64) ContextStatus {
 	window := model.ContextWindow
 	if window <= 0 {
 		window = 128000
@@ -68,16 +68,24 @@ func estimateContext(model models.Model, system string, history []message.Messag
 	if reserve <= 0 {
 		reserve = min(4096, window/4)
 	}
+	return ContextStatus{ContextSource: model.ContextSource, ContextWindow: window, ReservedOutputTokens: reserve, SafetyTokens: max(int64(512), window/20), Method: "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer"}
+}
+
+func estimateContext(model models.Model, system string, history []message.Message, ts []tools.BaseTool, reserve int64) ContextStatus {
+	status := contextDefaults(model, reserve)
 	raw, _ := json.Marshal(history)
 	schemas := make([]tools.ToolInfo, 0, len(ts))
-	for _, t := range ts {
-		schemas = append(schemas, t.Info())
+	for _, tool := range ts {
+		schemas = append(schemas, tool.Info())
 	}
 	schema, _ := json.Marshal(schemas)
-	schemaTokens := estimateTokens(schema)
-	input := estimateTokens(raw) + estimateTokens([]byte(system)) + schemaTokens + int64(len(history))*32 + 256
-	safety := max(int64(512), window/20)
-	return ContextStatus{ContextSource: model.ContextSource, Components: map[string]int64{"instructions": estimateTokens([]byte(system)), "history_and_evidence": estimateTokens(raw), "schemas": schemaTokens, "output": reserve, "safety": safety}, ContextWindow: window, EstimatedInputTokens: input, ReservedOutputTokens: reserve, SafetyTokens: safety, ToolSchemaTokens: schemaTokens, Method: "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer", Fits: input+reserve+safety <= window}
+	status.ToolSchemaTokens = estimateTokens(schema)
+	instruction := estimateTokens([]byte(system))
+	historyTokens := estimateTokens(raw)
+	status.EstimatedInputTokens = historyTokens + instruction + status.ToolSchemaTokens + int64(len(history))*32 + 256
+	status.Components = map[string]int64{"instructions": instruction, "history_and_evidence": historyTokens, "schemas": status.ToolSchemaTokens, "output": status.ReservedOutputTokens, "safety": status.SafetyTokens}
+	status.Fits = status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens <= status.ContextWindow
+	return status
 }
 
 // compactHistory keeps every user instruction and all tool call/result pairs.
@@ -285,7 +293,7 @@ func auxiliaryBudgetTools(name config.AgentName, p provider.Provider, history []
 }
 
 func (a *agent) estimateProviderContext(p provider.Provider, history []message.Message, ts []tools.BaseTool) (ContextStatus, error) {
-	status := estimateContext(p.Model(), a.systemPrompt(), history, ts, a.maxOutputTokens)
+	status := contextDefaults(p.Model(), a.maxOutputTokens)
 	visualTokens := int64(0)
 	if sizer, ok := p.(provider.RequestSizer); ok {
 		footprint, err := sizer.RequestFootprint(history, ts)
@@ -308,7 +316,10 @@ func (a *agent) estimateProviderContext(p provider.Provider, history []message.M
 		} else {
 			status.Method += "; SDK serialization approximation"
 		}
-		status.Fits = status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens <= status.ContextWindow
+		instruction := estimateTokens([]byte(a.systemPrompt()))
+		status.Components = map[string]int64{"instructions": instruction, "history_and_evidence": max(0, status.EstimatedInputTokens-instruction-status.ToolSchemaTokens)}
+	} else {
+		status = estimateContext(p.Model(), a.systemPrompt(), history, ts, a.maxOutputTokens)
 	}
 	status.uncalibratedInput = status.EstimatedInputTokens
 	status = a.calibratedEstimate(p.Model(), status)
@@ -319,13 +330,7 @@ func (a *agent) estimateProviderContext(p provider.Provider, history []message.M
 		status.Method += "; Base64 excluded from text, conservative image reserve included"
 	}
 	status.Fits = status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens <= status.ContextWindow
-	evidence := int64(0)
-	for _, msg := range history {
-		if msg.Role == message.Tool {
-			raw, _ := json.Marshal(msg)
-			evidence += estimateTokens(raw)
-		}
-	}
+	evidence := planningEvidenceTokens(history)
 	instruction := status.Components["instructions"]
 	hist := max(0, status.Components["history_and_evidence"]-evidence)
 	schemas := status.ToolSchemaTokens
@@ -337,6 +342,26 @@ func (a *agent) estimateProviderContext(p provider.Provider, history []message.M
 	status.Method += "; component shares are planning estimates, total budget is enforced"
 
 	return status, nil
+}
+
+// Component shares are UI planning weights; the serialized footprint alone
+// determines the hard limit. Avoid serializing tool bodies a second time here.
+func planningEvidenceTokens(history []message.Message) int64 {
+	var total int64
+	for _, msg := range history {
+		if msg.Role != message.Tool {
+			continue
+		}
+		for _, part := range msg.Parts {
+			switch value := part.(type) {
+			case message.ToolResult:
+				total += estimateTokens([]byte(value.Content)) + estimateTokens([]byte(value.Metadata)) + 32
+			case message.TextContent:
+				total += estimateTokens([]byte(value.Text)) + 32
+			}
+		}
+	}
+	return total
 }
 
 func runProvider(a *agent, run *generationRun) provider.Provider {

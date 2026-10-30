@@ -4,18 +4,14 @@ package memoryindex
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"unicode"
 
 	"github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
-	"github.com/raulaguila/opcode/internal/localstate"
 )
 
 type Document struct {
@@ -27,50 +23,26 @@ type Document struct {
 	Stamp   int64           `json:"stamp"`
 }
 
-func open(ctx context.Context, directory, project string) (*sql.DB, error) {
-	hash := sha256.Sum256([]byte(filepath.Clean(project)))
-	dir := filepath.Join(directory, "memory-index")
-	root, err := localstate.OpenPrivateRoot(dir, true)
-	if err != nil {
-		return nil, err
-	}
-	defer root.Close()
-	name := fmt.Sprintf("%x.sqlite", hash[:])
-	f, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err == nil {
-		err = f.Close()
-	} else if os.IsExist(err) {
-		info, e := root.Lstat(name)
-		if e != nil || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("memory index must be a regular file")
-		}
-		err = root.Chmod(name, 0600)
-	}
-	if err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("sqlite3", filepath.Join(dir, name))
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(1)
-	for _, q := range []string{`PRAGMA journal_mode=MEMORY`, `PRAGMA secure_delete=ON`, `PRAGMA max_page_count=32768`, `PRAGMA busy_timeout=3000`, `CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,kind TEXT NOT NULL,session TEXT NOT NULL,sources TEXT NOT NULL,stamp INTEGER NOT NULL)`, `CREATE INDEX IF NOT EXISTS documents_stamp ON documents(stamp DESC,id)`, `CREATE VIRTUAL TABLE IF NOT EXISTS memory USING fts5(id UNINDEXED,text)`} {
-		if _, err := db.ExecContext(ctx, q); err != nil {
-			db.Close()
-			return nil, err
-		}
-	}
-	return db, nil
-}
 func Upsert(ctx context.Context, directory, project string, d Document) error {
-	if len(d.ID) > 160 || len(d.Session) > 128 || len(d.Text) > 8192 || len(d.Sources) > 8192 || d.Kind != "conversation" && d.Kind != "finding" {
-		return fmt.Errorf("invalid bounded memory projection")
+	if err := validateDocument(d); err != nil {
+		return err
 	}
 	db, err := open(ctx, directory, project)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	return upsert(ctx, db, d)
+}
+
+func validateDocument(d Document) error {
+	if len(d.ID) > 160 || len(d.Session) > 128 || len(d.Text) > 8192 || len(d.Sources) > 8192 || d.Kind != "conversation" && d.Kind != "finding" {
+		return fmt.Errorf("invalid bounded memory projection")
+	}
+	return nil
+}
+
+func upsert(ctx context.Context, db *sql.DB, d Document) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return err
@@ -142,6 +114,10 @@ func Remove(ctx context.Context, directory, project, id string) error {
 		return err
 	}
 	defer db.Close()
+	return remove(ctx, db, id)
+}
+
+func remove(ctx context.Context, db *sql.DB, id string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

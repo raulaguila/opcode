@@ -92,3 +92,30 @@ func TestLargeViewKeepsSmallNativeReceiptMetadata(t *testing.T) {
 	_, ok := ParseSourceReadReceipt(result.Metadata)
 	require.True(t, ok)
 }
+
+func TestSourceVerifierChecksEveryIntervalAndExpiresWithItsPhase(t *testing.T) {
+	root := productivityWorkspace(t)
+	path := filepath.Join(root, "source.txt")
+	text := strings.Repeat("x", 32767) + "\nlast\n"
+	require.NoError(t, os.WriteFile(path, []byte(text), 0600))
+	receipt := SourceReadReceipt{Path: path, Hash: indexDigest(text), StartLine: 1, EndLine: 3}
+	verifier := NewSourceReadVerifier(context.Background())
+	incorrect := receipt
+	incorrect.Hash = indexDigest("not the source")
+	require.False(t, verifier.Current(incorrect))
+	require.True(t, verifier.Current(receipt), "count newlines across buffer boundaries")
+	receipt.EndLine = 4
+	require.False(t, verifier.Current(receipt), "a cached hash cannot validate an unread line")
+	receipt.EndLine = 3
+	require.True(t, verifier.Current(receipt), "a rejected interval cannot poison valid pages")
+
+	stamp, err := os.Stat(path)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, []byte(strings.Replace(text, "last", "next", 1)), 0600))
+	require.NoError(t, os.Chtimes(path, stamp.ModTime(), stamp.ModTime()))
+	require.False(t, NewSourceReadVerifier(context.Background()).Current(receipt), "the next phase must hash again despite matching size/mtime")
+	ctx, cancel := context.WithCancel(context.Background())
+	canceled := NewSourceReadVerifier(ctx)
+	cancel()
+	require.False(t, canceled.Current(receipt))
+}

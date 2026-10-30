@@ -13,7 +13,6 @@ import (
 	"github.com/raulaguila/opcode/internal/db"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/logging"
-	"github.com/raulaguila/opcode/internal/memoryindex"
 	"github.com/raulaguila/opcode/internal/pubsub"
 )
 
@@ -63,7 +62,7 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	}
 	s.forgetStream(message.ID)
 	if s.index != nil {
-		if err := memoryindex.Remove(ctx, s.index.Directory, s.index.Project, "message:"+id); err != nil {
+		if err := s.index.store.Remove(ctx, "message:"+id); err != nil {
 			logging.Warn("Deleted message search projection could not be removed", "error_kind", fmt.Sprintf("%T", err))
 		}
 	}

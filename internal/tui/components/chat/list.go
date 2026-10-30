@@ -1,8 +1,6 @@
 package chat
 
 import (
-	"context"
-
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -28,7 +26,7 @@ type cacheItem struct {
 type messagesCmp struct {
 	app             *app.App
 	width, height   int
-	viewport        viewport.Model
+	viewport        transcriptViewport
 	session         session.Session
 	messages        []message.Message
 	uiMessages      []uiMessage
@@ -37,8 +35,10 @@ type messagesCmp struct {
 	renderCache     transcriptCache
 	nested          nestedHistory
 	reconcile       messageReconciliation
+	history         transcriptHistory
 	spinner         spinner.Model
 	rendering       bool
+	loadingPreview  loadingPreview
 	attachments     viewport.Model
 	expanded        map[string]bool
 	toggled         map[string]bool
@@ -49,7 +49,6 @@ type messagesCmp struct {
 	selection       textSelection
 	find            transcriptFind
 }
-type renderFinishedMsg struct{ sessionID string }
 
 type MessageKeys struct {
 	PageDown     key.Binding
@@ -108,6 +107,8 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.find = transcriptFind{}
 		m.selection = textSelection{}
 		m.transcriptLines = nil
+		m.viewport.SetLines(nil)
+		m.history = transcriptHistory{}
 		m.session = session.Session{}
 		m.messages = make([]message.Message, 0)
 		m.currentMsgID = ""
@@ -133,22 +134,13 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseButtonLeft || msg.Action == tea.MouseActionRelease {
 			return m, m.transcriptMouse(msg)
 		}
-		u, cmd := m.viewport.Update(msg)
-		m.viewport = u
-		cmds = append(cmds, cmd)
+		cmds = append(cmds, m.updateTranscriptViewport(msg))
 
-	case renderFinishedMsg:
-		if msg.sessionID != m.session.ID {
-			return m, nil
-		}
-		m.rendering = false
-		m.viewport.GotoBottom()
 	case pubsub.Event[session.Session]:
 		updateEventSessionSession(m, &msg)
 	case pubsub.Event[message.Message]:
-		m.reconcile.version++
-		updateMessagesCmpMessage(m, &msg)
-		cmds = append(cmds, m.reconcileMessageEvent(msg), m.nestedMessageEvent(msg))
+		reload, nested := m.updateMessageEvent(msg)
+		cmds = append(cmds, reload, nested)
 	}
 
 	updateMessagesLastWorkingIsAgentWorking(m)
@@ -167,7 +159,7 @@ func (m *messagesCmp) renderView() { m.renderTurns() }
 func (m *messagesCmp) View() string {
 	content := m.highlightSelection(m.viewport.View())
 	if m.rendering {
-		content = config.Text("Carregando conversa…", "Loading conversation…")
+		content = m.loadingView()
 	} else if len(m.messages) == 0 {
 		content = m.initialScreen()
 	}
@@ -227,20 +219,17 @@ func (m *messagesCmp) SetSession(session session.Session) tea.Cmd {
 	m.resetMessageReconciliation()
 	m.session = session
 	m.find = transcriptFind{}
-	messages, err := m.app.Messages.List(context.Background(), session.ID)
-	if err != nil {
-		return util.ReportError(err)
-	}
-	m.messages = messages
+	m.messages = nil
 	m.currentMsgID = ""
-	if len(m.messages) > 0 {
-		m.currentMsgID = m.messages[len(m.messages)-1].ID
-	}
-	m.invalidateMessageCache(m.currentMsgID)
+	m.viewport.SetLines(nil)
+	m.history = transcriptHistory{initial: true}
 	m.rendering = true
-	// Model mutations belong to the event loop, not to asynchronous commands.
-	m.renderView()
-	return tea.Batch(func() tea.Msg { return renderFinishedMsg{sessionID: session.ID} }, m.requestNestedHistory())
+	m.reconcile.needed = true
+	cmd := m.requestMessageReload()
+	if cmd == nil {
+		m.rendering = false
+	}
+	return cmd
 }
 
 func (m *messagesCmp) BindingKeys() []key.Binding {
@@ -255,7 +244,7 @@ func (m *messagesCmp) BindingKeys() []key.Binding {
 func NewMessagesCmp(app *app.App) tea.Model {
 	s := spinner.New()
 	s.Spinner = spinner.Pulse
-	vp := viewport.New(0, 0)
+	vp := newTranscriptViewport(0, 0)
 	attachmets := viewport.New(0, 0)
 	vp.KeyMap.PageUp = messageKeys.PageUp
 	vp.KeyMap.PageDown = messageKeys.PageDown
@@ -268,6 +257,18 @@ func NewMessagesCmp(app *app.App) tea.Model {
 		spinner:       s,
 		attachments:   attachmets,
 	}
+}
+
+func (m *messagesCmp) updateMessageEvent(event pubsub.Event[message.Message]) (tea.Cmd, tea.Cmd) {
+	if event.Payload.SessionID == m.session.ID || event.ReconcileRequired {
+		m.reconcile.version++
+	}
+	if m.rendering {
+		m.updateLoadingPreview(event)
+	} else {
+		updateMessagesCmpMessage(m, &event)
+	}
+	return m.reconcileMessageEvent(event), m.nestedMessageEvent(event)
 }
 
 func updateMessagesCmpMessage(m *messagesCmp, msg *pubsub.Event[message.Message]) {
@@ -313,9 +314,7 @@ func updateMessagesCmpKeyMsg(m *messagesCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (
 	}
 	if key.Matches((*msg), messageKeys.PageUp) || key.Matches((*msg), messageKeys.PageDown) ||
 		key.Matches((*msg), messageKeys.HalfPageUp) || key.Matches((*msg), messageKeys.HalfPageDown) {
-		u, cmd := m.viewport.Update((*msg))
-		m.viewport = u
-		(*cmds) = append((*cmds), cmd)
+		(*cmds) = append((*cmds), m.updateTranscriptViewport(*msg))
 	}
 	return extractedResult0, extractedResult1, false
 }

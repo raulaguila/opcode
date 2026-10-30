@@ -67,42 +67,52 @@ type turnRenderer struct {
 }
 
 func (m *messagesCmp) renderTurns() {
-	if m.selection.engaged() || m.width < 1 {
+	if m.rendering || m.selection.engaged() || m.width < 1 {
 		return
 	}
 	m.ensureRenderCache()
-	groups := m.renderGroups()
+	groups := m.visibleRenderGroups()
 	working := len(m.messages) > 0 && m.IsAgentWorking()
 	if !m.renderCache.dirty && m.lastWorking == working {
 		return
 	}
 	m.lastWorking = working
-	m.uiMessages = m.uiMessages[:0]
-	m.hits = m.hits[:0]
-	var content strings.Builder
-	content.Grow(len(m.renderCache.content))
-	offset := 0
-	for index, g := range groups {
-		frame := m.renderTurnFrame(g, index == len(groups)-1, working)
-		if index > 0 {
-			content.WriteByte('\n')
+	blocks := m.renderCache.blocks
+	changed := false
+	for index, group := range groups {
+		frame, reused := m.renderTurnFrame(group, blocks, index, index == len(groups)-1, working)
+		if !reused && !changed {
+			m.truncateTranscript(blocks, index)
+			changed = true
 		}
-		content.WriteString(frame.text)
-		m.appendTurnFrame(frame, offset)
-		offset += frame.height
+		if changed {
+			m.installTurnFrame(group.key, frame)
+		}
+	}
+	if len(groups) < len(blocks) {
+		if !changed {
+			m.truncateTranscript(blocks, len(groups))
+		}
+		clear(blocks[len(groups):])
+		changed = true
 	}
 	m.renderCache.dirty = false
-	m.installTranscript(content.String())
+	if changed {
+		m.installTranscriptLines()
+	}
 }
-func (m *messagesCmp) renderTurnFrame(g turnGroup, latest, working bool) turnCacheItem {
+func (m *messagesCmp) renderTurnFrame(g turnGroup, blocks []installedTurn, index int, latest, working bool) (turnCacheItem, bool) {
 	active := latest && working
 	renderer := turnRenderer{messages: m}
 	expanded := renderer.processExpanded(g, active)
+	if index < len(blocks) && blocks[index].key == g.key && m.frameValid(blocks[index].frame, g, active, expanded, latest) {
+		return blocks[index].frame, true
+	}
 	if frame, ok := m.renderCache.frames[g.key]; ok && m.frameValid(frame, g, active, expanded, latest) {
 		m.renderCache.clock++
 		frame.used = m.renderCache.clock
 		m.renderCache.frames[g.key] = frame
-		return frame
+		return frame, false
 	}
 	renderer.base, renderer.theme = styles.BaseStyle(), theme.CurrentTheme()
 	renderer.renderGroup(g, latest)
@@ -111,9 +121,10 @@ func (m *messagesCmp) renderTurnFrame(g turnGroup, latest, working bool) turnCac
 	frame.items = renderer.items
 	frame.hits = renderer.hits
 	frame.dependencies = renderer.dependencies
-	frame.height = lipgloss.Height(frame.text)
+	frame.lines = strings.Split(frame.text, "\n")
+	frame.height = len(frame.lines)
 	m.storeTurnFrame(g.key, frame)
-	return frame
+	return frame, false
 }
 
 func (r *turnRenderer) appendItem(item uiMessage) {

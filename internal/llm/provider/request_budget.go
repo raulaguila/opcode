@@ -85,12 +85,14 @@ func (f *RequestFootprint) countPayload(counter tokenizer.Codec, raw []byte) {
 	}
 }
 func (f *RequestFootprint) countSchemas(counter tokenizer.Codec, raw []byte) {
-	encoded := map[string]json.RawMessage{}
+	var encoded struct {
+		Tools json.RawMessage `json:"tools"`
+	}
 	if json.Unmarshal(raw, &encoded) != nil {
 		return
 	}
-	schemas, ok := encoded["tools"]
-	if !ok {
+	schemas := encoded.Tools
+	if schemas == nil {
 		return
 	}
 	f.SchemaASCIIBytes, f.SchemaOtherBytes = countBytes(schemas)

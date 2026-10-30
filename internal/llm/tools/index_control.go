@@ -97,7 +97,7 @@ func ControlCodeIndex(ctx context.Context, action, path string) (IndexStatus, er
 	}
 	defer db.Close()
 	if action == "clear" {
-		if err := clearCodeIndex(ctx, db); err != nil {
+		if err := clearControlledIndex(ctx, db, root); err != nil {
 			return status, err
 		}
 	}
@@ -118,11 +118,14 @@ type IndexWatcher struct {
 	done      chan struct{}
 	mu        sync.Mutex
 	lastError string
+	root      string
+	state     indexWatchState
 }
 
 func StartIndexWatcher(parent context.Context) *IndexWatcher {
 	ctx, cancel := context.WithCancel(parent)
-	w := &IndexWatcher{cancel: cancel, done: make(chan struct{})}
+	root, _ := canonicalPath(config.WorkingDirectory())
+	w := &IndexWatcher{cancel: cancel, done: make(chan struct{}), root: root, state: indexWatchState{dirty: make(map[string]uint64)}}
 	go func() { defer close(w.done); w.watch(ctx) }()
 	return w
 }
@@ -134,18 +137,21 @@ func (w *IndexWatcher) Close() {
 }
 func (w *IndexWatcher) Error() string { w.mu.Lock(); defer w.mu.Unlock(); return w.lastError }
 func (w *IndexWatcher) watch(ctx context.Context) {
-	root := config.WorkingDirectory()
+	root := w.root
 	watch, err := fsnotify.NewWatcher()
 	if err == nil {
 		defer watch.Close()
-		_ = watch.Add(root)
+		w.syncDirectories(ctx, watch)
+		indexWatchers.Store(root, w)
+		defer indexWatchers.CompareAndDelete(root, w)
 	}
-	var events <-chan fsnotify.Event
-	var failures <-chan error
+	changes := make(chan struct{}, 1)
 	if watch != nil {
-		events = watch.Events
-		failures = watch.Errors
+		observed := make(chan struct{})
+		go func() { defer close(observed); w.observe(ctx, watch, changes) }()
+		defer func() { w.cancel(); <-observed }()
 	}
+
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	timer := time.NewTimer(150 * time.Millisecond)
@@ -158,19 +164,10 @@ func (w *IndexWatcher) watch(ctx context.Context) {
 		case <-timer.C:
 			w.refresh(ctx, root, watch, timer)
 		case <-ticker.C:
+			w.invalidate()
 			w.refresh(ctx, root, watch, timer)
-		case _, ok := <-failures:
-			if !ok {
-				failures = nil
-			}
-		case event, ok := <-events:
-			if !ok {
-				events = nil
-				continue
-			}
-			if shouldRefreshIndexEvent(root, event) {
-				resetIndexTimer(timer, 150*time.Millisecond)
-			}
+		case <-changes:
+			resetIndexTimer(timer, 150*time.Millisecond)
 		}
 	}
 }
@@ -187,6 +184,7 @@ func IndexStatusJSON(ctx context.Context, action, path string) (string, error) {
 type indexRebuildKey struct{}
 
 type indexBatchLimitKey struct{}
+type indexWatcherUpdateKey struct{}
 
 func prioritizeIndexPaths(paths []string) {
 	changed := map[string]int64{}
@@ -214,7 +212,15 @@ func (w *IndexWatcher) refresh(ctx context.Context, root string, watch *fsnotify
 	}
 	updateCtx, cancel := context.WithTimeout(ctx, time.Duration(limits.UpdateSeconds)*time.Second)
 	defer cancel()
-	status, err := ControlCodeIndex(context.WithValue(updateCtx, indexBatchLimitKey{}, 8), "update", "")
+	w.mu.Lock()
+	covered := w.state.covered
+	w.mu.Unlock()
+	if !covered {
+		w.syncDirectories(updateCtx, watch)
+	}
+	background := context.WithValue(updateCtx, indexBatchLimitKey{}, 8)
+	background = context.WithValue(background, indexWatcherUpdateKey{}, true)
+	status, err := ControlCodeIndex(background, "update", "")
 	if err == nil && status.Pending > 0 {
 		timer.Reset(time.Second)
 	}
@@ -225,9 +231,6 @@ func (w *IndexWatcher) refresh(ctx context.Context, root string, watch *fsnotify
 		w.lastError = ""
 	}
 	w.mu.Unlock()
-	if watch != nil {
-		syncIndexWatchDirectories(updateCtx, root, watch)
-	}
 }
 
 func shouldRefreshIndexEvent(root string, event fsnotify.Event) bool {
@@ -242,24 +245,6 @@ func resetIndexTimer(timer *time.Timer, delay time.Duration) {
 		}
 	}
 	timer.Reset(delay)
-}
-func syncIndexWatchDirectories(ctx context.Context, root string, watch *fsnotify.Watcher) {
-	files, _, err := scopedFilePaths(ctx, root, retrievalScope{}, nil)
-	if err != nil {
-		return
-	}
-	existing := map[string]bool{}
-	for _, dir := range watch.WatchList() {
-		existing[dir] = true
-	}
-	for _, path := range files {
-		dir := filepath.Dir(filepath.Join(root, path))
-		if !existing[dir] && len(existing) < 2048 {
-			if watch.Add(dir) == nil {
-				existing[dir] = true
-			}
-		}
-	}
 }
 
 func clearCodeIndex(ctx context.Context, db *sql.DB) error {
@@ -313,7 +298,14 @@ func updateControlledIndex(ctx context.Context, action, root string, db *sql.DB,
 	if action == "rebuild" {
 		ctx = context.WithValue(ctx, indexRebuildKey{}, true)
 	}
-	stats, err := refreshCodeIndex(ctx, db, root)
+	var stats indexRefresh
+	var err error
+	background, _ := ctx.Value(indexWatcherUpdateKey{}).(bool)
+	if background {
+		stats, err = refreshSearchCodeIndex(ctx, db, root)
+	} else {
+		stats, err = refreshCodeIndex(ctx, db, root)
+	}
 	if err != nil {
 		return ctx, err
 	}
@@ -329,4 +321,11 @@ func indexExclusion(root, path string) string {
 		return "eligible; binary/size/scan limits are checked during update"
 	}
 	return reason
+}
+
+func clearControlledIndex(ctx context.Context, db *sql.DB, root string) error {
+	if value, ok := indexWatchers.Load(root); ok {
+		value.(*IndexWatcher).invalidate()
+	}
+	return clearCodeIndex(ctx, db)
 }

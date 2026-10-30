@@ -25,7 +25,7 @@ func WorkspaceDigest(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer root.Close()
-	walker := workspaceHasher{ctx: ctx, root: root, rootPath: rootPath, digest: sha256.New()}
+	walker := workspaceHasher{ctx: ctx, root: root, rootPath: rootPath, digest: sha256.New(), buffer: make([]byte, 32<<10)}
 	if err := fs.WalkDir(root.FS(), ".", walker.visit); err != nil {
 		return "", err
 	}
@@ -37,6 +37,7 @@ type workspaceHasher struct {
 	root     *os.Root
 	rootPath string
 	digest   hash.Hash
+	buffer   []byte
 	count    int
 	total    int64
 }
@@ -99,7 +100,7 @@ func (w *workspaceHasher) writeFile(path string, size int64) error {
 		return err
 	}
 	fmt.Fprintf(w.digest, "%d:%s:%d\x00", len(path), path, size)
-	_, readErr := io.Copy(w.digest, io.LimitReader(file, 16<<20+1))
+	_, readErr := io.CopyBuffer(w.digest, io.LimitReader(file, 16<<20+1), w.buffer)
 	closeErr := file.Close()
 	if readErr != nil {
 		return readErr

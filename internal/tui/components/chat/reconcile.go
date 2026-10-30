@@ -5,6 +5,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"time"
 )
 
@@ -25,6 +26,7 @@ func (m *messagesCmp) resetMessageReconciliation() {
 		m.reconcile.cancel()
 	}
 	m.reconcile = messageReconciliation{generation: m.reconcile.generation + 1}
+	m.loadingPreview = loadingPreview{}
 }
 func (m *messagesCmp) reconcileMessageEvent(event pubsub.Event[message.Message]) tea.Cmd {
 	if event.ReconcileRequired {
@@ -55,19 +57,27 @@ func (m *messagesCmp) acceptMessageReload(result messageReloadMsg) tea.Cmd {
 		return nil
 	}
 	m.reconcile.pending = false
+	if result.err != nil {
+		if m.rendering {
+			m.rendering = false
+			m.loadingPreview = loadingPreview{}
+			return util.ReportError(result.err)
+		}
+		return nil
+	} // Retry on the next message; never spin on an unavailable store.
 	if result.version != m.reconcile.version {
 		return m.requestMessageReload()
 	}
-	if result.err != nil {
-		return nil
-	} // Retry on the next message; never spin on an unavailable store.
+	m.loadingPreview = loadingPreview{}
+	initial := m.rendering
+	m.rendering = false
 	m.reconcile.needed = false
 	m.messages = result.messages
 	m.currentMsgID = ""
 	if len(m.messages) > 0 {
 		m.currentMsgID = m.messages[len(m.messages)-1].ID
 	}
-	offset, follow := m.viewport.YOffset, m.viewport.AtBottom() && !m.selection.engaged() && !m.find.open
+	offset, follow := m.viewport.YOffset, (initial || m.viewport.AtBottom()) && !m.selection.engaged() && !m.find.open
 	m.rerender()
 	if follow {
 		m.viewport.GotoBottom()

@@ -145,8 +145,8 @@ func (m *messagesCmp) acceptNestedHistory(msg nestedHistoryMsg) tea.Cmd {
 		m.nested.tracked[id] = true
 	}
 	m.renderCache.dirty = true
-	for key := range m.renderCache.frames {
-		m.renderCache.versions[key]++
+	for _, group := range m.renderCache.groups {
+		m.renderCache.versions[group.key]++
 	}
 	m.renderView()
 	return nil

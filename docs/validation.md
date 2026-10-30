@@ -847,3 +847,68 @@ isolada. Não desativa AppArmor/sysctl global nem troca a aplicação para
 [notas oficiais do Ubuntu](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions).
 Os smokes selecionados Linux, Windows e macOS já executaram seus passos de teste
 e CLI com sucesso no CI; isso não transforma o smoke em suíte integral macOS/Windows.
+
+
+## Alocações e desempenho — 30/10/2026
+
+Os onze itens da auditoria foram implementados, na ordem proposta: fila justa
+para indexação; buffer de hash por operação; atualização incremental com watcher
+e reconciliação completa em caso de dúvida; transcript por blocos e viewport de
+linhas; verificador de citações por fase; remoção de serializações duplicadas do
+planejamento; carregamento assíncrono e apresentação inicial paginada do histórico;
+conexão de projeção pertencente ao serviço de mensagens; contratos de retorno
+mais simples; reutilização local do renderer Markdown; fixtures e gate comparativo.
+
+O índice continua sendo uma projeção: permissões, política de credenciais e hash
+dos hits são revalidados. O watcher não concede acesso e perde confiança em
+falhas, lacunas, mudanças de política ou reconciliação periódica. A validação de
+citações mantém arquivo, conteúdo e intervalo realmente lidos. O cache de
+observações é limitado e descartado entre fases/turnos/reparos. O orçamento
+serializado continua sendo a autoridade para decidir se o contexto cabe.
+
+Comparação em Linux/amd64, Go 1.27.3, contra `ffc07bb`, com fixtures iguais,
+três pares de amostras alternados, sem inferência/build concorrente. Valores
+abaixo são medianas de bytes alocados por operação, não memória residente:
+
+| Caso | Antes, B/op | Depois, B/op | Redução |
+| --- | ---: | ---: | ---: |
+| Hash, 2.000 arquivos | 68.258.242 | 2.687.247 | 96,1% |
+| Busca aquecida, 2.000 arquivos | 29.277.391 | 289.712 | 99,0% |
+| Citação, arquivo de 1 MiB | 5.411.528 | 71.056 | 98,7% |
+| Projeção repetida de mensagens | 487.080 | 16.196 | 96,7% |
+| Evento no chat, 1.000 turnos | 716.816 | 89.970 | 87,4% |
+| Resposta crescente, 1.000 turnos | 1.673.562 | 771.745 | 53,9% |
+| Apresentação concluída, 1.000 turnos | 142.147.398 | 19.200.952 | 86,5% |
+| Histórico acima dos caches | 570.156.356 | 816.040 | 99,9% |
+| Preparação do contexto no agente | 632.846 | 230.666 | 63,6% |
+| Markdown com vários blocos | 3.524.606 | 1.911.096 | 45,8% |
+
+O gate não encontrou regressão acima de 10% em B/op ou allocs/op nos casos
+comparáveis. Tempo de Markdown variou: +17,8% na amostra curta e −42,7% em cinco
+pares mais longos. Preparação de imagem ficou essencialmente neutra: +1,7% em
+bytes na amostra curta e −0,35% na longa, com +4,2% em tempo na longa. Não há
+promessa de melhoria de inferência nem ganho geral para imagens. Busca aquecida
+mede refresh com watcher; exclui abertura/schema e validação final dos hits.
+
+Passaram `go test -race -p 1 ./...`, a suíte completa com `-tags integration`,
+vet e Staticcheck com/sem integration, inventário de linguagens e o build.
+`gocognit -over 15 -exact-recursion .` não reportou funções acima do limite.
+Compilações cruzadas Windows/amd64 e macOS/arm64 sem CGO também passaram.
+Os testes cobrem invalidação de índices, quotas e rollback, cancelamento,
+substituição do banco privado, histórico/seleção/busca e paridade visual.
+
+O PTY real com `llama3.1:8b` passou em 24,04 s, incluindo leitura citada,
+pergunta ao usuário, aprovação explícita, saída ao vivo, entrada no terminal e
+instrução durante execução sem repetição do comando. Temas claro/escuro/sem cor
+passaram. O binário de produção foi usado; o runner e as suítes mantiveram
+`-race`. Tentativas iniciais com a aplicação instrumentada excederam os cinco
+segundos da primeira tela: os stacks localizaram compilação inicial SQLite/Wasm,
+e o terminal respondeu às consultas em 77 ms. Nenhum prazo foi aumentado. Uma
+regressão verifica as respostas OSC/posição após resize em todos os cortes de
+fragmentação. A latência inicial com a aplicação instrumentada permanece uma
+limitação deste teste neste host.
+
+Consulte [metodologia e comandos](performance.md) e os
+[dados das medições e limites](evidence/2026-10-30-allocation-performance.json).
+As verificações ao vivo usaram somente Ollama local; APIs privadas/cloud e
+execução nativa Windows/macOS não foram exercitadas nesta rodada.

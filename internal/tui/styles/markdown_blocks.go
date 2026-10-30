@@ -23,25 +23,21 @@ func RenderMarkdownBlocks(content string, width, proseWidth int) string {
 	source := []byte(content)
 	md := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.DefinitionList), goldmark.WithParserOptions(parser.WithAutoHeadingID()))
 	doc := md.Parser().Parse(text.NewReader(source))
+	style := generateMarkdownStyleConfig()
+	renderers := make(map[int]renderer.Renderer, 2)
 	var blocks []string
 	for node := doc.FirstChild(); node != nil; {
 		next := node.NextSibling()
-		wide := false
-		_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-			if entering && (n.Kind() == ast.KindFencedCodeBlock || n.Kind() == ast.KindCodeBlock || n.Kind() == extast.KindTable) {
-				wide = true
-			}
-			return ast.WalkContinue, nil
-		})
-		measure := max(1, min(width, proseWidth))
-		if wide {
-			measure = max(1, width)
+		measure := markdownBlockWidth(node, width, proseWidth)
+		r, ok := renderers[measure]
+		if !ok {
+			r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{
+				WordWrap: measure, Styles: style, ColorProfile: lipgloss.ColorProfile(),
+			}), 1000)))
+			renderers[measure] = r
 		}
 		block := ast.NewDocument()
 		block.AppendChild(block, node)
-		r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{
-			WordWrap: measure, Styles: generateMarkdownStyleConfig(), ColorProfile: lipgloss.ColorProfile(),
-		}), 1000)))
 		var out bytes.Buffer
 		if err := r.Render(&out, source, block); err != nil {
 			fallback := GetMarkdownRenderer(width)
@@ -54,4 +50,18 @@ func RenderMarkdownBlocks(content string, width, proseWidth int) string {
 		node = next
 	}
 	return strings.Join(blocks, "\n\n")
+}
+
+func markdownBlockWidth(node ast.Node, width, proseWidth int) int {
+	wide := false
+	_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering && (n.Kind() == ast.KindFencedCodeBlock || n.Kind() == ast.KindCodeBlock || n.Kind() == extast.KindTable) {
+			wide = true
+		}
+		return ast.WalkContinue, nil
+	})
+	if wide {
+		return max(1, width)
+	}
+	return max(1, min(width, proseWidth))
 }

@@ -65,7 +65,7 @@ func missingSourceCitation(run *generationRun, history []message.Message, answer
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	v := citationValidation{run: run, ctx: ctx, receipts: receipts, refs: refs, current: map[string]bool{}, invalid: []string{}, primaryValid: !run.requiresProjectEvidence || len(run.primaryEvidence) == 0}
+	v := citationValidation{run: run, ctx: ctx, receipts: receipts, refs: refs, verifier: tools.NewSourceReadVerifier(ctx), invalid: []string{}, primaryValid: !run.requiresProjectEvidence || len(run.primaryEvidence) == 0}
 	v.validate()
 	if v.validCount > 0 && len(v.invalid) == 0 && v.primaryValid {
 		return ""
@@ -141,12 +141,13 @@ func currentCitationChoices(run *generationRun, history []message.Message) []str
 	defer cancel()
 	receipts, _ := citationReadReceipts(run, history)
 	choices := []string{}
+	verifier := tools.NewSourceReadVerifier(ctx)
 	total := 0
 	for _, receipt := range receipts {
 		if len(choices) >= 8 || ctx.Err() != nil {
 			break
 		}
-		if !tools.SourceReadCurrent(ctx, receipt) {
+		if !verifier.Current(receipt) {
 			continue
 		}
 		if run.requiresProjectEvidence && len(run.primaryEvidence) > 0 && !run.primaryEvidence[normalizedToolPath(receipt.Path)] {
@@ -210,23 +211,19 @@ type citationValidation struct {
 	ctx          context.Context
 	receipts     []tools.SourceReadReceipt
 	refs         []sourceReference
-	current      map[string]bool
+	verifier     *tools.SourceReadVerifier
 	invalid      []string
 	validCount   int
 	primaryValid bool
 }
 
 func (v *citationValidation) isCurrent(r tools.SourceReadReceipt) bool {
-
-	key := r.Path + "\x00" + r.Hash
-	valid, exists := v.current[key]
-	if !exists {
-		valid = tools.SourceReadCurrent(v.ctx, r)
-		v.current[key] = valid
+	if v.verifier == nil {
+		v.verifier = tools.NewSourceReadVerifier(v.ctx)
 	}
-	return valid
-
+	return v.verifier.Current(r)
 }
+
 func (v *citationValidation) validate() {
 	for _, ref := range v.refs {
 		matched := false

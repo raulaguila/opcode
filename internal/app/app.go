@@ -222,6 +222,11 @@ func (app *App) Shutdown() {
 	}
 	app.cancelFuncsMutex.Unlock()
 	app.watcherWG.Wait()
+	if closer, ok := app.Messages.(interface{ Close() error }); ok {
+		if err := closer.Close(); err != nil {
+			logging.Error("failed to close message search projection", "error", err)
+		}
+	}
 
 	// Perform additional cleanup for LSP clients
 	app.clientsMutex.RLock()

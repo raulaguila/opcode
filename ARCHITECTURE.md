@@ -498,3 +498,49 @@ A indexação mantém cotas separadas de texto e leitura total. A retenção da 
 de conversas só roda quando ultrapassa o limite e remove apenas os registros
 excedentes, na mesma transação para metadados e FTS. Essas projeções continuam
 sem conceder permissões ou constituir prova para citações.
+
+## Atualização incremental e propriedade das projeções
+
+O watcher do índice mantém, apenas durante seu ciclo de vida, um conjunto limitado
+de caminhos alterados e a cobertura dos diretórios observados. Uma busca usa
+deltas somente após snapshot completo e cobertura conhecida. Perda de eventos,
+falha de cobertura, troca de credenciais/limites ou política de ignore forçam
+descoberta completa; há reconciliação periódica em 60 segundos. Sem watcher,
+as consultas conservam a descoberta completa. Atualizações explícitas e rebuild
+continuam completos. Resultados ainda revalidam autorização, política e hash.
+
+O lote em segundo plano prioriza arquivos inéditos/alterados e depois a
+verificação mais antiga. Isso permite avançar mesmo quando entradas do começo
+expiram. Transações limitam texto armazenado, leitura por refresh e quantidade
+de arquivos também nas atualizações parciais.
+
+O transcript instalado retém blocos e referências de linhas para navegação,
+em vez de concatenar e separar todo o histórico a cada evento. Somente o
+trecho alterado é substituído; o viewport recebe a janela visível. Os caches
+auxiliares continuam limitados, independentemente dos blocos necessários ao
+transcript apresentado. A abertura de uma conversa carrega seu histórico em
+comando cancelável, protegido por geração, e apresenta inicialmente até 64
+turnos. Rolar para trás amplia essa apresentação; seleção e busca materializam
+o histórico local completo antes de usar suas coordenadas. O histórico durável
+não é truncado nem passa a ser uma página de contexto do modelo. Enquanto uma
+leitura inicial perde validade por eventos novos, uma prévia limitada mostra
+somente o texto da resposta em andamento. Ela não fornece ações, seleção,
+busca ou evidência e não é instalada no histórico; gaps, exclusões e troca de
+conversa a descartam. Erros de leitura são reportados mesmo quando houve
+streaming durante a espera.
+
+A projeção de busca de mensagens pertence ao serviço de mensagens, com uma
+conexão SQLite preguiçosa e limitada. Cada uso revalida diretório/arquivo
+privados e sua identidade; substituições provocam reabertura. Shutdown cancela
+operações antes de fechar a conexão. Chamadas avulsas de busca/findings
+preservam seu ciclo de abrir/fechar; nenhum cache global de conexões foi criado.
+
+Citações usam buffer limitado para hash/linhas e observações de no máximo 32
+caminhos pertencentes a uma única fase de validação. Cada intervalo conserva
+sua checagem própria; nova validação, reparo ou turno faz nova leitura. Essa
+projeção não concede acesso. A decisão de contexto continua usando o envelope
+serializado aprovado, sem reconstruí-lo no envio; somente os pesos visuais dos
+componentes deixam de exigir serializações redundantes do histórico.
+
+Veja [medição de desempenho](docs/performance.md) para fixtures e comparação de
+alocações, separadas de inferência e da aceitação em PTY.

@@ -265,9 +265,8 @@ func (a *appModel) routeInput(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 
 	case tea.WindowSizeMsg:
-		if result0, result1, handled := updateAppModelWindowSizeMsg(a, &cmds, &cmd, &msg); handled {
-			return result0, result1, true
-		}
+		resize := a.resize(msg)
+		return *a, resize, true
 	// Status
 
 	case tea.KeyMsg:
@@ -1254,55 +1253,57 @@ func updateAppModelCloseInitDialogMsg(a *appModel, msg *dialog.CloseInitDialogMs
 
 }
 
-func updateAppModelWindowSizeMsg(a *appModel, cmds *[]tea.Cmd, cmd *tea.Cmd, msg *tea.WindowSizeMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func (a *appModel) resize(msg tea.WindowSizeMsg) tea.Cmd {
+	var cmds []tea.Cmd
 	msg.Height = max(0, msg.Height-1) // Make space for the status bar
 	a.width, a.height = msg.Width, msg.Height
 	if a.providerDialog != nil {
-		a.providerDialog.Update((*msg))
+		a.providerDialog.Update(msg)
 	}
 	if a.integrationDialog != nil {
-		a.integrationDialog.Update((*msg))
+		a.integrationDialog.Update(msg)
 	}
-	a.modelDialog.Update((*msg))
+	a.modelDialog.Update(msg)
 	if a.themeDialog != nil {
-		a.themeDialog.Update((*msg))
+		a.themeDialog.Update(msg)
 	}
 
-	s, _ := a.status.Update((*msg))
+	s, _ := a.status.Update(msg)
 	a.status = s.(core.StatusCmp)
-	a.pages[a.currentPage], (*cmd) = a.pages[a.currentPage].Update((*msg))
-	(*cmds) = append((*cmds), (*cmd))
+	updatedPage, pageCmd := a.pages[a.currentPage].Update(msg)
+	a.pages[a.currentPage] = updatedPage
+	cmds = append(cmds, pageCmd)
 
-	prm, permCmd := a.permissions.Update((*msg))
+	prm, permCmd := a.permissions.Update(msg)
 	a.permissions = prm.(dialog.PermissionDialogCmp)
-	(*cmds) = append((*cmds), permCmd)
+	cmds = append(cmds, permCmd)
 
-	help, helpCmd := a.help.Update((*msg))
+	help, helpCmd := a.help.Update(msg)
 	a.help = help.(dialog.HelpCmp)
-	(*cmds) = append((*cmds), helpCmd)
+	cmds = append(cmds, helpCmd)
 
-	session, sessionCmd := a.sessionDialog.Update((*msg))
+	session, sessionCmd := a.sessionDialog.Update(msg)
 	a.sessionDialog = session.(dialog.SessionDialog)
-	(*cmds) = append((*cmds), sessionCmd)
+	cmds = append(cmds, sessionCmd)
 
-	command, commandCmd := a.commandDialog.Update((*msg))
+	command, commandCmd := a.commandDialog.Update(msg)
 	a.commandDialog = command.(dialog.CommandDialog)
-	(*cmds) = append((*cmds), commandCmd)
+	cmds = append(cmds, commandCmd)
 
-	filepicker, filepickerCmd := a.filepicker.Update((*msg))
+	filepicker, filepickerCmd := a.filepicker.Update(msg)
 	a.filepicker = filepicker.(dialog.FilepickerCmp)
-	(*cmds) = append((*cmds), filepickerCmd)
+	cmds = append(cmds, filepickerCmd)
 
 	a.initDialog.SetSize(msg.Width, msg.Height)
 
 	if a.showMultiArgumentsDialog {
 		a.multiArgumentsDialog.SetSize(msg.Width, msg.Height)
-		args, argsCmd := a.multiArgumentsDialog.Update((*msg))
+		args, argsCmd := a.multiArgumentsDialog.Update(msg)
 		a.multiArgumentsDialog = args.(dialog.MultiArgumentsDialogCmp)
-		(*cmds) = append((*cmds), argsCmd)
+		cmds = append(cmds, argsCmd)
 	}
 
-	return (*a), tea.Batch((*cmds)...), true
+	return tea.Batch(cmds...)
 
 }
 

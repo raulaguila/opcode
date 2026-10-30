@@ -22,23 +22,49 @@ const maxIndexScanBytes = 128 << 20
 
 // Metadata reuse only skips background reads; returned hits always verify content.
 func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefresh, error) {
+	return refreshPlannedIndex(ctx, db, root, false)
+}
+
+func refreshSearchCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefresh, error) {
+	return refreshPlannedIndex(ctx, db, root, true)
+}
+
+func refreshPlannedIndex(ctx context.Context, db *sql.DB, root string, incremental bool) (stats indexRefresh, err error) {
+	plan := planIndexRefresh(root, incremental)
+	paths := plan.paths
+	defer func() { plan.finish(paths, stats, err) }()
+	if plan.partial {
+		if err = plan.checkFileLimit(root); err != nil {
+			return stats, err
+		}
+		if len(paths) == 0 {
+			return stats, nil
+		}
+	} else {
+		var truncated bool
+		paths, truncated, err = ripgrepFiles(ctx, root, "", indexLimits().MaxFiles)
+		if err != nil {
+			return stats, fmt.Errorf("index file discovery: %w", err)
+		}
+		if truncated {
+			return stats, fmt.Errorf("workspace exceeds 20000-file index limit")
+		}
+		prioritizeIndexPaths(paths)
+	}
+	return refreshIndexPaths(ctx, db, root, paths, plan.partial)
+}
+
+func refreshIndexPaths(ctx context.Context, db *sql.DB, root string, paths []string, partial bool) (indexRefresh, error) {
 	var stats indexRefresh
-	paths, truncated, err := ripgrepFiles(ctx, root, "", indexLimits().MaxFiles)
-	if err != nil {
-		return stats, fmt.Errorf("index file discovery: %w", err)
-	}
-	if truncated {
-		return stats, fmt.Errorf("workspace exceeds 20000-file index limit")
-	}
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return stats, err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `CREATE TEMP TABLE seen(path TEXT PRIMARY KEY)`); err != nil {
+	if err := prepareRefreshPaths(ctx, tx, root, paths, partial); err != nil {
 		return stats, err
 	}
-	prioritizeIndexPaths(paths)
+
 	batchLimit, _ := ctx.Value(indexBatchLimitKey{}).(int)
 	secrets := credentialValues()
 	sort.Strings(secrets)
@@ -47,18 +73,19 @@ func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefres
 		return stats, err
 	}
 	defer statements.Close()
-	refresh := indexRefresher{statements: statements, redactor: newCredentialRedactor(secrets), policySnapshot: newDiscoveryPolicy(), ctx: ctx, tx: tx, root: root, batchLimit: batchLimit, now: time.Now().Unix(), policy: indexDigest("parser-v5\x00" + strings.Join(secrets, "\x00"))}
-	for _, path := range paths {
-		if err := refresh.process(path); err != nil {
-			return refresh.stats, err
+	refresh := indexRefresher{statements: statements, redactor: newCredentialRedactor(secrets), policySnapshot: newDiscoveryPolicy(), ctx: ctx, tx: tx, root: root, partial: partial, batchLimit: batchLimit, now: time.Now().Unix(), policy: indexDigest("parser-v5\x00" + strings.Join(secrets, "\x00"))}
+	if partial {
+		// Stamps begin with the verified byte size; this projection also works with
+		// existing databases and avoids keeping database-derived metadata globally.
+		err = tx.QueryRowContext(ctx, `SELECT coalesce(sum(cast(stamp AS INTEGER)),0) FROM files WHERE path NOT IN (SELECT path FROM changed)`).Scan(&refresh.total)
+		if err != nil {
+			return stats, err
 		}
 	}
-	if err := refresh.removeUnseen(); err != nil {
+	if err := refresh.run(paths, partial); err != nil {
 		return refresh.stats, err
 	}
-	if err := refresh.policySnapshot.Validate(); err != nil {
-		return refresh.stats, err
-	}
+
 	return refresh.stats, tx.Commit()
 }
 
@@ -72,6 +99,8 @@ type indexRefresher struct {
 	batchLimit, processed int
 	now, total, scanned   int64
 	stats                 indexRefresh
+	partial               bool
+	pending               []*indexedSource
 }
 type indexedSource struct {
 	path, relative, stamp, previous, oldStamp, oldPolicy string
@@ -95,6 +124,9 @@ func (r *indexRefresher) inspect(path string) (*indexedSource, error) {
 		return nil, nil
 	}
 	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -120,15 +152,41 @@ func (r *indexRefresher) process(path string) error {
 	if force {
 		source.oldPolicy = ""
 	}
-	if source.reusable(r.policy, r.now) {
+	if !r.partial && source.reusable(r.policy, r.now) {
 		r.stats.Reused++
 		return r.accountText(source.bytes)
 	}
-	if r.batchLimit > 0 && r.processed >= r.batchLimit {
-		r.stats.Pending++
+	if r.batchLimit > 0 {
+		r.pending = append(r.pending, source)
 		return nil
 	}
 	return r.refreshSource(source)
+}
+
+func (s *indexedSource) revalidationOnly(policy string) bool {
+	return s.known && s.stamp == s.oldStamp && s.oldPolicy == policy
+}
+
+func (r *indexRefresher) refreshPending() error {
+	// New/changed files advance before expired metadata. Among expired entries,
+	// oldest verification goes first so the same prefix cannot consume every batch.
+	sort.SliceStable(r.pending, func(i, j int) bool {
+		a, b := r.pending[i], r.pending[j]
+		if oldA, oldB := a.revalidationOnly(r.policy), b.revalidationOnly(r.policy); oldA != oldB {
+			return !oldA
+		}
+		return a.verified < b.verified
+	})
+	for _, source := range r.pending {
+		if r.processed >= r.batchLimit {
+			r.stats.Pending++
+			continue
+		}
+		if err := r.refreshSource(source); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *indexRefresher) loadPrevious(source *indexedSource) error {
@@ -210,11 +268,67 @@ func (r *indexRefresher) replaceChunks(relative, text, digest string) error {
 	}
 	return nil
 }
-func (r *indexRefresher) removeUnseen() error {
-	for _, query := range []string{`DELETE FROM chunks WHERE path NOT IN (SELECT path FROM seen)`, `DELETE FROM files WHERE path NOT IN (SELECT path FROM seen)`, `DROP TABLE seen`} {
+func (r *indexRefresher) removeUnseen(partial bool) error {
+	predicate := "path NOT IN (SELECT path FROM seen)"
+	if partial {
+		predicate += " AND path IN (SELECT path FROM changed)"
+	}
+	queries := []string{"DELETE FROM chunks WHERE " + predicate, "DELETE FROM files WHERE " + predicate, "DROP TABLE seen"}
+	if partial {
+		queries = append(queries, "DROP TABLE changed")
+	}
+	for _, query := range queries {
 		if _, err := r.tx.ExecContext(r.ctx, query); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (r *indexRefresher) validateStoredText() error {
+	var size int64
+	if err := r.tx.QueryRowContext(r.ctx, `SELECT coalesce(sum(cast(stamp AS INTEGER)),0) FROM files`).Scan(&size); err != nil {
+		return err
+	}
+	if size > indexLimits().MaxTextBytes {
+		return fmt.Errorf("workspace text exceeds index limit (%d bytes)", indexLimits().MaxTextBytes)
+	}
+	return nil
+}
+
+func prepareRefreshPaths(ctx context.Context, tx *sql.Tx, root string, paths []string, partial bool) error {
+	if _, err := tx.ExecContext(ctx, `CREATE TEMP TABLE seen(path TEXT PRIMARY KEY)`); err != nil {
+		return err
+	}
+	if !partial {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `CREATE TEMP TABLE changed(path TEXT PRIMARY KEY)`); err != nil {
+		return err
+	}
+	for _, path := range paths {
+		relative, _ := filepath.Rel(root, path)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO changed VALUES(?)`, filepath.ToSlash(relative)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *indexRefresher) run(paths []string, partial bool) error {
+	for _, path := range paths {
+		if err := r.process(path); err != nil {
+			return err
+		}
+	}
+	if err := r.refreshPending(); err != nil {
+		return err
+	}
+	if err := r.removeUnseen(partial); err != nil {
+		return err
+	}
+	if err := r.validateStoredText(); err != nil {
+		return err
+	}
+	return r.policySnapshot.Validate()
 }

@@ -2,9 +2,8 @@ package provider
 
 import (
 	"encoding/json"
-	"github.com/raulaguila/opcode/internal/llm/models"
-	"github.com/tiktoken-go/tokenizer"
 
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 )
@@ -68,23 +67,29 @@ func (p *baseProvider) serializedFootprint(raw []byte) RequestFootprint {
 	return footprint
 }
 
-func (p *baseProvider) footprintTokenizer() tokenizer.Codec {
+func (p *baseProvider) footprintTokenizer() *requestTokenCounter {
 	if p.options.model.Provider != models.ProviderOpenAI {
 		return nil
 	}
-	counter, _ := tokenizer.ForModel(tokenizer.Model(p.options.model.APIModel))
+	counter := p.tokenCounter
+	if !counter.matches(p.options.model) {
+		counter = newRequestTokenCounter(p.options.model)
+	}
+	if counter.GetName() == "" {
+		return nil
+	}
 	return counter
 }
-func (f *RequestFootprint) countPayload(counter tokenizer.Codec, raw []byte) {
+func (f *RequestFootprint) countPayload(counter *requestTokenCounter, raw []byte) {
 	if counter == nil {
 		return
 	}
-	if count, err := counter.Count(string(raw)); err == nil {
+	if count, err := counter.count(raw); err == nil {
 		f.TokenizedPayloadTokens = int64(count)
 		f.CompatibleTokenizer = counter.GetName()
 	}
 }
-func (f *RequestFootprint) countSchemas(counter tokenizer.Codec, raw []byte) {
+func (f *RequestFootprint) countSchemas(counter *requestTokenCounter, raw []byte) {
 	var encoded struct {
 		Tools json.RawMessage `json:"tools"`
 	}
@@ -99,7 +104,7 @@ func (f *RequestFootprint) countSchemas(counter tokenizer.Codec, raw []byte) {
 	if counter == nil {
 		return
 	}
-	if count, err := counter.Count(string(schemas)); err == nil {
+	if count, err := counter.count(schemas); err == nil {
 		f.TokenizedSchemaTokens = int64(count)
 	}
 }

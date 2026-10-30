@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
@@ -57,6 +58,8 @@ type installedTurn struct {
 }
 
 type transcriptCache struct {
+	markdown                          styles.MarkdownCache
+	markdownOwner                     string
 	visual                            visualIdentity
 	groups                            []turnGroup
 	groupIndex                        map[string]int

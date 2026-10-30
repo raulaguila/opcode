@@ -18,8 +18,17 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+// JSON encodes a nil byte slice as null; these protocols previously sent an
+// empty Base64 string for nil data. Keep that wire representation unchanged.
+func base64ImageBytes(data []byte) []byte {
+	if data == nil {
+		return []byte{}
+	}
+	return data
+}
+
 // Only image headers are decoded; pixels, paths and remote URLs are never read.
-func imageBudgetProjection(model models.Model, history []message.Message, wire []byte) ([]byte, int64, error) {
+func imageBudgetProjection(model models.Model, history []message.Message, payload any, wire []byte) ([]byte, int64, error) {
 	var reserve int64
 	for _, msg := range history {
 		if msg.Role != message.User {
@@ -36,12 +45,12 @@ func imageBudgetProjection(model models.Model, history []message.Message, wire [
 	if reserve == 0 {
 		return wire, 0, nil
 	}
-	var payload map[string]any
-	if json.Unmarshal(wire, &payload) != nil {
+	envelope, ok := payload.(object)
+	if !ok {
 		return nil, 0, fmt.Errorf("cannot project image context budget")
 	}
 	for _, field := range []string{"messages", "input", "contents"} {
-		stripMessageImageData(payload[field])
+		stripMessageImageData(envelope[field])
 	}
 	text, err := json.Marshal(payload)
 	return text, reserve, err
@@ -167,20 +176,35 @@ func decodeImageDataURL(value string) (message.BinaryContent, error) {
 // Traverse only real message-content slots. Tool schemas, tool arguments and
 // text that happens to contain Base64 remain fully counted as text.
 func stripMessageImageData(value any) {
-	messages, _ := value.([]any)
-	for _, raw := range messages {
-		msg, ok := raw.(map[string]any)
-		if !ok {
-			continue
+	switch messages := value.(type) {
+	case []object:
+		for _, msg := range messages {
+			stripMessageImages(msg)
 		}
-		if images, ok := msg["images"].([]any); ok {
-			for i := range images {
-				images[i] = ""
+	case []any:
+		for _, raw := range messages {
+			if msg, ok := raw.(object); ok {
+				stripMessageImages(msg)
 			}
 		}
-		stripImageContentParts(msg["content"])
-		stripImageContentParts(msg["parts"])
+	case []geminiRequestContent:
+		for _, msg := range messages {
+			stripImageContentParts(msg.Parts)
+		}
 	}
+}
+
+func stripMessageImages(msg object) {
+	switch images := msg["images"].(type) {
+	case [][]byte:
+		msg["images"] = make([]string, len(images))
+	case []any:
+		for i := range images {
+			images[i] = ""
+		}
+	}
+	stripImageContentParts(msg["content"])
+	stripImageContentParts(msg["parts"])
 }
 
 func stripContentImageData(part map[string]any) {
@@ -202,10 +226,16 @@ func stripContentImageData(part map[string]any) {
 }
 
 func stripImageContentParts(value any) {
-	parts, _ := value.([]any)
-	for _, raw := range parts {
-		if part, ok := raw.(map[string]any); ok {
+	switch parts := value.(type) {
+	case []object:
+		for _, part := range parts {
 			stripContentImageData(part)
+		}
+	case []any:
+		for _, raw := range parts {
+			if part, ok := raw.(object); ok {
+				stripContentImageData(part)
+			}
 		}
 	}
 }

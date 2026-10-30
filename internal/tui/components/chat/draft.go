@@ -191,18 +191,11 @@ func (m *editorCmp) restoreSessionDraft() error {
 func (m *editorCmp) historyForSession(id string) ([]string, error) {
 	history := []string{}
 	if m.app != nil && m.app.Messages != nil && id != "" {
-		msgs, err := m.app.Messages.List(context.Background(), id)
+		var err error
+		history, err = readPromptHistory(context.Background(), m.app.Messages, id)
 		if err != nil {
 			return nil, fmt.Errorf("load prompt history: %w", err)
 		}
-		for _, msg := range msgs {
-			if msg.Role == message.User && !msg.IsApplication() && msg.Content().String() != "" {
-				history = append(history, msg.Content().String())
-			}
-		}
-	}
-	if len(history) > 200 {
-		history = history[len(history)-200:]
 	}
 	return history, nil
 }

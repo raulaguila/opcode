@@ -34,3 +34,9 @@ func TestBenchmarkInputCannotSilentlyPassMissingMetrics(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, rows[0].AllocationRegression)
 }
+
+func TestComparisonRejectsUnpairedCandidateCases(t *testing.T) {
+	samples := []sample{{NS: 1}, {NS: 1}, {NS: 1}}
+	_, err := compare(map[string][]sample{"paired": samples}, map[string][]sample{"paired": samples, "candidate-only": samples})
+	require.ErrorContains(t, err, "candidate-only has no baseline samples")
+}

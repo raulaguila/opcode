@@ -44,6 +44,13 @@ type geminiContent struct {
 	Role  string            `json:"role"`
 	Parts []json.RawMessage `json:"parts"`
 }
+
+// Outgoing parts retain typed image bytes until the envelope is encoded;
+// incoming/signed parts remain opaque RawMessages in geminiContent.
+type geminiRequestContent struct {
+	Role  string `json:"role"`
+	Parts []any  `json:"parts"`
+}
 type geminiPart struct {
 	Text             string `json:"text,omitempty"`
 	Thought          bool   `json:"thought,omitempty"`
@@ -56,9 +63,9 @@ type geminiPart struct {
 }
 
 func rawJSON(v any) json.RawMessage { raw, _ := json.Marshal(v); return raw }
-func (g *geminiClient) convertMessages(messages []message.Message) []geminiContent {
+func (g *geminiClient) convertMessages(messages []message.Message) []geminiRequestContent {
 	names, ids := g.messageCallIdentities(messages)
-	history := []geminiContent{}
+	history := []geminiRequestContent{}
 	for _, msg := range messages {
 		content := g.messageContent(msg, names, ids)
 		if len(content.Parts) > 0 {
@@ -187,17 +194,19 @@ func (g *geminiClient) restoreNativeCallIDs(msg message.Message, ids map[string]
 		index++
 	}
 }
-func (g *geminiClient) messageContent(msg message.Message, names, ids map[string]string) geminiContent {
-	content := geminiContent{Role: "user"}
+func (g *geminiClient) messageContent(msg message.Message, names, ids map[string]string) geminiRequestContent {
+	content := geminiRequestContent{Role: "user"}
 	switch msg.Role {
 	case message.User:
-		content.Parts = append(content.Parts, rawJSON(object{"text": msg.Content().String()}))
+		content.Parts = append(content.Parts, object{"text": msg.Content().String()})
 		for _, image := range msg.BinaryContent() {
-			content.Parts = append(content.Parts, rawJSON(object{"inlineData": object{"mimeType": image.MIMEType, "data": image.Data}}))
+			content.Parts = append(content.Parts, object{"inlineData": object{"mimeType": image.MIMEType, "data": image.Data}})
 		}
 	case message.Assistant:
 		content.Role = "model"
-		content.Parts = g.assistantParts(msg)
+		for _, part := range g.assistantParts(msg) {
+			content.Parts = append(content.Parts, part)
+		}
 	case message.Tool:
 		for _, r := range msg.ToolResults() {
 			content.Parts = append(content.Parts, geminiToolResult(r, names, ids))

@@ -1,0 +1,1876 @@
+{
+  "date": "2026-10-30",
+  "baseline_commit": "31bc991a95fe9952c33c23fb4a14e4ffa8a02cec",
+  "toolchain": "go version go1.27.3 linux/amd64",
+  "platform": "Linux/x86_64",
+  "items": [
+    {
+      "item": 1,
+      "change": "Bounded continuation, separate structural/expiry backlog; cooperative128-file/1MiB/200ms background budget",
+      "regression": "index_continuation_test.go; index_budget_test.go; index_dirty_generation_test.go"
+    },
+    {
+      "item": 2,
+      "change": "Streaming hit hashes within index file limit; skip oversized stale candidates without hiding valid siblings",
+      "regression": "index_verification_test.go"
+    },
+    {
+      "item": 3,
+      "change": "Native SQLite keyset UI paging; binary/continuation projection; full authoritative List/Get preserved",
+      "regression": "history_page_test.go; paged_history_test.go; presentation_snapshot_test.go"
+    },
+    {
+      "item": 4,
+      "change": "Bounded immutable event journal, replay with lazy copy; gap/overflow reread and session/generation guards",
+      "regression": "loading_preview_test.go; paged_history_test.go; navigation_pending_test.go"
+    },
+    {
+      "item": 5,
+      "change": "Bounded stable paragraph reuse with fresh AST each snapshot and full final rendering",
+      "regression": "markdown_cache_test.go; streaming_cache_test.go; transcript_blocks_test.go"
+    },
+    {
+      "item": 6,
+      "change": "Typed envelope image budget projection without second Base64 decode; frozen wire unchanged",
+      "regression": "image_budget_test.go; image data wire tests"
+    },
+    {
+      "item": 7,
+      "change": "Private model/connection-owned tokenizer plus two exact digest/count entries, no plaintext retained by counter",
+      "regression": "token_counter_test.go; BenchmarkAuditKnownTokenizer stable/changing"
+    },
+    {
+      "item": 8,
+      "change": "Identical fixtures for full search/SQLite/streaming/tokenizer and paired allocation workflow",
+      "regression": "bench-compare/main_test.go; full_search_benchmark_test.go; sqlite_history_benchmark_test.go"
+    },
+    {
+      "item": 9,
+      "change": "Keyboard/mouse/view responsibilities split; six key handlers remove redundant fourth return without changing precedence",
+      "regression": "TUI keyboard/permissions/layout integration; live Ollama PTY"
+    }
+  ],
+  "benchmark": {
+    "operations_per_sample": 100,
+    "samples_per_revision": 3,
+    "ordering": "Three sequential pairs per package; baseline/candidate order alternated. All binaries compiled before timing; no tests/builds/inference concurrent.",
+    "gomaxprocs": 2,
+    "allocation_growth_limit_percent": 10,
+    "fixtures_sha256": {
+      "internal/llm/tools/allocation_benchmark_test.go": "a6a5cab91b27d31d86187703ce25d69f5a750e8921c6e98ad5386570a9a4ba20",
+      "internal/llm/tools/full_search_benchmark_test.go": "2228bc4d70b220bc6f13f19f120ed2dcf5ebc5d2c59b3177dda9b735fd0977f0",
+      "internal/llm/tools/index_refresh_benchmark_test.go": "bd6d1e5a9785b886e3e3056159e41ed52b9651b28cfc94c3728cfe2972585d0c",
+      "internal/llm/agent/context_allocation_test.go": "8ad44c4cf8ba50482c171847a5dffc6328a62ffb02ef65a7a22d88bef93793e5",
+      "internal/llm/provider/image_benchmark_test.go": "fe2f1e9b26750eabec8f9adba2c578d30a4d5ea71420b0594cef1b84a172943e",
+      "internal/llm/provider/allocation_benchmark_test.go": "376caf401685618daa9797b0394992ea05002e2af24038a7edc6e4b885955e2a",
+      "internal/message/search_index_bench_test.go": "ccac468b0b7c9b153615d5aa10f453327ccdeb37acee4c1ed861f92348dc4a70",
+      "internal/tui/components/chat/render_cache_test.go": "31cf0e2bf34708b199f17d34ceead8641b8f642b097deab5b12d694ff722b675",
+      "internal/tui/components/chat/event_benchmark_test.go": "681c9b7def9473bf6c850a43bb32bf4f31ae88c7db60af9e64c5d3debda4ce16",
+      "internal/tui/components/chat/session_benchmark_test.go": "aa938408bc91df6dff59dcf0975ce27b7108b4ea92cf2fc63f19e14a6778d954",
+      "internal/tui/components/chat/sqlite_history_benchmark_test.go": "f484f700d5350895085b21bcb90e4cd579c2b4392030add9235c9b80778b1bb9",
+      "internal/tui/components/chat/streaming_benchmark_test.go": "e600a3a2ccc59d140c31674347dd16827d6a112cf8100f6236a00b6f466c7684",
+      "internal/tui/components/chat/streaming_blocks_benchmark_test.go": "9f566796dc77f97e2b95c3dedbe178fba51a638fa3667b0a581ae73da6fa9d1a",
+      "internal/tui/styles/markdown_benchmark_test.go": "a3ea2a0e1b8ba9b93b2bcd72aa99b7168c5f3ae8820f97397caa9660789ffd4d"
+    },
+    "gate_exit_code": 0,
+    "comparisons": [
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/agent_estimate",
+        "before": {
+          "ns_per_op": 270662,
+          "bytes_per_op": 207944,
+          "allocs_per_op": 455
+        },
+        "after": {
+          "ns_per_op": 273788,
+          "bytes_per_op": 207947,
+          "allocs_per_op": 455
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/prepare_only",
+        "before": {
+          "ns_per_op": 328021,
+          "bytes_per_op": 206686,
+          "allocs_per_op": 444
+        },
+        "after": {
+          "ns_per_op": 300358,
+          "bytes_per_op": 206672,
+          "allocs_per_op": 444
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/changing",
+        "before": {
+          "ns_per_op": 273457,
+          "bytes_per_op": 222715,
+          "allocs_per_op": 449
+        },
+        "after": {
+          "ns_per_op": 264343,
+          "bytes_per_op": 215633,
+          "allocs_per_op": 448
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/stable",
+        "before": {
+          "ns_per_op": 295299,
+          "bytes_per_op": 206670,
+          "allocs_per_op": 444
+        },
+        "after": {
+          "ns_per_op": 293679,
+          "bytes_per_op": 199527,
+          "allocs_per_op": 444
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/changing",
+        "before": {
+          "ns_per_op": 7095858,
+          "bytes_per_op": 10225872,
+          "allocs_per_op": 194330
+        },
+        "after": {
+          "ns_per_op": 6861363,
+          "bytes_per_op": 10180748,
+          "allocs_per_op": 194311
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/stable",
+        "before": {
+          "ns_per_op": 7099250,
+          "bytes_per_op": 10253843,
+          "allocs_per_op": 194301
+        },
+        "after": {
+          "ns_per_op": 335753,
+          "bytes_per_op": 199466,
+          "allocs_per_op": 443
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkPreparedImageBudget",
+        "before": {
+          "ns_per_op": 2788989,
+          "bytes_per_op": 7397545,
+          "allocs_per_op": 177
+        },
+        "after": {
+          "ns_per_op": 1763756,
+          "bytes_per_op": 2897019,
+          "allocs_per_op": 122
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkCitationCurrent",
+        "before": {
+          "ns_per_op": 563537,
+          "bytes_per_op": 71120,
+          "allocs_per_op": 420
+        },
+        "after": {
+          "ns_per_op": 562002,
+          "bytes_per_op": 71120,
+          "allocs_per_op": 420
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/200",
+        "before": {
+          "ns_per_op": 4354634,
+          "bytes_per_op": 1148360,
+          "allocs_per_op": 6873
+        },
+        "after": {
+          "ns_per_op": 4323142,
+          "bytes_per_op": 1125211,
+          "allocs_per_op": 6852
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/2000",
+        "before": {
+          "ns_per_op": 27438023,
+          "bytes_per_op": 1147149,
+          "allocs_per_op": 6872
+        },
+        "after": {
+          "ns_per_op": 27618552,
+          "bytes_per_op": 1124588,
+          "allocs_per_op": 6851
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/one-file",
+        "before": {
+          "ns_per_op": 1491630,
+          "bytes_per_op": 61046,
+          "allocs_per_op": 637
+        },
+        "after": {
+          "ns_per_op": 1484706,
+          "bytes_per_op": 60860,
+          "allocs_per_op": 634
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/periodic",
+        "before": {
+          "ns_per_op": 19932360,
+          "bytes_per_op": 3012786,
+          "allocs_per_op": 40690
+        },
+        "after": {
+          "ns_per_op": 18774324,
+          "bytes_per_op": 3012798,
+          "allocs_per_op": 40690
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/policy",
+        "before": {
+          "ns_per_op": 20187291,
+          "bytes_per_op": 3088438,
+          "allocs_per_op": 41020
+        },
+        "after": {
+          "ns_per_op": 19828303,
+          "bytes_per_op": 3063292,
+          "allocs_per_op": 41020
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/200",
+        "before": {
+          "ns_per_op": 2684586,
+          "bytes_per_op": 289983,
+          "allocs_per_op": 2994
+        },
+        "after": {
+          "ns_per_op": 2672507,
+          "bytes_per_op": 291108,
+          "allocs_per_op": 2994
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/2000",
+        "before": {
+          "ns_per_op": 23501438,
+          "bytes_per_op": 290366,
+          "allocs_per_op": 2994
+        },
+        "after": {
+          "ns_per_op": 23551531,
+          "bytes_per_op": 290733,
+          "allocs_per_op": 2994
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/200",
+        "before": {
+          "ns_per_op": 1314772,
+          "bytes_per_op": 298189,
+          "allocs_per_op": 5028
+        },
+        "after": {
+          "ns_per_op": 1353823,
+          "bytes_per_op": 298436,
+          "allocs_per_op": 5028
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/2000",
+        "before": {
+          "ns_per_op": 13008661,
+          "bytes_per_op": 2682274,
+          "allocs_per_op": 50036
+        },
+        "after": {
+          "ns_per_op": 13222575,
+          "bytes_per_op": 2682583,
+          "allocs_per_op": 50036
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/message/BenchmarkConversationProjection",
+        "before": {
+          "ns_per_op": 443191,
+          "bytes_per_op": 16105,
+          "allocs_per_op": 205
+        },
+        "after": {
+          "ns_per_op": 431812,
+          "bytes_per_op": 16094,
+          "allocs_per_op": 205
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatCacheOverflow",
+        "before": {
+          "ns_per_op": 1757837,
+          "bytes_per_op": 1099323,
+          "allocs_per_op": 14912
+        },
+        "after": {
+          "ns_per_op": 1699867,
+          "bytes_per_op": 1142199,
+          "allocs_per_op": 14915
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/100",
+        "before": {
+          "ns_per_op": 92004,
+          "bytes_per_op": 132964,
+          "allocs_per_op": 920
+        },
+        "after": {
+          "ns_per_op": 91404,
+          "bytes_per_op": 133235,
+          "allocs_per_op": 923
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/1000",
+        "before": {
+          "ns_per_op": 78314,
+          "bytes_per_op": 89962,
+          "allocs_per_op": 920
+        },
+        "after": {
+          "ns_per_op": 85497,
+          "bytes_per_op": 90249,
+          "allocs_per_op": 923
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingBlocks",
+        "before": {
+          "ns_per_op": 842049,
+          "bytes_per_op": 1225595,
+          "allocs_per_op": 8627
+        },
+        "after": {
+          "ns_per_op": 408663,
+          "bytes_per_op": 483141,
+          "allocs_per_op": 2440
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/100",
+        "before": {
+          "ns_per_op": 1287194,
+          "bytes_per_op": 851712,
+          "allocs_per_op": 14903
+        },
+        "after": {
+          "ns_per_op": 1262862,
+          "bytes_per_op": 808246,
+          "allocs_per_op": 14906
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/1000",
+        "before": {
+          "ns_per_op": 1265223,
+          "bytes_per_op": 722006,
+          "allocs_per_op": 14902
+        },
+        "after": {
+          "ns_per_op": 1282466,
+          "bytes_per_op": 722268,
+          "allocs_per_op": 14905
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/100",
+        "before": {
+          "ns_per_op": 6553956,
+          "bytes_per_op": 9534941,
+          "allocs_per_op": 93469
+        },
+        "after": {
+          "ns_per_op": 6732363,
+          "bytes_per_op": 9478006,
+          "allocs_per_op": 93670
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/1000",
+        "before": {
+          "ns_per_op": 8504839,
+          "bytes_per_op": 12617457,
+          "allocs_per_op": 119623
+        },
+        "after": {
+          "ns_per_op": 8483363,
+          "bytes_per_op": 12350541,
+          "allocs_per_op": 119878
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/100",
+        "before": {
+          "ns_per_op": 4512733,
+          "bytes_per_op": 8018995,
+          "allocs_per_op": 71122
+        },
+        "after": {
+          "ns_per_op": 5102587,
+          "bytes_per_op": 8244718,
+          "allocs_per_op": 71337
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/1000",
+        "before": {
+          "ns_per_op": 8235763,
+          "bytes_per_op": 12497793,
+          "allocs_per_op": 110134
+        },
+        "after": {
+          "ns_per_op": 6600048,
+          "bytes_per_op": 10504385,
+          "allocs_per_op": 91266
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderStreaming",
+        "before": {
+          "ns_per_op": 83656,
+          "bytes_per_op": 89896,
+          "allocs_per_op": 925
+        },
+        "after": {
+          "ns_per_op": 85183,
+          "bytes_per_op": 90169,
+          "allocs_per_op": 928
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderTailInvalidated",
+        "before": {
+          "ns_per_op": 88507,
+          "bytes_per_op": 89668,
+          "allocs_per_op": 903
+        },
+        "after": {
+          "ns_per_op": 88601,
+          "bytes_per_op": 89924,
+          "allocs_per_op": 905
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderWarm",
+        "before": {
+          "ns_per_op": 75.95,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        "after": {
+          "ns_per_op": 73.17,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        "allocation_regression": false
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/styles/BenchmarkAuditMarkdownManyBlocks",
+        "before": {
+          "ns_per_op": 1696064,
+          "bytes_per_op": 1907038,
+          "allocs_per_op": 24370
+        },
+        "after": {
+          "ns_per_op": 1654517,
+          "bytes_per_op": 1907296,
+          "allocs_per_op": 24372
+        },
+        "allocation_regression": false
+      }
+    ],
+    "raw_before": {
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/200": [
+        {
+          "ns/op": 1313038.0,
+          "B/op": 298435.0,
+          "allocs/op": 5028.0
+        },
+        {
+          "ns/op": 1502520.0,
+          "B/op": 298189.0,
+          "allocs/op": 5028.0
+        },
+        {
+          "ns/op": 1314772.0,
+          "B/op": 298104.0,
+          "allocs/op": 5027.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/2000": [
+        {
+          "ns/op": 13250426.0,
+          "B/op": 2682196.0,
+          "allocs/op": 50036.0
+        },
+        {
+          "ns/op": 13001502.0,
+          "B/op": 2682838.0,
+          "allocs/op": 50036.0
+        },
+        {
+          "ns/op": 13008661.0,
+          "B/op": 2682274.0,
+          "allocs/op": 50036.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/200": [
+        {
+          "ns/op": 2623934.0,
+          "B/op": 289983.0,
+          "allocs/op": 2994.0
+        },
+        {
+          "ns/op": 2718798.0,
+          "B/op": 289229.0,
+          "allocs/op": 2994.0
+        },
+        {
+          "ns/op": 2684586.0,
+          "B/op": 289986.0,
+          "allocs/op": 2994.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/2000": [
+        {
+          "ns/op": 23331348.0,
+          "B/op": 289602.0,
+          "allocs/op": 2994.0
+        },
+        {
+          "ns/op": 23501438.0,
+          "B/op": 290366.0,
+          "allocs/op": 2994.0
+        },
+        {
+          "ns/op": 23503859.0,
+          "B/op": 290728.0,
+          "allocs/op": 2994.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkCitationCurrent": [
+        {
+          "ns/op": 565663.0,
+          "B/op": 71120.0,
+          "allocs/op": 420.0
+        },
+        {
+          "ns/op": 559057.0,
+          "B/op": 71120.0,
+          "allocs/op": 420.0
+        },
+        {
+          "ns/op": 563537.0,
+          "B/op": 71120.0,
+          "allocs/op": 420.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/200": [
+        {
+          "ns/op": 4250399.0,
+          "B/op": 1148360.0,
+          "allocs/op": 6873.0
+        },
+        {
+          "ns/op": 4354634.0,
+          "B/op": 1146743.0,
+          "allocs/op": 6872.0
+        },
+        {
+          "ns/op": 5850287.0,
+          "B/op": 1148926.0,
+          "allocs/op": 6873.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/2000": [
+        {
+          "ns/op": 27438023.0,
+          "B/op": 1147149.0,
+          "allocs/op": 6872.0
+        },
+        {
+          "ns/op": 27329206.0,
+          "B/op": 1143241.0,
+          "allocs/op": 6870.0
+        },
+        {
+          "ns/op": 27620577.0,
+          "B/op": 1149389.0,
+          "allocs/op": 6873.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/one-file": [
+        {
+          "ns/op": 1485961.0,
+          "B/op": 61046.0,
+          "allocs/op": 637.0
+        },
+        {
+          "ns/op": 1491630.0,
+          "B/op": 59879.0,
+          "allocs/op": 627.0
+        },
+        {
+          "ns/op": 1515726.0,
+          "B/op": 62303.0,
+          "allocs/op": 652.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/policy": [
+        {
+          "ns/op": 21048255.0,
+          "B/op": 3087940.0,
+          "allocs/op": 41020.0
+        },
+        {
+          "ns/op": 19455177.0,
+          "B/op": 3088438.0,
+          "allocs/op": 41020.0
+        },
+        {
+          "ns/op": 20187291.0,
+          "B/op": 3089070.0,
+          "allocs/op": 41020.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/periodic": [
+        {
+          "ns/op": 18674240.0,
+          "B/op": 3012786.0,
+          "allocs/op": 40690.0
+        },
+        {
+          "ns/op": 20357581.0,
+          "B/op": 3012718.0,
+          "allocs/op": 40689.0
+        },
+        {
+          "ns/op": 19932360.0,
+          "B/op": 3012799.0,
+          "allocs/op": 40690.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/prepare_only": [
+        {
+          "ns/op": 304707.0,
+          "B/op": 213838.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 564872.0,
+          "B/op": 206686.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 328021.0,
+          "B/op": 206647.0,
+          "allocs/op": 444.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/agent_estimate": [
+        {
+          "ns/op": 270662.0,
+          "B/op": 200775.0,
+          "allocs/op": 455.0
+        },
+        {
+          "ns/op": 283489.0,
+          "B/op": 215115.0,
+          "allocs/op": 456.0
+        },
+        {
+          "ns/op": 263147.0,
+          "B/op": 207944.0,
+          "allocs/op": 455.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/stable": [
+        {
+          "ns/op": 286431.0,
+          "B/op": 206681.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 349926.0,
+          "B/op": 199534.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 295299.0,
+          "B/op": 206670.0,
+          "allocs/op": 444.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/changing": [
+        {
+          "ns/op": 320266.0,
+          "B/op": 222875.0,
+          "allocs/op": 449.0
+        },
+        {
+          "ns/op": 263468.0,
+          "B/op": 222532.0,
+          "allocs/op": 448.0
+        },
+        {
+          "ns/op": 273457.0,
+          "B/op": 222715.0,
+          "allocs/op": 449.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/stable": [
+        {
+          "ns/op": 7099250.0,
+          "B/op": 10210910.0,
+          "allocs/op": 194300.0
+        },
+        {
+          "ns/op": 7063931.0,
+          "B/op": 10253843.0,
+          "allocs/op": 194301.0
+        },
+        {
+          "ns/op": 7142729.0,
+          "B/op": 10261001.0,
+          "allocs/op": 194302.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/changing": [
+        {
+          "ns/op": 6979433.0,
+          "B/op": 10212116.0,
+          "allocs/op": 194330.0
+        },
+        {
+          "ns/op": 7141498.0,
+          "B/op": 10225872.0,
+          "allocs/op": 194330.0
+        },
+        {
+          "ns/op": 7095858.0,
+          "B/op": 10305556.0,
+          "allocs/op": 194333.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkPreparedImageBudget": [
+        {
+          "ns/op": 2788989.0,
+          "B/op": 7425450.0,
+          "allocs/op": 177.0
+        },
+        {
+          "ns/op": 2817218.0,
+          "B/op": 7397545.0,
+          "allocs/op": 177.0
+        },
+        {
+          "ns/op": 2740743.0,
+          "B/op": 7158671.0,
+          "allocs/op": 173.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/message/BenchmarkConversationProjection": [
+        {
+          "ns/op": 443191.0,
+          "B/op": 16159.0,
+          "allocs/op": 205.0
+        },
+        {
+          "ns/op": 500657.0,
+          "B/op": 16055.0,
+          "allocs/op": 205.0
+        },
+        {
+          "ns/op": 440331.0,
+          "B/op": 16105.0,
+          "allocs/op": 205.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/100": [
+        {
+          "ns/op": 70750.0,
+          "B/op": 132956.0,
+          "allocs/op": 920.0
+        },
+        {
+          "ns/op": 104263.0,
+          "B/op": 175955.0,
+          "allocs/op": 920.0
+        },
+        {
+          "ns/op": 92004.0,
+          "B/op": 132964.0,
+          "allocs/op": 920.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/1000": [
+        {
+          "ns/op": 86885.0,
+          "B/op": 89972.0,
+          "allocs/op": 920.0
+        },
+        {
+          "ns/op": 76361.0,
+          "B/op": 89962.0,
+          "allocs/op": 920.0
+        },
+        {
+          "ns/op": 78314.0,
+          "B/op": 89962.0,
+          "allocs/op": 920.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderWarm": [
+        {
+          "ns/op": 75.95,
+          "B/op": 0.0,
+          "allocs/op": 0.0
+        },
+        {
+          "ns/op": 69.08,
+          "B/op": 0.0,
+          "allocs/op": 0.0
+        },
+        {
+          "ns/op": 86.29,
+          "B/op": 0.0,
+          "allocs/op": 0.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderTailInvalidated": [
+        {
+          "ns/op": 88507.0,
+          "B/op": 89668.0,
+          "allocs/op": 903.0
+        },
+        {
+          "ns/op": 90902.0,
+          "B/op": 89668.0,
+          "allocs/op": 903.0
+        },
+        {
+          "ns/op": 82434.0,
+          "B/op": 89668.0,
+          "allocs/op": 903.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderStreaming": [
+        {
+          "ns/op": 82349.0,
+          "B/op": 89886.0,
+          "allocs/op": 925.0
+        },
+        {
+          "ns/op": 87109.0,
+          "B/op": 89896.0,
+          "allocs/op": 925.0
+        },
+        {
+          "ns/op": 83656.0,
+          "B/op": 89898.0,
+          "allocs/op": 925.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/100": [
+        {
+          "ns/op": 6553956.0,
+          "B/op": 9664317.0,
+          "allocs/op": 93470.0
+        },
+        {
+          "ns/op": 6821195.0,
+          "B/op": 9534941.0,
+          "allocs/op": 93469.0
+        },
+        {
+          "ns/op": 6536470.0,
+          "B/op": 9451583.0,
+          "allocs/op": 93469.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/1000": [
+        {
+          "ns/op": 8875033.0,
+          "B/op": 12617457.0,
+          "allocs/op": 119623.0
+        },
+        {
+          "ns/op": 8344043.0,
+          "B/op": 12444722.0,
+          "allocs/op": 119621.0
+        },
+        {
+          "ns/op": 8504839.0,
+          "B/op": 12704406.0,
+          "allocs/op": 119623.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/100": [
+        {
+          "ns/op": 4512733.0,
+          "B/op": 8146733.0,
+          "allocs/op": 71122.0
+        },
+        {
+          "ns/op": 4427948.0,
+          "B/op": 8018516.0,
+          "allocs/op": 71122.0
+        },
+        {
+          "ns/op": 4728881.0,
+          "B/op": 8018995.0,
+          "allocs/op": 71119.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/1000": [
+        {
+          "ns/op": 8334897.0,
+          "B/op": 12497793.0,
+          "allocs/op": 110134.0
+        },
+        {
+          "ns/op": 8235763.0,
+          "B/op": 12581596.0,
+          "allocs/op": 110134.0
+        },
+        {
+          "ns/op": 8166189.0,
+          "B/op": 12279845.0,
+          "allocs/op": 110133.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/100": [
+        {
+          "ns/op": 1295219.0,
+          "B/op": 722754.0,
+          "allocs/op": 14902.0
+        },
+        {
+          "ns/op": 1284500.0,
+          "B/op": 937296.0,
+          "allocs/op": 14903.0
+        },
+        {
+          "ns/op": 1287194.0,
+          "B/op": 851712.0,
+          "allocs/op": 14903.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/1000": [
+        {
+          "ns/op": 1265223.0,
+          "B/op": 764974.0,
+          "allocs/op": 14902.0
+        },
+        {
+          "ns/op": 1263526.0,
+          "B/op": 721995.0,
+          "allocs/op": 14902.0
+        },
+        {
+          "ns/op": 1269215.0,
+          "B/op": 722006.0,
+          "allocs/op": 14902.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatCacheOverflow": [
+        {
+          "ns/op": 1700986.0,
+          "B/op": 1099322.0,
+          "allocs/op": 14912.0
+        },
+        {
+          "ns/op": 1761480.0,
+          "B/op": 1142303.0,
+          "allocs/op": 14912.0
+        },
+        {
+          "ns/op": 1757837.0,
+          "B/op": 1099323.0,
+          "allocs/op": 14912.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingBlocks": [
+        {
+          "ns/op": 832407.0,
+          "B/op": 1226716.0,
+          "allocs/op": 8627.0
+        },
+        {
+          "ns/op": 842049.0,
+          "B/op": 1225595.0,
+          "allocs/op": 8627.0
+        },
+        {
+          "ns/op": 912382.0,
+          "B/op": 1225220.0,
+          "allocs/op": 8627.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/styles/BenchmarkAuditMarkdownManyBlocks": [
+        {
+          "ns/op": 1600693.0,
+          "B/op": 1907040.0,
+          "allocs/op": 24370.0
+        },
+        {
+          "ns/op": 1696064.0,
+          "B/op": 1907038.0,
+          "allocs/op": 24370.0
+        },
+        {
+          "ns/op": 1892499.0,
+          "B/op": 1907030.0,
+          "allocs/op": 24370.0
+        }
+      ]
+    },
+    "raw_after": {
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/200": [
+        {
+          "ns/op": 1356363.0,
+          "B/op": 298515.0,
+          "allocs/op": 5028.0
+        },
+        {
+          "ns/op": 1353823.0,
+          "B/op": 298436.0,
+          "allocs/op": 5028.0
+        },
+        {
+          "ns/op": 1296377.0,
+          "B/op": 298433.0,
+          "allocs/op": 5028.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/2000": [
+        {
+          "ns/op": 13222575.0,
+          "B/op": 2682160.0,
+          "allocs/op": 50036.0
+        },
+        {
+          "ns/op": 13059430.0,
+          "B/op": 2682583.0,
+          "allocs/op": 50036.0
+        },
+        {
+          "ns/op": 13612582.0,
+          "B/op": 2683118.0,
+          "allocs/op": 50037.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/200": [
+        {
+          "ns/op": 2695862.0,
+          "B/op": 291112.0,
+          "allocs/op": 2995.0
+        },
+        {
+          "ns/op": 2672507.0,
+          "B/op": 290358.0,
+          "allocs/op": 2994.0
+        },
+        {
+          "ns/op": 2442148.0,
+          "B/op": 291108.0,
+          "allocs/op": 2994.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/2000": [
+        {
+          "ns/op": 23346633.0,
+          "B/op": 290743.0,
+          "allocs/op": 2994.0
+        },
+        {
+          "ns/op": 23551531.0,
+          "B/op": 289618.0,
+          "allocs/op": 2994.0
+        },
+        {
+          "ns/op": 23578260.0,
+          "B/op": 290733.0,
+          "allocs/op": 2994.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkCitationCurrent": [
+        {
+          "ns/op": 562002.0,
+          "B/op": 71120.0,
+          "allocs/op": 420.0
+        },
+        {
+          "ns/op": 575363.0,
+          "B/op": 71056.0,
+          "allocs/op": 420.0
+        },
+        {
+          "ns/op": 551327.0,
+          "B/op": 71120.0,
+          "allocs/op": 420.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/200": [
+        {
+          "ns/op": 4350943.0,
+          "B/op": 1127364.0,
+          "allocs/op": 6852.0
+        },
+        {
+          "ns/op": 4278405.0,
+          "B/op": 1124982.0,
+          "allocs/op": 6852.0
+        },
+        {
+          "ns/op": 4323142.0,
+          "B/op": 1125211.0,
+          "allocs/op": 6851.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/2000": [
+        {
+          "ns/op": 27618552.0,
+          "B/op": 1124588.0,
+          "allocs/op": 6851.0
+        },
+        {
+          "ns/op": 27077493.0,
+          "B/op": 1122938.0,
+          "allocs/op": 6849.0
+        },
+        {
+          "ns/op": 27809757.0,
+          "B/op": 1126690.0,
+          "allocs/op": 6852.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/one-file": [
+        {
+          "ns/op": 1556347.0,
+          "B/op": 60860.0,
+          "allocs/op": 634.0
+        },
+        {
+          "ns/op": 1481334.0,
+          "B/op": 60680.0,
+          "allocs/op": 627.0
+        },
+        {
+          "ns/op": 1484706.0,
+          "B/op": 60990.0,
+          "allocs/op": 640.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/policy": [
+        {
+          "ns/op": 19828303.0,
+          "B/op": 3062554.0,
+          "allocs/op": 41020.0
+        },
+        {
+          "ns/op": 20714294.0,
+          "B/op": 3089758.0,
+          "allocs/op": 41020.0
+        },
+        {
+          "ns/op": 18949410.0,
+          "B/op": 3063292.0,
+          "allocs/op": 41019.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/periodic": [
+        {
+          "ns/op": 21168024.0,
+          "B/op": 3012798.0,
+          "allocs/op": 40689.0
+        },
+        {
+          "ns/op": 18484166.0,
+          "B/op": 3006396.0,
+          "allocs/op": 40690.0
+        },
+        {
+          "ns/op": 18774324.0,
+          "B/op": 3012816.0,
+          "allocs/op": 40690.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/prepare_only": [
+        {
+          "ns/op": 502386.0,
+          "B/op": 199520.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 276817.0,
+          "B/op": 213838.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 300358.0,
+          "B/op": 206672.0,
+          "allocs/op": 444.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/agent_estimate": [
+        {
+          "ns/op": 273788.0,
+          "B/op": 207947.0,
+          "allocs/op": 455.0
+        },
+        {
+          "ns/op": 282612.0,
+          "B/op": 200762.0,
+          "allocs/op": 455.0
+        },
+        {
+          "ns/op": 270477.0,
+          "B/op": 207955.0,
+          "allocs/op": 455.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/stable": [
+        {
+          "ns/op": 285356.0,
+          "B/op": 206682.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 293679.0,
+          "B/op": 199519.0,
+          "allocs/op": 444.0
+        },
+        {
+          "ns/op": 491320.0,
+          "B/op": 199527.0,
+          "allocs/op": 444.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/changing": [
+        {
+          "ns/op": 264092.0,
+          "B/op": 215633.0,
+          "allocs/op": 448.0
+        },
+        {
+          "ns/op": 275562.0,
+          "B/op": 222722.0,
+          "allocs/op": 449.0
+        },
+        {
+          "ns/op": 264343.0,
+          "B/op": 215305.0,
+          "allocs/op": 448.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/stable": [
+        {
+          "ns/op": 333264.0,
+          "B/op": 199460.0,
+          "allocs/op": 443.0
+        },
+        {
+          "ns/op": 335753.0,
+          "B/op": 199466.0,
+          "allocs/op": 443.0
+        },
+        {
+          "ns/op": 338121.0,
+          "B/op": 206620.0,
+          "allocs/op": 443.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/changing": [
+        {
+          "ns/op": 6877369.0,
+          "B/op": 10123028.0,
+          "allocs/op": 194309.0
+        },
+        {
+          "ns/op": 6782431.0,
+          "B/op": 10180748.0,
+          "allocs/op": 194311.0
+        },
+        {
+          "ns/op": 6861363.0,
+          "B/op": 10273874.0,
+          "allocs/op": 194314.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkPreparedImageBudget": [
+        {
+          "ns/op": 1763756.0,
+          "B/op": 2868986.0,
+          "allocs/op": 122.0
+        },
+        {
+          "ns/op": 1689526.0,
+          "B/op": 2897019.0,
+          "allocs/op": 122.0
+        },
+        {
+          "ns/op": 1778266.0,
+          "B/op": 2911027.0,
+          "allocs/op": 122.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/message/BenchmarkConversationProjection": [
+        {
+          "ns/op": 423606.0,
+          "B/op": 16089.0,
+          "allocs/op": 205.0
+        },
+        {
+          "ns/op": 431812.0,
+          "B/op": 16094.0,
+          "allocs/op": 205.0
+        },
+        {
+          "ns/op": 762927.0,
+          "B/op": 16160.0,
+          "allocs/op": 205.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/100": [
+        {
+          "ns/op": 94381.0,
+          "B/op": 133611.0,
+          "allocs/op": 923.0
+        },
+        {
+          "ns/op": 83384.0,
+          "B/op": 133226.0,
+          "allocs/op": 923.0
+        },
+        {
+          "ns/op": 91404.0,
+          "B/op": 133235.0,
+          "allocs/op": 923.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/1000": [
+        {
+          "ns/op": 86589.0,
+          "B/op": 90249.0,
+          "allocs/op": 923.0
+        },
+        {
+          "ns/op": 85497.0,
+          "B/op": 90251.0,
+          "allocs/op": 923.0
+        },
+        {
+          "ns/op": 82966.0,
+          "B/op": 90245.0,
+          "allocs/op": 923.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderWarm": [
+        {
+          "ns/op": 68.47,
+          "B/op": 0.0,
+          "allocs/op": 0.0
+        },
+        {
+          "ns/op": 75.43,
+          "B/op": 0.0,
+          "allocs/op": 0.0
+        },
+        {
+          "ns/op": 73.17,
+          "B/op": 0.0,
+          "allocs/op": 0.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderTailInvalidated": [
+        {
+          "ns/op": 88601.0,
+          "B/op": 89927.0,
+          "allocs/op": 905.0
+        },
+        {
+          "ns/op": 82678.0,
+          "B/op": 89914.0,
+          "allocs/op": 905.0
+        },
+        {
+          "ns/op": 92334.0,
+          "B/op": 89924.0,
+          "allocs/op": 905.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderStreaming": [
+        {
+          "ns/op": 85253.0,
+          "B/op": 90169.0,
+          "allocs/op": 928.0
+        },
+        {
+          "ns/op": 85183.0,
+          "B/op": 90168.0,
+          "allocs/op": 928.0
+        },
+        {
+          "ns/op": 83329.0,
+          "B/op": 90169.0,
+          "allocs/op": 928.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/100": [
+        {
+          "ns/op": 6630593.0,
+          "B/op": 9432444.0,
+          "allocs/op": 93670.0
+        },
+        {
+          "ns/op": 6852461.0,
+          "B/op": 9478006.0,
+          "allocs/op": 93670.0
+        },
+        {
+          "ns/op": 6732363.0,
+          "B/op": 9648060.0,
+          "allocs/op": 93670.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/1000": [
+        {
+          "ns/op": 8483363.0,
+          "B/op": 12304873.0,
+          "allocs/op": 119878.0
+        },
+        {
+          "ns/op": 8439023.0,
+          "B/op": 12431928.0,
+          "allocs/op": 119877.0
+        },
+        {
+          "ns/op": 8557311.0,
+          "B/op": 12350541.0,
+          "allocs/op": 119879.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/100": [
+        {
+          "ns/op": 4917824.0,
+          "B/op": 8286778.0,
+          "allocs/op": 71337.0
+        },
+        {
+          "ns/op": 5173050.0,
+          "B/op": 8244718.0,
+          "allocs/op": 71335.0
+        },
+        {
+          "ns/op": 5102587.0,
+          "B/op": 8159216.0,
+          "allocs/op": 71340.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/1000": [
+        {
+          "ns/op": 6622353.0,
+          "B/op": 10504385.0,
+          "allocs/op": 91272.0
+        },
+        {
+          "ns/op": 6600048.0,
+          "B/op": 10461141.0,
+          "allocs/op": 91264.0
+        },
+        {
+          "ns/op": 6494281.0,
+          "B/op": 10547205.0,
+          "allocs/op": 91266.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/100": [
+        {
+          "ns/op": 1360490.0,
+          "B/op": 765246.0,
+          "allocs/op": 14905.0
+        },
+        {
+          "ns/op": 1260011.0,
+          "B/op": 808246.0,
+          "allocs/op": 14906.0
+        },
+        {
+          "ns/op": 1262862.0,
+          "B/op": 808620.0,
+          "allocs/op": 14906.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/1000": [
+        {
+          "ns/op": 1284643.0,
+          "B/op": 765630.0,
+          "allocs/op": 14905.0
+        },
+        {
+          "ns/op": 1282466.0,
+          "B/op": 679673.0,
+          "allocs/op": 14905.0
+        },
+        {
+          "ns/op": 1234058.0,
+          "B/op": 722268.0,
+          "allocs/op": 14905.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatCacheOverflow": [
+        {
+          "ns/op": 1699867.0,
+          "B/op": 1226663.0,
+          "allocs/op": 14915.0
+        },
+        {
+          "ns/op": 1676999.0,
+          "B/op": 1056616.0,
+          "allocs/op": 14915.0
+        },
+        {
+          "ns/op": 1704573.0,
+          "B/op": 1142199.0,
+          "allocs/op": 14915.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingBlocks": [
+        {
+          "ns/op": 380065.0,
+          "B/op": 354180.0,
+          "allocs/op": 2440.0
+        },
+        {
+          "ns/op": 420143.0,
+          "B/op": 525754.0,
+          "allocs/op": 2440.0
+        },
+        {
+          "ns/op": 408663.0,
+          "B/op": 483141.0,
+          "allocs/op": 2440.0
+        }
+      ],
+      "github.com/raulaguila/opcode/internal/tui/styles/BenchmarkAuditMarkdownManyBlocks": [
+        {
+          "ns/op": 1702888.0,
+          "B/op": 1907296.0,
+          "allocs/op": 24372.0
+        },
+        {
+          "ns/op": 1654517.0,
+          "B/op": 1907289.0,
+          "allocs/op": 24372.0
+        },
+        {
+          "ns/op": 1585580.0,
+          "B/op": 1907314.0,
+          "allocs/op": 24372.0
+        }
+      ]
+    }
+  },
+  "intermediate_results": [
+    {
+      "run": "attempt-1",
+      "operations_per_sample": 10,
+      "gate_exit_code": 1,
+      "failures": [
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/one-file",
+          "before": {
+            "ns_per_op": 1527684,
+            "bytes_per_op": 60716,
+            "allocs_per_op": 629
+          },
+          "after": {
+            "ns_per_op": 1531821,
+            "bytes_per_op": 67443,
+            "allocs_per_op": 712
+          },
+          "allocation_regression": true
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/100",
+          "before": {
+            "ns_per_op": 6593737,
+            "bytes_per_op": 9748278,
+            "allocs_per_op": 93471
+          },
+          "after": {
+            "ns_per_op": 6952205,
+            "bytes_per_op": 10867420,
+            "allocs_per_op": 93775
+          },
+          "allocation_regression": true
+        },
+        {
+          "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/1000",
+          "before": {
+            "ns_per_op": 8698225,
+            "bytes_per_op": 13344762,
+            "allocs_per_op": 119625
+          },
+          "after": {
+            "ns_per_op": 9439360,
+            "bytes_per_op": 15183377,
+            "allocs_per_op": 120016
+          },
+          "allocation_regression": true
+        }
+      ],
+      "resolution": "Removed escaped style allocation, clone only when replaying events, and avoid rechecking already-counted paths from an unprocessed newer event generation; eligibility checks retained for captured/new paths."
+    },
+    {
+      "run": "attempt-2",
+      "operations_per_sample": 10,
+      "gate_exit_code": 1,
+      "failures": [
+        {
+          "name": "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/prepare_only",
+          "before": {
+            "ns_per_op": 269509,
+            "bytes_per_op": 192380,
+            "allocs_per_op": 444
+          },
+          "after": {
+            "ns_per_op": 485554,
+            "bytes_per_op": 335724,
+            "allocs_per_op": 451
+          },
+          "allocation_regression": true
+        }
+      ],
+      "resolution": "Repeated unchanged baseline context preparation varied192kB–336kB with only10operations; increase measurement length to100on both revisions and CI, retaining three samples and10percent threshold."
+    }
+  ],
+  "validation": [
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet-integration",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck-integration",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "-exact-recursion",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "languages",
+      "command": [
+        "go",
+        "run",
+        "./scripts/language-docs",
+        "-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "workflows",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/actionlint",
+        ".github/workflows/build.yml",
+        ".github/workflows/test.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/performance.yml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-followup-implementation/opcode",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "windows",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-followup-implementation/opcode-windows.exe",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "darwin",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-followup-implementation/opcode-darwin",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "ollama-pty",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUITerminalStartupQueries)$",
+        "-count=1",
+        "-v"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "live_ollama_pty": {
+    "status": "passed",
+    "model": "llama3.1:8b",
+    "application_binary": "normal production build; test runner uses -race",
+    "elapsed_seconds": 25.69,
+    "overview_sha256": "21281c6c3ba41b396745de55bc537db486165a8a14961a527dc7be479101925e",
+    "coverage": [
+      "Unicode paste, composer3–8rows, resizes, provider outage/retry/delete",
+      "strict factual overview with native source citations",
+      "separately approved LSP probe, suppressed child stderr",
+      "OSC52 response copy",
+      "native model question, real human choice and resumed generation",
+      "PTY command blocked until explicit approval",
+      "live output, human terminal input, queued instruction without replay",
+      "light/dark/no-color layouts",
+      "source fixtures unchanged"
+    ]
+  },
+  "permissions_preserved": true,
+  "citation_criteria_preserved": true,
+  "dependencies_changed": false,
+  "limits": [
+    "Component allocations are not resident memory or inference latency.",
+    "Stable recognized-tokenizer inputs reuse exact counts; changing history still performs native tokenization.",
+    "SQLite100-message initial load adds SQL JSON projection overhead; no universal latency improvement is claimed.",
+    "Budget yield is cooperative between files; existing hard scan/text/context limits remain.",
+    "A turn longer than128messages remains paged; ancestors are available by scrolling.",
+    "Markdown reuse covers bounded safe stable paragraphs only; code/links/tables and final completion are fully rendered.",
+    "No company/cloud APIs or native Windows/macOS runtime tests were exercised in this round."
+  ],
+  "visual_oracle": {
+    "initial_failure": "New truecolor byte oracle exposed equidistant terminal256 code-color quantization (indices116/117); application behavior/criteria were not changed to approve.",
+    "fixture_fix": "Use deterministic Monokai fixture; restore prior theme/profile after test.",
+    "proof": "Every byte prefix of all fixtures compared exactly in ASCII and TrueColor; five -race repetitions passed (71.135s).",
+    "production_palette_changed": false
+  }
+}

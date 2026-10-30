@@ -3,14 +3,9 @@ package tui
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
-
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/app"
-	"github.com/raulaguila/opcode/internal/clipboard"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/logging"
@@ -25,6 +20,8 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
+	"io"
+	"strings"
 )
 
 type keyMap struct {
@@ -690,181 +687,6 @@ func (a *appModel) moveToPage(pageID page.PageID) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// baseView is shared by rendering and mouse hit testing so both use the same
-// bounded page dimensions, including while a page is loading or resizing.
-func (a appModel) baseView() string {
-	pageView := a.pages[a.currentPage].View()
-	if a.width > 0 {
-		if a.height == 0 {
-			pageView = ""
-		} else {
-			pageView = lipgloss.NewStyle().Width(a.width).Height(a.height).MaxWidth(a.width).MaxHeight(a.height).Render(pageView)
-		}
-	}
-	components := []string{
-		pageView,
-	}
-	if pageView == "" {
-		components = nil
-	}
-
-	components = append(components, a.statusView())
-
-	return lipgloss.JoinVertical(lipgloss.Top, components...)
-}
-
-func (a appModel) View() string {
-	appView := a.baseView()
-
-	if a.showFilepicker {
-		overlay := a.filepicker.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-
-	}
-
-	// Show compacting status overlay
-	if a.isCompacting {
-		t := theme.CurrentTheme()
-		style := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(t.BorderFocused()).
-			BorderBackground(t.Background()).
-			Padding(1, 2).
-			Background(t.Background()).
-			Foreground(t.Text())
-
-		overlay := style.Render("Summarizing\n" + a.compactingMessage)
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	viewShowHelp(&a, &appView)
-
-	if a.showQuit {
-		overlay := a.quit.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	if a.showSessionDialog {
-		overlay := a.sessionDialog.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	if a.showModelDialog {
-		overlay := a.modelDialog.View()
-		col, row := a.modelDialogOrigin()
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	if a.showCommandDialog {
-		overlay := a.commandDialog.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	if a.showInitDialog {
-		overlay := a.initDialog.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	if a.showThemeDialog {
-		overlay := a.themeDialog.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	if a.showMultiArgumentsDialog {
-		overlay := a.multiArgumentsDialog.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
-
-	if a.showProviderDialog {
-		overlay := a.providerDialog.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
-	}
-	if a.showIntegrationDialog {
-		overlay := a.integrationDialog.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
-	}
-	// Authorization always appears above settings/probes that requested it.
-	if a.showPermissions {
-		overlay := a.permissions.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
-	}
-
-	if a.showQuit {
-		overlay := a.quit.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
-	}
-	if a.width > 0 {
-		appView = lipgloss.NewStyle().MaxWidth(a.width).MaxHeight(a.height + 1).Render(appView)
-	}
-	return appView
-}
-
 func New(app *app.App, initial ...session.Session) tea.Model {
 	startPage := page.ChatPage
 	if app.Questions != nil {
@@ -967,10 +789,6 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 	return model
 }
 
-func (a appModel) modelDialogOrigin() (int, int) {
-	return a.dialogOrigin(a.modelDialog.View())
-}
-
 func agentEventSession(event agent.AgentEvent, fallback string) string {
 	if event.SessionID != "" {
 		return event.SessionID
@@ -996,24 +814,6 @@ func configuredKeys() keyMap {
 	return k
 }
 
-func (a appModel) mouseModal() (tea.Model, bool) {
-	switch {
-	case a.showQuit:
-		return a.quit, true
-	case a.showCommandDialog:
-		return a.commandDialog, true
-	case a.showThemeDialog:
-		return a.themeDialog, true
-	case a.showFilepicker:
-		return a.filepicker, true
-	case a.showMultiArgumentsDialog:
-		return a.multiArgumentsDialog, true
-	case a.showInitDialog:
-		return a.initDialog, true
-	}
-	return nil, false
-}
-
 // WithTerminalOutput shares the serialized terminal writer with explicit OSC commands.
 func WithTerminalOutput(model tea.Model, output io.Writer) tea.Model {
 	switch a := model.(type) {
@@ -1024,147 +824,6 @@ func WithTerminalOutput(model tea.Model, output io.Writer) tea.Model {
 		return a
 	}
 	return model
-}
-
-func updateAppModelKeyMsg(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if result0, result1, result2, handled := routeRemotePasteKey(a, msg); handled {
-		return result0, result1, result2
-	}
-	if result0, result1, result2, handled := routeQuitOrPermissionKey(a, msg); handled {
-		return result0, result1, result2
-	}
-	if result0, result1, result2, handled := routeConnectionOrWorkspaceKey(a, cmd, msg); handled {
-		return result0, result1, result2
-	}
-	// In the terminal pane control keys belong to the child, including
-	// Ctrl+C and Escape. Permission/modal dialogs always keep precedence.
-	if result0, result1, result2, handled := routeTerminalOrSelectionKey(a, cmd, msg); handled {
-		return result0, result1, result2
-	}
-	// Modal shortcuts belong to the focused dialog. In particular Ctrl+H
-	// shows archived sessions and Ctrl+F filters favorite models.
-	if result0, result1, result2, handled := routeFocusedHelpKey(a, msg); handled {
-		return result0, result1, result2
-	}
-	if result0, result1, result2, handled := routeSessionOrModelKey(a, msg); handled {
-		return result0, result1, result2
-	}
-	// If multi-arguments dialog is open, let it handle the key press first
-	if a.showMultiArgumentsDialog {
-		args, cmd := a.multiArgumentsDialog.Update((*msg))
-		a.multiArgumentsDialog = args.(dialog.MultiArgumentsDialogCmp)
-		return (*a), cmd, true
-	}
-
-	return updateApplicationShortcut(a, msg)
-}
-
-func updateApplicationShortcut(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-
-	switch {
-
-	case key.Matches((*msg), keys.Quit):
-		return updateAppModelKeyMsgQuit(a)
-	case msg.String() == config.Shortcut("sessions"):
-		return updateAppModelKeyMsgSessions(a)
-	case msg.String() == config.Shortcut("commands"):
-		return updateAppModelKeyMsgCommands(a)
-	case msg.String() == config.Shortcut("models"):
-		return updateAppModelKeyMsgModels(a)
-	case msg.String() == config.Shortcut("theme"):
-		return updateAppModelKeyMsgTheme(a)
-	case key.Matches((*msg), returnKey) || key.Matches((*msg)):
-		if result0, result1, result2, handled := updateAppModelKeyMsgMatches(a, msg); handled {
-			return result0, result1, result2
-		}
-	case key.Matches((*msg), keys.Logs):
-		return (*a), a.moveToPage(page.LogsPage), true
-	case key.Matches((*msg), keys.Help):
-		if a.showQuit {
-			return (*a), nil, true
-		}
-		a.showHelp = !a.showHelp
-		return (*a), nil, true
-	case key.Matches((*msg), helpEsc):
-		if a.showHelp {
-			a.showHelp = false
-			return (*a), nil, true
-		}
-	case msg.String() == config.Shortcut("files"):
-		a.showFilepicker = !a.showFilepicker
-		a.filepicker.ToggleFilepicker(a.showFilepicker)
-		return (*a), nil, true
-	}
-	return nil, nil, false
-}
-
-func updateAppModelMouseMsg(a *appModel, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if a.showPermissions && a.permissions != nil {
-		col, row := a.dialogOrigin(a.permissions.View())
-		msg.X -= col
-		msg.Y -= row
-		updated, c := a.permissions.Update((*msg))
-		a.permissions = updated.(dialog.PermissionDialogCmp)
-		return (*a), c, true
-	}
-	if a.showHelp && a.help != nil {
-		col, row := a.dialogOrigin(a.help.View())
-		msg.X -= col
-		msg.Y -= row
-		updated, c := a.help.Update((*msg))
-		a.help = updated.(dialog.HelpCmp)
-		return (*a), c, true
-	}
-	if result0, result1, result2, handled := updateAppModelMouseMsgMouseModal(a, msg); handled {
-		return result0, result1, result2
-	}
-	// Capturing the wheel must not scroll the conversation underneath a
-	// modal dialog. The model picker handles its own mouse navigation.
-	if result0, result1, result2, handled := updateAppModelMouseMsgShowPermissionsShowHelpShowQuit(a); handled {
-		return result0, result1, result2
-	}
-	if a.showSessionDialog {
-		if a.sessionDialog == nil {
-			return (*a), nil, true
-		}
-		col, row := a.dialogOrigin(a.sessionDialog.View())
-		msg.X -= col
-		msg.Y -= row
-		updated, c := a.sessionDialog.Update((*msg))
-		a.sessionDialog = updated.(dialog.SessionDialog)
-		return (*a), c, true
-	}
-	if a.showProviderDialog {
-		col, row := a.dialogOrigin(a.providerDialog.View())
-		msg.X -= col
-		msg.Y -= row
-		d, cmd := a.providerDialog.Update((*msg))
-		a.providerDialog = d.(dialog.ProviderDialog)
-		return (*a), cmd, true
-	}
-	if a.showIntegrationDialog {
-		col, row := a.dialogOrigin(a.integrationDialog.View())
-		msg.X -= col
-		msg.Y -= row
-		d, cmd := a.integrationDialog.Update((*msg))
-		a.integrationDialog = d.(dialog.IntegrationDialog)
-		return (*a), cmd, true
-	}
-	if a.showModelDialog {
-		if a.modelDialog == nil {
-			return (*a), nil, true
-		}
-		col, row := a.modelDialogOrigin()
-		msg.X -= col
-		msg.Y -= row
-		d, cmd := a.modelDialog.Update((*msg))
-		a.modelDialog = d.(dialog.ModelDialog)
-		return (*a), cmd, true
-	}
-	if result0, result1, result2, handled := updateAppModelMouseMsgButtonTeaMouseButtonLeft(a, msg); handled {
-		return result0, result1, result2
-	}
-	return extractedResult0, extractedResult1, false
 }
 
 func updateAgentEvent(a *appModel, msg *pubsub.Event[agent.AgentEvent]) (updated tea.Model, result tea.Cmd, handled bool) {
@@ -1307,17 +966,6 @@ func (a *appModel) resize(msg tea.WindowSizeMsg) tea.Cmd {
 
 }
 
-func updateAppModelKeyMsgMatches(a *appModel, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.String() == quitKey {
-		if a.currentPage == page.LogsPage {
-			return (*a), a.moveToPage(page.ChatPage), true, true
-		}
-	} else if result0, result1, result2, result3, handled := updateAppModelKeyMsgMatchesFilepickerIsCWDFocused(a); handled {
-		return result0, result1, result2, result3
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
 func updateAppModelModelSelectedMsg(a *appModel, msg *dialog.ModelSelectedMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
 	target := msg.Agent
 	if target == "" {
@@ -1341,208 +989,6 @@ func updateAppModelModelSelectedMsg(a *appModel, msg *dialog.ModelSelectedMsg) (
 
 }
 
-func updateAppModelKeyMsgQuit(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
-	if a.pendingProviderNativeOperation() {
-		a.showQuit = false
-		return (*a), nativeOperationQuitNotice(), true
-	}
-	a.showQuit = !a.showQuit
-	if a.showHelp {
-		a.showHelp = false
-	}
-	if a.showSessionDialog {
-		a.showSessionDialog = false
-	}
-	if a.showCommandDialog {
-		a.showCommandDialog = false
-	}
-	if a.showFilepicker {
-		a.showFilepicker = false
-		a.filepicker.ToggleFilepicker(a.showFilepicker)
-	}
-	if a.showModelDialog {
-		a.modelDialog.Close()
-		a.showModelDialog = false
-	}
-	if a.showMultiArgumentsDialog {
-		a.showMultiArgumentsDialog = false
-	}
-	return (*a), nil, true
-
-}
-
-func updateAppModelKeyMsgCommands(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
-	if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showThemeDialog && !a.showFilepicker {
-		// Show commands dialog
-		if len(a.commands) == 0 {
-			return (*a), util.ReportWarn(config.Text("Nenhum comando disponível", "No commands available")), true
-		}
-		a.commandDialog.SetCommands(a.contextualCommands())
-		a.showCommandDialog = true
-		return (*a), nil, true
-	}
-	return (*a), nil, true
-
-}
-
-func updateAppModelKeyMsgModels(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
-	if a.showModelDialog {
-		a.modelDialog.Close()
-		a.showModelDialog = false
-		return (*a), nil, true
-	}
-	if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog {
-		a.showModelDialog = true
-		return (*a), a.openModelCatalog("", false), true
-	}
-	return (*a), nil, true
-
-}
-
-func updateAppModelKeyMsgSessions(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
-	if a.currentPage == page.ChatPage && !a.showQuit && !a.showPermissions && !a.showCommandDialog {
-		return (*a), a.openSessions(), true
-	}
-	return (*a), nil, true
-
-}
-
-func updateAppModelKeyMsgTheme(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
-	if !a.showQuit && !a.showPermissions && !a.showSessionDialog && !a.showCommandDialog {
-		// Show theme switcher dialog
-		a.showThemeDialog = true
-		// Theme list is dynamically loaded by the dialog component
-		return (*a), a.themeDialog.Init(), true
-	}
-	return (*a), nil, true
-
-}
-
-func routeTerminalOrSelectionKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if !a.showPermissions && !a.showHelp && !a.showQuit && !a.showSessionDialog &&
-		!a.showCommandDialog && !a.showModelDialog && !a.showInitDialog && !a.showFilepicker &&
-		!a.showThemeDialog && !a.showMultiArgumentsDialog && !a.showProviderDialog && !a.showIntegrationDialog && !a.isCompacting {
-		if focused, ok := a.pages[a.currentPage].(interface{ TerminalFocused() bool }); ok && focused.TerminalFocused() {
-			a.pages[a.currentPage], (*cmd) = a.pages[a.currentPage].Update((*msg))
-			return (*a), (*cmd), true, true
-		}
-		if selection, ok := a.pages[a.currentPage].(interface {
-			SelectionKey(tea.KeyMsg) (tea.Cmd, bool)
-		}); ok {
-			if cmd, handled := selection.SelectionKey((*msg)); handled {
-				return (*a), cmd, true, true
-			}
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func routeConnectionOrWorkspaceKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.String() != "ctrl+c" && !a.showPermissions && !a.showHelp && !a.showQuit && !a.showSessionDialog && !a.showCommandDialog && !a.showModelDialog && !a.showInitDialog && !a.showFilepicker && !a.showThemeDialog && !a.showMultiArgumentsDialog {
-		if a.showProviderDialog {
-			d, c := a.providerDialog.Update((*msg))
-			a.providerDialog = d.(dialog.ProviderDialog)
-			return (*a), c, true, true
-		}
-		if a.showIntegrationDialog {
-			d, c := a.integrationDialog.Update((*msg))
-			a.integrationDialog = d.(dialog.IntegrationDialog)
-			return (*a), c, true, true
-		}
-		if focused, ok := a.pages[a.currentPage].(interface{ WorkspaceFocused() bool }); ok && focused.WorkspaceFocused() {
-			a.pages[a.currentPage], (*cmd) = a.pages[a.currentPage].Update((*msg))
-			return (*a), (*cmd), true, true
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func routeRemotePasteKey(a *appModel, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.Type == tea.KeyCtrlV && clipboard.Remote() {
-		terminal := false
-		if p, ok := a.pages[a.currentPage].(interface{ TerminalFocused() bool }); ok {
-			terminal = p.TerminalFocused()
-		}
-		_, modal := a.mouseModal()
-		if !terminal || modal || a.showProviderDialog || a.showIntegrationDialog || a.showModelDialog || a.showSessionDialog || a.showPermissions || a.showHelp {
-			return (*a), util.ReportInfo(config.Text("Use a colagem do terminal (por exemplo Ctrl+Shift+V). O clipboard do servidor SSH não será lido.", "Use terminal paste (for example Ctrl+Shift+V). The SSH server clipboard will not be read.")), true, true
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func routeSessionOrModelKey(a *appModel, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.String() != "ctrl+c" && !a.showPermissions && !a.showQuit && !a.showHelp {
-		if a.showSessionDialog {
-			updated, c := a.sessionDialog.Update((*msg))
-			a.sessionDialog = updated.(dialog.SessionDialog)
-			return (*a), c, true, true
-		}
-		if a.showModelDialog && msg.String() != config.Shortcut("models") {
-			updated, c := a.modelDialog.Update((*msg))
-			a.modelDialog = updated.(dialog.ModelDialog)
-			return (*a), c, true, true
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func routeFocusedHelpKey(a *appModel, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if a.showHelp && msg.String() != "ctrl+c" && msg.String() != "esc" && !key.Matches((*msg), helpEsc) && !key.Matches((*msg), keys.Help) {
-		updated, c := a.help.Update((*msg))
-		a.help = updated.(dialog.HelpCmp)
-		return (*a), c, true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func routeQuitOrPermissionKey(a *appModel, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.String() != "ctrl+c" {
-		if a.showQuit {
-			updated, c := a.quit.Update((*msg))
-			a.quit = updated.(dialog.QuitDialog)
-			return (*a), c, true, true
-		}
-		if a.showPermissions {
-			updated, c := a.permissions.Update((*msg))
-			a.permissions = updated.(dialog.PermissionDialogCmp)
-			return (*a), c, true, true
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func updateAppModelMouseMsgMouseModal(a *appModel, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if m, ok := a.mouseModal(); ok && m != nil {
-		if a.pages[a.currentPage] == nil || a.status == nil {
-			return (*a), nil, true, true
-		}
-		x, y := a.dialogOrigin(m.View())
-		msg.X -= x
-		msg.Y -= y
-		if msg.X < 0 || msg.Y < 0 || msg.X >= lipgloss.Width(m.View()) || msg.Y >= lipgloss.Height(m.View()) {
-			return (*a), nil, true, true
-		}
-		updated, c := m.Update((*msg))
-		switch {
-		case a.showQuit:
-			a.quit = updated.(dialog.QuitDialog)
-		case a.showCommandDialog:
-			a.commandDialog = updated.(dialog.CommandDialog)
-		case a.showThemeDialog:
-			a.themeDialog = updated.(dialog.ThemeDialog)
-		case a.showFilepicker:
-			a.filepicker = updated.(dialog.FilepickerCmp)
-		case a.showMultiArgumentsDialog:
-			a.multiArgumentsDialog = updated.(dialog.MultiArgumentsDialogCmp)
-		case a.showInitDialog:
-			a.initDialog = updated.(dialog.InitDialogCmp)
-		}
-		return (*a), c, true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
 func newInitial(app *app.App, initial []session.Session, model *appModel) {
 	if len(initial) > 0 {
 		model.selectedSession = initial[0]
@@ -1553,33 +999,6 @@ func newInitial(app *app.App, initial []session.Session, model *appModel) {
 				model.selectedSession = sess
 			}
 		}
-	}
-}
-
-func viewShowHelp(a *appModel, appView *string) {
-	if a.showHelp {
-		bindings := layout.KeyMapToSlice(configuredKeys())
-		if p, ok := a.pages[a.currentPage].(layout.Bindings); ok {
-			bindings = append(bindings, p.BindingKeys()...)
-		}
-		if a.showPermissions {
-			bindings = append(bindings, a.permissions.BindingKeys()...)
-		}
-		if a.currentPage == page.LogsPage {
-			bindings = append(bindings, logsKeyReturnKey)
-		}
-		bindings = append(bindings, helpEsc)
-		a.help.SetBindings(bindings)
-
-		overlay := a.help.View()
-		col, row := a.dialogOrigin(overlay)
-		(*appView) = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			(*appView),
-			true,
-		)
 	}
 }
 
@@ -1598,15 +1017,6 @@ func finishAgentEvent(a *appModel, payload *agent.AgentEvent) (extractedResult0 
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateAppModelMouseMsgShowPermissionsShowHelpShowQuit(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if a.showPermissions || a.showHelp || a.showQuit ||
-		a.showCommandDialog || a.showInitDialog ||
-		a.showFilepicker || a.showThemeDialog || a.showMultiArgumentsDialog || a.isCompacting {
-		return (*a), nil, true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
 func newCommandsBuiltins(model *appModel) {
 	for _, entry := range commands.Builtins {
 		id := strings.TrimSpace(entry.ID)
@@ -1615,45 +1025,6 @@ func newCommandsBuiltins(model *appModel) {
 		}
 		model.RegisterCommand(dialog.Command{ID: id, Title: entry.Title, Description: entry.Description, Handler: func(dialog.Command) tea.Cmd { return util.CmdHandler(page.WorkspaceCommandMsg{Command: id}) }})
 	}
-}
-
-func updateAppModelKeyMsgMatchesFilepickerIsCWDFocused(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, extractedResult3 bool, handled bool) {
-	if !a.filepicker.IsCWDFocused() {
-		if a.showQuit {
-			a.showQuit = !a.showQuit
-			return (*a), nil, true, true, true
-		}
-		if a.showHelp {
-			a.showHelp = !a.showHelp
-			return (*a), nil, true, true, true
-		}
-		if a.showInitDialog {
-			a.showInitDialog = false
-			// Mark the project as initialized without running the command
-			if err := config.MarkProjectInitialized(); err != nil {
-				return (*a), util.ReportError(err), true, true, true
-			}
-			return (*a), nil, true, true, true
-		}
-		if a.showFilepicker {
-			a.showFilepicker = false
-			a.filepicker.ToggleFilepicker(a.showFilepicker)
-			return (*a), nil, true, true, true
-		}
-		if a.currentPage == page.LogsPage {
-			return (*a), a.moveToPage(page.ChatPage), true, true, true
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, extractedResult3, false
-}
-
-func updateAppModelMouseMsgButtonTeaMouseButtonLeft(a *appModel, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if a.currentPage == page.ChatPage && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft &&
-		msg.Y == lipgloss.Height(a.pages[a.currentPage].View()) {
-		cmd := a.footerClick(msg.X)
-		return (*a), cmd, true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
 func routeSessionCaseChatSessionClearedMsg(a *appModel) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {

@@ -45,6 +45,10 @@ func toMarkdown(content string, _ bool, width int) string {
 }
 
 func renderMessage(msg string, isUser bool, _ bool, width int, info ...string) string {
+	return renderMessageWithCache(msg, isUser, width, nil, info...)
+}
+
+func renderMessageWithCache(msg string, isUser bool, width int, cache *styles.MarkdownCache, info ...string) string {
 	t := theme.CurrentTheme()
 
 	style := styles.BaseStyle().
@@ -62,7 +66,11 @@ func renderMessage(msg string, isUser bool, _ bool, width int, info ...string) s
 	if c := config.Get(); c != nil && c.TUI.ProseWidth > 0 {
 		measure = c.TUI.ProseWidth
 	}
-	parts := []string{styles.ForceReplaceBackgroundWithLipgloss(styles.RenderMarkdownBlocks(msg, width, measure), t.Background())}
+	markdown := styles.RenderMarkdownBlocks
+	if cache != nil {
+		markdown = cache.Render
+	}
+	parts := []string{styles.ForceReplaceBackgroundWithLipgloss(markdown(msg, width, measure), t.Background())}
 
 	// Remove newline at the end
 	parts[0] = strings.TrimSuffix(parts[0], "\n")
@@ -130,6 +138,7 @@ func renderAssistantMessage(
 	isSummary bool,
 	width int,
 	position int,
+	markdown ...*styles.MarkdownCache,
 ) []uiMessage {
 	messages := []uiMessage{}
 	content := msg.Content().String()
@@ -178,7 +187,11 @@ func renderAssistantMessage(
 			info = append(info, baseStyle.Width(width-1).Foreground(t.TextMuted()).Render(config.Text(" (resumo)", " (summary)")))
 		}
 
-		content = renderMessage(content, false, true, width, info...)
+		var cache *styles.MarkdownCache
+		if len(markdown) > 0 {
+			cache = markdown[0]
+		}
+		content = renderMessageWithCache(content, false, width, cache, info...)
 		messages = append(messages, uiMessage{
 			ID:          msg.ID,
 			messageType: assistantMessageType,

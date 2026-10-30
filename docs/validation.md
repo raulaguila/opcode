@@ -912,3 +912,77 @@ Consulte [metodologia e comandos](performance.md) e os
 [dados das medições e limites](evidence/2026-10-30-allocation-performance.json).
 As verificações ao vivo usaram somente Ollama local; APIs privadas/cloud e
 execução nativa Windows/macOS não foram exercitadas nesta rodada.
+
+
+## Segunda rodada da auditoria — 30/10/2026
+
+Os nove itens foram implementados: continuação da indexação com pendências
+estruturais separadas de expiração e orçamento cooperativo; hash limitado dos
+hits; páginas nativas do SQLite para apresentação; reconciliação de eventos
+recebidos durante a consulta; reaproveitamento limitado de parágrafos; projeção
+tipada de imagens; tokenizer privado com contagem exata reutilizável; comparação
+pareada no CI; separação dos handlers de teclado, mouse e view da TUI.
+
+Os testes de indexação cobrem 512 arquivos com expiração forçada entre os lotes,
+progresso sem nova descoberta, troca de política, gerações mais novas de eventos,
+contagem conservadora, orçamento por bytes/tempo e arquivo desatualizado que
+cresce até 17 MiB sem esconder os hits válidos. Autorizações e hashes continuam
+sendo verificados. Não foram removidos limites ou permissões para obter ganho.
+
+O histórico de apresentação começa com até 128 mensagens, incluindo projeção
+SQL que omite dados binários e continuação opaca. `List` e `Get` continuam
+completos para o agente. Gaps/overflow exigem releitura autoritativa, e eventos
+normais ao vivo também usam a projeção da UI. Busca/seleção carregam as páginas
+necessárias e podem ser canceladas sem reaparecer depois. Regressões preservam
+turnos longos, desempate por inserção, cursor excluído, rascunhos, tarefas filhas,
+imutabilidade do snapshot e separação entre apresentação e evidência.
+
+Foram comparados 32 casos contra `31bc991`, com 14 arquivos de fixture idênticos,
+Go 1.27.3, Linux/amd64 e GOMAXPROCS=2. Todas as compilações terminaram antes de
+medir; três pares por pacote alternaram a ordem antes/depois, sem testes ou
+inferência concorrentes. Medianas de B/op:
+
+| Caso | Antes | Depois | Variação |
+| --- | ---: | ---: | ---: |
+| Tokenizer conhecido, pedido estável de 160 kB | 10.253.843 | 199.466 | −98,05% |
+| Tokenizer conhecido, histórico alterado | 10.225.872 | 10.180.748 | −0,44% |
+| Preparação de imagem de aproximadamente 1 MiB | 7.397.545 | 2.897.019 | −60,84% |
+| Streaming com parágrafos estáveis | 1.225.595 | 483.141 | −60,58% |
+| Conversa SQLite com 1.000 mensagens | 12.497.793 | 10.504.385 | −15,95% |
+| Conversa SQLite com 100 mensagens | 8.018.995 | 8.244.718 | +2,81% |
+| Busca completa em 2.000 arquivos | 1.147.149 | 1.124.588 | −1,97% |
+| Atualização de um arquivo | 61.046 | 60.860 | −0,30% |
+
+O gate manteve o limite de 10% em bytes e objetos alocados e passou nos 32 casos.
+Tempo não tem gate fixo: nesta amostragem, a conversa SQLite pequena ficou
+13,1% mais lenta, enquanto a de 1.000 mensagens ficou 19,9% mais rápida. A busca
+completa ficou praticamente neutra. Não se declara ganho geral de inferência.
+O reuso do tokenizer estável não elimina o custo de contar histórico alterado.
+
+Rodadas iniciais com dez operações detectaram regressões reais na configuração
+de estilo, cópia de histórico e rechecagem de uma geração ainda não processada;
+elas foram corrigidas. Outra rodada mostrou oscilação do baseline JSON entre
+192 e 336 kB/op. A amostragem passou a 100 operações nos dois lados e no CI,
+sem alterar o limite de 10%, casos ou número mínimo de amostras. Os resultados
+intermediários também foram preservados na evidência.
+
+Um teste novo detectou ainda desempate variável de cores pelo highlighter de
+256 cores. A fixture usa Monokai para evitar cores equidistantes e mantém a
+comparação byte a byte para todo prefixo, inclusive código, nas duas modalidades
+de cor. Cinco repetições com `-race` passaram; a aplicação não teve sua paleta
+alterada para aprovar o teste. As verificações de citação permanecem intactas.
+
+Passaram as suítes completas comum e integration com `-race -p 1`, vet e
+Staticcheck com/sem integration, complexidade com resolução exata de recursão,
+inventário de linguagens, actionlint nos quatro workflows e build. Nenhuma função
+excedeu 15. Compilações cruzadas Windows/amd64 e macOS/arm64 sem CGO passaram.
+
+O fluxo completo em PTY com Ollama `llama3.1:8b` passou em 25,69 s:
+leitura factual e citações, pergunta/entrada humana, aprovação explícita,
+comando único em PTY, saída ao vivo, instrução durante execução e ausência de
+replay. Claro/escuro/sem cor passaram. O aplicativo foi o build normal de produção;
+o runner e as suítes usaram `-race`. Não houve acesso a APIs privadas/cloud nem
+execução nativa Windows/macOS nesta rodada.
+
+Veja [metodologia](performance.md) e
+[amostras, comparação e limites](evidence/2026-10-30-followup-performance.json).

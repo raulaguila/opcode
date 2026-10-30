@@ -10,7 +10,6 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
-	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
@@ -35,30 +34,33 @@ func loadingPreviewFixture(t *testing.T) *messagesCmp {
 	return m
 }
 
-func TestSustainedInitialReloadInvalidationsKeepLiveTextVisible(t *testing.T) {
+func TestSustainedInitialStreamCompletesHistoryWithOrderedJournal(t *testing.T) {
 	history := &renderHistory{histories: map[string][]message.Message{"A": benchmarkSessionMessages(2)}}
 	m := NewMessagesCmp(&app.App{Messages: history}).(*messagesCmp)
 	m.SetSize(80, 20)
 	t.Cleanup(m.resetMessageReconciliation)
-	cmd := m.SetSession(session.Session{ID: "A"})
+	snapshot := m.SetSession(session.Session{ID: "A"})().(messageReloadMsg)
+	var text string
 	for index := range 12 {
-		stale := cmd().(messageReloadMsg)
-		text := fmt.Sprintf("Visible stream chunk %d.", index)
+		text = fmt.Sprintf("Visible stream chunk %d.", index)
 		event := previewEvent(text)
 		if index == 0 {
 			event.Type = pubsub.CreatedEvent
 		}
 		m.Update(event)
-		cmd = m.acceptMessageReload(stale)
-		require.NotNil(t, cmd, "the authoritative version guard still retries every stale snapshot")
 		require.True(t, m.rendering)
-		require.Contains(t, ansi.Strip(m.View()), text, "the stream must remain visible without a quiet query")
-		require.Contains(t, m.View(), config.Text("Carregando conversa", "Loading conversation"))
-		require.Empty(t, m.messages, "presentation previews must not become authoritative history")
-		require.Empty(t, m.transcriptLines)
-		require.Empty(t, m.hits)
+		require.Contains(t, ansi.Strip(m.View()), text)
+		require.Empty(t, m.messages, "preview remains presentation-only until a successful snapshot")
 		require.Empty(t, m.LatestResponse())
 	}
+	runSQLiteHistoryCommand(m, m.acceptMessageReload(snapshot))
+	require.False(t, m.rendering, "a complete event journal must not wait for a quiet stream")
+	require.False(t, m.reconcile.needed)
+	require.Equal(t, 1, history.calls, "sustained ordered events do not trigger another full read")
+	require.Len(t, m.messages, 3)
+	require.Equal(t, text, m.messages[2].Content().Text)
+	require.Equal(t, text, m.LatestResponse())
+	require.Empty(t, m.loadingPreview)
 }
 
 func TestVersionChangedDuringInitialTimeoutReportsWithoutRetrySpin(t *testing.T) {

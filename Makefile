@@ -1,4 +1,4 @@
-.PHONY: test test-integration vet build release-local complexity staticcheck quality bench-performance bench-compare
+.PHONY: test test-integration vet build release-local complexity staticcheck quality bench-performance bench-compile bench-compare
 
 test:
 	go test ./...
@@ -19,9 +19,15 @@ staticcheck:
 
 quality: complexity staticcheck vet test test-integration
 
-# Offline component fixtures only. Compare logs from the same fixture/toolchain.
+# Identical offline fixtures/toolchain are required for paired comparisons.
+BENCH_PACKAGES := ./internal/llm/tools ./internal/llm/agent ./internal/llm/provider ./internal/message ./internal/tui/components/chat ./internal/tui/styles
+BENCH_PATTERN := Benchmark(WorkspaceDigest|WarmCodeIndexSearch|FullWarmCodeIndexSearch|CitationCurrent|IndexRefreshChanges|ContextPreparation|PreparedImageBudget|AuditKnownTokenizer|ConversationProjection|AuditChat|SQLiteChatSessionLoad|TranscriptRender|AuditMarkdown)
+
+bench-compile:
+	OPCODE_LIVE_TESTS= OPCODE_LIVE_OLLAMA= go test -p 1 -run '^$$' $(BENCH_PACKAGES)
+
 bench-performance:
-	OPCODE_LIVE_TESTS= OPCODE_LIVE_OLLAMA= go test -p 1 -run '^$$' -bench 'Benchmark(WorkspaceDigest|WarmCodeIndexSearch|CitationCurrent|IndexRefreshChanges|ContextPreparation|PreparedImageBudget|ConversationProjection|AuditChat|TranscriptRender|AuditMarkdown)' -benchmem -benchtime=10x -count=3 ./internal/llm/tools ./internal/llm/agent ./internal/llm/provider ./internal/message ./internal/tui/components/chat ./internal/tui/styles
+	OPCODE_LIVE_TESTS= OPCODE_LIVE_OLLAMA= go test -p 1 -run '^$$' -bench '$(BENCH_PATTERN)' -benchmem -benchtime=100x -count=3 $(BENCH_PACKAGES)
 
 bench-compare:
 	go run ./scripts/bench-compare -before '$(BEFORE)' -after '$(AFTER)'

@@ -22,21 +22,24 @@ const indexReconcileInterval = 60 * time.Second
 const maxIndexDirtyPaths = 20000
 
 type indexWatchState struct {
-	covered, known  bool
-	unavailable     bool
-	epoch, sequence uint64
-	dirty           map[string]uint64
-	inventory       map[string]bool
-	policy          string
-	reconciled      time.Time
+	covered, known    bool
+	unavailable       bool
+	epoch, sequence   uint64
+	dirty             map[string]uint64
+	inventory         map[string]bool
+	policy            string
+	reconciled        time.Time
+	pending           []indexPending
+	structuralPending int
 }
 
 type indexRefreshPlan struct {
-	watcher         *IndexWatcher
-	epoch, sequence uint64
-	paths           []string
-	partial         bool
-	policy          string
+	watcher                     *IndexWatcher
+	epoch, sequence             uint64
+	paths                       []string
+	partial                     bool
+	policy                      string
+	queueCount, queueStructural int
 }
 
 func indexRefreshPolicy() string {
@@ -47,6 +50,10 @@ func indexRefreshPolicy() string {
 }
 
 func planIndexRefresh(root string, incremental bool) indexRefreshPlan {
+	return planIndexRefreshLimit(root, incremental, 0)
+}
+
+func planIndexRefreshLimit(root string, incremental bool, batchLimit int) indexRefreshPlan {
 	plan := indexRefreshPlan{policy: indexRefreshPolicy()}
 	value, ok := indexWatchers.Load(root)
 	if !ok {
@@ -57,17 +64,43 @@ func planIndexRefresh(root string, incremental bool) indexRefreshPlan {
 	defer w.mu.Unlock()
 	plan.watcher, plan.epoch, plan.sequence = w, w.state.epoch, w.state.sequence
 	state := &w.state
-	plan.partial = incremental && state.covered && state.known && state.policy == plan.policy && time.Since(state.reconciled) < indexReconcileInterval
+	continuing := len(state.pending) > 0
+	plan.partial = incremental && state.covered && state.policy == plan.policy && (state.known || continuing) && (continuing || time.Since(state.reconciled) < indexReconcileInterval)
 	if plan.partial {
-		for path := range state.dirty {
-			plan.paths = append(plan.paths, path)
-		}
-		sort.Strings(plan.paths)
+		plan.selectPaths(state, batchLimit)
 	}
 	return plan
 }
 
-func (p indexRefreshPlan) finish(paths []string, stats indexRefresh, err error) {
+func (p *indexRefreshPlan) selectPaths(state *indexWatchState, limit int) {
+	for path := range state.dirty {
+		p.paths = append(p.paths, path)
+	}
+	sort.Strings(p.paths)
+	if limit > 0 && len(p.paths) > limit {
+		p.paths = p.paths[:limit]
+	}
+	selected := make(map[string]bool, len(p.paths))
+	for _, path := range p.paths {
+		selected[path] = true
+	}
+	for _, pending := range state.pending {
+		if limit > 0 && len(p.paths) >= limit {
+			break
+		}
+		p.queueCount++
+		if !pending.revalidation {
+			p.queueStructural++
+		}
+		if selected[pending.path] {
+			continue
+		}
+		p.paths = append(p.paths, pending.path)
+		selected[pending.path] = true
+	}
+}
+
+func (p indexRefreshPlan) finish(paths []string, stats *indexRefresh, err error) {
 	if p.watcher == nil {
 		return
 	}
@@ -77,37 +110,68 @@ func (p indexRefreshPlan) finish(paths []string, stats indexRefresh, err error) 
 	state := &w.state
 	if err != nil {
 		state.known = false
+		state.pending = nil
 		return
 	}
 	if p.epoch != state.epoch {
 		return
 	}
-	if p.partial && stats.Pending > 0 {
-		state.known = false
-		return
-	}
-	if !p.partial {
-		state.inventory = make(map[string]bool, len(paths))
-		for _, path := range paths {
-			state.inventory[path] = true
-		}
-		state.known, state.policy, state.reconciled = stats.Pending == 0, p.policy, time.Now()
+	if p.partial {
+		p.finishContinuation(state, stats)
+	} else {
+		p.finishSnapshot(state, paths, stats)
 	}
 	p.consumeDirty(state)
+	if p.partial {
+		stats.Pending = len(state.pending) + len(state.dirty)
+	}
+}
+
+func (p indexRefreshPlan) finishSnapshot(state *indexWatchState, paths []string, stats *indexRefresh) {
+	state.inventory = make(map[string]bool, len(paths))
+	for _, path := range paths {
+		state.inventory[path] = true
+	}
+	state.pending, state.structuralPending = stats.deferred, stats.structuralPending
+	state.known, state.policy, state.reconciled = stats.structuralPending == 0, p.policy, time.Now()
+}
+
+func (p indexRefreshPlan) finishContinuation(state *indexWatchState, stats *indexRefresh) {
+	state.pending = append(state.pending[p.queueCount:], stats.deferred...)
+	if len(state.pending) == 0 {
+		state.pending = nil
+	}
+	state.structuralPending += stats.structuralPending - p.queueStructural
+	state.known = state.structuralPending == 0
 }
 
 func (p indexRefreshPlan) consumeDirty(state *indexWatchState) {
-	for path, sequence := range state.dirty {
-		if sequence > p.sequence {
-			continue
-		}
-		if p.partial {
-			if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() && retrievalPathAllowed(p.watcher.root, path, nil) {
-				state.inventory[path] = true
-			} else {
-				delete(state.inventory, path)
+	if !p.partial {
+		for path, sequence := range state.dirty {
+			if sequence <= p.sequence {
+				delete(state.dirty, path)
 			}
 		}
+		return
+	}
+	for _, path := range p.paths {
+		p.consumePath(state, path)
+	}
+}
+
+func (p indexRefreshPlan) consumePath(state *indexWatchState, path string) {
+	sequence := state.dirty[path]
+	// A newer generation remains queued. Retain an already counted entry until
+	// that generation is inspected; new paths still need accounting now.
+	if sequence > p.sequence && state.inventory[path] {
+		return
+	}
+	if info, err := os.Lstat(path); err == nil && info.Mode().IsRegular() && retrievalPathAllowed(p.watcher.root, path, nil) {
+		state.inventory[path] = true
+	} else {
+		delete(state.inventory, path)
+	}
+	if sequence <= p.sequence {
 		delete(state.dirty, path)
 	}
 
@@ -143,6 +207,8 @@ func (w *IndexWatcher) invalidate() {
 	w.mu.Lock()
 	w.state.epoch++
 	w.state.known, w.state.covered = false, false
+	w.state.pending = nil
+	w.state.structuralPending = 0
 	clear(w.state.dirty)
 	w.mu.Unlock()
 }
@@ -176,6 +242,8 @@ func (w *IndexWatcher) recordEvent(event fsnotify.Event) {
 	if len(w.state.dirty) >= maxIndexDirtyPaths {
 		w.state.epoch++
 		w.state.known = false
+		w.state.pending = nil
+		w.state.structuralPending = 0
 		clear(w.state.dirty)
 		return
 	}
@@ -295,4 +363,15 @@ func (w *IndexWatcher) receiveWatchEvent(event fsnotify.Event, ok bool) bool {
 	}
 	w.recordEvent(event)
 	return true
+}
+
+// Finish the captured bounded pass before scheduling the next TTL pass. Expiry
+// is revalidation work, not a structural freshness failure or a reason to restart.
+func (w *IndexWatcher) reconcileWhenIdle() {
+	w.mu.Lock()
+	continuing := len(w.state.pending) > 0
+	w.mu.Unlock()
+	if !continuing {
+		w.invalidate()
+	}
 }

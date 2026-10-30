@@ -14,7 +14,16 @@ import (
 	"unicode/utf8"
 )
 
-type indexRefresh struct{ Updated, Reused, Read, Pending int }
+type indexRefresh struct {
+	Updated, Reused, Read, Pending int
+	structuralPending              int
+	deferred                       []indexPending
+}
+
+type indexPending struct {
+	path         string
+	revalidation bool
+}
 
 // Binary assets do not consume the text allowance. Bound actual scan I/O
 // separately, so a workspace of non-text files cannot cause unbounded reads.
@@ -30,9 +39,10 @@ func refreshSearchCodeIndex(ctx context.Context, db *sql.DB, root string) (index
 }
 
 func refreshPlannedIndex(ctx context.Context, db *sql.DB, root string, incremental bool) (stats indexRefresh, err error) {
-	plan := planIndexRefresh(root, incremental)
+	batchLimit, _ := ctx.Value(indexBatchLimitKey{}).(int)
+	plan := planIndexRefreshLimit(root, incremental, batchLimit)
 	paths := plan.paths
-	defer func() { plan.finish(paths, stats, err) }()
+	defer func() { plan.finish(paths, &stats, err) }()
 	if plan.partial {
 		if err = plan.checkFileLimit(root); err != nil {
 			return stats, err
@@ -74,6 +84,7 @@ func refreshIndexPaths(ctx context.Context, db *sql.DB, root string, paths []str
 	}
 	defer statements.Close()
 	refresh := indexRefresher{statements: statements, redactor: newCredentialRedactor(secrets), policySnapshot: newDiscoveryPolicy(), ctx: ctx, tx: tx, root: root, partial: partial, batchLimit: batchLimit, now: time.Now().Unix(), policy: indexDigest("parser-v5\x00" + strings.Join(secrets, "\x00"))}
+	refresh.work, _ = ctx.Value(indexBatchWorkKey{}).(indexBatchWork)
 	if partial {
 		// Stamps begin with the verified byte size; this projection also works with
 		// existing databases and avoids keeping database-derived metadata globally.
@@ -97,6 +108,7 @@ type indexRefresher struct {
 	policySnapshot        *discoveryPolicy
 	root, policy          string
 	batchLimit, processed int
+	work                  indexBatchWork
 	now, total, scanned   int64
 	stats                 indexRefresh
 	partial               bool
@@ -177,9 +189,15 @@ func (r *indexRefresher) refreshPending() error {
 		}
 		return a.verified < b.verified
 	})
+	started := time.Now()
 	for _, source := range r.pending {
-		if r.processed >= r.batchLimit {
+		if r.batchExhausted(source, started) {
 			r.stats.Pending++
+			revalidation := source.revalidationOnly(r.policy)
+			if !revalidation {
+				r.stats.structuralPending++
+			}
+			r.stats.deferred = append(r.stats.deferred, indexPending{path: source.path, revalidation: revalidation})
 			continue
 		}
 		if err := r.refreshSource(source); err != nil {
@@ -187,6 +205,21 @@ func (r *indexRefresher) refreshPending() error {
 		}
 	}
 	return nil
+}
+
+// Yield before the next file, after at least one read, so slow parsing still
+// commits progress. The outer context and hard scan/text quotas remain limits.
+func (r *indexRefresher) batchExhausted(source *indexedSource, started time.Time) bool {
+	if r.processed >= r.batchLimit {
+		return true
+	}
+	if r.stats.Read == 0 {
+		return false
+	}
+	if r.work.bytes > 0 && r.scanned+source.bytes > r.work.bytes {
+		return true
+	}
+	return r.work.duration > 0 && time.Since(started) >= r.work.duration
 }
 
 func (r *indexRefresher) loadPrevious(source *indexedSource) error {

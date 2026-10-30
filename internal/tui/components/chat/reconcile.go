@@ -10,15 +10,19 @@ import (
 )
 
 type messageReconciliation struct {
-	generation, version uint64
-	pending, needed     bool
-	cancel              context.CancelFunc
+	generation, version  uint64
+	pending, needed, gap bool
+	cancel               context.CancelFunc
+	journal              []journalEvent
+	bytes                int
 }
 type messageReloadMsg struct {
 	sessionID           string
 	generation, version uint64
 	messages            []message.Message
 	err                 error
+	page                *message.HistoryPage
+	older               bool
 }
 
 func (m *messagesCmp) resetMessageReconciliation() {
@@ -37,19 +41,38 @@ func (m *messagesCmp) reconcileMessageEvent(event pubsub.Event[message.Message])
 	}
 	return m.requestMessageReload()
 }
-func (m *messagesCmp) requestMessageReload() tea.Cmd {
+func (m *messagesCmp) requestMessageReload() tea.Cmd { return m.requestHistoryRead(false) }
+
+func (m *messagesCmp) requestHistoryRead(older bool) tea.Cmd {
 	if m.reconcile.pending || m.app == nil || m.app.Messages == nil || m.session.ID == "" {
 		return nil
 	}
 	m.reconcile.pending = true
 	m.reconcile.generation++
+	m.reconcile.journal, m.reconcile.bytes, m.reconcile.gap = nil, 0, false
 	generation, version, id, service := m.reconcile.generation, m.reconcile.version, m.session.ID, m.app.Messages
+	before, all := m.history.before, m.history.all || m.history.paged && !m.history.more
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	m.reconcile.cancel = cancel
 	return func() tea.Msg {
 		defer cancel()
-		messages, err := service.List(ctx, id)
-		return messageReloadMsg{id, generation, version, messages, err}
+		var page message.HistoryPage
+		var paged bool
+		var err error
+		if older {
+			paged = true
+			page, err = service.(message.HistoryPager).ListPage(ctx, id, before, transcriptPageMessages)
+			if err == nil {
+				err = validateOlderPage(before, page)
+			}
+		} else {
+			page, paged, err = readTranscriptHistory(ctx, service, id, before, all)
+		}
+		result := messageReloadMsg{sessionID: id, generation: generation, version: version, messages: page.Messages, err: err, older: older}
+		if paged {
+			result.page = &page
+		}
+		return result
 	}
 }
 func (m *messagesCmp) acceptMessageReload(result messageReloadMsg) tea.Cmd {
@@ -58,33 +81,66 @@ func (m *messagesCmp) acceptMessageReload(result messageReloadMsg) tea.Cmd {
 	}
 	m.reconcile.pending = false
 	if result.err != nil {
-		if m.rendering {
-			m.rendering = false
-			m.loadingPreview = loadingPreview{}
-			return util.ReportError(result.err)
-		}
-		return nil
-	} // Retry on the next message; never spin on an unavailable store.
-	if result.version != m.reconcile.version {
+		m.rendering = false
+		m.loadingPreview = loadingPreview{}
+		m.reconcile.journal = nil
+		return util.ReportError(result.err)
+	}
+	messages := result.messages
+	if result.older {
+		messages = prependHistory(messages, m.messages)
+	}
+	messages, complete := m.reconcileSnapshot(messages, result.version)
+	if !complete {
+		m.reconcile.needed = true
 		return m.requestMessageReload()
 	}
+	m.reconcile.journal, m.reconcile.bytes = nil, 0
+	return m.installHistorySnapshot(result, messages)
+}
+
+func (m *messagesCmp) installHistorySnapshot(result messageReloadMsg, messages []message.Message) tea.Cmd {
 	m.loadingPreview = loadingPreview{}
 	initial := m.rendering
 	m.rendering = false
 	m.reconcile.needed = false
-	m.messages = result.messages
+	m.messages = messages
+	if result.page != nil {
+		m.history.before, m.history.more, m.history.paged = result.page.Before, result.page.More, true
+	}
 	m.currentMsgID = ""
 	if len(m.messages) > 0 {
 		m.currentMsgID = m.messages[len(m.messages)-1].ID
 	}
-	offset, follow := m.viewport.YOffset, (initial || m.viewport.AtBottom()) && !m.selection.engaged() && !m.find.open
+	offset, lines := m.viewport.YOffset, len(m.transcriptLines)
+	follow := !result.older && (initial || m.viewport.AtBottom()) && !m.selection.engaged() && !m.find.open
+	if result.older {
+		m.history.first = ""
+	}
 	m.rerender()
 	if follow {
 		m.viewport.GotoBottom()
 	} else {
+		if result.older {
+			offset += len(m.transcriptLines) - lines
+		}
 		m.viewport.SetYOffset(offset)
 	}
-	return m.requestNestedHistory()
+	return tea.Batch(m.continueHistoryRead(), m.requestNestedHistory())
+}
+
+func prependHistory(older, current []message.Message) []message.Message {
+	seen := make(map[string]bool, len(current))
+	for _, item := range current {
+		seen[item.ID] = true
+	}
+	result := make([]message.Message, 0, len(older)+len(current))
+	for _, item := range older {
+		if !seen[item.ID] {
+			result = append(result, item)
+		}
+	}
+	return append(result, current...)
 }
 func (m *messagesCmp) nestedMessageEvent(event pubsub.Event[message.Message]) tea.Cmd {
 	if event.Payload.SessionID != m.session.ID {

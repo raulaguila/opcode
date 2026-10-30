@@ -95,8 +95,9 @@ type providerClient interface {
 }
 
 type baseProvider struct {
-	options providerClientOptions
-	client  providerClient
+	options      providerClientOptions
+	client       providerClient
+	tokenCounter *requestTokenCounter
 }
 
 func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption) (Provider, error) {
@@ -114,7 +115,7 @@ func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption
 	if err != nil {
 		return nil, err
 	}
-	return &baseProvider{options: options, client: client}, nil
+	return &baseProvider{options: options, client: client, tokenCounter: newRequestTokenCounter(options.model)}, nil
 }
 
 func (p *baseProvider) cleanMessages(messages []message.Message) (cleaned []message.Message) {

@@ -15,7 +15,11 @@ func (p *baseProvider) cloneRequest(options providerClientOptions) (Provider, er
 	if !ok {
 		return nil, fmt.Errorf("provider does not support request-scoped options")
 	}
-	return &baseProvider{options: options, client: cloner.cloneRequest(options)}, nil
+	counter := p.tokenCounter
+	if !counter.matches(options.model) {
+		counter = newRequestTokenCounter(options.model)
+	}
+	return &baseProvider{options: options, client: cloner.cloneRequest(options), tokenCounter: counter}, nil
 }
 
 // Constructors may normalize protocol-specific model IDs (e.g. Bedrock). Only

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -332,8 +333,11 @@ func overlappingIndexHit(items []codeIndexHit, candidate codeIndexHit) bool {
 	return false
 }
 func verifiedIndexDigest(ctx context.Context, path string, verified map[string]string) (string, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return "", false, err
+	}
 	if digest, ok := verified[path]; ok {
-		return digest, true, nil
+		return digest, digest != "", nil
 	}
 	resolved, err := authorizeFile(ctx, path, "read")
 	if err != nil {
@@ -342,11 +346,50 @@ func verifiedIndexDigest(ctx context.Context, path string, verified map[string]s
 	if resolved != path {
 		return "", false, nil
 	}
-	raw, err := readFile(ctx, resolved)
+	digest, allowed, err := boundedIndexDigest(ctx, resolved)
+	if err == nil {
+		verified[path] = digest
+	}
+	return digest, allowed, err
+}
+
+func boundedIndexDigest(ctx context.Context, path string) (string, bool, error) {
+	file, err := openFile(ctx, path)
 	if err != nil {
 		return "", false, err
 	}
-	digest := indexDigest(string(raw))
-	verified[path] = digest
-	return digest, true, nil
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return "", false, err
+	}
+	limit := indexLimits().MaxFileBytes
+	if !info.Mode().IsRegular() || info.Size() > limit {
+		return "", false, nil
+	}
+	return streamIndexDigest(ctx, io.LimitReader(file, limit+1), limit, min(info.Size()+1, 32<<10))
+}
+
+func streamIndexDigest(ctx context.Context, reader io.Reader, limit, bufferSize int64) (string, bool, error) {
+	buffer := make([]byte, bufferSize)
+	digest := sha256.New()
+	var total int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", false, err
+		}
+		n, err := reader.Read(buffer)
+		total += int64(n)
+		if total > limit {
+			return "", false, nil
+		}
+		digest.Write(buffer[:n])
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", false, err
+		}
+	}
+	return hex.EncodeToString(digest.Sum(nil)), true, ctx.Err()
 }

@@ -108,7 +108,7 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selection = textSelection{}
 		m.transcriptLines = nil
 		m.viewport.SetLines(nil)
-		m.history = transcriptHistory{}
+		m.resetTranscriptHistory()
 		m.session = session.Session{}
 		m.messages = make([]message.Message, 0)
 		m.currentMsgID = ""
@@ -132,7 +132,8 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.MouseMsg:
 		if msg.Button == tea.MouseButtonLeft || msg.Action == tea.MouseActionRelease {
-			return m, m.transcriptMouse(msg)
+			cmd := m.transcriptMouse(msg)
+			return m, tea.Batch(cmd, m.HistoryCommand())
 		}
 		cmds = append(cmds, m.updateTranscriptViewport(msg))
 
@@ -222,7 +223,8 @@ func (m *messagesCmp) SetSession(session session.Session) tea.Cmd {
 	m.messages = nil
 	m.currentMsgID = ""
 	m.viewport.SetLines(nil)
-	m.history = transcriptHistory{initial: true}
+	m.resetTranscriptHistory()
+	m.history.initial = true
 	m.rendering = true
 	m.reconcile.needed = true
 	cmd := m.requestMessageReload()
@@ -260,9 +262,8 @@ func NewMessagesCmp(app *app.App) tea.Model {
 }
 
 func (m *messagesCmp) updateMessageEvent(event pubsub.Event[message.Message]) (tea.Cmd, tea.Cmd) {
-	if event.Payload.SessionID == m.session.ID || event.ReconcileRequired {
-		m.reconcile.version++
-	}
+	event.Payload = message.HistorySnapshot(event.Payload)
+	m.journalMessageEvent(event)
 	if m.rendering {
 		m.updateLoadingPreview(event)
 	} else {
@@ -275,6 +276,12 @@ func updateMessagesCmpMessage(m *messagesCmp, msg *pubsub.Event[message.Message]
 	needsRerender := false
 	if msg.Payload.SessionID == m.session.ID {
 		m.invalidateToolResponses(msg.Payload)
+		if msg.Type == pubsub.DeletedEvent {
+			before := len(m.messages)
+			m.messages = applyHistoryEvent(m.messages, *msg)
+			m.invalidateMessageCache(msg.Payload.ID)
+			needsRerender = before != len(m.messages)
+		}
 	}
 	updateMessagesCmpMessageTypePubsubCreatedEvent(m, msg, &needsRerender)
 	if needsRerender {
@@ -294,7 +301,7 @@ func updateMessagesCmpMessage(m *messagesCmp, msg *pubsub.Event[message.Message]
 
 func updateMessagesCmpKeyMsg(m *messagesCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
 	if m.TranscriptKey((*msg)) {
-		return m, nil, true
+		return m, m.HistoryCommand(), true
 	}
 	if msg.String() == "alt+end" {
 		m.ClearSelection()

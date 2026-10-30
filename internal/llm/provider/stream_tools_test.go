@@ -90,7 +90,7 @@ func TestGeminiOlderModelsDoNotReceiveInventedCallIDs(t *testing.T) {
 	history := []message.Message{{Role: message.Assistant, Parts: []message.ContentPart{call, message.Finish{ProviderState: result.ProviderState}}}, {Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Content: `{"number":9007199254740993}`}}}}
 	converted := client.convertMessages(history)
 	require.Len(t, converted, 2)
-	require.NotContains(t, string(converted[1].Parts[0]), `"id"`)
-	require.Contains(t, string(converted[1].Parts[0]), `9007199254740993`)
-	require.Contains(t, string(converted[1].Parts[0]), `"name":"inspect"`)
+	require.NotContains(t, string(rawJSON(converted[1].Parts[0])), `"id"`)
+	require.Contains(t, string(rawJSON(converted[1].Parts[0])), `9007199254740993`)
+	require.Contains(t, string(rawJSON(converted[1].Parts[0])), `"name":"inspect"`)
 }

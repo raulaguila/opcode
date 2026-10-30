@@ -1,0 +1,129 @@
+name: performance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  paired-allocations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GOMAXPROCS: "2"
+      GOTOOLCHAIN: "local"
+      OPCODE_LIVE_TESTS: ""
+      OPCODE_LIVE_OLLAMA: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - name: Install offline code-search prerequisite
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ripgrep
+          fi
+      - name: Isolate benchmark state and resolve the comparison revision
+        env:
+          EVENT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          performance_root="$RUNNER_TEMP/opcode-performance"
+          mkdir -p "$performance_root"/{results,config,data,cache,tmp,go-cache}
+          {
+            printf 'PERFORMANCE_ROOT=%s\n' "$performance_root"
+            printf 'XDG_CONFIG_HOME=%s/config\n' "$performance_root"
+            printf 'XDG_DATA_HOME=%s/data\n' "$performance_root"
+            printf 'XDG_CACHE_HOME=%s/cache\n' "$performance_root"
+            printf 'TMPDIR=%s/tmp\n' "$performance_root"
+            printf 'GOTMPDIR=%s/tmp\n' "$performance_root"
+            printf 'GOCACHE=%s/go-cache\n' "$performance_root"
+          } >> "$GITHUB_ENV"
+          baseline_ref="$EVENT_BASE"
+          if [[ -z "$baseline_ref" || "$baseline_ref" =~ ^0+$ ]]; then
+            baseline_ref='HEAD^'
+          fi
+          if [[ "$baseline_ref" != 'HEAD^' ]] && ! git cat-file -e "${baseline_ref}^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$baseline_ref"
+          fi
+          baseline_sha="$(git rev-parse --verify "${baseline_ref}^{commit}")"
+          git worktree add --detach "$performance_root/baseline" "$baseline_sha"
+          {
+            printf 'baseline=%s\n' "$baseline_sha"
+            printf 'candidate=%s\n' "$(git rev-parse --verify 'HEAD^{commit}')"
+            go version
+          } > "$performance_root/results/revisions.txt"
+      - name: Copy the exact offline fixture whitelist to the baseline
+        run: |
+          set -euo pipefail
+          fixtures=(
+            internal/llm/tools/allocation_benchmark_test.go
+            internal/llm/tools/full_search_benchmark_test.go
+            internal/llm/tools/index_refresh_benchmark_test.go
+            internal/llm/agent/context_allocation_test.go
+            internal/llm/provider/image_benchmark_test.go
+            internal/llm/provider/allocation_benchmark_test.go
+            internal/message/search_index_bench_test.go
+            internal/tui/components/chat/render_cache_test.go
+            internal/tui/components/chat/event_benchmark_test.go
+            internal/tui/components/chat/session_benchmark_test.go
+            internal/tui/components/chat/sqlite_history_benchmark_test.go
+            internal/tui/components/chat/streaming_benchmark_test.go
+            internal/tui/components/chat/streaming_blocks_benchmark_test.go
+            internal/tui/styles/markdown_benchmark_test.go
+          )
+          for fixture in "${fixtures[@]}"; do
+            test -f "$fixture"
+            mkdir -p "$PERFORMANCE_ROOT/baseline/$(dirname "$fixture")"
+            cp -- "$fixture" "$PERFORMANCE_ROOT/baseline/$fixture"
+            cmp -- "$fixture" "$PERFORMANCE_ROOT/baseline/$fixture"
+          done
+          printf '%s\n' "${fixtures[@]}" > "$PERFORMANCE_ROOT/results/fixtures.txt"
+      - name: Download modules and compile both revisions serially
+        run: |
+          set -euo pipefail
+          for revision in "$PERFORMANCE_ROOT/baseline" "$GITHUB_WORKSPACE"; do
+            (
+              cd "$revision"
+              go mod download
+              make -f "$GITHUB_WORKSPACE/Makefile" bench-compile
+            )
+          done
+      # This job has its own runner. Each complete baseline/candidate run is
+      # sequential, uses the same fixtures and Go version, and sends no inference.
+      - name: Measure baseline and candidate serially
+        env:
+          GOPROXY: "off"
+          GOSUMDB: "off"
+        run: |
+          set -euo pipefail
+          (
+            cd "$PERFORMANCE_ROOT/baseline"
+            make -f "$GITHUB_WORKSPACE/Makefile" bench-performance
+          ) | tee "$PERFORMANCE_ROOT/results/baseline.log"
+          make bench-performance | tee "$PERFORMANCE_ROOT/results/candidate.log"
+      - name: Enforce the existing 10 percent allocation gate
+        run: |
+          set -euo pipefail
+          make --silent bench-compare BEFORE="$PERFORMANCE_ROOT/results/baseline.log" AFTER="$PERFORMANCE_ROOT/results/candidate.log" \
+            | tee "$PERFORMANCE_ROOT/results/comparison.json"
+      - name: Upload paired benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/opcode-performance/results/*
+          if-no-files-found: error

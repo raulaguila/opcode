@@ -7,7 +7,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 )
@@ -220,7 +219,7 @@ func anthropicTextBlock(text string, cache bool) object {
 func anthropicUserBlocks(msg message.Message, cache bool) []any {
 	blocks := []any{anthropicTextBlock(msg.Content().String(), cache)}
 	for _, image := range msg.BinaryContent() {
-		blocks = append(blocks, object{"type": "image", "source": object{"type": "base64", "media_type": image.MIMEType, "data": image.String(models.ProviderAnthropic)}})
+		blocks = append(blocks, object{"type": "image", "source": object{"type": "base64", "media_type": image.MIMEType, "data": base64ImageBytes(image.Data)}})
 	}
 	return blocks
 }

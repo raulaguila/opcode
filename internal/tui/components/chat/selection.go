@@ -40,15 +40,11 @@ func (m *messagesCmp) ClearSelection() {
 }
 
 func (m *messagesCmp) selectionMouse(msg tea.MouseMsg) {
+	if msg.Action == tea.MouseActionRelease && m.cancelPendingHistoryNavigation(historyMouseSelection) {
+		return
+	}
 	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-		m.ClearSelection()
-		m.loadEarlierHistory(true)
-		row := msg.Y - 1 + m.viewport.YOffset // Container padding.
-		if m.rendering || len(m.messages) == 0 || row < 0 || row >= len(m.transcriptLines) || msg.Y < 1 || msg.Y > m.viewport.Height {
-			return
-		}
-		point := textPoint{max(0, min(msg.X-1, m.width-1)), row}
-		m.selection = textSelection{anchor: point, focus: point, dragging: true}
+		m.beginMouseSelection(msg)
 		return
 	}
 	if !m.selection.dragging || (msg.Action != tea.MouseActionMotion && msg.Action != tea.MouseActionRelease) {
@@ -65,6 +61,20 @@ func (m *messagesCmp) selectionMouse(msg tea.MouseMsg) {
 			m.selection.dragging = false
 		}
 	}
+}
+
+func (m *messagesCmp) beginMouseSelection(msg tea.MouseMsg) {
+	m.ClearSelection()
+	if m.deferHistory(historyMouseSelection, func() { m.selectionMouse(msg) }) {
+		return
+	}
+	m.loadEarlierHistory(true)
+	row := msg.Y - 1 + m.viewport.YOffset // Container padding.
+	if m.rendering || len(m.messages) == 0 || row < 0 || row >= len(m.transcriptLines) || msg.Y < 1 || msg.Y > m.viewport.Height {
+		return
+	}
+	point := textPoint{max(0, min(msg.X-1, m.width-1)), row}
+	m.selection = textSelection{anchor: point, focus: point, dragging: true}
 }
 
 // Endpoints refer to display cells. Expand partial wide/combining characters to

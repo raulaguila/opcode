@@ -544,3 +544,45 @@ componentes deixam de exigir serializações redundantes do histórico.
 
 Veja [medição de desempenho](docs/performance.md) para fixtures e comparação de
 alocações, separadas de inferência e da aceitação em PTY.
+
+
+## Continuação limitada, páginas de apresentação e contagens exatas
+
+A indexação em segundo plano mantém uma fila limitada de continuação. Pendências
+de descoberta/alteração são separadas da revalidação por expiração; o TTL não
+reinicia um passe em andamento. Cada lote de produção lê até 128 arquivos e cede
+antes da próxima leitura ao atingir aproximadamente 1 MiB ou 200 ms, depois de
+realizar pelo menos uma leitura. Esses orçamentos são cooperativos: não interrompem
+um parser no meio; o contexto externo e as cotas duras continuam valendo. Eventos,
+política, credenciais e cobertura ainda invalidam a confiança. A verificação dos
+hits usa hash em fluxo com o limite por arquivo do índice; candidatos que cresceram
+além dele são descartados, sem ignorar falhas de autorização ou leitura.
+
+`message.HistoryPager` é opcional e serve somente à apresentação. A implementação
+SQLite usa páginas por `(created_at,rowid)` e retira dados binários e continuação
+opaca do provedor antes de decodificar o JSON no Go. `List`/`Get` permanecem
+completos para o agente. O primeiro carregamento da conversa pede até 128 mensagens;
+rolagem carrega páginas anteriores e busca/seleção terminam o carregamento necessário
+antes de registrar coordenadas. Um turno maior que a página permanece limitado e
+seu usuário original pode ser alcançado pela rolagem. Não são inventadas mensagens.
+
+Enquanto uma consulta está pendente, a TUI guarda até 128 eventos/2 MiB de partes
+de apresentação imutáveis. O resultado é reconciliado com essa sequência; gaps,
+ordem incompleta ou excesso do limite exigem outra leitura autoritativa. Geração,
+sessão, cancelamento e erros continuam sendo validados. Histórico de prompts e
+projeção de tarefas também usam páginas nativas quando disponíveis, preservando
+seus limites anteriores. Essa camada não fornece evidência ao agente.
+
+A resposta em andamento pode reaproveitar até 128 parágrafos estáveis/1 MiB
+renderizados. O AST é reconstruído em cada atualização; links, imagens, HTML,
+código, listas, tabelas e o último parágrafo seguem o renderer completo. Mudanças
+de identidade visual invalidam o cache e a conclusão descarta o cache e faz uma
+renderização completa. Não há cache global de respostas.
+
+O payload dos provedores é serializado uma vez para o envio. A projeção de imagens
+para orçamento usa os nós tipados já construídos, sem decodificar novamente o
+Base64 do envelope; não altera os bytes congelados nem o histórico do usuário.
+Cada conexão possui seu tokenizer privado, compartilhado por clones compatíveis,
+com uso sincronizado. Até duas contagens exatas por digest/tamanho são retidas,
+sem guardar texto de prompt ou credenciais. Modelo/encoding diferente não reutiliza
+o contador; payload diferente é contado novamente.

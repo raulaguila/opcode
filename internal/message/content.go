@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -75,11 +76,17 @@ type BinaryContent struct {
 }
 
 func (bc BinaryContent) String(provider models.ModelProvider) string {
-	base64Encoded := base64.StdEncoding.EncodeToString(bc.Data)
+	var out strings.Builder
+	prefix := ""
 	if provider == models.ProviderOpenAI {
-		return "data:" + bc.MIMEType + ";base64," + base64Encoded
+		prefix = "data:" + bc.MIMEType + ";base64,"
 	}
-	return base64Encoded
+	out.Grow(len(prefix) + base64.StdEncoding.EncodedLen(len(bc.Data)))
+	out.WriteString(prefix)
+	encoder := base64.NewEncoder(base64.StdEncoding, &out)
+	_, _ = encoder.Write(bc.Data)
+	_ = encoder.Close() // strings.Builder writes cannot fail.
+	return out.String()
 }
 
 func (BinaryContent) isPart() {}

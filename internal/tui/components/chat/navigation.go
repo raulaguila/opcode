@@ -39,12 +39,16 @@ func (m *messagesCmp) TranscriptKey(msg tea.KeyMsg) bool {
 	case "alt+f":
 		if m.find.open {
 			m.find.open = false
+			m.cancelPendingHistoryNavigation(historySearch)
 		} else {
 			m.StartSearch(m.find.query)
 		}
 		return true
 	case "alt+s":
 		m.ToggleKeyboardSelection()
+		return true
+	}
+	if msg.String() == "esc" && m.cancelPendingHistoryNavigation(historyKeyboardSelection) {
 		return true
 	}
 	if m.find.open {
@@ -114,8 +118,14 @@ func (m *messagesCmp) horizontalPoint(p textPoint, direction int) textPoint {
 	return p
 }
 func (m *messagesCmp) ToggleKeyboardSelection() {
+	if m.cancelPendingHistoryNavigation(historyKeyboardSelection) {
+		return
+	}
 	if m.selection.keyboard {
 		m.ClearSelection()
+		return
+	}
+	if m.deferHistory(historyKeyboardSelection, m.ToggleKeyboardSelection) {
 		return
 	}
 	m.loadEarlierHistory(true)
@@ -145,8 +155,11 @@ func (m *messagesCmp) ToggleKeyboardSelection() {
 }
 func (m *messagesCmp) StartSearch(query string) {
 	m.ClearSelection()
-	m.loadEarlierHistory(true)
 	m.find = transcriptFind{open: true, query: boundedQuery(query)}
+	if m.deferHistory(historySearch, func() { m.StartSearch(m.find.query) }) {
+		return
+	}
+	m.loadEarlierHistory(true)
 	m.updateSearch()
 	m.jumpSearch(0)
 }
@@ -178,31 +191,36 @@ func (m *messagesCmp) updateSearch() {
 			break
 		}
 		plain := m.normalizedSearchLine(row, line)
-		for offset := 0; offset < len(plain); {
-			at := strings.Index(plain[offset:], query)
-			if at < 0 {
-				break
-			}
-			at += offset
-			left := ansi.StringWidth(plain[:at])
-			right := left + ansi.StringWidth(plain[at:at+len(query)])
-			m.find.matches = append(m.find.matches, transcriptMatch{row, left, right})
-			if len(m.find.matches) >= 200 {
-				m.find.limited = true
-				break
-			}
-			offset = at + len(query)
-		}
+		m.searchLineMatches(row, plain, query)
 		if m.find.limited {
 			break
 		}
 	}
 	m.find.selected = max(0, min(m.find.selected, len(m.find.matches)-1))
+	m.find.limited = m.find.limited || m.history.more
+}
+func (m *messagesCmp) searchLineMatches(row int, plain, query string) {
+	for offset := 0; offset < len(plain); {
+		at := strings.Index(plain[offset:], query)
+		if at < 0 {
+			break
+		}
+		at += offset
+		left := ansi.StringWidth(plain[:at])
+		right := left + ansi.StringWidth(plain[at:at+len(query)])
+		m.find.matches = append(m.find.matches, transcriptMatch{row, left, right})
+		if len(m.find.matches) >= 200 {
+			m.find.limited = true
+			break
+		}
+		offset = at + len(query)
+	}
 }
 func (m *messagesCmp) findKey(msg tea.KeyMsg) bool {
 	switch msg.String() {
 	case "esc":
 		m.find.open = false
+		m.cancelPendingHistoryNavigation(historySearch)
 		return true
 	case "enter", "down", "tab":
 		m.jumpSearch(1)

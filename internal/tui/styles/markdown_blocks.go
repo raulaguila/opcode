@@ -20,36 +20,75 @@ import (
 // at different widths. Containers with code/tables retain their full structure.
 // This changes presentation only; stored and copied source remains untouched.
 func RenderMarkdownBlocks(content string, width, proseWidth int) string {
+	return renderMarkdownBlocks(content, width, proseWidth, nil)
+}
+
+func renderMarkdownBlocks(content string, width, proseWidth int, cache *MarkdownCache) string {
 	source := []byte(content)
 	md := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.DefinitionList), goldmark.WithParserOptions(parser.WithAutoHeadingID()))
 	doc := md.Parser().Parse(text.NewReader(source))
-	style := generateMarkdownStyleConfig()
-	renderers := make(map[int]renderer.Renderer, 2)
-	var blocks []string
+	blocks := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, cache: cache, renderers: map[int]renderer.Renderer{}}
+	var output []string
 	for node := doc.FirstChild(); node != nil; {
 		next := node.NextSibling()
-		measure := markdownBlockWidth(node, width, proseWidth)
-		r, ok := renderers[measure]
-		if !ok {
-			r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{
-				WordWrap: measure, Styles: style, ColorProfile: lipgloss.ColorProfile(),
-			}), 1000)))
-			renderers[measure] = r
-		}
-		block := ast.NewDocument()
-		block.AppendChild(block, node)
-		var out bytes.Buffer
-		if err := r.Render(&out, source, block); err != nil {
+		rendered, err := blocks.render(node)
+		if err != nil {
 			fallback := GetMarkdownRenderer(width)
 			result, _ := fallback.Render(content)
 			return result
 		}
-		if rendered := strings.Trim(out.String(), "\n"); rendered != "" {
-			blocks = append(blocks, rendered)
+		if rendered != "" {
+			output = append(output, rendered)
 		}
 		node = next
 	}
-	return strings.Join(blocks, "\n\n")
+	return strings.Join(output, "\n\n")
+}
+
+type markdownBlockRenderer struct {
+	content      string
+	source       []byte
+	width, prose int
+	cache        *MarkdownCache
+	style        ansi.StyleConfig
+	styled       bool
+	renderers    map[int]renderer.Renderer
+}
+
+func (b *markdownBlockRenderer) render(node ast.Node) (string, error) {
+	key, stable := "", false
+	if b.cache != nil {
+		key, stable = stableMarkdownKey(node, b.content)
+	}
+	if stable {
+		if rendered, ok := b.cache.entries[key]; ok {
+			return rendered, nil
+		}
+	}
+	rendered, err := b.renderFresh(node)
+	if err == nil && rendered != "" && stable {
+		b.cache.store(key, rendered)
+	}
+	return rendered, err
+}
+func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
+	measure := markdownBlockWidth(node, b.width, b.prose)
+	r, ok := b.renderers[measure]
+	if !ok {
+		if !b.styled {
+			b.style = generateMarkdownStyleConfig()
+			b.styled = true
+		}
+		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: measure, Styles: b.style, ColorProfile: lipgloss.ColorProfile()}), 1000)))
+		b.renderers[measure] = r
+	}
+	block := ast.NewDocument()
+	block.AppendChild(block, node)
+	var out bytes.Buffer
+	if err := r.Render(&out, b.source, block); err != nil {
+		return "", err
+	}
+	return strings.Trim(out.String(), "\n"), nil
 }
 
 func markdownBlockWidth(node ast.Node, width, proseWidth int) int {

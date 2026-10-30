@@ -13,8 +13,9 @@ comando emite JSON e retorna 1 se a mediana de B/op ou allocs/op de
 qualquer caso do baseline crescer mais de 10%. Retorna 2 para logs vazios,
 métricas inválidas, caso removido do candidato ou menos de três amostras por
 caso nos dois lados. Tempo é informado e revisado, sem um limite fixo entre
-máquinas. Casos novos sem baseline não entram nessa comparação: meça-os
-separadamente e preserve suas condições antes de atribuir um ganho.
+máquinas. Casos presentes apenas no candidato também são rejeitados: copie as fixtures
+compatíveis para o baseline e preserve as mesmas condições antes de atribuir
+um ganho. Não remova casos para fazer o gate passar.
 
 Use exatamente as mesmas fixtures nos dois checkouts; um benchmark adicionado
 nesta revisão pode precisar ser copiado para a revisão anterior, desde que use
@@ -50,3 +51,26 @@ expiração entre lotes, falha de watcher, rotação de credenciais, quotas,
 rollback, cancelamento, substituição do armazenamento privado, limites de
 citação, paginação visual, seleção, busca, posições dos links e paridade do
 Markdown. Reduzir alocações não autoriza remover essas verificações.
+
+
+A comparação do CI roda em `.github/workflows/performance.yml`. O baseline é o
+commit base do PR ou o `before` do push; execução manual/primeiro push usa o pai
+verificado de HEAD. Um runner separado compila as duas revisões antes de medir,
+usa a mesma linha Go 1.27, copia uma lista explícita de fixtures compatíveis e
+mede os pacotes/revisões sequencialmente. Falha de compilação, fixture ausente,
+caso sem par ou regressão de alocações não vira skip. Logs, revisões e comparação
+JSON são preservados como artifacts. O tempo continua sendo informado, sem
+limite fixo de latência entre máquinas.
+
+As fixtures incluem também a ferramenta completa de busca (abertura/schema,
+consulta, autorização/hash dos hits e JSON), a abertura de conversa com SQLite
+real e todos os comandos assíncronos concluídos, resposta com parágrafos estáveis,
+e tokenizer reconhecido com histórico estável e histórico alterado. O caso estável
+mede reuso de contagem exata; o caso alterado continua executando a tokenização.
+A busca completa usa uma cobertura sintética conhecida, em workspace imutável,
+para excluir a latência do watcher sem sleeps ou concorrência na região medida.
+
+A amostragem padrão usa 100 operações por caso e três amostras por revisão.
+Rodadas muito curtas podem ficar dominadas pelo aquecimento/descarte de buffers
+internos de JSON; aumentar a região medida não muda o limite de regressão de 10%.
+Histórico crescente continua usando o mesmo ciclo limitado nos dois lados.

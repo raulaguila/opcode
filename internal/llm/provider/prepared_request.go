@@ -43,11 +43,11 @@ func (p *baseProvider) PrepareRequest(history []message.Message, definitions []t
 	if !ok {
 		return nil, fmt.Errorf("provider does not support prepared requests")
 	}
-	prepared, err := owner.requestHTTP().prepare(history, definitions, stream)
+	prepared, payload, err := owner.requestHTTP().prepareEnvelope(history, definitions, stream)
 	if err != nil {
 		return nil, err
 	}
-	text, visual, err := imageBudgetProjection(p.options.model, history, prepared.body)
+	text, visual, err := imageBudgetProjection(p.options.model, history, payload, prepared.body)
 	if err != nil {
 		return nil, err
 	}
@@ -60,22 +60,27 @@ func (p *baseProvider) PrepareRequest(history []message.Message, definitions []t
 func (p *httpProvider) requestHTTP() *httpProvider { return p }
 
 func (p *httpProvider) prepare(history []message.Message, definitions []tools.BaseTool, stream bool) (*preparedHTTP, error) {
+	prepared, _, err := p.prepareEnvelope(history, definitions, stream)
+	return prepared, err
+}
+
+func (p *httpProvider) prepareEnvelope(history []message.Message, definitions []tools.BaseTool, stream bool) (*preparedHTTP, any, error) {
 	history, err := normalizeImageURLs(history)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	path, payload, err := p.protocol.request(history, definitions, stream)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("encode provider request: %w", err)
+		return nil, nil, fmt.Errorf("encode provider request: %w", err)
 	}
 	if len(body) > maxProviderBytes {
-		return nil, fmt.Errorf("provider request exceeds 32 MiB")
+		return nil, nil, fmt.Errorf("provider request exceeds 32 MiB")
 	}
-	return &preparedHTTP{transport: p.transport, protocol: p.protocol, path: path, body: body, stream: stream}, nil
+	return &preparedHTTP{transport: p.transport, protocol: p.protocol, path: path, body: body, stream: stream}, payload, nil
 }
 
 func (p *preparedHTTP) RequestFootprint() (RequestFootprint, error) { return p.footprint, nil }

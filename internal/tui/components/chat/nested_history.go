@@ -97,13 +97,11 @@ func loadNestedHistory(ctx context.Context, service message.Service, ids []strin
 		if _, seen := snapshots[id]; seen {
 			continue
 		}
-		history, err := service.List(ctx, id)
+		history, size, err := readNestedHistory(ctx, service, id)
 		if err != nil {
 			snapshots[id] = nil
 			continue
 		}
-		history = compactTaskHistory(history)
-		size := messageHistoryBytes(history)
 		if total+size > nestedHistoryLimit {
 			break
 		}

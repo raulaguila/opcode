@@ -281,9 +281,20 @@ func withoutReasoning(item message.Message) message.Message {
 func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool) {
 	m := r.messages
 	start := r.position
+	var markdown *styles.MarkdownCache
+	if latest && !item.IsFinished() {
+		if m.renderCache.markdownOwner != item.ID {
+			m.renderCache.markdown.Reset()
+			m.renderCache.markdownOwner = item.ID
+		}
+		markdown = &m.renderCache.markdown
+	} else if m.renderCache.markdownOwner == item.ID {
+		m.renderCache.markdown.Reset()
+		m.renderCache.markdownOwner = ""
+	}
 	cached, ok := m.cachedContent[item.ID]
 	if !ok || cached.width != m.width {
-		cached = cacheItem{width: m.width, content: renderAssistantMessage(withoutReasoning(item), index, m.messages, m.nestedProjection(), m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position)}
+		cached = cacheItem{width: m.width, content: renderAssistantMessage(withoutReasoning(item), index, m.messages, m.nestedProjection(), m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position, markdown)}
 		m.putMessageCache(item.ID, cached)
 	}
 	r.dependencies = append(r.dependencies, item.ID)

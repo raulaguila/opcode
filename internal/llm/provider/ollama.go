@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 )
@@ -330,10 +329,10 @@ func ollamaHistoryCalls(msg message.Message, names map[string]string) ([]object,
 	return calls, nil
 }
 
-func ollamaHistoryImages(msg message.Message) []string {
-	var images []string
+func ollamaHistoryImages(msg message.Message) [][]byte {
+	var images [][]byte
 	for _, image := range msg.BinaryContent() {
-		images = append(images, image.String(models.ProviderLocal))
+		images = append(images, base64ImageBytes(image.Data))
 	}
 	return images
 }

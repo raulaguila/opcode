@@ -59,7 +59,9 @@ func TestImageFootprintDependsOnDimensionsNotPNGCompression(t *testing.T) {
 func TestImageProjectionKeepsTextSchemasAndToolArgumentsIntact(t *testing.T) {
 	raw := []byte(`{"messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/png;base64,IMAGE"}},{"type":"text","text":"data:image/png;base64,TEXT"}]},{"role":"assistant","tool_calls":[{"arguments":{"type":"image","source":{"type":"base64","data":"ARGUMENT"}}}]}],"tools":[{"parameters":{"type":"image","source":{"type":"base64","data":"SCHEMA"}}}]}`)
 	history := []message.Message{{Role: message.User, Parts: []message.ContentPart{message.BinaryContent{MIMEType: "image/png", Data: budgetPNG(t, 1, png.BestCompression)}}}}
-	projected, _, err := imageBudgetProjection(models.Model{}, history, raw)
+	var payload object
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	projected, _, err := imageBudgetProjection(models.Model{}, history, payload, raw)
 	require.NoError(t, err)
 	require.NotContains(t, string(projected), "base64,IMAGE")
 	for _, value := range []string{"base64,TEXT", "ARGUMENT", "SCHEMA"} {
@@ -118,7 +120,7 @@ func TestImageDataURLIsNormalizedAndBudgetedWithoutChangingHistory(t *testing.T)
 
 func TestImageBudgetRejectsInvalidDimensionsAndLargeWireBody(t *testing.T) {
 	history := []message.Message{{Role: message.User, Parts: []message.ContentPart{message.BinaryContent{MIMEType: "image/png", Data: []byte("invalid")}}}}
-	_, _, err := imageBudgetProjection(models.Model{}, history, []byte(`{}`))
+	_, _, err := imageBudgetProjection(models.Model{}, history, object{}, []byte(`{}`))
 	require.Error(t, err)
 	p, err := NewProvider(models.ProviderOpenAI, WithAPIKey("fixture"), WithModel(models.Model{Provider: models.ProviderOpenAI, APIModel: "fixture"}))
 	require.NoError(t, err)
@@ -131,4 +133,63 @@ func TestHTTPErrorJSONDoesNotPublishPrivateFields(t *testing.T) {
 	raw, err := json.Marshal(&HTTPError{StatusCode: 400, RequestID: "private-id", Body: "private-secret"})
 	require.NoError(t, err)
 	require.NotContains(t, string(raw), "private")
+}
+
+func TestTypedImageProjectionMatchesSerializedEnvelope(t *testing.T) {
+	for _, variant := range []struct {
+		backend models.ModelProvider
+		api     string
+	}{
+		{models.ProviderOpenAI, "chat_completions"}, {models.ProviderOpenAI, "responses"}, {models.ProviderAnthropic, ""}, {models.ProviderGemini, ""}, {models.ProviderLocal, "ollama"},
+	} {
+		t.Run(string(variant.backend)+"/"+variant.api, func(t *testing.T) {
+			model := models.Model{Provider: variant.backend, ProviderProfile: "fixture", APIModel: "gpt-4o", API: variant.api, ContextWindow: 128000}
+			p, err := NewProvider(model.Provider, WithModel(model), WithAPIKey("fixture"), WithBaseURL("http://127.0.0.1:11434/v1"))
+			require.NoError(t, err)
+			data := budgetPNG(t, 8, png.NoCompression)
+			original := bytes.Clone(data)
+			history := []message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Literal data:image/png;base64,TEXT"}, message.BinaryContent{MIMEType: "image/png", Data: data}}}}
+			owner := p.(*baseProvider).client.(interface{ requestHTTP() *httpProvider })
+			request, payload, err := owner.requestHTTP().prepareEnvelope(history, nil, true)
+			require.NoError(t, err)
+			frozen := bytes.Clone(request.body)
+			var decoded object
+			require.NoError(t, json.Unmarshal(frozen, &decoded))
+			expected, visual, err := imageBudgetProjection(model, history, decoded, frozen)
+			require.NoError(t, err)
+			actual, actualVisual, err := imageBudgetProjection(model, history, payload, request.body)
+			require.NoError(t, err)
+			require.JSONEq(t, string(expected), string(actual))
+			require.Equal(t, visual, actualVisual)
+			require.Contains(t, string(actual), "base64,TEXT")
+			require.Equal(t, frozen, request.body, "budget projection cannot mutate the frozen wire")
+			require.Equal(t, original, data, "budget projection cannot mutate caller attachment bytes")
+			require.Equal(t, data, history[0].BinaryContent()[0].Data)
+		})
+	}
+}
+
+func TestBinaryContentEncodingPreservesExactData(t *testing.T) {
+	for _, backend := range []models.ModelProvider{models.ProviderOpenAI, models.ProviderAnthropic, models.ProviderGemini, models.ProviderLocal} {
+		for _, data := range [][]byte{nil, {}, {1}, {1, 2}, {1, 2, 3}, {0, 255, 254, 1}} {
+			content := message.BinaryContent{MIMEType: "image/png", Data: data}
+			expected := base64.StdEncoding.EncodeToString(data)
+			if backend == models.ProviderOpenAI {
+				expected = "data:image/png;base64," + expected
+			}
+			require.Equal(t, expected, content.String(backend))
+		}
+	}
+}
+
+func TestNativeBase64ImagesKeepEmptyStringWireRepresentation(t *testing.T) {
+	for _, data := range [][]byte{nil, {}} {
+		msg := message.Message{Role: message.User, Parts: []message.ContentPart{message.BinaryContent{MIMEType: "image/png", Data: data}}}
+		encoded, err := json.Marshal(anthropicUserBlocks(msg, false))
+		require.NoError(t, err)
+		require.Contains(t, string(encoded), `"data":""`)
+		encoded, err = json.Marshal(ollamaHistoryImages(msg))
+		require.NoError(t, err)
+		require.Equal(t, `[""]`, string(encoded))
+	}
 }

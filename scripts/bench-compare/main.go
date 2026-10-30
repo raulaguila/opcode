@@ -153,6 +153,11 @@ func parseSample(fields []string) (sample, error) {
 	return value, nil
 }
 func compare(before, after map[string][]sample) ([]comparison, error) {
+	for name := range after {
+		if _, exists := before[name]; !exists {
+			return nil, fmt.Errorf("%s has no baseline samples", name)
+		}
+	}
 	keys := make([]string, 0, len(before))
 	for key := range before {
 		keys = append(keys, key)

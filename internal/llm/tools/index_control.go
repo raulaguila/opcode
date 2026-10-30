@@ -164,7 +164,7 @@ func (w *IndexWatcher) watch(ctx context.Context) {
 		case <-timer.C:
 			w.refresh(ctx, root, watch, timer)
 		case <-ticker.C:
-			w.invalidate()
+			w.reconcileWhenIdle()
 			w.refresh(ctx, root, watch, timer)
 		case <-changes:
 			resetIndexTimer(timer, 150*time.Millisecond)
@@ -184,6 +184,11 @@ func IndexStatusJSON(ctx context.Context, action, path string) (string, error) {
 type indexRebuildKey struct{}
 
 type indexBatchLimitKey struct{}
+type indexBatchWorkKey struct{}
+type indexBatchWork struct {
+	bytes    int64
+	duration time.Duration
+}
 type indexWatcherUpdateKey struct{}
 
 func prioritizeIndexPaths(paths []string) {
@@ -218,7 +223,8 @@ func (w *IndexWatcher) refresh(ctx context.Context, root string, watch *fsnotify
 	if !covered {
 		w.syncDirectories(updateCtx, watch)
 	}
-	background := context.WithValue(updateCtx, indexBatchLimitKey{}, 8)
+	background := context.WithValue(updateCtx, indexBatchLimitKey{}, 128)
+	background = context.WithValue(background, indexBatchWorkKey{}, indexBatchWork{bytes: 1 << 20, duration: 200 * time.Millisecond})
 	background = context.WithValue(background, indexWatcherUpdateKey{}, true)
 	status, err := ControlCodeIndex(background, "update", "")
 	if err == nil && status.Pending > 0 {

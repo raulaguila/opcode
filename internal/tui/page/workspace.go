@@ -199,12 +199,12 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 		if navigation, ok := p.transcript.(chat.TranscriptNavigation); ok {
 			navigation.StartSearch(value)
 		}
-		return nil
+		return chat.PendingHistoryCommand(p.transcript)
 	case "select":
 		if navigation, ok := p.transcript.(chat.TranscriptNavigation); ok {
 			navigation.ToggleKeyboardSelection()
 		}
-		return nil
+		return chat.PendingHistoryCommand(p.transcript)
 	case "runtime":
 		return p.openRuntime()
 	case "index":

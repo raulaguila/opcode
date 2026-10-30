@@ -61,22 +61,18 @@ func TestInitialSessionFailureClearsLoadingAndReportsError(t *testing.T) {
 	}
 }
 
-func TestSessionLoadRejectsSnapshotOlderThanStreamingArrival(t *testing.T) {
+func TestSessionLoadReplaysSnapshotConcurrentStreamingArrival(t *testing.T) {
 	fixture := renderFixture(2)
 	history := &renderHistory{histories: map[string][]message.Message{"A": fixture.messages}}
 	m := NewMessagesCmp(&app.App{Messages: history}).(*messagesCmp)
 	m.SetSize(80, 20)
 	old := m.SetSession(session.Session{ID: "A"})().(messageReloadMsg)
-	newest := fixture.messages[1]
+	newest := message.HistorySnapshot(fixture.messages[1])
 	newest.AppendContent(" evidence received during the query")
-	history.histories["A"] = []message.Message{fixture.messages[0], newest}
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: newest})
-	retry := m.acceptMessageReload(old)
-	require.NotNil(t, retry)
-	require.True(t, m.rendering)
-	require.True(t, m.history.initial)
-	m.acceptMessageReload(retry().(messageReloadMsg))
+	runSQLiteHistoryCommand(m, m.acceptMessageReload(old))
 	require.False(t, m.rendering)
+	require.Equal(t, 1, history.calls)
 	require.Contains(t, strings.Join(m.transcriptLines, "\n"), "evidence received during the query")
 	require.Equal(t, newest.Content().String(), m.LatestResponse())
 }

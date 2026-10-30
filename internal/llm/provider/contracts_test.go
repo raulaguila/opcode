@@ -181,9 +181,9 @@ func TestGeminiContractAndThoughtSignatures(t *testing.T) {
 	require.Equal(t, TokenUsage{InputTokens: 8, OutputTokens: 5, CacheReadTokens: 4}, result.Usage)
 	history := []message.Message{{Role: message.Assistant, Parts: []message.ContentPart{result.ToolCalls[0], message.Finish{ProviderState: result.ProviderState}}}, {Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: "call_1", Content: "found"}}}}
 	converted := client.convertMessages(history)
-	require.Contains(t, string(converted[0].Parts[3]), `"thoughtSignature":"c2lnbmF0dXJl"`)
+	require.Contains(t, string(rawJSON(converted[0].Parts[3])), `"thoughtSignature":"c2lnbmF0dXJl"`)
 	require.Equal(t, "user", converted[1].Role)
-	require.Contains(t, string(converted[1].Parts[0]), `"id":"call_1"`)
+	require.Contains(t, string(rawJSON(converted[1].Parts[0])), `"id":"call_1"`)
 	client.providerOptions.model.APIModel = "different-model"
 	raw, err := json.Marshal(client.convertMessages(history))
 	require.NoError(t, err)

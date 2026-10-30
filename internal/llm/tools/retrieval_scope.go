@@ -122,7 +122,7 @@ func retrievalPathAllowed(root, path string, ignore []string) bool {
 		return false
 	}
 	partPath := root
-	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+	for part := range strings.SplitSeq(rel, string(filepath.Separator)) {
 		partPath = filepath.Join(partPath, part)
 		if shouldSkip(partPath, ignore) || part == ".opcode-worktrees" || part == ".venv" || part == "venv" {
 			return false

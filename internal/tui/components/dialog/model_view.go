@@ -159,28 +159,9 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 		contextNote = config.Text("estimativa alternativa", "fallback estimate")
 	}
 	context := config.Text("Contexto: não informado", "Context: not reported")
-	if selected.ContextWindow > 0 {
-		context = fmt.Sprintf(config.Text("Contexto: %s", "Context: %s"), tokenLabel(selected.ContextWindow))
-		if contextNote != "" {
-			context += " (" + contextNote + ")"
-		}
-		if !selected.ContextEstimated && selected.ContextSource != "ollama:loaded" && selected.ContextSource != "lmstudio:loaded" && selected.ContextSource != "ollama:parameter" && selected.ContextSource != "configuration" {
-			context += config.Text(" · anunciado", " · advertised")
-		}
-	}
+	modelDetailLinesSelectedContextWindow(&selected, contextNote, &context)
 	effective := config.Text("Efetivo: disponível após ativar", "Effective: available after activation")
-	if selected.ID == m.activeContextModel && m.target == config.AgentCoder {
-		effective = config.Text("Efetivo: ainda não informado", "Effective: not reported yet")
-		if m.activeContextWindow > 0 {
-			effective = fmt.Sprintf(config.Text("Efetivo: %s", "Effective: %s"), tokenLabel(m.activeContextWindow))
-			if selected.ContextWindow > 0 && m.activeContextWindow != selected.ContextWindow {
-				effective += config.Text(" · limite em uso", " · current request limit")
-			}
-			if m.activeContextSource == "ollama:loaded" || m.activeContextSource == "lmstudio:loaded" {
-				effective += config.Text(" · alocado no servidor", " · server allocation")
-			}
-		}
-	}
+	modelDetailLinesActiveContextModelTargetAgentCoder(m, &selected, &effective)
 	tools := config.Text("Ferramentas: não informado", "Tools: not reported")
 	if selected.SupportsTools != nil {
 		if *selected.SupportsTools {
@@ -189,11 +170,8 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 			tools = config.Text("Ferramentas: não suportadas", "Tools: not supported")
 		}
 	}
-	if !m.details {
-		if m.height > 0 && m.height < 18 {
-			return []string{context, effective}
-		}
-		return []string{context, effective, tools}
+	if result0, handled := modelDetailLinesDetails(m, context, effective, tools); handled {
+		return result0
 	}
 	rows := []string{"ID: " + selected.APIModel, context, effective, tools}
 	if m.height > 0 && m.height < 18 {
@@ -237,50 +215,8 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	rows = append(rows, line(note))
 	active := m.activeModelID()
-	for i := m.scrollOffset; i < min(len(m.filtered), m.scrollOffset+g.rows); i++ {
-		model := m.filtered[i]
-		caret, mark := " ", " "
-		if i == m.selectedIdx {
-			caret = "›"
-		}
-		if model.ID == active {
-			mark = "✓"
-		}
-		label := m.modelLabel(model)
-		prefs := config.Get().Preferences
-		if containsModel(prefs.FavoriteModels, model.ID) {
-			label = "★ " + label
-		} else if containsModel(prefs.RecentModels, model.ID) {
-			label = "↺ " + label
-		}
-		group := ""
-		if model.ID == active {
-			group = config.Text("Atual", "Current")
-		} else if containsModel(prefs.FavoriteModels, model.ID) {
-			group = config.Text("Favoritos", "Favorites")
-		} else if containsModel(prefs.RecentModels, model.ID) {
-			group = config.Text("Recentes", "Recent")
-		}
-		rendered := fmt.Sprintf("%s %s %s", caret, mark, label)
-		if g.width >= 48 && group != "" {
-			rendered = ansi.Truncate(rendered, g.width-12, "…")
-			rendered += strings.Repeat(" ", max(1, g.width-11-ansi.StringWidth(rendered))) + group
-		}
-		row := base
-		if i == m.selectedIdx {
-			row = row.Background(t.Primary()).Foreground(t.Background()).Bold(true)
-		}
-		rows = append(rows, row.Render(ansi.Truncate(interfaceCopy(rendered), g.width, "…")))
-	}
-	if len(m.filtered) == 0 {
-		empty := config.Text("Nenhum modelo encontrado", "No models found")
-		if m.loading {
-			empty = config.Text("Aguarde o catálogo…", "Waiting for catalog…")
-		} else if m.catalogFailed {
-			empty = config.Text("Lista vazia: consulta falhou", "Empty list: query failed")
-		}
-		rows = append(rows, line(empty))
-	}
+	catalogViewScrollOffset(m, &g, t, &base, &rows, active)
+	catalogViewFiltered(m, line, &rows)
 	for _, detail := range m.modelDetailLines() {
 		rows = append(rows, line(detail))
 	}
@@ -316,12 +252,7 @@ func (m *modelDialogCmp) catalogView() string {
 }
 
 func containsModel(list []models.ModelID, id models.ModelID) bool {
-	for _, candidate := range list {
-		if candidate == id {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, id)
 }
 
 func tokenLabel(n int64) string {
@@ -329,4 +260,95 @@ func tokenLabel(n int64) string {
 		return fmt.Sprintf("%dk (%d)", n/1024, n)
 	}
 	return fmt.Sprint(n)
+}
+
+func modelDetailLinesSelectedContextWindow(selected *models.Model, contextNote string, context *string) {
+	if selected.ContextWindow > 0 {
+		(*context) = fmt.Sprintf(config.Text("Contexto: %s", "Context: %s"), tokenLabel(selected.ContextWindow))
+		if contextNote != "" {
+			(*context) += " (" + contextNote + ")"
+		}
+		if !selected.ContextEstimated && selected.ContextSource != "ollama:loaded" && selected.ContextSource != "lmstudio:loaded" && selected.ContextSource != "ollama:parameter" && selected.ContextSource != "configuration" {
+			(*context) += config.Text(" · anunciado", " · advertised")
+		}
+	}
+}
+
+func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme, base *lipgloss.Style, rows *[]string, active models.ModelID) {
+	for i := m.scrollOffset; i < min(len(m.filtered), m.scrollOffset+g.rows); i++ {
+		model := m.filtered[i]
+		caret, mark := " ", " "
+		if i == m.selectedIdx {
+			caret = "›"
+		}
+		if model.ID == active {
+			mark = "✓"
+		}
+		label := m.modelLabel(model)
+		prefs := config.Get().Preferences
+		if containsModel(prefs.FavoriteModels, model.ID) {
+			label = "★ " + label
+		} else if containsModel(prefs.RecentModels, model.ID) {
+			label = "↺ " + label
+		}
+		group := ""
+		catalogViewScrollOffsetModelIDActive(active, &model, &prefs, &group)
+		rendered := fmt.Sprintf("%s %s %s", caret, mark, label)
+		if g.width >= 48 && group != "" {
+			rendered = ansi.Truncate(rendered, g.width-12, "…")
+			rendered += strings.Repeat(" ", max(1, g.width-11-ansi.StringWidth(rendered))) + group
+		}
+		row := (*base)
+		if i == m.selectedIdx {
+			row = row.Background(t.Primary()).Foreground(t.Background()).Bold(true)
+		}
+		(*rows) = append((*rows), row.Render(ansi.Truncate(interfaceCopy(rendered), g.width, "…")))
+	}
+}
+
+func modelDetailLinesActiveContextModelTargetAgentCoder(m *modelDialogCmp, selected *models.Model, effective *string) {
+	if selected.ID == m.activeContextModel && m.target == config.AgentCoder {
+		(*effective) = config.Text("Efetivo: ainda não informado", "Effective: not reported yet")
+		if m.activeContextWindow > 0 {
+			(*effective) = fmt.Sprintf(config.Text("Efetivo: %s", "Effective: %s"), tokenLabel(m.activeContextWindow))
+			if selected.ContextWindow > 0 && m.activeContextWindow != selected.ContextWindow {
+				(*effective) += config.Text(" · limite em uso", " · current request limit")
+			}
+			if m.activeContextSource == "ollama:loaded" || m.activeContextSource == "lmstudio:loaded" {
+				(*effective) += config.Text(" · alocado no servidor", " · server allocation")
+			}
+		}
+	}
+}
+
+func modelDetailLinesDetails(m *modelDialogCmp, context string, effective string, tools string) (extractedResult0 []string, handled bool) {
+	if !m.details {
+		if m.height > 0 && m.height < 18 {
+			return []string{context, effective}, true
+		}
+		return []string{context, effective, tools}, true
+	}
+	return extractedResult0, false
+}
+
+func catalogViewScrollOffsetModelIDActive(active models.ModelID, model *models.Model, prefs *config.Preferences, group *string) {
+	if model.ID == active {
+		(*group) = config.Text("Atual", "Current")
+	} else if containsModel(prefs.FavoriteModels, model.ID) {
+		(*group) = config.Text("Favoritos", "Favorites")
+	} else if containsModel(prefs.RecentModels, model.ID) {
+		(*group) = config.Text("Recentes", "Recent")
+	}
+}
+
+func catalogViewFiltered(m *modelDialogCmp, line func(s string) string, rows *[]string) {
+	if len(m.filtered) == 0 {
+		empty := config.Text("Nenhum modelo encontrado", "No models found")
+		if m.loading {
+			empty = config.Text("Aguarde o catálogo…", "Waiting for catalog…")
+		} else if m.catalogFailed {
+			empty = config.Text("Lista vazia: consulta falhou", "Empty list: query failed")
+		}
+		(*rows) = append((*rows), line(empty))
+	}
 }

@@ -50,7 +50,7 @@ func TestPagedReadLongUnicodeLinesAndExternalEdit(t *testing.T) {
 	offset, column := 0, 0
 	hash := ""
 	var result strings.Builder
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		r, err := tool.Run(toolContext(), toolInput(map[string]any{"file_path": "source.py", "offset": offset, "column": column, "max_bytes": 64, "expected_hash": hash}))
 		require.NoError(t, err)
 		require.False(t, r.IsError, r.Content)

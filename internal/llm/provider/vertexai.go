@@ -25,7 +25,7 @@ func newVertexAIClient(opts providerClientOptions) (*geminiClient, error) {
 		location = "us-central1"
 	}
 	if project == "" {
-		return nil, fmt.Errorf("VertexAI requires VERTEXAI_PROJECT or GOOGLE_CLOUD_PROJECT")
+		return nil, fmt.Errorf("provider VertexAI requires VERTEXAI_PROJECT or GOOGLE_CLOUD_PROJECT")
 	}
 	if !regexp.MustCompile(`^[a-z0-9-]+$`).MatchString(location) {
 		return nil, fmt.Errorf("invalid VertexAI location")

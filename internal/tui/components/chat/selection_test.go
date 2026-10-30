@@ -29,8 +29,8 @@ func responsePoint(t *testing.T, m *messagesCmp, text string) textPoint {
 	t.Helper()
 	for row, line := range m.transcriptLines {
 		plain := ansi.Strip(line)
-		if at := strings.Index(plain, text); at >= 0 {
-			return textPoint{ansi.StringWidth(plain[:at]), row}
+		if before, _, ok := strings.Cut(plain, text); ok {
+			return textPoint{ansi.StringWidth(before), row}
 		}
 	}
 	t.Fatalf("missing text %q", text)

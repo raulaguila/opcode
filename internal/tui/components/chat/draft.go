@@ -139,14 +139,12 @@ func (m *editorCmp) persistDraftValue(id string, value editorDraft) error {
 	if err := localstate.Write(path, document, maxDraftDocument); err != nil {
 		return fmt.Errorf("save draft: %w", err)
 	}
-	if id != "" && path != "" {
-		if err := session.NewCatalog(root, filepath.Dir(path)).SaveDraft(id, value.Text); err != nil {
-			return fmt.Errorf("save session draft index: %w", err)
-		}
+	if result0, handled := persistDraftValueIdPath(id, &value, root, path); handled {
+		return result0
 	}
 	return nil
 }
-func (m *editorCmp) saveDraft() error { return m.PersistDraft() }
+
 func (m *editorCmp) sessionDraft(id string) (editorDraft, error) {
 	if draft, ok := m.drafts[id]; ok {
 		return draft, nil
@@ -205,15 +203,7 @@ func (m *editorCmp) historyForSession(id string) ([]string, error) {
 	}
 	return history, nil
 }
-func (m *editorCmp) loadPromptHistory() error {
-	history, err := m.historyForSession(m.session.ID)
-	if err != nil {
-		return err
-	}
-	m.history = history
-	m.browsingHistory = false
-	return nil
-}
+
 func (m *editorCmp) PrepareSessionDraft(id string) error {
 	if m.preparedDraft != nil && m.preparedDraft.id == id {
 		return nil
@@ -275,4 +265,13 @@ func sameAttachments(a, b []message.Attachment) bool {
 	return slices.EqualFunc(a, b, func(x, y message.Attachment) bool {
 		return x.FileName == y.FileName && x.FilePath == y.FilePath && x.MimeType == y.MimeType && bytes.Equal(x.Content, y.Content)
 	})
+}
+
+func persistDraftValueIdPath(id string, value *editorDraft, root string, path string) (extractedResult0 error, handled bool) {
+	if id != "" && path != "" {
+		if err := session.NewCatalog(root, filepath.Dir(path)).SaveDraft(id, value.Text); err != nil {
+			return fmt.Errorf("save session draft index: %w", err), true
+		}
+	}
+	return extractedResult0, false
 }

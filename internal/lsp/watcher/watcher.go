@@ -19,8 +19,9 @@ import (
 
 // WorkspaceWatcher manages LSP file watching
 type WorkspaceWatcher struct {
-	client        *lsp.Client
-	workspacePath string
+	client         *lsp.Client
+	watcherFactory func() (*fsnotify.Watcher, error)
+	workspacePath  string
 
 	debounceTime time.Duration
 	debounceMap  map[string]*time.Timer
@@ -29,6 +30,15 @@ type WorkspaceWatcher struct {
 	// File watchers registered by the server
 	registrations  []protocol.FileSystemWatcher
 	registrationMu sync.RWMutex
+}
+
+type watcherContextKey struct{}
+type serverNameContextKey struct{}
+
+// WithServerName associates an LSP server with a watcher without colliding
+// with arbitrary string keys supplied by other context users.
+func WithServerName(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, serverNameContextKey{}, name)
 }
 
 // NewWorkspaceWatcher creates a new workspace watcher
@@ -70,15 +80,7 @@ func (w *WorkspaceWatcher) AddRegistrations(ctx context.Context, id string, watc
 			case protocol.RelativePattern:
 				logging.Debug("GlobPattern", "pattern", v.Pattern)
 
-				// Log BaseURI details
-				switch u := v.BaseURI.Value.(type) {
-				case string:
-					logging.Debug("BaseURI", "baseURI", u)
-				case protocol.DocumentUri:
-					logging.Debug("BaseURI", "baseURI", u)
-				default:
-					logging.Debug("BaseURI", "baseURI", u)
-				}
+				logging.Debug("BaseURI", "baseURI", v.BaseURI.Value)
 			default:
 				logging.Debug("GlobPattern", "unknown type", fmt.Sprintf("%T", v))
 			}
@@ -102,93 +104,7 @@ func (w *WorkspaceWatcher) AddRegistrations(ctx context.Context, id string, watc
 
 	// For servers that need file preloading, we'll use a smart approach
 	if shouldPreloadFiles(serverName) || !hasFileWatchers {
-		go func() {
-			startTime := time.Now()
-			filesOpened := 0
-
-			// Determine max files to open based on server type
-			maxFilesToOpen := 50 // Default conservative limit
-
-			switch serverName {
-			case "typescript", "typescript-language-server", "tsserver", "vtsls":
-				// TypeScript servers benefit from seeing more files
-				maxFilesToOpen = 100
-			case "java", "jdtls":
-				// Java servers need to see many files for project model
-				maxFilesToOpen = 200
-			}
-
-			// First, open high-priority files
-			highPriorityFilesOpened := w.openHighPriorityFiles(ctx, serverName)
-			filesOpened += highPriorityFilesOpened
-
-			if cnf.DebugLSP {
-				logging.Debug("Opened high-priority files",
-					"count", highPriorityFilesOpened,
-					"serverName", serverName)
-			}
-
-			// If we've already opened enough high-priority files, we might not need more
-			if filesOpened >= maxFilesToOpen {
-				if cnf.DebugLSP {
-					logging.Debug("Reached file limit with high-priority files",
-						"filesOpened", filesOpened,
-						"maxFiles", maxFilesToOpen)
-				}
-				return
-			}
-
-			// For the remaining slots, walk the directory and open matching files
-
-			err := filepath.WalkDir(w.workspacePath, func(path string, d os.DirEntry, err error) error {
-				if err != nil {
-					return err
-				}
-
-				// Skip directories that should be excluded
-				if d.IsDir() {
-					if path != w.workspacePath && shouldExcludeDir(path) {
-						if cnf.DebugLSP {
-							logging.Debug("Skipping excluded directory", "path", path)
-						}
-						return filepath.SkipDir
-					}
-				} else {
-					// Process files, but limit the total number
-					if filesOpened < maxFilesToOpen {
-						// Only process if it's not already open (high-priority files were opened earlier)
-						if !w.client.IsFileOpen(path) {
-							w.openMatchingFile(ctx, path)
-							filesOpened++
-
-							// Add a small delay after every 10 files to prevent overwhelming the server
-							if filesOpened%10 == 0 {
-								time.Sleep(50 * time.Millisecond)
-							}
-						}
-					} else {
-						// We've reached our limit, stop walking
-						return filepath.SkipAll
-					}
-				}
-
-				return nil
-			})
-
-			elapsedTime := time.Since(startTime)
-			if cnf.DebugLSP {
-				logging.Debug("Limited workspace scan complete",
-					"filesOpened", filesOpened,
-					"maxFiles", maxFilesToOpen,
-					"elapsedTime", elapsedTime.Seconds(),
-					"workspacePath", w.workspacePath,
-				)
-			}
-
-			if err != nil && cnf.DebugLSP {
-				logging.Debug("Error scanning workspace for files to open", "error", err)
-			}
-		}()
+		go w.preloadWorkspace(ctx, cnf, serverName)
 	} else if cnf.DebugLSP {
 		logging.Debug("Using on-demand file loading for server", "server", serverName)
 	}
@@ -258,47 +174,7 @@ func (w *WorkspaceWatcher) openHighPriorityFiles(ctx context.Context, serverName
 	}
 
 	// For each pattern, find and open matching files
-	for _, pattern := range patterns {
-		// Use doublestar.Glob to find files matching the pattern (supports ** patterns)
-		matches, err := doublestar.Glob(os.DirFS(w.workspacePath), pattern)
-		if err != nil {
-			if cnf.DebugLSP {
-				logging.Debug("Error finding high-priority files", "pattern", pattern, "error", err)
-			}
-			continue
-		}
-
-		for _, match := range matches {
-			// Convert relative path to absolute
-			fullPath := filepath.Join(w.workspacePath, match)
-
-			// Skip directories and excluded files
-			info, err := os.Stat(fullPath)
-			if err != nil || info.IsDir() || shouldExcludeFile(fullPath) {
-				continue
-			}
-
-			// Open the file
-			if err := w.client.OpenFile(ctx, fullPath); err != nil {
-				if cnf.DebugLSP {
-					logging.Debug("Error opening high-priority file", "path", fullPath, "error", err)
-				}
-			} else {
-				filesOpened++
-				if cnf.DebugLSP {
-					logging.Debug("Opened high-priority file", "path", fullPath)
-				}
-			}
-
-			// Add a small delay to prevent overwhelming the server
-			time.Sleep(20 * time.Millisecond)
-
-			// Limit the number of files opened per pattern
-			if filesOpened >= 5 && (serverName != "java" && serverName != "jdtls") {
-				break
-			}
-		}
-	}
+	openHighPriorityFilesPatterns(w, ctx, serverName, cnf, &filesOpened, patterns)
 
 	return filesOpened
 }
@@ -309,12 +185,12 @@ func (w *WorkspaceWatcher) WatchWorkspace(ctx context.Context, workspacePath str
 	w.workspacePath = workspacePath
 
 	// Store the watcher in the context for later use
-	ctx = context.WithValue(ctx, "workspaceWatcher", w)
+	ctx = context.WithValue(ctx, watcherContextKey{}, w)
 
 	// If the server name isn't already in the context, try to detect it
-	if _, ok := ctx.Value("serverName").(string); !ok {
+	if _, ok := ctx.Value(serverNameContextKey{}).(string); !ok {
 		serverName := getServerNameFromContext(ctx)
-		ctx = context.WithValue(ctx, "serverName", serverName)
+		ctx = WithServerName(ctx, serverName)
 	}
 
 	serverName := getServerNameFromContext(ctx)
@@ -325,9 +201,10 @@ func (w *WorkspaceWatcher) WatchWorkspace(ctx context.Context, workspacePath str
 		w.AddRegistrations(ctx, id, watchers)
 	})
 
-	watcher, err := fsnotify.NewWatcher()
+	watcher, err := w.createFileWatcher()
 	if err != nil {
 		logging.Error("Error creating watcher", "error", err)
+		return
 	}
 	defer watcher.Close()
 
@@ -338,13 +215,8 @@ func (w *WorkspaceWatcher) WatchWorkspace(ctx context.Context, workspacePath str
 		}
 
 		// Skip excluded directories (except workspace root)
-		if d.IsDir() && path != workspacePath {
-			if shouldExcludeDir(path) {
-				if cnf.DebugLSP {
-					logging.Debug("Skipping excluded directory", "path", path)
-				}
-				return filepath.SkipDir
-			}
+		if result0, handled := watchWorkspaceIsDirPathWorkspacePath(workspacePath, cnf, path, d); handled {
+			return result0
 		}
 
 		// Add directories to watcher
@@ -362,90 +234,8 @@ func (w *WorkspaceWatcher) WatchWorkspace(ctx context.Context, workspacePath str
 	}
 
 	// Event loop
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-
-			uri := fmt.Sprintf("file://%s", event.Name)
-
-			// Add new directories to the watcher
-			if event.Op&fsnotify.Create != 0 {
-				if info, err := os.Stat(event.Name); err == nil {
-					if info.IsDir() {
-						// Skip excluded directories
-						if !shouldExcludeDir(event.Name) {
-							if err := watcher.Add(event.Name); err != nil {
-								logging.Error("Error adding directory to watcher", "path", event.Name, "error", err)
-							}
-						}
-					} else {
-						// For newly created files
-						if !shouldExcludeFile(event.Name) {
-							w.openMatchingFile(ctx, event.Name)
-						}
-					}
-				}
-			}
-
-			// Debug logging
-			if cnf.DebugLSP {
-				matched, kind := w.isPathWatched(event.Name)
-				logging.Debug("File event",
-					"path", event.Name,
-					"operation", event.Op.String(),
-					"watched", matched,
-					"kind", kind,
-				)
-
-			}
-
-			// Check if this path should be watched according to server registrations
-			if watched, watchKind := w.isPathWatched(event.Name); watched {
-				switch {
-				case event.Op&fsnotify.Write != 0:
-					if watchKind&protocol.WatchChange != 0 {
-						w.debounceHandleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Changed))
-					}
-				case event.Op&fsnotify.Create != 0:
-					// Already handled earlier in the event loop
-					// Just send the notification if needed
-					info, err := os.Stat(event.Name)
-					if err != nil {
-						logging.Error("Error getting file info", "path", event.Name, "error", err)
-						return
-					}
-					if !info.IsDir() && watchKind&protocol.WatchCreate != 0 {
-						w.debounceHandleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Created))
-					}
-				case event.Op&fsnotify.Remove != 0:
-					if watchKind&protocol.WatchDelete != 0 {
-						w.handleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Deleted))
-					}
-				case event.Op&fsnotify.Rename != 0:
-					// For renames, first delete
-					if watchKind&protocol.WatchDelete != 0 {
-						w.handleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Deleted))
-					}
-
-					// Then check if the new file exists and create an event
-					if info, err := os.Stat(event.Name); err == nil && !info.IsDir() {
-						if watchKind&protocol.WatchCreate != 0 {
-							w.debounceHandleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Created))
-						}
-					}
-				}
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			logging.Error("Error watching file", "error", err)
-		}
+	if handled := watchWorkspaceState(w, ctx, cnf, watcher); handled {
+		return
 	}
 }
 
@@ -480,23 +270,8 @@ func matchesGlob(pattern, path string) bool {
 	if strings.Contains(pattern, "{") && strings.Contains(pattern, "}") {
 		// Extract extensions from pattern like "*.{go,mod,sum}"
 		parts := strings.SplitN(pattern, "{", 2)
-		if len(parts) == 2 {
-			prefix := parts[0]
-			extPart := strings.SplitN(parts[1], "}", 2)
-			if len(extPart) == 2 {
-				extensions := strings.Split(extPart[0], ",")
-				suffix := extPart[1]
-
-				// Check if the path matches any of the extensions
-				for _, ext := range extensions {
-					extPattern := prefix + ext + suffix
-					isMatch := matchesSimpleGlob(extPattern, path)
-					if isMatch {
-						return true
-					}
-				}
-				return false
-			}
+		if result0, handled := matchesGlobParts(path, parts); handled {
+			return result0
 		}
 	}
 
@@ -506,8 +281,8 @@ func matchesGlob(pattern, path string) bool {
 // matchesSimpleGlob handles glob patterns with ** wildcards
 func matchesSimpleGlob(pattern, path string) bool {
 	// Handle special case for **/*.ext pattern (common in LSP)
-	if strings.HasPrefix(pattern, "**/") {
-		rest := strings.TrimPrefix(pattern, "**/")
+	if after, ok := strings.CutPrefix(pattern, "**/"); ok {
+		rest := after
 
 		// If the rest is a simple file extension pattern like *.go
 		if strings.HasPrefix(rest, "*.") {
@@ -537,26 +312,8 @@ func matchesSimpleGlob(pattern, path string) bool {
 	}
 
 	// Handle other ** wildcard pattern cases
-	if strings.Contains(pattern, "**") {
-		parts := strings.Split(pattern, "**")
-
-		// Validate the path starts with the first part
-		if !strings.HasPrefix(path, parts[0]) && parts[0] != "" {
-			return false
-		}
-
-		// For patterns like "**/*.go", just check the suffix
-		if len(parts) == 2 && parts[0] == "" {
-			isMatch := strings.HasSuffix(path, parts[1])
-			return isMatch
-		}
-
-		// For other patterns, handle middle part
-		remaining := strings.TrimPrefix(path, parts[0])
-		if len(parts) == 2 {
-			isMatch := strings.HasSuffix(remaining, parts[1])
-			return isMatch
-		}
+	if result0, handled := matchesSimpleGlobStringsContainsPattern(pattern, path); handled {
+		return result0
 	}
 
 	// Handle simple * wildcard for file extension patterns (*.go, *.sum, etc)
@@ -685,12 +442,12 @@ func (w *WorkspaceWatcher) notifyFileEvent(ctx context.Context, uri string, chan
 // This is a best-effort function that tries to identify which LSP server we're dealing with
 func getServerNameFromContext(ctx context.Context) string {
 	// First check if the server name is directly stored in the context
-	if serverName, ok := ctx.Value("serverName").(string); ok && serverName != "" {
+	if serverName, ok := ctx.Value(serverNameContextKey{}).(string); ok && serverName != "" {
 		return strings.ToLower(serverName)
 	}
 
 	// Otherwise, try to extract server name from the client command path
-	if w, ok := ctx.Value("workspaceWatcher").(*WorkspaceWatcher); ok && w != nil && w.client != nil && w.client.Cmd != nil {
+	if w, ok := ctx.Value(watcherContextKey{}).(*WorkspaceWatcher); ok && w != nil && w.client != nil && w.client.Cmd != nil {
 		path := strings.ToLower(w.client.Cmd.Path)
 
 		// Extract server name from path
@@ -868,65 +625,8 @@ func (w *WorkspaceWatcher) openMatchingFile(ctx context.Context, path string) {
 	}
 
 	// Check if this path should be watched according to server registrations
-	if watched, _ := w.isPathWatched(path); watched {
-		// Get server name for specialized handling
-		serverName := getServerNameFromContext(ctx)
-
-		// Check if the file is a high-priority file that should be opened immediately
-		// This helps with project initialization for certain language servers
-		if isHighPriorityFile(path, serverName) {
-			if cnf.DebugLSP {
-				logging.Debug("Opening high-priority file", "path", path, "serverName", serverName)
-			}
-			if err := w.client.OpenFile(ctx, path); err != nil && cnf.DebugLSP {
-				logging.Error("Error opening high-priority file", "path", path, "error", err)
-			}
-			return
-		}
-
-		// For non-high-priority files, we'll use different strategies based on server type
-		if shouldPreloadFiles(serverName) {
-			// For servers that benefit from preloading, open files but with limits
-
-			// Check file size - for preloading we're more conservative
-			if info.Size() > (1 * 1024 * 1024) { // 1MB limit for preloaded files
-				if cnf.DebugLSP {
-					logging.Debug("Skipping large file for preloading", "path", path, "size", info.Size())
-				}
-				return
-			}
-
-			// Check file extension for common source files
-			ext := strings.ToLower(filepath.Ext(path))
-
-			// Only preload source files for the specific language
-			shouldOpen := false
-
-			switch serverName {
-			case "typescript", "typescript-language-server", "tsserver", "vtsls":
-				shouldOpen = ext == ".ts" || ext == ".js" || ext == ".tsx" || ext == ".jsx"
-			case "gopls":
-				shouldOpen = ext == ".go"
-			case "rust-analyzer":
-				shouldOpen = ext == ".rs"
-			case "python", "pyright", "pylsp":
-				shouldOpen = ext == ".py"
-			case "clangd":
-				shouldOpen = ext == ".c" || ext == ".cpp" || ext == ".h" || ext == ".hpp"
-			case "java", "jdtls":
-				shouldOpen = ext == ".java"
-			default:
-				// For unknown servers, be conservative
-				shouldOpen = false
-			}
-
-			if shouldOpen {
-				// Don't need to check if it's already open - the client.OpenFile handles that
-				if err := w.client.OpenFile(ctx, path); err != nil && cnf.DebugLSP {
-					logging.Error("Error opening file", "path", path, "error", err)
-				}
-			}
-		}
+	if handled := openMatchingFileWIsPathWatchedPath(w, ctx, path, cnf, info); handled {
+		return
 	}
 }
 
@@ -984,4 +684,377 @@ func isHighPriorityFile(path string, serverName string) bool {
 		fileName == "Makefile" ||
 		fileName == "CMakeLists.txt" ||
 		fileName == ".editorconfig"
+}
+
+func watchWorkspaceWorkspaceWatcher0(w *WorkspaceWatcher, ctx context.Context, event *fsnotify.Event, uri string, watchKind protocol.WatchKind) {
+	if watchKind&protocol.WatchDelete != 0 {
+		w.handleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Deleted))
+	}
+
+	// Then check if the new file exists and create an event
+	if info, err := os.Stat(event.Name); err == nil && !info.IsDir() {
+		if watchKind&protocol.WatchCreate != 0 {
+			w.debounceHandleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Created))
+		}
+	}
+}
+
+func watchWorkspaceWorkspaceWatcher0Case(w *WorkspaceWatcher, ctx context.Context, event *fsnotify.Event, uri string, watchKind protocol.WatchKind) (handled bool) {
+	info, err := os.Stat(event.Name)
+	if err != nil {
+		logging.Error("Error getting file info", "path", event.Name, "error", err)
+		return true
+	}
+	if !info.IsDir() && watchKind&protocol.WatchCreate != 0 {
+		w.debounceHandleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Created))
+	}
+	return false
+}
+
+func openMatchingFileWorkspaceWatcherTypescript(ext string, shouldOpen *bool) {
+	(*shouldOpen) = ext == ".ts" || ext == ".js" || ext == ".tsx" || ext == ".jsx"
+}
+
+func openMatchingFileWorkspaceWatcherClangd(ext string, shouldOpen *bool) {
+	(*shouldOpen) = ext == ".c" || ext == ".cpp" || ext == ".h" || ext == ".hpp"
+}
+
+func watchWorkspaceState(w *WorkspaceWatcher, ctx context.Context, cnf *config.Config, watcher *fsnotify.Watcher) (handled bool) {
+	for {
+		select {
+		case <-ctx.Done():
+			return true
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return true
+			}
+
+			uri := fmt.Sprintf("file://%s", event.Name)
+
+			// Add new directories to the watcher
+			watchWorkspaceStateOpFsnotifyCreate(w, ctx, watcher, &event)
+
+			// Debug logging
+			if cnf.DebugLSP {
+				matched, kind := w.isPathWatched(event.Name)
+				logging.Debug("File event",
+					"path", event.Name,
+					"operation", event.Op.String(),
+					"watched", matched,
+					"kind", kind,
+				)
+
+			}
+
+			// Check if this path should be watched according to server registrations
+			if result0, handled := watchWorkspaceStateIsPathWatchedEventName(w, ctx, &event, uri); handled {
+				return result0
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return true
+			}
+			logging.Error("Error watching file", "error", err)
+		}
+	}
+}
+
+func watchWorkspaceStateOpFsnotifyCreate(w *WorkspaceWatcher, ctx context.Context, watcher *fsnotify.Watcher, event *fsnotify.Event) {
+	if event.Op&fsnotify.Create != 0 {
+		watchWorkspaceStateOpFsnotifyCreateStatEventName(w, ctx, watcher, event)
+	}
+}
+
+func watchWorkspaceStateIsPathWatchedEventName(w *WorkspaceWatcher, ctx context.Context, event *fsnotify.Event, uri string) (extractedResult0 bool, handled bool) {
+	if watched, watchKind := w.isPathWatched(event.Name); watched {
+		switch {
+		case event.Op&fsnotify.Write != 0:
+			if watchKind&protocol.WatchChange != 0 {
+				w.debounceHandleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Changed))
+			}
+		case event.Op&fsnotify.Create != 0:
+			// Already handled earlier in the event loop
+			// Just send the notification if needed
+			if handled := watchWorkspaceWorkspaceWatcher0Case(w, ctx, event, uri, watchKind); handled {
+				return true, true
+			}
+		case event.Op&fsnotify.Remove != 0:
+			if watchKind&protocol.WatchDelete != 0 {
+				w.handleFileEvent(ctx, uri, protocol.FileChangeType(protocol.Deleted))
+			}
+		case event.Op&fsnotify.Rename != 0:
+			// For renames, first delete
+			watchWorkspaceWorkspaceWatcher0(w, ctx, event, uri, watchKind)
+		}
+	}
+	return extractedResult0, false
+}
+
+func openMatchingFileWIsPathWatchedPath(w *WorkspaceWatcher, ctx context.Context, path string, cnf *config.Config, info os.FileInfo) (handled bool) {
+	if watched, _ := w.isPathWatched(path); watched {
+		// Get server name for specialized handling
+		serverName := getServerNameFromContext(ctx)
+
+		// Check if the file is a high-priority file that should be opened immediately
+		// This helps with project initialization for certain language servers
+		if isHighPriorityFile(path, serverName) {
+			if cnf.DebugLSP {
+				logging.Debug("Opening high-priority file", "path", path, "serverName", serverName)
+			}
+			if err := w.client.OpenFile(ctx, path); err != nil && cnf.DebugLSP {
+				logging.Error("Error opening high-priority file", "path", path, "error", err)
+			}
+			return true
+		}
+
+		// For non-high-priority files, we'll use different strategies based on server type
+		if result0, handled := openMatchingFileWIsPathWatchedPathShouldPreloadFilesServerName(w, ctx, path, cnf, info, serverName); handled {
+			return result0
+		}
+	}
+	return false
+}
+
+func openMatchingFileWIsPathWatchedPathShouldPreloadFilesServerName(w *WorkspaceWatcher, ctx context.Context, path string, cnf *config.Config, info os.FileInfo, serverName string) (extractedResult0 bool, handled bool) {
+	if shouldPreloadFiles(serverName) {
+		// For servers that benefit from preloading, open files but with limits
+
+		// Check file size - for preloading we're more conservative
+		if info.Size() > (1 * 1024 * 1024) { // 1MB limit for preloaded files
+			if cnf.DebugLSP {
+				logging.Debug("Skipping large file for preloading", "path", path, "size", info.Size())
+			}
+			return true, true
+		}
+
+		// Check file extension for common source files
+		ext := strings.ToLower(filepath.Ext(path))
+
+		// Only preload source files for the specific language
+		shouldOpen := false
+
+		switch serverName {
+		case "typescript", "typescript-language-server", "tsserver", "vtsls":
+			openMatchingFileWorkspaceWatcherTypescript(ext, &shouldOpen)
+		case "gopls":
+			shouldOpen = ext == ".go"
+		case "rust-analyzer":
+			shouldOpen = ext == ".rs"
+		case "python", "pyright", "pylsp":
+			shouldOpen = ext == ".py"
+		case "clangd":
+			openMatchingFileWorkspaceWatcherClangd(ext, &shouldOpen)
+		case "java", "jdtls":
+			shouldOpen = ext == ".java"
+		default:
+			// For unknown servers, be conservative
+			shouldOpen = false
+		}
+
+		if shouldOpen {
+			// Don't need to check if it's already open - the client.OpenFile handles that
+			if err := w.client.OpenFile(ctx, path); err != nil && cnf.DebugLSP {
+				logging.Error("Error opening file", "path", path, "error", err)
+			}
+		}
+	}
+	return extractedResult0, false
+}
+
+func openHighPriorityFilesPatterns(w *WorkspaceWatcher, ctx context.Context, serverName string, cnf *config.Config, filesOpened *int, patterns []string) {
+	for _, pattern := range patterns {
+		// Use doublestar.Glob to find files matching the pattern (supports ** patterns)
+		matches, err := doublestar.Glob(os.DirFS(w.workspacePath), pattern)
+		if err != nil {
+			if cnf.DebugLSP {
+				logging.Debug("Error finding high-priority files", "pattern", pattern, "error", err)
+			}
+			continue
+		}
+
+		openHighPriorityFilesPatternsMatches(w, ctx, serverName, cnf, filesOpened, matches)
+	}
+}
+
+func openHighPriorityFilesPatternsMatches(w *WorkspaceWatcher, ctx context.Context, serverName string, cnf *config.Config, filesOpened *int, matches []string) {
+	for _, match := range matches {
+		// Convert relative path to absolute
+		fullPath := filepath.Join(w.workspacePath, match)
+
+		// Skip directories and excluded files
+		info, err := os.Stat(fullPath)
+		if err != nil || info.IsDir() || shouldExcludeFile(fullPath) {
+			continue
+		}
+
+		// Open the file
+		openHighPriorityFilesPatternsMatchesOpenFileCtxFullPath(w, ctx, cnf, filesOpened, fullPath)
+
+		// Add a small delay to prevent overwhelming the server
+		time.Sleep(20 * time.Millisecond)
+
+		// Limit the number of files opened per pattern
+		if (*filesOpened) >= 5 && (serverName != "java" && serverName != "jdtls") {
+			break
+		}
+	}
+}
+
+func watchWorkspaceIsDirPathWorkspacePath(workspacePath string, cnf *config.Config, path string, d os.DirEntry) (extractedResult0 error, handled bool) {
+	if d.IsDir() && path != workspacePath {
+		if shouldExcludeDir(path) {
+			if cnf.DebugLSP {
+				logging.Debug("Skipping excluded directory", "path", path)
+			}
+			return filepath.SkipDir, true
+		}
+	}
+	return extractedResult0, false
+}
+
+func matchesSimpleGlobStringsContainsPattern(pattern string, path string) (extractedResult0 bool, handled bool) {
+	if strings.Contains(pattern, "**") {
+		parts := strings.Split(pattern, "**")
+
+		// Validate the path starts with the first part
+		if !strings.HasPrefix(path, parts[0]) && parts[0] != "" {
+			return false, true
+		}
+
+		// For patterns like "**/*.go", just check the suffix
+		if len(parts) == 2 && parts[0] == "" {
+			isMatch := strings.HasSuffix(path, parts[1])
+			return isMatch, true
+		}
+
+		// For other patterns, handle middle part
+		remaining := strings.TrimPrefix(path, parts[0])
+		if len(parts) == 2 {
+			isMatch := strings.HasSuffix(remaining, parts[1])
+			return isMatch, true
+		}
+	}
+	return extractedResult0, false
+}
+
+func watchWorkspaceStateOpFsnotifyCreateStatEventName(w *WorkspaceWatcher, ctx context.Context, watcher *fsnotify.Watcher, event *fsnotify.Event) {
+	if info, err := os.Stat(event.Name); err == nil {
+		if info.IsDir() {
+			// Skip excluded directories
+			if !shouldExcludeDir(event.Name) {
+				if err := watcher.Add(event.Name); err != nil {
+					logging.Error("Error adding directory to watcher", "path", event.Name, "error", err)
+				}
+			}
+		} else {
+			// For newly created files
+			if !shouldExcludeFile(event.Name) {
+				w.openMatchingFile(ctx, event.Name)
+			}
+		}
+	}
+}
+
+func matchesGlobParts(path string, parts []string) (extractedResult0 bool, handled bool) {
+	if len(parts) == 2 {
+		prefix := parts[0]
+		extPart := strings.SplitN(parts[1], "}", 2)
+		if len(extPart) == 2 {
+			extensions := strings.Split(extPart[0], ",")
+			suffix := extPart[1]
+
+			// Check if the path matches any of the extensions
+			for _, ext := range extensions {
+				extPattern := prefix + ext + suffix
+				isMatch := matchesSimpleGlob(extPattern, path)
+				if isMatch {
+					return true, true
+				}
+			}
+			return false, true
+		}
+	}
+	return extractedResult0, false
+}
+
+func openHighPriorityFilesPatternsMatchesOpenFileCtxFullPath(w *WorkspaceWatcher, ctx context.Context, cnf *config.Config, filesOpened *int, fullPath string) {
+	if err := w.client.OpenFile(ctx, fullPath); err != nil {
+		if cnf.DebugLSP {
+			logging.Debug("Error opening high-priority file", "path", fullPath, "error", err)
+		}
+	} else {
+		(*filesOpened)++
+		if cnf.DebugLSP {
+			logging.Debug("Opened high-priority file", "path", fullPath)
+		}
+	}
+}
+
+func preloadFileLimit(serverName string) int {
+	switch serverName {
+	case "typescript", "typescript-language-server", "tsserver", "vtsls":
+		return 100
+	case "java", "jdtls":
+		return 200
+	default:
+		return 50
+	}
+}
+func (w *WorkspaceWatcher) preloadWorkspace(ctx context.Context, cnf *config.Config, serverName string) {
+	start := time.Now()
+	maximum := preloadFileLimit(serverName)
+	opened := w.openHighPriorityFiles(ctx, serverName)
+	if cnf.DebugLSP {
+		logging.Debug("Opened high-priority files", "count", opened, "serverName", serverName)
+	}
+	if opened >= maximum {
+		if cnf.DebugLSP {
+			logging.Debug("High-priority files filled preload limit", "count", opened, "maximum", maximum)
+		}
+		return
+	}
+	err := filepath.WalkDir(w.workspacePath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		return w.preloadEntry(ctx, cnf, path, d, &opened, maximum)
+	})
+	if cnf.DebugLSP {
+		logging.Debug("Limited workspace scan complete", "filesOpened", opened, "maxFiles", maximum, "elapsedTime", time.Since(start).Seconds(), "workspacePath", w.workspacePath)
+	}
+	if err != nil && err != filepath.SkipAll && cnf.DebugLSP {
+		logging.Debug("Error during limited workspace scan", "error", err)
+	}
+}
+func (w *WorkspaceWatcher) preloadEntry(ctx context.Context, cnf *config.Config, path string, d os.DirEntry, opened *int, maximum int) error {
+	if d.IsDir() {
+		if path != w.workspacePath && shouldExcludeDir(path) {
+			if cnf.DebugLSP {
+				logging.Debug("Skipping excluded directory", "path", path)
+			}
+			return filepath.SkipDir
+		}
+		return nil
+	}
+	if *opened >= maximum {
+		return filepath.SkipAll
+	}
+	if w.client.IsFileOpen(path) {
+		return nil
+	}
+	w.openMatchingFile(ctx, path)
+	*opened++
+	if *opened%10 == 0 {
+		time.Sleep(50 * time.Millisecond)
+	}
+	return nil
+}
+
+// The default stays the native fsnotify backend. The per-instance factory
+// permits failure-path verification without changing process resource limits.
+func (w *WorkspaceWatcher) createFileWatcher() (*fsnotify.Watcher, error) {
+	if w.watcherFactory != nil {
+		return w.watcherFactory()
+	}
+	return fsnotify.NewWatcher()
 }

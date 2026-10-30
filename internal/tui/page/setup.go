@@ -92,16 +92,7 @@ func (p *chatPage) openLocalStatus() tea.Cmd {
 		}
 		lines := []string{fmt.Sprintf(config.Text("Modelo: %s · contexto configurado: %d", "Model: %s · configured context: %d"), panelText(m.APIModel), m.ContextWindow)}
 		matched := false
-		for _, loaded := range found {
-			if loaded.Name != m.APIModel && loaded.Name != m.APIModel+":latest" {
-				continue
-			}
-			matched = true
-			lines = append(lines, fmt.Sprintf(config.Text("Contexto alocado: %d · execução: %s · VRAM usada pelo modelo: %.1f GiB", "Allocated context: %d · placement: %s · model VRAM: %.1f GiB"), loaded.Context, loaded.Placement(), float64(loaded.VRAM)/(1<<30)))
-			if loaded.Context > 0 && loaded.Context != m.ContextWindow {
-				lines = append(lines, config.Text("O contexto alocado difere do configurado; a próxima geração pode recarregar o modelo. O limite aprendido pode reduzir a próxima requisição.", "Allocated context differs from configuration; the next generation may reload the model. A learned limit may reduce the next request."))
-			}
-		}
+		openLocalStatusFound(&m, found, &lines, &matched)
 		if !matched {
 			lines = append(lines, config.Text("O modelo não está carregado. Não foi carregado nem baixado por esta consulta.", "Model is not loaded. This query did not load or download it."))
 		}
@@ -119,4 +110,17 @@ func (p *chatPage) setupRead() (tea.Cmd, error) {
 	p.refreshWorkflow()
 	prompt := config.Text("Leia o README do projeto, se existir, e um arquivo de código relevante usando as ferramentas. Explique em português a finalidade do projeto, cite os arquivos que realmente leu e diga o que não pôde confirmar. Não invente fatos.", "Read the project README, if present, and one relevant source file using tools. Explain the project purpose, cite files you actually read and state what you could not verify. Do not invent facts.")
 	return p.submitAgentMessage(prompt, nil, prompt), nil
+}
+
+func openLocalStatusFound(m *models.Model, found []models.OllamaRuntime, lines *[]string, matched *bool) {
+	for _, loaded := range found {
+		if loaded.Name != m.APIModel && loaded.Name != m.APIModel+":latest" {
+			continue
+		}
+		(*matched) = true
+		(*lines) = append((*lines), fmt.Sprintf(config.Text("Contexto alocado: %d · execução: %s · VRAM usada pelo modelo: %.1f GiB", "Allocated context: %d · placement: %s · model VRAM: %.1f GiB"), loaded.Context, loaded.Placement(), float64(loaded.VRAM)/(1<<30)))
+		if loaded.Context > 0 && loaded.Context != m.ContextWindow {
+			(*lines) = append((*lines), config.Text("O contexto alocado difere do configurado; a próxima geração pode recarregar o modelo. O limite aprendido pode reduzir a próxima requisição.", "Allocated context differs from configuration; the next generation may reload the model. A learned limit may reduce the next request."))
+		}
+	}
 }

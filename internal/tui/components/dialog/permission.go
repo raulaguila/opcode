@@ -114,67 +114,10 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.markdownCache = make(map[string]string)
 		p.diffCache = make(map[string]string)
 	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			for i, hit := range p.buttonHits {
-				if msg.Y == p.buttonY+hit.y && msg.X >= hit.x && msg.X < hit.x+hit.width {
-					p.selectedOption = i
-					return p, p.selectCurrentOption()
-				}
-			}
-		}
-		if msg.Button == tea.MouseButtonWheelUp {
-			p.contentViewPort.ScrollUp(3)
-		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			p.contentViewPort.ScrollDown(3)
-		}
-		return p, nil
+		return updatePermissionDialogCmpMouseMsg(p, &msg)
 	case tea.KeyMsg:
-		if msg.String() == "f" {
-			p.fullscreen = !p.fullscreen
-			p.SetSize()
-			p.diffCache = map[string]string{}
-			return p, nil
-		}
-		if msg.String() == "t" {
-			switch p.diffMode {
-			case "auto":
-				p.diffMode = "unified"
-			case "unified":
-				p.diffMode = "split"
-			default:
-				p.diffMode = "auto"
-			}
-			p.diffCache = map[string]string{}
-			return p, nil
-		}
-		if msg.String() == "]" || msg.String() == "[" {
-			delta := 1
-			if msg.String() == "[" {
-				delta = -1
-			}
-			p.nextFile(delta)
-			return p, nil
-		}
-		switch {
-		case key.Matches(msg, permissionsKeys.Right) || key.Matches(msg, permissionsKeys.Tab):
-			p.selectedOption = (p.selectedOption + 1) % 3
-			return p, nil
-		case key.Matches(msg, permissionsKeys.Left):
-			p.selectedOption = (p.selectedOption + 2) % 3
-		case key.Matches(msg, permissionsKeys.EnterSpace):
-			return p, p.selectCurrentOption()
-		case key.Matches(msg, permissionsKeys.Allow):
-			return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionAllow, Permission: p.permission})
-		case key.Matches(msg, permissionsKeys.AllowSession):
-			return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionAllowForSession, Permission: p.permission})
-		case key.Matches(msg, permissionsKeys.Deny):
-			return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionDeny, Permission: p.permission})
-		default:
-			// Pass other keys to viewport
-			viewPort, cmd := p.contentViewPort.Update(msg)
-			p.contentViewPort = viewPort
-			cmds = append(cmds, cmd)
+		if result0, result1, handled := updateCaseTeaKeyMsg(p, &cmds, &msg); handled {
+			return result0, result1
 		}
 	}
 
@@ -492,4 +435,73 @@ func (p *permissionDialogCmp) permissionHint() string {
 	default:
 		return config.Text("F tela cheia · escopo exato nesta sessão", "F full screen · exact scope for this session")
 	}
+}
+
+func updatePermissionDialogCmpMouseMsg(p *permissionDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+		for i, hit := range p.buttonHits {
+			if msg.Y == p.buttonY+hit.y && msg.X >= hit.x && msg.X < hit.x+hit.width {
+				p.selectedOption = i
+				return p, p.selectCurrentOption()
+			}
+		}
+	}
+	if msg.Button == tea.MouseButtonWheelUp {
+		p.contentViewPort.ScrollUp(3)
+	}
+	if msg.Button == tea.MouseButtonWheelDown {
+		p.contentViewPort.ScrollDown(3)
+	}
+	return p, nil
+
+}
+
+func updateCaseTeaKeyMsg(p *permissionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if msg.String() == "f" {
+		p.fullscreen = !p.fullscreen
+		p.SetSize()
+		p.diffCache = map[string]string{}
+		return p, nil, true
+	}
+	if msg.String() == "t" {
+		switch p.diffMode {
+		case "auto":
+			p.diffMode = "unified"
+		case "unified":
+			p.diffMode = "split"
+		default:
+			p.diffMode = "auto"
+		}
+		p.diffCache = map[string]string{}
+		return p, nil, true
+	}
+	if msg.String() == "]" || msg.String() == "[" {
+		delta := 1
+		if msg.String() == "[" {
+			delta = -1
+		}
+		p.nextFile(delta)
+		return p, nil, true
+	}
+	switch {
+	case key.Matches((*msg), permissionsKeys.Right) || key.Matches((*msg), permissionsKeys.Tab):
+		p.selectedOption = (p.selectedOption + 1) % 3
+		return p, nil, true
+	case key.Matches((*msg), permissionsKeys.Left):
+		p.selectedOption = (p.selectedOption + 2) % 3
+	case key.Matches((*msg), permissionsKeys.EnterSpace):
+		return p, p.selectCurrentOption(), true
+	case key.Matches((*msg), permissionsKeys.Allow):
+		return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionAllow, Permission: p.permission}), true
+	case key.Matches((*msg), permissionsKeys.AllowSession):
+		return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionAllowForSession, Permission: p.permission}), true
+	case key.Matches((*msg), permissionsKeys.Deny):
+		return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionDeny, Permission: p.permission}), true
+	default:
+		// Pass other keys to viewport
+		viewPort, cmd := p.contentViewPort.Update((*msg))
+		p.contentViewPort = viewPort
+		(*cmds) = append((*cmds), cmd)
+	}
+	return extractedResult0, extractedResult1, false
 }

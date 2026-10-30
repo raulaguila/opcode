@@ -58,11 +58,6 @@ type EditorKeyMaps struct {
 	OpenEditor key.Binding
 }
 
-type bluredEditorKeyMaps struct {
-	Send       key.Binding
-	Focus      key.Binding
-	OpenEditor key.Binding
-}
 type DeleteAttachmentKeyMaps struct {
 	AttachmentDeleteMode key.Binding
 	Escape               key.Binding
@@ -189,10 +184,8 @@ func (m *editorCmp) send() tea.Cmd {
 
 func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	switch msg.(type) {
-	case tea.KeyMsg, dialog.AttachmentAddedMsg, dialog.CompletionSelectedMsg, editorResultMsg, RestoreDraftMsg, SubmissionResultMsg:
-		m.preparedDraft = nil
-	}
+	m.invalidatePreparedDraft(msg)
+
 	switch msg := msg.(type) {
 	case CommandContextMsg:
 		m.commandPriorities = msg.Priorities
@@ -207,49 +200,11 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case RestoreDraftMsg:
-		if m.textarea.Value() != "" || len(m.attachments) > 0 {
-			return m, util.ReportWarn("O rascunho atual foi preservado; limpe-o antes de editar a instrução")
-		}
-		m.textarea.SetValue(msg.Text)
-		m.textarea.CursorEnd()
-		m.attachments = cloneAttachments(msg.Attachments)
-		return m, nil
+		return updateCaseRestoreDraftMsg(m, &msg)
 	case SubmissionResultMsg:
-		if msg.KeepDraft {
-			return m, nil
+		if result0, result1, handled := updateEditorCmpDefault(m, &msg); handled {
+			return result0, result1
 		}
-		sameSession := m.submissionText == "" || m.session.ID == m.submissionSession
-		m.submitting = false
-		if msg.Error == nil && msg.Text != "" && sameSession {
-			m.history = append(m.history, msg.Text)
-			if len(m.history) > 200 {
-				m.history = m.history[len(m.history)-200:]
-			}
-			m.browsingHistory = false
-		}
-		if msg.Error == nil && sameSession && m.textarea.Value() == msg.Text && (m.submissionText == "" || sameAttachments(m.attachments, m.submissionAttachments)) {
-			m.textarea.Reset()
-			m.attachments = nil
-		}
-		if msg.Error == nil {
-			if !sameSession && m.submissionText != "" {
-				if err := m.persistDraftValue(m.submissionSession, editorDraft{}); err != nil {
-					return m, util.ReportError(err)
-				}
-			}
-			if m.submissionUnassigned {
-				if err := m.persistDraftValue("", editorDraft{}); err != nil {
-					return m, util.ReportError(err)
-				}
-			}
-			m.submissionText = ""
-			m.submissionUnassigned = false
-			m.submissionAttachments = nil
-			if err := m.PersistDraft(); err != nil {
-				return m, util.ReportError(err)
-			}
-		}
-		return m, nil
 	case dialog.ThemeChangedMsg:
 		m.textarea = CreateTextArea(&m.textarea)
 	case dialog.CompletionSelectedMsg:
@@ -259,23 +214,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.SetValue(modifiedValue)
 		return m, nil
 	case SessionSelectedMsg:
-		if msg.ID != m.session.ID {
-			if err := m.PrepareSessionDraft(msg.ID); err != nil {
-				return m, util.ReportError(err)
-			}
-			prepared := m.preparedDraft
-			m.preparedDraft = nil
-			m.session = msg
-			if prepared != nil && prepared.keepCurrent {
-				m.submissionSession = msg.ID
-				return m, nil
-			}
-			if prepared != nil {
-				m.applyDraft(prepared.draft)
-				m.history = prepared.history
-			}
-		}
-		return m, nil
+		return updateEditorCmpDefaultCase(m, &msg)
 	case dialog.AttachmentAddedMsg:
 		if len(m.attachments) >= maxAttachments {
 			logging.ErrorPersist(fmt.Sprintf("cannot add more than %d images", maxAttachments))
@@ -283,91 +222,25 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.attachments = append(m.attachments, msg.Attachment)
 	case SessionClearedMsg:
-		if m.session.ID != "" {
-			if err := m.PrepareSessionDraft(""); err != nil {
-				return m, util.ReportError(err)
-			}
-		} else {
-			if err := m.PersistDraft(); err != nil {
-				return m, util.ReportError(err)
-			}
-		}
-		prepared := m.preparedDraft
-		m.preparedDraft = nil
-		m.session = session.Session{}
-		if prepared != nil {
-			m.applyDraft(prepared.draft)
-			m.history = prepared.history
-		} else {
-			m.textarea.Reset()
-			m.attachments = nil
-			m.history = nil
-		}
-		m.browsingHistory = false
-		return m, nil
+		return updateEditorCmpDefaultCaseCase(m)
 	case tea.KeyMsg:
-		if msg.String() == "alt+end" || msg.String() == "ctrl+b" || msg.String() == "ctrl+y" {
-			return m, nil
-		}
-		if cmd, handled := m.slashKey(msg); handled {
-			return m, cmd
-		}
-		if m.promptHistoryKey(msg) {
-			return m, nil
-		}
-		if key.Matches(msg, editorMaps.NewLine) || msg.Type == tea.KeyCtrlJ {
-			m.textarea.InsertString("\n")
-			return m, nil
-		}
-		if key.Matches(msg, DeleteKeyMaps.AttachmentDeleteMode) {
-			m.deleteMode = true
-			return m, nil
-		}
-		if key.Matches(msg, DeleteKeyMaps.DeleteAllAttachments) && m.deleteMode {
-			m.deleteMode = false
-			m.attachments = nil
-			return m, nil
-		}
-		if m.deleteMode && len(msg.Runes) > 0 && unicode.IsDigit(msg.Runes[0]) {
-			num := int(msg.Runes[0] - '0')
-			m.deleteMode = false
-			if num < 10 && len(m.attachments) > num {
-				if num == 0 {
-					m.attachments = m.attachments[num+1:]
-				} else {
-					m.attachments = slices.Delete(m.attachments, num, num+1)
-				}
-				return m, nil
-			}
-		}
-		if key.Matches(msg, messageKeys.PageUp) || key.Matches(msg, messageKeys.PageDown) ||
-			key.Matches(msg, messageKeys.HalfPageUp) || key.Matches(msg, messageKeys.HalfPageDown) {
-			return m, nil
-		}
-		if key.Matches(msg, editorMaps.OpenEditor) {
-			if m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID) {
-				return m, util.ReportWarn("Agent is working, please wait...")
-			}
-			return m, m.openEditor()
-		}
-		if key.Matches(msg, DeleteKeyMaps.Escape) {
-			m.deleteMode = false
-			return m, nil
-		}
-		// Hanlde Enter key
-		if m.textarea.Focused() && key.Matches(msg, editorMaps.Send) {
-			value := m.textarea.Value()
-			if len(value) > 0 && value[len(value)-1] == '\\' {
-				// If the last character is a backslash, remove it and add a newline
-				m.textarea.SetValue(value[:len(value)-1] + "\n")
-				return m, nil
-			} else {
-				// Otherwise, send the message
-				return m, m.send()
-			}
+		if result0, result1, handled := updateEditorCmpKeyMsg(m, &msg); handled {
+			return result0, result1
 		}
 
 	}
+	return m.updateTextarea(msg)
+}
+
+func (m *editorCmp) invalidatePreparedDraft(msg tea.Msg) {
+	switch msg.(type) {
+	case tea.KeyMsg, dialog.AttachmentAddedMsg, dialog.CompletionSelectedMsg, editorResultMsg, RestoreDraftMsg, SubmissionResultMsg:
+		m.preparedDraft = nil
+	}
+}
+
+func (m *editorCmp) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 	previous := m.textarea.Value()
 	m.textarea, cmd = m.textarea.Update(msg)
 	if m.textarea.Value() != previous {
@@ -496,7 +369,7 @@ func newEditorWithDraftStorage(app *app.App, root, path string) *editorCmp {
 func (m *editorCmp) DesiredHeight(width, available int) int {
 	textWidth := max(1, width-3)
 	rows := 0
-	for _, line := range strings.Split(m.textarea.Value(), "\n") {
+	for line := range strings.SplitSeq(m.textarea.Value(), "\n") {
 		rows += max(1, (ansi.StringWidth(line)+textWidth-1)/textWidth)
 	}
 	rows = min(8, max(3, rows))
@@ -518,4 +391,207 @@ func (m *editorCmp) attachmentRows(width int) int {
 	}
 	content := m.attachmentsContentWidth(width)
 	return max(1, strings.Count(content, "\n")+1)
+}
+
+func updateEditorCmpKeyMsg(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if result0, result1, result2, handled := updateEditorCmpKeyMsgAltEnd(m, msg); handled {
+		return result0, result1, result2
+	}
+	if cmd, handled := m.slashKey((*msg)); handled {
+		return m, cmd, true
+	}
+	if m.promptHistoryKey((*msg)) {
+		return m, nil, true
+	}
+	if key.Matches((*msg), editorMaps.NewLine) || msg.Type == tea.KeyCtrlJ {
+		m.textarea.InsertString("\n")
+		return m, nil, true
+	}
+	if key.Matches((*msg), DeleteKeyMaps.AttachmentDeleteMode) {
+		m.deleteMode = true
+		return m, nil, true
+	}
+	if key.Matches((*msg), DeleteKeyMaps.DeleteAllAttachments) && m.deleteMode {
+		m.deleteMode = false
+		m.attachments = nil
+		return m, nil, true
+	}
+	if result0, result1, result2, handled := updateEditorCmpKeyMsgUnicodeIsDigitRunes(m, msg); handled {
+		return result0, result1, result2
+	}
+	if result0, result1, result2, handled := updateEditorCmpKeyMsgMatchesMessageKeysPageDown(m, msg); handled {
+		return result0, result1, result2
+	}
+	if result0, result1, result2, handled := updateEditorCmpKeyMsgMatchesEditorMapsOpenEditor(m, msg); handled {
+		return result0, result1, result2
+	}
+	if key.Matches((*msg), DeleteKeyMaps.Escape) {
+		m.deleteMode = false
+		return m, nil, true
+	}
+	// Hanlde Enter key
+	if result0, result1, result2, handled := updateEditorCmpKeyMsgMatchesEditorMapsSend(m, msg); handled {
+		return result0, result1, result2
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateEditorCmpDefault(m *editorCmp, msg *SubmissionResultMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if msg.KeepDraft {
+		return m, nil, true
+	}
+	sameSession := m.submissionText == "" || m.session.ID == m.submissionSession
+	m.submitting = false
+	if msg.Error == nil && msg.Text != "" && sameSession {
+		m.history = append(m.history, msg.Text)
+		if len(m.history) > 200 {
+			m.history = m.history[len(m.history)-200:]
+		}
+		m.browsingHistory = false
+	}
+	if msg.Error == nil && sameSession && m.textarea.Value() == msg.Text && (m.submissionText == "" || sameAttachments(m.attachments, m.submissionAttachments)) {
+		m.textarea.Reset()
+		m.attachments = nil
+	}
+	if result0, result1, result2, handled := updateEditorCmpDefaultError(m, msg, sameSession); handled {
+		return result0, result1, result2
+	}
+	return m, nil, true
+
+}
+
+func updateEditorCmpDefaultCase(m *editorCmp, msg *SessionSelectedMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+	if msg.ID != m.session.ID {
+		if err := m.PrepareSessionDraft(msg.ID); err != nil {
+			return m, util.ReportError(err)
+		}
+		prepared := m.preparedDraft
+		m.preparedDraft = nil
+		m.session = (*msg)
+		if prepared != nil && prepared.keepCurrent {
+			m.submissionSession = msg.ID
+			return m, nil
+		}
+		if prepared != nil {
+			m.applyDraft(prepared.draft)
+			m.history = prepared.history
+		}
+	}
+	return m, nil
+
+}
+
+func updateEditorCmpDefaultCaseCase(m *editorCmp) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+	if m.session.ID != "" {
+		if err := m.PrepareSessionDraft(""); err != nil {
+			return m, util.ReportError(err)
+		}
+	} else {
+		if err := m.PersistDraft(); err != nil {
+			return m, util.ReportError(err)
+		}
+	}
+	prepared := m.preparedDraft
+	m.preparedDraft = nil
+	m.session = session.Session{}
+	if prepared != nil {
+		m.applyDraft(prepared.draft)
+		m.history = prepared.history
+	} else {
+		m.textarea.Reset()
+		m.attachments = nil
+		m.history = nil
+	}
+	m.browsingHistory = false
+	return m, nil
+
+}
+
+func updateEditorCmpKeyMsgUnicodeIsDigitRunes(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if m.deleteMode && len(msg.Runes) > 0 && unicode.IsDigit(msg.Runes[0]) {
+		num := int(msg.Runes[0] - '0')
+		m.deleteMode = false
+		if num < 10 && len(m.attachments) > num {
+			if num == 0 {
+				m.attachments = m.attachments[num+1:]
+			} else {
+				m.attachments = slices.Delete(m.attachments, num, num+1)
+			}
+			return m, nil, true, true
+		}
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateEditorCmpDefaultError(m *editorCmp, msg *SubmissionResultMsg, sameSession bool) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if msg.Error == nil {
+		if !sameSession && m.submissionText != "" {
+			if err := m.persistDraftValue(m.submissionSession, editorDraft{}); err != nil {
+				return m, util.ReportError(err), true, true
+			}
+		}
+		if m.submissionUnassigned {
+			if err := m.persistDraftValue("", editorDraft{}); err != nil {
+				return m, util.ReportError(err), true, true
+			}
+		}
+		m.submissionText = ""
+		m.submissionUnassigned = false
+		m.submissionAttachments = nil
+		if err := m.PersistDraft(); err != nil {
+			return m, util.ReportError(err), true, true
+		}
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateEditorCmpKeyMsgMatchesMessageKeysPageDown(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if key.Matches((*msg), messageKeys.PageUp) || key.Matches((*msg), messageKeys.PageDown) ||
+		key.Matches((*msg), messageKeys.HalfPageUp) || key.Matches((*msg), messageKeys.HalfPageDown) {
+		return m, nil, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateEditorCmpKeyMsgMatchesEditorMapsSend(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if m.textarea.Focused() && key.Matches((*msg), editorMaps.Send) {
+		value := m.textarea.Value()
+		if len(value) > 0 && value[len(value)-1] == '\\' {
+			// If the last character is a backslash, remove it and add a newline
+			m.textarea.SetValue(value[:len(value)-1] + "\n")
+			return m, nil, true, true
+		} else {
+			// Otherwise, send the message
+			return m, m.send(), true, true
+		}
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateCaseRestoreDraftMsg(m *editorCmp, msg *RestoreDraftMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+	if m.textarea.Value() != "" || len(m.attachments) > 0 {
+		return m, util.ReportWarn("O rascunho atual foi preservado; limpe-o antes de editar a instrução")
+	}
+	m.textarea.SetValue(msg.Text)
+	m.textarea.CursorEnd()
+	m.attachments = cloneAttachments(msg.Attachments)
+	return m, nil
+
+}
+
+func updateEditorCmpKeyMsgAltEnd(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if msg.String() == "alt+end" || msg.String() == "ctrl+b" || msg.String() == "ctrl+y" {
+		return m, nil, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateEditorCmpKeyMsgMatchesEditorMapsOpenEditor(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if key.Matches((*msg), editorMaps.OpenEditor) {
+		if m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID) {
+			return m, util.ReportWarn("Agent is working, please wait..."), true, true
+		}
+		return m, m.openEditor(), true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
 }

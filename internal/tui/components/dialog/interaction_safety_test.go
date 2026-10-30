@@ -30,8 +30,8 @@ func TestApprovalResetsConsentAndSupportsEscapeAndExactMouseTargets(t *testing.T
 		view := ansi.Strip(m.View())
 		clicked := false
 		for y, line := range strings.Split(view, "\n") {
-			if pos := strings.Index(line, "Allow (a)"); pos >= 0 {
-				x := ansi.StringWidth(line[:pos])
+			if before, _, ok := strings.Cut(line, "Allow (a)"); ok {
+				x := ansi.StringWidth(before)
 				_, cmd = m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 				require.NotNil(t, cmd)
 				response := cmd().(PermissionResponseMsg)
@@ -46,7 +46,7 @@ func TestApprovalResetsConsentAndSupportsEscapeAndExactMouseTargets(t *testing.T
 
 func TestDisabledProviderVisibleAndEnableRequiresExplicitSave(t *testing.T) {
 	m := settingsDialog(t)
-	config.Get().ProviderProfiles["studio"] = config.ProviderProfile{Name: "Studio", Provider: config.Provider{Disabled: true}}
+	config.Get().ProviderProfiles["studio"] = config.ProviderProfile{Name: "Studio", Disabled: true}
 	m.Open()
 	require.Contains(t, ansi.Strip(m.View()), "disabled")
 	m.edit(&providerRow{id: "studio"})

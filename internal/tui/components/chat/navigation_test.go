@@ -32,7 +32,7 @@ func TestKeyboardSelectionExtendsWholeUnicodeGraphemes(t *testing.T) {
 	m := selectionFixture(t)
 	m.StartSearch("ação")
 	require.True(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'s'}}))
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		require.True(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyShiftRight}))
 	}
 	require.Equal(t, "ação", m.SelectedText())

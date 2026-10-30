@@ -55,61 +55,15 @@ func (e *themeEditor) candidate() theme.CustomPalette {
 }
 func (t *themeDialogCmp) editorUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	e := t.editor
-	if k, ok := msg.(tea.KeyMsg); ok {
-		switch k.String() {
-		case "esc":
-			if err := theme.DiscardCustomPreview(e.restore); err != nil {
-				return t, util.ReportError(err)
-			}
-			t.editor = nil
-			return t, util.CmdHandler(ThemeChangedMsg{ThemeName: e.restore, Preview: true})
-		case "ctrl+s":
-			if err := theme.SaveCustomPalette(e.candidate()); err != nil {
-				e.note = err.Error()
-				return t, nil
-			}
-			if err := theme.DiscardCustomPreview(theme.CustomThemeName); err != nil {
-				e.note = err.Error()
-				return t, nil
-			}
-			t.editor = nil
-			t.currentTheme = theme.CustomThemeName
-			t.themes = theme.AvailableThemes()
-			for i, name := range t.themes {
-				if name == theme.CustomThemeName {
-					t.selectedIdx = i
-				}
-			}
-			return t, util.CmdHandler(ThemeChangedMsg{ThemeName: theme.CustomThemeName})
-		case "tab", "enter", "down", "shift+tab", "up":
-			step := 1
-			if k.String() == "up" || k.String() == "shift+tab" {
-				step = -1
-			}
-			e.fields[e.focus].Blur()
-			e.focus = (e.focus + step + len(e.fields)) % len(e.fields)
-			return t, e.fields[e.focus].Focus()
-		}
+	if result0, result1, handled := editorUpdateTeaKeyMsg(t, msg, e); handled {
+		return result0, result1
 	}
 	if size, ok := msg.(tea.WindowSizeMsg); ok {
 		t.width, t.height = size.Width, size.Height
 		return t, nil
 	}
-	if mouse, ok := msg.(tea.MouseMsg); ok {
-		if clickedLabel(t.editorView(), config.Text("[Salvar]", "[Save]"), mouse) {
-			return t.editorUpdate(tea.KeyMsg{Type: tea.KeyCtrlS})
-		}
-		if clickedLabel(t.editorView(), config.Text("[Cancelar]", "[Cancel]"), mouse) {
-			return t.editorUpdate(tea.KeyMsg{Type: tea.KeyEsc})
-		}
-		rows, start := t.editorRows()
-		i := start + (mouse.Y-4)/2
-		if mouse.Action == tea.MouseActionPress && mouse.Button == tea.MouseButtonLeft && mouse.Y >= 4 && mouse.Y < 4+rows*2 && i < len(e.fields) && mouse.X >= 3 && mouse.X < t.editorWidth()+3 {
-			e.fields[e.focus].Blur()
-			e.focus = i
-			return t, e.fields[i].Focus()
-		}
-		return t, nil
+	if result0, result1, handled := editorUpdateTeaMouseMsg(t, msg, e); handled {
+		return result0, result1
 	}
 	var cmd tea.Cmd
 	e.fields[e.focus], cmd = e.fields[e.focus].Update(msg)
@@ -153,4 +107,73 @@ func (t *themeDialogCmp) editorView() string {
 	}
 	lines = append(lines, line(config.Text("[Salvar] Ctrl+S · [Cancelar] Esc · Tab campo", "[Save] Ctrl+S · [Cancel] Esc · Tab field")), line(e.note))
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
+}
+
+func editorUpdateThemeDialogCmpCtrlS(t *themeDialogCmp, e *themeEditor) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if err := theme.SaveCustomPalette(e.candidate()); err != nil {
+		e.note = err.Error()
+		return t, nil, true
+	}
+	if err := theme.DiscardCustomPreview(theme.CustomThemeName); err != nil {
+		e.note = err.Error()
+		return t, nil, true
+	}
+	t.editor = nil
+	t.currentTheme = theme.CustomThemeName
+	t.themes = theme.AvailableThemes()
+	for i, name := range t.themes {
+		if name == theme.CustomThemeName {
+			t.selectedIdx = i
+		}
+	}
+	return t, util.CmdHandler(ThemeChangedMsg{ThemeName: theme.CustomThemeName}), true
+
+}
+
+func editorUpdateTeaMouseMsg(t *themeDialogCmp, msg tea.Msg, e *themeEditor) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if mouse, ok := msg.(tea.MouseMsg); ok {
+		if clickedLabel(t.editorView(), config.Text("[Salvar]", "[Save]"), mouse) {
+			returned1Value0, returned1Value1 := t.editorUpdate(tea.KeyMsg{Type: tea.KeyCtrlS})
+			return returned1Value0, returned1Value1, true
+		}
+		if clickedLabel(t.editorView(), config.Text("[Cancelar]", "[Cancel]"), mouse) {
+			returned2Value0, returned2Value1 := t.editorUpdate(tea.KeyMsg{Type: tea.KeyEsc})
+			return returned2Value0, returned2Value1, true
+		}
+		rows, start := t.editorRows()
+		i := start + (mouse.Y-4)/2
+		if mouse.Action == tea.MouseActionPress && mouse.Button == tea.MouseButtonLeft && mouse.Y >= 4 && mouse.Y < 4+rows*2 && i < len(e.fields) && mouse.X >= 3 && mouse.X < t.editorWidth()+3 {
+			e.fields[e.focus].Blur()
+			e.focus = i
+			return t, e.fields[i].Focus(), true
+		}
+		return t, nil, true
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func editorUpdateTeaKeyMsg(t *themeDialogCmp, msg tea.Msg, e *themeEditor) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if k, ok := msg.(tea.KeyMsg); ok {
+		switch k.String() {
+		case "esc":
+			if err := theme.DiscardCustomPreview(e.restore); err != nil {
+				return t, util.ReportError(err), true
+			}
+			t.editor = nil
+			return t, util.CmdHandler(ThemeChangedMsg{ThemeName: e.restore, Preview: true}), true
+		case "ctrl+s":
+			if result0, result1, handled := editorUpdateThemeDialogCmpCtrlS(t, e); handled {
+				return result0, result1, true
+			}
+		case "tab", "enter", "down", "shift+tab", "up":
+			step := 1
+			if k.String() == "up" || k.String() == "shift+tab" {
+				step = -1
+			}
+			e.fields[e.focus].Blur()
+			e.focus = (e.focus + step + len(e.fields)) % len(e.fields)
+			return t, e.fields[e.focus].Focus(), true
+		}
+	}
+	return extractedResult0, extractedResult1, false
 }

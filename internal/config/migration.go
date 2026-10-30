@@ -74,11 +74,11 @@ func globalConfigPath() (string, bool) {
 // LookupEnvironmentWith gives the new alias precedence, including an explicitly
 // empty value. Provider names such as OPENAI_API_KEY are unchanged.
 func EnvironmentAliases(name string) []string {
-	if strings.HasPrefix(name, currentEnvironmentPrefix) {
-		return []string{name, legacyEnvironmentPrefix + strings.TrimPrefix(name, currentEnvironmentPrefix)}
+	if after, ok := strings.CutPrefix(name, currentEnvironmentPrefix); ok {
+		return []string{name, legacyEnvironmentPrefix + after}
 	}
-	if strings.HasPrefix(name, legacyEnvironmentPrefix) {
-		return []string{currentEnvironmentPrefix + strings.TrimPrefix(name, legacyEnvironmentPrefix), name}
+	if after, ok := strings.CutPrefix(name, legacyEnvironmentPrefix); ok {
+		return []string{currentEnvironmentPrefix + after, name}
 	}
 	return []string{name}
 }
@@ -95,31 +95,15 @@ func LookupEnvironment(name string) (string, bool) { return LookupEnvironmentWit
 func Environment(name string) string               { value, _ := LookupEnvironment(name); return value }
 func bindCompatibleEnvironment(v *viper.Viper) {
 	keys := map[string]bool{}
-	var walk func(reflect.Type, string)
-	walk = func(typ reflect.Type, prefix string) {
-		for i := 0; i < typ.NumField(); i++ {
-			field := typ.Field(i)
-			name := strings.Split(field.Tag.Get("json"), ",")[0]
-			if name == "" || name == "-" {
-				continue
-			}
-			key := prefix + name
-			if field.Type.Kind() == reflect.Struct {
-				walk(field.Type, key+".")
-			} else {
-				keys[key] = true
-			}
-		}
-	}
-	walk(reflect.TypeOf(Config{}), "")
+	collectConfigurationKeys(reflect.TypeFor[Config](), "", keys)
 	for _, key := range v.AllKeys() {
 		keys[key] = true
 	}
 	for _, entry := range os.Environ() {
 		name, _, _ := strings.Cut(entry, "=")
 		for _, prefix := range []string{currentEnvironmentPrefix, legacyEnvironmentPrefix} {
-			if strings.HasPrefix(name, prefix) {
-				keys[strings.ToLower(strings.TrimPrefix(name, prefix))] = true
+			if after, ok := strings.CutPrefix(name, prefix); ok {
+				keys[strings.ToLower(after)] = true
 			}
 		}
 	}
@@ -133,7 +117,7 @@ func bindCompatibleEnvironment(v *viper.Viper) {
 // LegacySensitivePath is shared by read tools and sandbox masking. Legacy
 // storage stays protected even when the new data directory is selected.
 func LegacySensitivePath(path string) bool {
-	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
+	for part := range strings.SplitSeq(filepath.ToSlash(path), "/") {
 		if strings.EqualFold(part, "."+legacyAppName) {
 			return true
 		}
@@ -159,13 +143,7 @@ func defaultGuidancePaths(root string) []string {
 		if local {
 			suffix = ".local.md"
 		}
-		hasCurrent := false
-		for _, base := range []string{"opcode", "Opcode", "OPCODE"} {
-			if _, err := os.Lstat(filepath.Join(root, base+suffix)); err == nil {
-				hasCurrent = true
-				break
-			}
-		}
+		hasCurrent := hasCurrentGuidance(root, suffix)
 		if !hasCurrent {
 			for _, legacy := range legacyGuidancePaths() {
 				if strings.HasSuffix(legacy, ".local.md") == local {
@@ -175,4 +153,31 @@ func defaultGuidancePaths(root string) []string {
 		}
 	}
 	return paths
+}
+
+func collectConfigurationKeys(typ reflect.Type, prefix string, keys map[string]bool) {
+	for field := range typ.Fields() {
+		field := field
+		name, _, _ := strings.Cut(field.Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		key := prefix + name
+		if field.Type.Kind() == reflect.Struct {
+			collectConfigurationKeys(field.Type, key+".", keys)
+		} else {
+			keys[key] = true
+		}
+	}
+}
+
+func hasCurrentGuidance(root, suffix string) bool {
+	hasCurrent := false
+	for _, base := range []string{"opcode", "Opcode", "OPCODE"} {
+		if _, err := os.Lstat(filepath.Join(root, base+suffix)); err == nil {
+			hasCurrent = true
+			break
+		}
+	}
+	return hasCurrent
 }

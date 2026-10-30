@@ -86,23 +86,8 @@ func ValidateCustomPalette(p CustomPalette) error {
 		}
 	}
 	base := GetTheme(p.Base)
-	for _, mode := range []string{"light", "dark"} {
-		choose := func(c lipgloss.AdaptiveColor) string {
-			if mode == "light" {
-				return c.Light
-			}
-			return c.Dark
-		}
-		bg := choose(p.Background)
-		for label, fg := range map[string]lipgloss.AdaptiveColor{"primary": p.Primary, "text": p.Text, "muted": p.Muted} {
-			if colorContrast(choose(fg), bg) < 4.5 {
-				return fmt.Errorf("%s/%s contrast must be at least 4.5:1", mode, label)
-			}
-			secondary := choose(base.BackgroundSecondary())
-			if literalColor.MatchString(secondary) && colorContrast(choose(fg), secondary) < 4.5 {
-				return fmt.Errorf("%s/%s needs 4.5:1 on the secondary background", mode, label)
-			}
-		}
+	if result0, handled := validateCustomPaletteState(&p, base); handled {
+		return result0
 	}
 	return nil
 }
@@ -245,4 +230,26 @@ func LoadCustomTheme() error {
 	}
 	RegisterTheme(CustomThemeName, t)
 	return nil
+}
+
+func validateCustomPaletteState(p *CustomPalette, base Theme) (extractedResult0 error, handled bool) {
+	for _, mode := range []string{"light", "dark"} {
+		choose := func(c lipgloss.AdaptiveColor) string {
+			if mode == "light" {
+				return c.Light
+			}
+			return c.Dark
+		}
+		bg := choose(p.Background)
+		for label, fg := range map[string]lipgloss.AdaptiveColor{"primary": p.Primary, "text": p.Text, "muted": p.Muted} {
+			if colorContrast(choose(fg), bg) < 4.5 {
+				return fmt.Errorf("%s/%s contrast must be at least 4.5:1", mode, label), true
+			}
+			secondary := choose(base.BackgroundSecondary())
+			if literalColor.MatchString(secondary) && colorContrast(choose(fg), secondary) < 4.5 {
+				return fmt.Errorf("%s/%s needs 4.5:1 on the secondary background", mode, label), true
+			}
+		}
+	}
+	return extractedResult0, false
 }

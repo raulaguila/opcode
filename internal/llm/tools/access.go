@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -36,26 +37,8 @@ func (s *secureTool) Run(ctx context.Context, call ToolCall) (ToolResponse, erro
 		return NewTextErrorResponse("tool arguments contain a configured credential; remove it before retrying"), nil
 	}
 	ctx = context.WithValue(ctx, accessKey{}, &accessPolicy{permissions: s.permissions, tool: s.Info().Name, approved: map[string]bool{}})
-	// Scope directory traversal before starting subprocesses or walking trees.
-	var input struct {
-		Path     string `json:"path"`
-		FilePath string `json:"file_path"`
-	}
-	localPathTool := false
-	switch s.Info().Name {
-	case "view", "ls", "glob", "grep", "edit", "write", "patch", "diagnostics", "symbols", "definition", "references":
-		localPathTool = true
-	}
-	if localPathTool && json.Unmarshal([]byte(call.Input), &input) == nil {
-		path := input.FilePath
-		if path == "" {
-			path = input.Path
-		}
-		if path != "" {
-			if _, err := authorizeFile(ctx, path, "read"); err != nil {
-				return ToolResponse{}, err
-			}
-		}
+	if err := authorizeToolTraversal(ctx, s.Info().Name, call.Input); err != nil {
+		return ToolResponse{}, err
 	}
 	response, err := s.BaseTool.Run(ctx, call)
 	response.Content = redact(response.Content)
@@ -125,39 +108,10 @@ func redactScreen(value string, running bool) string {
 		compact = append(compact, b)
 		positions = append(positions, i)
 	}
-	mask := func(start, count int) {
-		for _, pos := range positions[start : start+count] {
-			raw[pos] = '*'
-		}
-	}
+
+	masker := screenCredentialMasker{raw: raw, positions: positions, text: string(compact)}
 	for _, secret := range credentialValues() {
-		needle := strings.Map(func(r rune) rune {
-			if r == ' ' || r == '\n' || r == '\r' || r == '\t' {
-				return -1
-			}
-			return r
-		}, secret)
-		if needle == "" {
-			continue
-		}
-		text := string(compact)
-		for offset := 0; offset < len(text); {
-			at := strings.Index(text[offset:], needle)
-			if at < 0 {
-				break
-			}
-			at += offset
-			mask(at, len(needle))
-			offset = at + len(needle)
-		}
-		if running {
-			for n := min(len(needle)-1, len(text)); n > 0; n-- {
-				if strings.HasSuffix(text, needle[:n]) {
-					mask(len(text)-n, n)
-					break
-				}
-			}
-		}
+		masker.hide(secret, running)
 	}
 	return redact(string(raw))
 }
@@ -176,8 +130,8 @@ func canonicalPath(path string) (string, error) {
 	for {
 		resolved, err := filepath.EvalSymlinks(path)
 		if err == nil {
-			for i := len(suffix) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, suffix[i])
+			for _, s := range slices.Backward(suffix) {
+				resolved = filepath.Join(resolved, s)
 			}
 			return resolved, nil
 		}
@@ -209,12 +163,7 @@ func authorizeFile(ctx context.Context, path, action string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sensitive := shell.SensitivePath(resolved) || shell.SensitivePath(absolutePath(path))
-	if cfg := config.Get(); cfg != nil && cfg.Data.Directory != "" {
-		if dataRoot, e := canonicalPath(cfg.Data.Directory); e == nil && inside(dataRoot, resolved) {
-			sensitive = true
-		}
-	}
+	sensitive := sensitiveAccessPath(path, resolved)
 	symlinkWrite := action == "write" && resolved != absolutePath(path)
 	if inside(root, resolved) && !sensitive && !symlinkWrite {
 		return resolved, nil
@@ -348,4 +297,80 @@ func IsOpaqueTool(tool BaseTool) bool {
 		return opaque.OpaqueTool()
 	}
 	return false
+}
+
+func authorizeToolTraversal(ctx context.Context, tool, raw string) error {
+	// Scope directory traversal before starting subprocesses or walking trees.
+	var input struct {
+		Path     string `json:"path"`
+		FilePath string `json:"file_path"`
+	}
+	localPathTool := false
+	switch tool {
+	case "view", "ls", "glob", "grep", "edit", "write", "patch", "diagnostics", "symbols", "definition", "references":
+		localPathTool = true
+	}
+	if localPathTool && json.Unmarshal([]byte(raw), &input) == nil {
+		path := input.FilePath
+		if path == "" {
+			path = input.Path
+		}
+		if path != "" {
+			if _, err := authorizeFile(ctx, path, "read"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func sensitiveAccessPath(path, resolved string) bool {
+	sensitive := shell.SensitivePath(resolved) || shell.SensitivePath(absolutePath(path))
+	if cfg := config.Get(); cfg != nil && cfg.Data.Directory != "" {
+		if dataRoot, e := canonicalPath(cfg.Data.Directory); e == nil && inside(dataRoot, resolved) {
+			sensitive = true
+		}
+	}
+	return sensitive
+}
+
+type screenCredentialMasker struct {
+	raw       []byte
+	positions []int
+	text      string
+}
+
+func (m screenCredentialMasker) mask(start, count int) {
+	for _, pos := range m.positions[start : start+count] {
+		m.raw[pos] = '*'
+	}
+}
+func (m screenCredentialMasker) hide(secret string, running bool) {
+	needle := strings.Map(func(r rune) rune {
+		if r == ' ' || r == '\n' || r == '\r' || r == '\t' {
+			return -1
+		}
+		return r
+	}, secret)
+	if needle == "" {
+		return
+	}
+	text := m.text
+	for offset := 0; offset < len(text); {
+		at := strings.Index(text[offset:], needle)
+		if at < 0 {
+			break
+		}
+		at += offset
+		m.mask(at, len(needle))
+		offset = at + len(needle)
+	}
+	if running {
+		for n := min(len(needle)-1, len(text)); n > 0; n-- {
+			if strings.HasSuffix(text, needle[:n]) {
+				m.mask(len(text)-n, n)
+				break
+			}
+		}
+	}
 }

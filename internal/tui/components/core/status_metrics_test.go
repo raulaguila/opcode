@@ -24,8 +24,8 @@ func TestFooterMetricsResizeAndClicksMatchVisibleCells(t *testing.T) {
 			continue
 		}
 		require.Contains(t, plain, "~8k/32k ctx")
-		at := strings.Index(plain, "~8k")
-		x := ansi.StringWidth(plain[:at])
+		before, _, _ := strings.Cut(plain, "~8k")
+		x := ansi.StringWidth(before)
 		require.Equal(t, "context", m.ActionAt(x, state))
 		require.Equal(t, "models", m.ActionAt(width-2, state))
 		if width >= 110 {

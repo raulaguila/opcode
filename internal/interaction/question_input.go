@@ -18,55 +18,64 @@ func DecodeQuestion(raw string) (Question, error) {
 	if json.Unmarshal([]byte(raw), &object) != nil || object == nil {
 		return q, fmt.Errorf("invalid question: expected a JSON object with question and optional choices")
 	}
-	normalize := func(object map[string]json.RawMessage) error {
-		value, ok := object["choices"]
-		if !ok {
-			return nil
-		}
-		value = bytes.TrimSpace(value)
-		if len(value) > 0 && value[0] == '"' {
-			var encoded string
-			if json.Unmarshal(value, &encoded) != nil {
-				return fmt.Errorf("invalid question: choices must be an array of strings, e.g. [\"Yes\",\"No\"]")
-			}
-			value = bytes.TrimSpace([]byte(encoded))
-			if len(value) == 0 || value[0] != '[' {
-				return fmt.Errorf("invalid question: choices must be an array of strings, e.g. [\"Yes\",\"No\"]")
-			}
-		}
-		var choices []string
-		if json.Unmarshal(value, &choices) != nil || len(choices) > 5 {
-			return fmt.Errorf("invalid question: choices must contain at most five strings, e.g. [\"Yes\",\"No\"]")
-		}
-		for _, choice := range choices {
-			if len(bytes.TrimSpace([]byte(choice))) == 0 || len(choice) > 300 {
-				return fmt.Errorf("invalid question: each choice must contain 1–300 bytes")
-			}
-		}
-		object["choices"], _ = json.Marshal(choices)
-		return nil
-	}
-	if err := normalize(object); err != nil {
+
+	if err := normalizeQuestionChoices(object); err != nil {
 		return q, err
 	}
-	if rawItems, ok := object["questions"]; ok {
-		var items []map[string]json.RawMessage
-		if json.Unmarshal(rawItems, &items) != nil || len(items) > 5 {
-			return q, fmt.Errorf("invalid question: questions must be an array of at most five objects")
-		}
-		for _, item := range items {
-			if item == nil {
-				return q, fmt.Errorf("invalid question: each question must be an object")
-			}
-			if err := normalize(item); err != nil {
-				return q, err
-			}
-		}
-		object["questions"], _ = json.Marshal(items)
+	if err := normalizeQuestionBatch(object); err != nil {
+		return q, err
 	}
 	normalized, _ := json.Marshal(object)
 	if json.Unmarshal(normalized, &q) != nil {
 		return q, fmt.Errorf("invalid question: question/explanation must be strings; choices must be an array of strings")
 	}
 	return q, nil
+}
+
+func normalizeQuestionChoices(object map[string]json.RawMessage) error {
+	value, ok := object["choices"]
+	if !ok {
+		return nil
+	}
+	value = bytes.TrimSpace(value)
+	if len(value) > 0 && value[0] == '"' {
+		var encoded string
+		if json.Unmarshal(value, &encoded) != nil {
+			return fmt.Errorf("invalid question: choices must be an array of strings, e.g. [\"Yes\",\"No\"]")
+		}
+		value = bytes.TrimSpace([]byte(encoded))
+		if len(value) == 0 || value[0] != '[' {
+			return fmt.Errorf("invalid question: choices must be an array of strings, e.g. [\"Yes\",\"No\"]")
+		}
+	}
+	var choices []string
+	if json.Unmarshal(value, &choices) != nil || len(choices) > 5 {
+		return fmt.Errorf("invalid question: choices must contain at most five strings, e.g. [\"Yes\",\"No\"]")
+	}
+	for _, choice := range choices {
+		if len(bytes.TrimSpace([]byte(choice))) == 0 || len(choice) > 300 {
+			return fmt.Errorf("invalid question: each choice must contain 1–300 bytes")
+		}
+	}
+	object["choices"], _ = json.Marshal(choices)
+	return nil
+}
+
+func normalizeQuestionBatch(object map[string]json.RawMessage) error {
+	if rawItems, ok := object["questions"]; ok {
+		var items []map[string]json.RawMessage
+		if json.Unmarshal(rawItems, &items) != nil || len(items) > 5 {
+			return fmt.Errorf("invalid question: questions must be an array of at most five objects")
+		}
+		for _, item := range items {
+			if item == nil {
+				return fmt.Errorf("invalid question: each question must be an object")
+			}
+			if err := normalizeQuestionChoices(item); err != nil {
+				return err
+			}
+		}
+		object["questions"], _ = json.Marshal(items)
+	}
+	return nil
 }

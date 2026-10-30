@@ -82,18 +82,7 @@ func probeMCPClient(ctx context.Context, c MCPClient) (MCPProbe, error) {
 	}
 	sort.Strings(result.Tools)
 	if reader, ok := c.(mcpResourceClient); ok {
-		resources, err := reader.ListResourcesByPage(ctx, mcp.ListResourcesRequest{})
-		if err != nil {
-			result.ResourceError = tools.RedactCredentials(err.Error())
-		} else if resources == nil || len(resources.Resources) > 1000 {
-			result.ResourceError = "MCP resource page exceeds 1000 entries"
-		} else {
-			result.NextResourcesCursor = string(resources.NextCursor)
-			for _, resource := range resources.Resources {
-				result.Resources = append(result.Resources, tools.RedactCredentials(resource.URI))
-			}
-			sort.Strings(result.Resources)
-		}
+		probeMCPResources(ctx, reader, &result)
 	}
 	return result, nil
 }
@@ -119,4 +108,21 @@ func redactMCPProbe(server config.MCPServer, text string) string {
 		}
 	}
 	return tools.RedactCredentials(text)
+}
+
+func probeMCPResources(ctx context.Context, reader mcpResourceClient, result *MCPProbe) {
+
+	resources, err := reader.ListResourcesByPage(ctx, mcp.ListResourcesRequest{})
+	if err != nil {
+		result.ResourceError = tools.RedactCredentials(err.Error())
+	} else if resources == nil || len(resources.Resources) > 1000 {
+		result.ResourceError = "MCP resource page exceeds 1000 entries"
+	} else {
+		result.NextResourcesCursor = string(resources.NextCursor)
+		for _, resource := range resources.Resources {
+			result.Resources = append(result.Resources, tools.RedactCredentials(resource.URI))
+		}
+		sort.Strings(result.Resources)
+	}
+
 }

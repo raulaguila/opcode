@@ -6,7 +6,6 @@ import (
 	"math"
 	"slices"
 	"sort"
-	"strings"
 
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -49,6 +48,17 @@ type RunSummary struct {
 	ToolCalls           *int                `json:"tool_calls"`
 }
 
+type comparisonRun struct {
+	summary                           RunSummary
+	input, output                     int64
+	recall, mrr                       float64
+	allInput, allOutput, allRetrieval bool
+	toolCalls                         int
+	allToolCalls                      bool
+	phases                            agent.PhaseMetrics
+	allPhases                         bool
+}
+
 func Compare(paths []string) (Comparison, error) {
 	result := Comparison{Version: 1, Comparable: true, Rankable: true, Differences: []string{}, RankingUnavailable: []string{}, Notice: "Same fixture hash, case/trial/criteria, requested model, protocol, effective context and output reserve are required. Applications retain different prompts/tools/policies. Missing metrics are null; unavailable criteria are not passed. Rankable concerns only complete declared observations, not general superiority or causal prompt improvements."}
 	if len(paths) < 2 || len(paths) > 12 {
@@ -56,16 +66,9 @@ func Compare(paths []string) (Comparison, error) {
 	}
 	var baseline Report
 	for index, path := range paths {
-		raw, err := readBounded(path, 2<<20)
+		report, err := loadComparisonReport(path, index)
 		if err != nil {
-			return result, fmt.Errorf("cannot read comparison report %d", index+1)
-		}
-		var report Report
-		if json.Unmarshal(raw, &report) != nil || report.Version != 1 || report.Mode != "live_provider" || len(report.Cases) == 0 || len(report.Cases) > 96 || len(report.SuiteSHA256) != 64 {
-			return result, fmt.Errorf("comparison report %d must be a bounded live report", index+1)
-		}
-		if err := validateComparisonCases(report); err != nil {
-			return result, fmt.Errorf("comparison report %d: %w", index+1, err)
+			return result, err
 		}
 		result.Differences = append(result.Differences, requestedDifferences(report)...)
 		if index == 0 {
@@ -76,144 +79,59 @@ func Compare(paths []string) (Comparison, error) {
 			}
 			result.Differences = append(result.Differences, conditionDifferences(baseline, report)...)
 		}
-		summary := RunSummary{Experiment: tools.RedactCredentials(report.Experiment), PromptVersions: []string{}, PromptProfiles: []string{}}
-		input, output, recall, mrr := int64(0), int64(0), 0., 0.
-		allInput, allOutput, allRetrieval := true, true, true
-		toolCalls, allToolCalls := 0, true
-		phases, allPhases := agent.PhaseMetrics{}, true
-		for _, c := range report.Cases {
-			label := caseLabel(c)
-			for _, field := range c.ConditionsUnavailable {
-				result.RankingUnavailable = append(result.RankingUnavailable, label+": effective "+field+" unavailable; requested value is not an observation")
-			}
-			if c.Temperature == nil {
-				result.RankingUnavailable = append(result.RankingUnavailable, label+": sampling temperature unavailable")
-			}
-			if c.CriteriaSHA256 == "" {
-				result.RankingUnavailable = append(result.RankingUnavailable, label+": full criterion identity unavailable in legacy report")
-			}
-			if c.Status == "unavailable" {
-				result.RankingUnavailable = append(result.RankingUnavailable, label+": application/case unavailable")
-			}
-			if c.PhaseMetrics == nil {
-				allPhases = false
-			} else {
-				if !addPhaseMetrics(&phases, *c.PhaseMetrics) {
-					return result, fmt.Errorf("comparison report %d contains invalid phase metrics", index+1)
-				}
-			}
-			if c.Temperature != nil && !slices.Contains(summary.Temperatures, *c.Temperature) {
-				summary.Temperatures = append(summary.Temperatures, *c.Temperature)
-			}
-			if summary.Application == "" {
-				summary.Application = tools.RedactCredentials(c.Application)
-				summary.Version = tools.RedactCredentials(c.ApplicationVersion)
-			}
-			if c.Application == "" || c.Application != summary.Application {
-				return result, fmt.Errorf("comparison report %d mixes or omits application names", index+1)
-			}
-			if c.APIModel == "" || c.Protocol == "" || c.ContextWindow <= 0 || c.OutputReserve <= 0 {
-				result.Differences = append(result.Differences, "effective model/protocol/context/output information missing")
-			}
-			if !contains(summary.APIModels, c.APIModel) {
-				summary.APIModels = append(summary.APIModels, tools.RedactCredentials(c.APIModel))
-			}
-			if !contains(summary.Protocols, c.Protocol) {
-				summary.Protocols = append(summary.Protocols, tools.RedactCredentials(c.Protocol))
-			}
-			if !containsInt64(summary.ContextWindows, c.ContextWindow) {
-				summary.ContextWindows = append(summary.ContextWindows, c.ContextWindow)
-			}
-			if !containsInt64(summary.OutputReserves, c.OutputReserve) {
-				summary.OutputReserves = append(summary.OutputReserves, c.OutputReserve)
-			}
-			if c.Application == "opcode" {
-				if toolCalls > math.MaxInt-c.ToolCalls {
-					return result, fmt.Errorf("comparison tool metrics overflow")
-				}
-				toolCalls += c.ToolCalls
-			} else if c.ReportedToolCalls != nil {
-				if toolCalls > math.MaxInt-*c.ReportedToolCalls {
-					return result, fmt.Errorf("comparison tool metrics overflow")
-				}
-				toolCalls += *c.ReportedToolCalls
-			} else {
-				allToolCalls = false
-			}
-			switch c.Status {
-			case "passed":
-				summary.Passed++
-			case "failed":
-				summary.Failed++
-			case "unavailable":
-				summary.Unavailable++
-			default:
-				return result, fmt.Errorf("comparison report contains non-live status")
-			}
-			for _, criterion := range c.Criteria {
-				if criterion.Passed == nil {
-					result.RankingUnavailable = append(result.RankingUnavailable, comparisonDiagnostic("%s: criterion %s unavailable", label, criterion.Kind))
-					summary.UnavailableCriteria++
-				} else {
-					summary.ObservedCriteria++
-					if *criterion.Passed {
-						summary.PassedCriteria++
-					}
-				}
-			}
-			if summary.DurationMS > math.MaxInt64-c.DurationMS {
-				return result, fmt.Errorf("comparison duration metrics overflow")
-			}
-			summary.DurationMS += c.DurationMS
-			if c.InputTokens == nil {
-				allInput = false
-			} else {
-				if input > math.MaxInt64-*c.InputTokens {
-					return result, fmt.Errorf("comparison input metrics overflow")
-				}
-				input += *c.InputTokens
-			}
-			if c.OutputTokens == nil {
-				allOutput = false
-			} else {
-				if output > math.MaxInt64-*c.OutputTokens {
-					return result, fmt.Errorf("comparison output metrics overflow")
-				}
-				output += *c.OutputTokens
-			}
-			if c.RetrievalRecall == nil || c.RetrievalMRR == nil {
-				allRetrieval = false
-			} else {
-				recall += *c.RetrievalRecall
-				mrr += *c.RetrievalMRR
-			}
-			if c.PromptVersion != "" && !contains(summary.PromptVersions, c.PromptVersion) {
-				summary.PromptVersions = append(summary.PromptVersions, tools.RedactCredentials(c.PromptVersion))
-			}
-			if c.PromptProfile != "" && !contains(summary.PromptProfiles, c.PromptProfile) {
-				summary.PromptProfiles = append(summary.PromptProfiles, tools.RedactCredentials(c.PromptProfile))
-			}
+		run := comparisonRun{summary: RunSummary{Experiment: tools.RedactCredentials(report.Experiment), PromptVersions: []string{}, PromptProfiles: []string{}}, allInput: true, allOutput: true, allRetrieval: true, allToolCalls: true, allPhases: true}
+		if err := run.observe(&result, report.Cases, index); err != nil {
+			return result, err
 		}
-		if allPhases {
-			summary.PhaseMetrics = &phases
-		}
-		if allInput {
-			summary.InputTokens = &input
-		}
-		if allOutput {
-			summary.OutputTokens = &output
-		}
-		if allToolCalls {
-			summary.ToolCalls = &toolCalls
-		}
-		if allRetrieval {
-			recall /= float64(len(report.Cases))
-			mrr /= float64(len(report.Cases))
-			summary.RetrievalRecall = &recall
-			summary.RetrievalMRR = &mrr
-		}
-		result.Runs = append(result.Runs, summary)
+		result.Runs = append(result.Runs, run.finish(len(report.Cases)))
 	}
+	finalizeComparison(&result)
+	return result, nil
+}
+
+func loadComparisonReport(path string, index int) (report Report, err error) {
+	raw, err := readBounded(path, 2<<20)
+	if err != nil {
+		return report, fmt.Errorf("cannot read comparison report %d", index+1)
+	}
+	if json.Unmarshal(raw, &report) != nil || report.Version != 1 || report.Mode != "live_provider" || len(report.Cases) == 0 || len(report.Cases) > 96 || len(report.SuiteSHA256) != 64 {
+		return report, fmt.Errorf("comparison report %d must be a bounded live report", index+1)
+	}
+	if err := validateComparisonCases(report); err != nil {
+		return report, fmt.Errorf("comparison report %d: %w", index+1, err)
+	}
+	return report, nil
+}
+func (r *comparisonRun) observe(comparison *Comparison, cases []CaseResult, index int) error {
+	for _, c := range cases {
+		if err := r.observeCase(comparison, c, index); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (r *comparisonRun) finish(caseCount int) RunSummary {
+	if r.allPhases {
+		r.summary.PhaseMetrics = &r.phases
+	}
+	if r.allInput {
+		r.summary.InputTokens = &r.input
+	}
+	if r.allOutput {
+		r.summary.OutputTokens = &r.output
+	}
+	if r.allToolCalls {
+		r.summary.ToolCalls = &r.toolCalls
+	}
+	if r.allRetrieval {
+		r.recall /= float64(caseCount)
+		r.mrr /= float64(caseCount)
+		r.summary.RetrievalRecall = &r.recall
+		r.summary.RetrievalMRR = &r.mrr
+	}
+	return r.summary
+}
+func finalizeComparison(result *Comparison) {
 	sort.Strings(result.Differences)
 	unique := result.Differences[:0]
 	for _, d := range result.Differences {
@@ -226,30 +144,166 @@ func Compare(paths []string) (Comparison, error) {
 	sort.Strings(result.RankingUnavailable)
 	result.RankingUnavailable = slices.Compact(result.RankingUnavailable)
 	result.Rankable = result.Comparable && len(result.RankingUnavailable) == 0
-	return result, nil
+}
+
+func (r *comparisonRun) recordUnavailable(comparison *Comparison, c CaseResult, index int) error {
+	label := caseLabel(c)
+	for _, field := range c.ConditionsUnavailable {
+		comparison.RankingUnavailable = append(comparison.RankingUnavailable, label+": effective "+field+" unavailable; requested value is not an observation")
+	}
+	if c.Temperature == nil {
+		comparison.RankingUnavailable = append(comparison.RankingUnavailable, label+": sampling temperature unavailable")
+	}
+	if c.CriteriaSHA256 == "" {
+		comparison.RankingUnavailable = append(comparison.RankingUnavailable, label+": full criterion identity unavailable in legacy report")
+	}
+	if c.Status == "unavailable" {
+		comparison.RankingUnavailable = append(comparison.RankingUnavailable, label+": application/case unavailable")
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordPhases(comparison *Comparison, c CaseResult, index int) error {
+	if c.PhaseMetrics == nil {
+		r.allPhases = false
+	} else {
+		if !addPhaseMetrics(&r.phases, *c.PhaseMetrics) {
+			return fmt.Errorf("comparison report %d contains invalid phase metrics", index+1)
+		}
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordIdentity(comparison *Comparison, c CaseResult, index int) error {
+	if c.Temperature != nil && !slices.Contains(r.summary.Temperatures, *c.Temperature) {
+		r.summary.Temperatures = append(r.summary.Temperatures, *c.Temperature)
+	}
+	if r.summary.Application == "" {
+		r.summary.Application = tools.RedactCredentials(c.Application)
+		r.summary.Version = tools.RedactCredentials(c.ApplicationVersion)
+	}
+	if c.Application == "" || c.Application != r.summary.Application {
+		return fmt.Errorf("comparison report %d mixes or omits application names", index+1)
+	}
+	if c.APIModel == "" || c.Protocol == "" || c.ContextWindow <= 0 || c.OutputReserve <= 0 {
+		comparison.Differences = append(comparison.Differences, "effective model/protocol/context/output information missing")
+	}
+	if !contains(r.summary.APIModels, c.APIModel) {
+		r.summary.APIModels = append(r.summary.APIModels, tools.RedactCredentials(c.APIModel))
+	}
+	if !contains(r.summary.Protocols, c.Protocol) {
+		r.summary.Protocols = append(r.summary.Protocols, tools.RedactCredentials(c.Protocol))
+	}
+	if !containsInt64(r.summary.ContextWindows, c.ContextWindow) {
+		r.summary.ContextWindows = append(r.summary.ContextWindows, c.ContextWindow)
+	}
+	if !containsInt64(r.summary.OutputReserves, c.OutputReserve) {
+		r.summary.OutputReserves = append(r.summary.OutputReserves, c.OutputReserve)
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordToolMetrics(comparison *Comparison, c CaseResult, index int) error {
+	if c.Application == "opcode" {
+		if r.toolCalls > math.MaxInt-c.ToolCalls {
+			return fmt.Errorf("comparison tool metrics overflow")
+		}
+		r.toolCalls += c.ToolCalls
+	} else if c.ReportedToolCalls != nil {
+		if r.toolCalls > math.MaxInt-*c.ReportedToolCalls {
+			return fmt.Errorf("comparison tool metrics overflow")
+		}
+		r.toolCalls += *c.ReportedToolCalls
+	} else {
+		r.allToolCalls = false
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordStatus(comparison *Comparison, c CaseResult, index int) error {
+	switch c.Status {
+	case "passed":
+		r.summary.Passed++
+	case "failed":
+		r.summary.Failed++
+	case "unavailable":
+		r.summary.Unavailable++
+	default:
+		return fmt.Errorf("comparison report contains non-live status")
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordCriteria(comparison *Comparison, c CaseResult, index int) error {
+	label := caseLabel(c)
+	for _, criterion := range c.Criteria {
+		if criterion.Passed == nil {
+			comparison.RankingUnavailable = append(comparison.RankingUnavailable, comparisonDiagnostic("%s: criterion %s unavailable", label, criterion.Kind))
+			r.summary.UnavailableCriteria++
+		} else {
+			r.summary.ObservedCriteria++
+			if *criterion.Passed {
+				r.summary.PassedCriteria++
+			}
+		}
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordTokenMetrics(comparison *Comparison, c CaseResult, index int) error {
+	if r.summary.DurationMS > math.MaxInt64-c.DurationMS {
+		return fmt.Errorf("comparison duration metrics overflow")
+	}
+	r.summary.DurationMS += c.DurationMS
+	if c.InputTokens == nil {
+		r.allInput = false
+	} else {
+		if r.input > math.MaxInt64-*c.InputTokens {
+			return fmt.Errorf("comparison input metrics overflow")
+		}
+		r.input += *c.InputTokens
+	}
+	if c.OutputTokens == nil {
+		r.allOutput = false
+	} else {
+		if r.output > math.MaxInt64-*c.OutputTokens {
+			return fmt.Errorf("comparison output metrics overflow")
+		}
+		r.output += *c.OutputTokens
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordRetrieval(comparison *Comparison, c CaseResult, index int) error {
+	if c.RetrievalRecall == nil || c.RetrievalMRR == nil {
+		r.allRetrieval = false
+	} else {
+		r.recall += *c.RetrievalRecall
+		r.mrr += *c.RetrievalMRR
+	}
+
+	return nil
+}
+
+func (r *comparisonRun) recordPromptIdentity(comparison *Comparison, c CaseResult, index int) error {
+	if c.PromptVersion != "" && !contains(r.summary.PromptVersions, c.PromptVersion) {
+		r.summary.PromptVersions = append(r.summary.PromptVersions, tools.RedactCredentials(c.PromptVersion))
+	}
+	if c.PromptProfile != "" && !contains(r.summary.PromptProfiles, c.PromptProfile) {
+		r.summary.PromptProfiles = append(r.summary.PromptProfiles, tools.RedactCredentials(c.PromptProfile))
+	}
+	return nil
 }
 
 func containsInt64(values []int64, target int64) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
-}
-
-func fingerprintConditions(report Report) string {
-	rows := make([]string, 0, len(report.Cases))
-	for _, c := range report.Cases {
-		criteria := []string{}
-		for _, v := range c.Criteria {
-			criteria = append(criteria, v.Kind+":"+v.Path)
-		}
-		temperature, _ := json.Marshal(c.Temperature)
-		rows = append(rows, fmt.Sprintf("%s|%d|%s|%s|%d|%d|%s|%s", c.ID, c.Trial, c.APIModel, c.Protocol, c.ContextWindow, c.OutputReserve, string(temperature), strings.Join(criteria, ",")))
-	}
-	sort.Strings(rows)
-	return strings.Join(rows, "\n")
+	return slices.Contains(values, target)
 }
 
 func addPhaseMetrics(total *agent.PhaseMetrics, sample agent.PhaseMetrics) bool {
@@ -264,4 +318,36 @@ func addPhaseMetrics(total *agent.PhaseMetrics, sample agent.PhaseMetrics) bool 
 		*targets[i] += value
 	}
 	return true
+}
+
+func (r *comparisonRun) observeCase(comparison *Comparison, c CaseResult, index int) error {
+	if err := r.recordUnavailable(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordPhases(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordIdentity(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordToolMetrics(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordStatus(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordCriteria(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordTokenMetrics(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordRetrieval(comparison, c, index); err != nil {
+		return err
+	}
+	if err := r.recordPromptIdentity(comparison, c, index); err != nil {
+		return err
+	}
+
+	return nil
 }

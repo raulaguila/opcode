@@ -180,7 +180,7 @@ func (m *sidebarCmp) modifiedFiles() string {
 		Render(config.Text("Arquivos alterados:", "Modified Files:"))
 
 	// If no modified files, show a placeholder message
-	if m.modFiles == nil || len(m.modFiles) == 0 {
+	if len(m.modFiles) == 0 {
 		message := config.Text("Nenhum arquivo alterado", "No modified files")
 		remainingWidth := m.width - lipgloss.Width(message)
 		if remainingWidth > 0 {
@@ -266,49 +266,7 @@ func (m *sidebarCmp) loadModifiedFiles(ctx context.Context) {
 	})
 
 	// Process each latest file
-	for _, file := range latestFiles {
-		// Skip if this is the initial version (no changes to show)
-		if file.Version == history.InitialVersion {
-			continue
-		}
-
-		// Find the initial version for this specific file
-		var initialVersion history.File
-		for _, v := range allFiles {
-			if v.Path == file.Path && v.Version == history.InitialVersion {
-				initialVersion = v
-				break
-			}
-		}
-
-		// Skip if we can't find the initial version
-		if initialVersion.ID == "" {
-			continue
-		}
-		if initialVersion.Content == file.Content {
-			continue
-		}
-
-		// Calculate diff between initial and latest version
-		_, additions, removals := diff.GenerateDiff(initialVersion.Content, file.Content, file.Path)
-
-		// Only add to modified files if there are changes
-		if additions > 0 || removals > 0 {
-			// Remove working directory prefix from file path
-			displayPath := file.Path
-			workingDir := config.WorkingDirectory()
-			displayPath = strings.TrimPrefix(displayPath, workingDir)
-			displayPath = strings.TrimPrefix(displayPath, "/")
-
-			m.modFiles[displayPath] = struct {
-				additions int
-				removals  int
-			}{
-				additions: additions,
-				removals:  removals,
-			}
-		}
-	}
+	loadModifiedFilesLatestFiles(m, latestFiles, allFiles)
 }
 
 func (m *sidebarCmp) processFileChanges(ctx context.Context, file history.File) {
@@ -375,4 +333,54 @@ func getDisplayPath(path string) string {
 	workingDir := config.WorkingDirectory()
 	displayPath := strings.TrimPrefix(path, workingDir)
 	return strings.TrimPrefix(displayPath, "/")
+}
+
+func loadModifiedFilesLatestFiles(m *sidebarCmp, latestFiles []history.File, allFiles []history.File) {
+	for _, file := range latestFiles {
+		// Skip if this is the initial version (no changes to show)
+		if file.Version == history.InitialVersion {
+			continue
+		}
+
+		// Find the initial version for this specific file
+		var initialVersion history.File
+		loadModifiedFilesLatestFilesAllFiles(allFiles, &file, &initialVersion)
+
+		// Skip if we can't find the initial version
+		if initialVersion.ID == "" {
+			continue
+		}
+		if initialVersion.Content == file.Content {
+			continue
+		}
+
+		// Calculate diff between initial and latest version
+		_, additions, removals := diff.GenerateDiff(initialVersion.Content, file.Content, file.Path)
+
+		// Only add to modified files if there are changes
+		if additions > 0 || removals > 0 {
+			// Remove working directory prefix from file path
+			displayPath := file.Path
+			workingDir := config.WorkingDirectory()
+			displayPath = strings.TrimPrefix(displayPath, workingDir)
+			displayPath = strings.TrimPrefix(displayPath, "/")
+
+			m.modFiles[displayPath] = struct {
+				additions int
+				removals  int
+			}{
+				additions: additions,
+				removals:  removals,
+			}
+		}
+	}
+}
+
+func loadModifiedFilesLatestFilesAllFiles(allFiles []history.File, file *history.File, initialVersion *history.File) {
+	for _, v := range allFiles {
+		if v.Path == file.Path && v.Version == history.InitialVersion {
+			(*initialVersion) = v
+			break
+		}
+	}
 }

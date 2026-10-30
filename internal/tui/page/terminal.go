@@ -137,18 +137,8 @@ func (p *chatPage) startTerminal() tea.Cmd {
 	if p.app == nil || p.app.Processes == nil {
 		return util.ReportError(fmt.Errorf("terminal manager unavailable"))
 	}
-	if p.app.Workflows != nil {
-		mode := p.mode()
-		if p.session.ID != "" {
-			task, err := p.app.Workflows.Get(context.Background(), p.session.ID)
-			if err != nil {
-				return util.ReportError(err)
-			}
-			mode = task.Mode
-		}
-		if mode != "execute" {
-			return util.ReportError(fmt.Errorf("terminal requires execute mode; use /mode execute"))
-		}
+	if result0, handled := startTerminalAppWorkflows(p); handled {
+		return result0
 	}
 	var cmds []tea.Cmd
 	if p.session.ID == "" {
@@ -188,22 +178,7 @@ func (p *chatPage) terminalKey(msg tea.KeyMsg) tea.Cmd {
 	case "ctrl+n":
 		return p.startTerminal()
 	case "alt+left", "alt+right":
-		if len(t.processes) > 0 {
-			index := 0
-			for i, process := range t.processes {
-				if process.ID == t.selected {
-					index = i
-					break
-				}
-			}
-			step := 1
-			if msg.String() == "alt+left" {
-				step = -1
-			}
-			t.selected = t.processes[(index+step+len(t.processes))%len(t.processes)].ID
-			p.refreshTerminal()
-		}
-		return nil
+		return terminalKeyLeftAltRight(p, &msg, t)
 	case "ctrl+x":
 		manager, owner, id := p.app.Processes, p.session.ID, t.selected
 		return func() tea.Msg {
@@ -288,44 +263,8 @@ func (p *chatPage) terminalView(full bool) string {
 		header = fmt.Sprintf("Terminal • %s • %s", state, t.snapshot.Command)
 	}
 	header = ansi.Truncate(header, width, "…")
-	if full {
-		header += " · " + config.Text("Entrada no terminal", "Terminal input")
-		if len(t.processes) > 1 {
-			labels := []string{}
-			for _, process := range t.processes {
-				mark := " "
-				if process.ID == t.selected {
-					mark = "›"
-				}
-				labels = append(labels, mark+process.ID)
-			}
-			header += "\n" + ansi.Truncate(strings.Join(labels, " · "), width, "…")
-		}
-		body := t.logs.View()
-		if t.snapshot.PTY {
-			body = t.snapshot.Screen
-			if t.snapshot.Running && t.snapshot.CursorVisible {
-				lines := strings.Split(body, "\n")
-				if y := t.snapshot.CursorY; y >= 0 && y < len(lines) {
-					x := t.snapshot.CursorX
-					char := ansi.Cut(lines[y], x, x+1)
-					if char == "" {
-						char = " "
-					}
-					lines[y] = ansi.Cut(lines[y], 0, x) + lipgloss.NewStyle().Reverse(true).Render(char) + ansi.Cut(lines[y], x+1, width)
-					body = strings.Join(lines, "\n")
-				}
-			}
-		}
-		if t.starting {
-			body = config.Text("Aguardando aprovação para iniciar o terminal…", "Waiting for permission to start the terminal…")
-		}
-		if t.selected == "" && !t.starting {
-			body = config.Text("Ctrl+N inicia um terminal após aprovação.", "Ctrl+N starts a terminal after approval.")
-		}
-		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-1-lipgloss.Height(header))).MaxHeight(max(1, p.height-1-lipgloss.Height(header))).Render(body)
-		footer := ansi.Truncate(config.Text("Ctrl+P conversa • Ctrl+N novo • Alt+←/→ troca • Ctrl+X encerra • Ctrl+C interrompe", "Ctrl+P chat • Ctrl+N new • Alt+←/→ switch • Ctrl+X stop • Ctrl+C interrupt"), width, "…")
-		return style.Render(lipgloss.JoinVertical(lipgloss.Left, header, body, footer))
+	if result0, handled := terminalViewFull(p, full, t, width, &style, &header); handled {
+		return result0
 	}
 	text := strings.TrimRight(t.snapshot.Stdout+t.snapshot.Stderr, "\n")
 	lines := strings.Split(text, "\n")
@@ -337,4 +276,88 @@ func (p *chatPage) terminalView(full bool) string {
 	}
 	header = ansi.Truncate(header+config.Text(" • Ctrl+P abre", " • Ctrl+P open"), width, "…")
 	return style.Foreground(theme.CurrentTheme().TextMuted()).Height(6).MaxHeight(6).Render(lipgloss.JoinVertical(lipgloss.Left, header, strings.Join(lines, "\n")))
+}
+
+func terminalViewFull(p *chatPage, full bool, t *terminalPanel, width int, style *lipgloss.Style, header *string) (extractedResult0 string, handled bool) {
+	if full {
+		(*header) += " · " + config.Text("Entrada no terminal", "Terminal input")
+		if len(t.processes) > 1 {
+			labels := []string{}
+			for _, process := range t.processes {
+				mark := " "
+				if process.ID == t.selected {
+					mark = "›"
+				}
+				labels = append(labels, mark+process.ID)
+			}
+			(*header) += "\n" + ansi.Truncate(strings.Join(labels, " · "), width, "…")
+		}
+		body := t.logs.View()
+		terminalViewFullTSnapshotPTY(t, width, &body)
+		if t.starting {
+			body = config.Text("Aguardando aprovação para iniciar o terminal…", "Waiting for permission to start the terminal…")
+		}
+		if t.selected == "" && !t.starting {
+			body = config.Text("Ctrl+N inicia um terminal após aprovação.", "Ctrl+N starts a terminal after approval.")
+		}
+		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-1-lipgloss.Height((*header)))).MaxHeight(max(1, p.height-1-lipgloss.Height((*header)))).Render(body)
+		footer := ansi.Truncate(config.Text("Ctrl+P conversa • Ctrl+N novo • Alt+←/→ troca • Ctrl+X encerra • Ctrl+C interrompe", "Ctrl+P chat • Ctrl+N new • Alt+←/→ switch • Ctrl+X stop • Ctrl+C interrupt"), width, "…")
+		return style.Render(lipgloss.JoinVertical(lipgloss.Left, (*header), body, footer)), true
+	}
+	return extractedResult0, false
+}
+
+func terminalViewFullTSnapshotPTY(t *terminalPanel, width int, body *string) {
+	if t.snapshot.PTY {
+		(*body) = t.snapshot.Screen
+		if t.snapshot.Running && t.snapshot.CursorVisible {
+			lines := strings.Split((*body), "\n")
+			if y := t.snapshot.CursorY; y >= 0 && y < len(lines) {
+				x := t.snapshot.CursorX
+				char := ansi.Cut(lines[y], x, x+1)
+				if char == "" {
+					char = " "
+				}
+				lines[y] = ansi.Cut(lines[y], 0, x) + lipgloss.NewStyle().Reverse(true).Render(char) + ansi.Cut(lines[y], x+1, width)
+				(*body) = strings.Join(lines, "\n")
+			}
+		}
+	}
+}
+
+func terminalKeyLeftAltRight(p *chatPage, msg *tea.KeyMsg, t *terminalPanel) (extractedResult0 tea.Cmd) {
+	if len(t.processes) > 0 {
+		index := 0
+		for i, process := range t.processes {
+			if process.ID == t.selected {
+				index = i
+				break
+			}
+		}
+		step := 1
+		if msg.String() == "alt+left" {
+			step = -1
+		}
+		t.selected = t.processes[(index+step+len(t.processes))%len(t.processes)].ID
+		p.refreshTerminal()
+	}
+	return nil
+
+}
+
+func startTerminalAppWorkflows(p *chatPage) (extractedResult0 tea.Cmd, handled bool) {
+	if p.app.Workflows != nil {
+		mode := p.mode()
+		if p.session.ID != "" {
+			task, err := p.app.Workflows.Get(context.Background(), p.session.ID)
+			if err != nil {
+				return util.ReportError(err), true
+			}
+			mode = task.Mode
+		}
+		if mode != "execute" {
+			return util.ReportError(fmt.Errorf("terminal requires execute mode; use /mode execute")), true
+		}
+	}
+	return extractedResult0, false
 }

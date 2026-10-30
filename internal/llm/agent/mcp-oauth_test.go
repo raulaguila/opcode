@@ -132,30 +132,7 @@ func TestOAuthFullPKCEFlowRejectsBadStateAndKeepsIssuer(t *testing.T) {
 		if values.Get("code_challenge_method") != "S256" || expectedChallenge == "" {
 			return fmt.Errorf("missing PKCE")
 		}
-		go func() {
-			callback, _ := url.Parse(values.Get("redirect_uri"))
-			q := url.Values{"code": {"valid-code"}, "state": {"wrong-state"}, "iss": {issuer.URL}}
-			callback.RawQuery = q.Encode()
-			response, err := http.Get(callback.String())
-			if err != nil {
-				callbackResult <- err
-				return
-			}
-			io.Copy(io.Discard, response.Body)
-			response.Body.Close()
-			if response.StatusCode != 400 {
-				callbackResult <- fmt.Errorf("bad state accepted")
-				return
-			}
-			q.Set("state", values.Get("state"))
-			callback.RawQuery = q.Encode()
-			response, err = http.Get(callback.String())
-			if err == nil {
-				io.Copy(io.Discard, response.Body)
-				response.Body.Close()
-			}
-			callbackResult <- err
-		}()
+		go sendOAuthCallbackFixtures(values, issuer.URL, callbackResult)
 		return nil
 	})
 	require.NoError(t, err)
@@ -181,7 +158,9 @@ func TestOAuthHTTPClientNeverFollowsRedirectsWithBearer(t *testing.T) {
 	var forwarded atomic.Int64
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { forwarded.Add(1); w.WriteHeader(200) }))
 	defer target.Close()
-	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, target.URL, 307) }))
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
+	}))
 	defer source.Close()
 	request, err := http.NewRequest("GET", source.URL, nil)
 	require.NoError(t, err)
@@ -193,4 +172,29 @@ func TestOAuthHTTPClientNeverFollowsRedirectsWithBearer(t *testing.T) {
 	response.Body.Close()
 	require.Equal(t, 307, response.StatusCode)
 	require.Zero(t, forwarded.Load())
+}
+
+func sendOAuthCallbackFixtures(values url.Values, issuerURL string, callbackResult chan<- error) {
+	callback, _ := url.Parse(values.Get("redirect_uri"))
+	q := url.Values{"code": {"valid-code"}, "state": {"wrong-state"}, "iss": {issuerURL}}
+	callback.RawQuery = q.Encode()
+	response, err := http.Get(callback.String())
+	if err != nil {
+		callbackResult <- err
+		return
+	}
+	io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+	if response.StatusCode != 400 {
+		callbackResult <- fmt.Errorf("bad state accepted")
+		return
+	}
+	q.Set("state", values.Get("state"))
+	callback.RawQuery = q.Encode()
+	response, err = http.Get(callback.String())
+	if err == nil {
+		io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+	}
+	callbackResult <- err
 }

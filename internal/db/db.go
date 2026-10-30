@@ -24,177 +24,23 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
-	if q.createFileStmt, err = db.PrepareContext(ctx, createFile); err != nil {
-		return nil, fmt.Errorf("error preparing query CreateFile: %w", err)
-	}
-	if q.createMessageStmt, err = db.PrepareContext(ctx, createMessage); err != nil {
-		return nil, fmt.Errorf("error preparing query CreateMessage: %w", err)
-	}
-	if q.createSessionStmt, err = db.PrepareContext(ctx, createSession); err != nil {
-		return nil, fmt.Errorf("error preparing query CreateSession: %w", err)
-	}
-	if q.deleteFileStmt, err = db.PrepareContext(ctx, deleteFile); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteFile: %w", err)
-	}
-	if q.deleteMessageStmt, err = db.PrepareContext(ctx, deleteMessage); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteMessage: %w", err)
-	}
-	if q.deleteSessionStmt, err = db.PrepareContext(ctx, deleteSession); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteSession: %w", err)
-	}
-	if q.deleteSessionFilesStmt, err = db.PrepareContext(ctx, deleteSessionFiles); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteSessionFiles: %w", err)
-	}
-	if q.deleteSessionMessagesStmt, err = db.PrepareContext(ctx, deleteSessionMessages); err != nil {
-		return nil, fmt.Errorf("error preparing query DeleteSessionMessages: %w", err)
-	}
-	if q.getFileStmt, err = db.PrepareContext(ctx, getFile); err != nil {
-		return nil, fmt.Errorf("error preparing query GetFile: %w", err)
-	}
-	if q.getFileByPathAndSessionStmt, err = db.PrepareContext(ctx, getFileByPathAndSession); err != nil {
-		return nil, fmt.Errorf("error preparing query GetFileByPathAndSession: %w", err)
-	}
-	if q.getMessageStmt, err = db.PrepareContext(ctx, getMessage); err != nil {
-		return nil, fmt.Errorf("error preparing query GetMessage: %w", err)
-	}
-	if q.getSessionByIDStmt, err = db.PrepareContext(ctx, getSessionByID); err != nil {
-		return nil, fmt.Errorf("error preparing query GetSessionByID: %w", err)
-	}
-	if q.listFilesByPathStmt, err = db.PrepareContext(ctx, listFilesByPath); err != nil {
-		return nil, fmt.Errorf("error preparing query ListFilesByPath: %w", err)
-	}
-	if q.listFilesBySessionStmt, err = db.PrepareContext(ctx, listFilesBySession); err != nil {
-		return nil, fmt.Errorf("error preparing query ListFilesBySession: %w", err)
-	}
-	if q.listLatestSessionFilesStmt, err = db.PrepareContext(ctx, listLatestSessionFiles); err != nil {
-		return nil, fmt.Errorf("error preparing query ListLatestSessionFiles: %w", err)
-	}
-	if q.listMessagesBySessionStmt, err = db.PrepareContext(ctx, listMessagesBySession); err != nil {
-		return nil, fmt.Errorf("error preparing query ListMessagesBySession: %w", err)
-	}
-	if q.listNewFilesStmt, err = db.PrepareContext(ctx, listNewFiles); err != nil {
-		return nil, fmt.Errorf("error preparing query ListNewFiles: %w", err)
-	}
-	if q.listSessionsStmt, err = db.PrepareContext(ctx, listSessions); err != nil {
-		return nil, fmt.Errorf("error preparing query ListSessions: %w", err)
-	}
-	if q.updateFileStmt, err = db.PrepareContext(ctx, updateFile); err != nil {
-		return nil, fmt.Errorf("error preparing query UpdateFile: %w", err)
-	}
-	if q.updateMessageStmt, err = db.PrepareContext(ctx, updateMessage); err != nil {
-		return nil, fmt.Errorf("error preparing query UpdateMessage: %w", err)
-	}
-	if q.updateSessionStmt, err = db.PrepareContext(ctx, updateSession); err != nil {
-		return nil, fmt.Errorf("error preparing query UpdateSession: %w", err)
+	for _, statement := range q.preparedStatements() {
+		*statement.destination, err = db.PrepareContext(ctx, statement.query)
+		if err != nil {
+			return nil, fmt.Errorf("error preparing query %s: %w", statement.name, err)
+		}
 	}
 	return &q, nil
 }
 
 func (q *Queries) Close() error {
 	var err error
-	if q.createFileStmt != nil {
-		if cerr := q.createFileStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing createFileStmt: %w", cerr)
+	for _, statement := range q.preparedStatements() {
+		if *statement.destination == nil {
+			continue
 		}
-	}
-	if q.createMessageStmt != nil {
-		if cerr := q.createMessageStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing createMessageStmt: %w", cerr)
-		}
-	}
-	if q.createSessionStmt != nil {
-		if cerr := q.createSessionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing createSessionStmt: %w", cerr)
-		}
-	}
-	if q.deleteFileStmt != nil {
-		if cerr := q.deleteFileStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteFileStmt: %w", cerr)
-		}
-	}
-	if q.deleteMessageStmt != nil {
-		if cerr := q.deleteMessageStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteMessageStmt: %w", cerr)
-		}
-	}
-	if q.deleteSessionStmt != nil {
-		if cerr := q.deleteSessionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteSessionStmt: %w", cerr)
-		}
-	}
-	if q.deleteSessionFilesStmt != nil {
-		if cerr := q.deleteSessionFilesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteSessionFilesStmt: %w", cerr)
-		}
-	}
-	if q.deleteSessionMessagesStmt != nil {
-		if cerr := q.deleteSessionMessagesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing deleteSessionMessagesStmt: %w", cerr)
-		}
-	}
-	if q.getFileStmt != nil {
-		if cerr := q.getFileStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getFileStmt: %w", cerr)
-		}
-	}
-	if q.getFileByPathAndSessionStmt != nil {
-		if cerr := q.getFileByPathAndSessionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getFileByPathAndSessionStmt: %w", cerr)
-		}
-	}
-	if q.getMessageStmt != nil {
-		if cerr := q.getMessageStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getMessageStmt: %w", cerr)
-		}
-	}
-	if q.getSessionByIDStmt != nil {
-		if cerr := q.getSessionByIDStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing getSessionByIDStmt: %w", cerr)
-		}
-	}
-	if q.listFilesByPathStmt != nil {
-		if cerr := q.listFilesByPathStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing listFilesByPathStmt: %w", cerr)
-		}
-	}
-	if q.listFilesBySessionStmt != nil {
-		if cerr := q.listFilesBySessionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing listFilesBySessionStmt: %w", cerr)
-		}
-	}
-	if q.listLatestSessionFilesStmt != nil {
-		if cerr := q.listLatestSessionFilesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing listLatestSessionFilesStmt: %w", cerr)
-		}
-	}
-	if q.listMessagesBySessionStmt != nil {
-		if cerr := q.listMessagesBySessionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing listMessagesBySessionStmt: %w", cerr)
-		}
-	}
-	if q.listNewFilesStmt != nil {
-		if cerr := q.listNewFilesStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing listNewFilesStmt: %w", cerr)
-		}
-	}
-	if q.listSessionsStmt != nil {
-		if cerr := q.listSessionsStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing listSessionsStmt: %w", cerr)
-		}
-	}
-	if q.updateFileStmt != nil {
-		if cerr := q.updateFileStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing updateFileStmt: %w", cerr)
-		}
-	}
-	if q.updateMessageStmt != nil {
-		if cerr := q.updateMessageStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing updateMessageStmt: %w", cerr)
-		}
-	}
-	if q.updateSessionStmt != nil {
-		if cerr := q.updateSessionStmt.Close(); cerr != nil {
-			err = fmt.Errorf("error closing updateSessionStmt: %w", cerr)
+		if closeErr := (*statement.destination).Close(); closeErr != nil {
+			err = fmt.Errorf("error closing %s: %w", statement.field, closeErr)
 		}
 	}
 	return err
@@ -284,5 +130,38 @@ func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 		updateFileStmt:              q.updateFileStmt,
 		updateMessageStmt:           q.updateMessageStmt,
 		updateSessionStmt:           q.updateSessionStmt,
+	}
+}
+
+// preparedStatement keeps query order and the generated diagnostic names.
+type preparedStatement struct {
+	name, field string
+	destination **sql.Stmt
+	query       string
+}
+
+func (q *Queries) preparedStatements() [21]preparedStatement {
+	return [21]preparedStatement{
+		{"CreateFile", "createFileStmt", &q.createFileStmt, createFile},
+		{"CreateMessage", "createMessageStmt", &q.createMessageStmt, createMessage},
+		{"CreateSession", "createSessionStmt", &q.createSessionStmt, createSession},
+		{"DeleteFile", "deleteFileStmt", &q.deleteFileStmt, deleteFile},
+		{"DeleteMessage", "deleteMessageStmt", &q.deleteMessageStmt, deleteMessage},
+		{"DeleteSession", "deleteSessionStmt", &q.deleteSessionStmt, deleteSession},
+		{"DeleteSessionFiles", "deleteSessionFilesStmt", &q.deleteSessionFilesStmt, deleteSessionFiles},
+		{"DeleteSessionMessages", "deleteSessionMessagesStmt", &q.deleteSessionMessagesStmt, deleteSessionMessages},
+		{"GetFile", "getFileStmt", &q.getFileStmt, getFile},
+		{"GetFileByPathAndSession", "getFileByPathAndSessionStmt", &q.getFileByPathAndSessionStmt, getFileByPathAndSession},
+		{"GetMessage", "getMessageStmt", &q.getMessageStmt, getMessage},
+		{"GetSessionByID", "getSessionByIDStmt", &q.getSessionByIDStmt, getSessionByID},
+		{"ListFilesByPath", "listFilesByPathStmt", &q.listFilesByPathStmt, listFilesByPath},
+		{"ListFilesBySession", "listFilesBySessionStmt", &q.listFilesBySessionStmt, listFilesBySession},
+		{"ListLatestSessionFiles", "listLatestSessionFilesStmt", &q.listLatestSessionFilesStmt, listLatestSessionFiles},
+		{"ListMessagesBySession", "listMessagesBySessionStmt", &q.listMessagesBySessionStmt, listMessagesBySession},
+		{"ListNewFiles", "listNewFilesStmt", &q.listNewFilesStmt, listNewFiles},
+		{"ListSessions", "listSessionsStmt", &q.listSessionsStmt, listSessions},
+		{"UpdateFile", "updateFileStmt", &q.updateFileStmt, updateFile},
+		{"UpdateMessage", "updateMessageStmt", &q.updateMessageStmt, updateMessage},
+		{"UpdateSession", "updateSessionStmt", &q.updateSessionStmt, updateSession},
 	}
 }

@@ -13,7 +13,7 @@ func TestMixedMarkdownKeepsProseNarrowAndCodeWide(t *testing.T) {
 	source := strings.Repeat("Narrative explanation ", 20) + "\n\n```text\nREADME.md:1-5 " + strings.Repeat("x", 80) + "\n```\n\n" + strings.Repeat("Further explanation ", 20) + "\n\nSee [source][ref].\n\n[ref]: https://example.test/README.md#L1\n"
 	view := ansi.Strip(RenderMarkdownBlocks(source, 120, 48))
 	codeFound := false
-	for _, line := range strings.Split(view, "\n") {
+	for line := range strings.SplitSeq(view, "\n") {
 		if strings.Contains(line, "README.md:1-5") {
 			require.Greater(t, ansi.StringWidth(line), 70)
 			codeFound = true
@@ -40,7 +40,7 @@ func TestMarkdownContainersTablesAndNoColor(t *testing.T) {
 	require.Contains(t, view, "streaming")
 	require.Contains(t, view, "Column A")
 	wide := false
-	for _, line := range strings.Split(view, "\n") {
+	for line := range strings.SplitSeq(view, "\n") {
 		if strings.Contains(line, "│") && ansi.StringWidth(line) > 60 {
 			wide = true
 		}

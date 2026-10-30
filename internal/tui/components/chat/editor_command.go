@@ -20,38 +20,7 @@ func editorArguments(value string) ([]string, error) {
 			started = false
 		}
 	}
-	for _, r := range value {
-		if escaped {
-			word.WriteRune(r)
-			escaped = false
-			started = true
-			continue
-		}
-		if r == '\\' && quote != '\'' {
-			escaped = true
-			started = true
-			continue
-		}
-		if quote != 0 {
-			if r == quote {
-				quote = 0
-			} else {
-				word.WriteRune(r)
-			}
-			continue
-		}
-		if r == '\'' || r == '"' {
-			quote = r
-			started = true
-			continue
-		}
-		if unicode.IsSpace(r) {
-			flush()
-			continue
-		}
-		word.WriteRune(r)
-		started = true
-	}
+	editorArgumentsValue(value, &word, &quote, &escaped, &started, flush)
 	if quote != 0 || escaped {
 		return nil, fmt.Errorf("EDITOR: incomplete quote or escape")
 	}
@@ -60,4 +29,43 @@ func editorArguments(value string) ([]string, error) {
 		return nil, fmt.Errorf("EDITOR: missing executable")
 	}
 	return args, nil
+}
+
+func editorArgumentsValue(value string, word *strings.Builder, quote *rune, escaped *bool, started *bool, flush func()) {
+	for _, r := range value {
+		if *escaped {
+			word.WriteRune(r)
+			(*escaped) = false
+			(*started) = true
+			continue
+		}
+		if r == '\\' && (*quote) != '\'' {
+			(*escaped) = true
+			(*started) = true
+			continue
+		}
+		if (*quote) != 0 {
+			consumeQuotedArgument(word, quote, r)
+			continue
+		}
+		if r == '\'' || r == '"' {
+			(*quote) = r
+			(*started) = true
+			continue
+		}
+		if unicode.IsSpace(r) {
+			flush()
+			continue
+		}
+		word.WriteRune(r)
+		(*started) = true
+	}
+}
+
+func consumeQuotedArgument(word *strings.Builder, quote *rune, value rune) {
+	if value == *quote {
+		*quote = 0
+		return
+	}
+	word.WriteRune(value)
 }

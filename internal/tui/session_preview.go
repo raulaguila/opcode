@@ -21,25 +21,29 @@ func (a *appModel) sessionPreview(id string) tea.Cmd {
 		defer cancel()
 		items, err := a.app.Messages.List(ctx, id)
 		preview := config.Text("Nenhuma mensagem ainda", "No messages yet")
-		if err != nil {
-			preview = config.Text("Prévia indisponível; Enter abre a conversa", "Preview unavailable; Enter opens the conversation")
-		} else {
-			for i := len(items) - 1; i >= 0; i-- {
-				if items[i].Role != message.User || items[i].IsApplication() {
-					continue
-				}
-				text := strings.Join(strings.Fields(ansi.Strip(tools.RedactCredentials(items[i].Content().Text))), " ")
-				if text == "" {
-					continue
-				}
-				runes := []rune(text)
-				if len(runes) > 240 {
-					text = string(runes[:240]) + "…"
-				}
-				preview = config.Text("Última mensagem: ", "Last message: ") + text
-				break
-			}
-		}
+		sessionPreviewState(items, err, &preview)
 		return dialog.SessionPreviewLoadedMsg{ID: id, Text: preview}
+	}
+}
+
+func sessionPreviewState(items []message.Message, err error, preview *string) {
+	if err != nil {
+		(*preview) = config.Text("Prévia indisponível; Enter abre a conversa", "Preview unavailable; Enter opens the conversation")
+	} else {
+		for i := len(items) - 1; i >= 0; i-- {
+			if items[i].Role != message.User || items[i].IsApplication() {
+				continue
+			}
+			text := strings.Join(strings.Fields(ansi.Strip(tools.RedactCredentials(items[i].Content().Text))), " ")
+			if text == "" {
+				continue
+			}
+			runes := []rune(text)
+			if len(runes) > 240 {
+				text = string(runes[:240]) + "…"
+			}
+			(*preview) = config.Text("Última mensagem: ", "Last message: ") + text
+			break
+		}
 	}
 }

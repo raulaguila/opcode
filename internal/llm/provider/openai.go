@@ -145,10 +145,10 @@ func (o *openaiClient) decodeResponse(raw json.RawMessage) (*ProviderResponse, e
 		return nil, err
 	}
 	if len(r.Error) > 0 && string(r.Error) != "null" {
-		return nil, fmt.Errorf("Chat Completions error: %s", r.Error)
+		return nil, fmt.Errorf("provider Chat Completions error: %s", r.Error)
 	}
 	if len(r.Choices) == 0 || r.Choices[0].FinishReason == "" {
-		return nil, fmt.Errorf("Chat Completions returned no completed choice")
+		return nil, fmt.Errorf("provider Chat Completions returned no completed choice")
 	}
 	return chatResultFrom(r.Choices[0].Message, r.Choices[0].FinishReason, r.Usage)
 }
@@ -156,7 +156,7 @@ func chatResultFrom(msg chatMessage, finish string, usage chatUsage) (*ProviderR
 	result := &ProviderResponse{Content: msg.Content, Usage: usage.tokens(), FinishReason: chatFinishReason(finish)}
 	for _, call := range msg.ToolCalls {
 		if finish != "tool_calls" || call.ID == "" || call.Function.Name == "" || !json.Valid([]byte(call.Function.Arguments)) {
-			return nil, fmt.Errorf("Chat Completions returned an incomplete function call")
+			return nil, fmt.Errorf("provider Chat Completions returned an incomplete function call")
 		}
 		result.ToolCalls = append(result.ToolCalls, message.ToolCall{ID: call.ID, Name: call.Function.Name, Input: call.Function.Arguments, Type: "function", Finished: true})
 	}
@@ -182,69 +182,11 @@ func (o *openaiClient) readStream(ctx context.Context, r io.Reader, events chan<
 	if o.providerOptions.model.API == "responses" {
 		return o.readResponsesStream(ctx, r, events)
 	}
-	var text strings.Builder
-	calls := make(map[int]*chatCall)
-	var usage chatUsage
-	finish := ""
-	err := readSSE(r, func(_ string, raw json.RawMessage) (bool, error) {
-		if string(raw) == "[DONE]" {
-			return true, nil
-		}
-		var chunk chatResponse
-		if err := json.Unmarshal(raw, &chunk); err != nil {
-			return false, err
-		}
-		if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
-			return false, fmt.Errorf("Chat Completions stream error: %s", chunk.Error)
-		}
-		if chunk.Usage.Prompt != 0 || chunk.Usage.Completion != 0 {
-			usage = chunk.Usage
-		}
-		for _, choice := range chunk.Choices {
-			if choice.Index != 0 {
-				continue
-			}
-			if choice.FinishReason != "" {
-				finish = choice.FinishReason
-			}
-			delta := choice.Delta
-			text.WriteString(delta.Content)
-			if delta.Content != "" && !publishEvent(ctx, events, ProviderEvent{Type: EventContentDelta, Content: delta.Content}) {
-				return false, ctx.Err()
-			}
-			if delta.Reasoning != "" && !publishEvent(ctx, events, ProviderEvent{Type: EventThinkingDelta, Content: delta.Reasoning, Thinking: delta.Reasoning}) {
-				return false, ctx.Err()
-			}
-			for _, part := range delta.ToolCalls {
-				call := calls[part.Index]
-				if call == nil {
-					call = &chatCall{Index: part.Index}
-					calls[part.Index] = call
-				}
-				call.ID += part.ID
-				call.Type += part.Type
-				call.Function.Name += part.Function.Name
-				call.Function.Arguments += part.Function.Arguments
-			}
-		}
-		return false, nil
-	})
-	if err != nil {
+	s := chatStreamState{ctx: ctx, events: events, calls: make(map[int]*chatCall)}
+	if err := readSSE(r, s.consume); err != nil {
 		return err
 	}
-	if finish == "" {
-		return fmt.Errorf("Chat Completions stream ended without a finish reason")
-	}
-	msg := chatMessage{Content: text.String()}
-	// Tool indexes are contiguous, and order must remain stable for parallel calls.
-	for index := 0; index < len(calls); index++ {
-		call := calls[index]
-		if call == nil {
-			return fmt.Errorf("invalid tool call index")
-		}
-		msg.ToolCalls = append(msg.ToolCalls, *call)
-	}
-	result, err := chatResultFrom(msg, finish, usage)
+	result, err := s.result()
 	if err != nil {
 		return err
 	}
@@ -270,4 +212,76 @@ func WithReasoningEffort(effort string) OpenAIOption {
 			o.reasoningEffort = ""
 		}
 	}
+}
+
+type chatStreamState struct {
+	ctx    context.Context
+	events chan<- ProviderEvent
+	text   strings.Builder
+	calls  map[int]*chatCall
+	usage  chatUsage
+	finish string
+}
+
+func (s *chatStreamState) consume(_ string, raw json.RawMessage) (bool, error) {
+	if string(raw) == "[DONE]" {
+		return true, nil
+	}
+	var chunk chatResponse
+	if err := json.Unmarshal(raw, &chunk); err != nil {
+		return false, err
+	}
+	if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
+		return false, fmt.Errorf("provider Chat Completions stream error: %s", chunk.Error)
+	}
+	if chunk.Usage.Prompt != 0 || chunk.Usage.Completion != 0 {
+		s.usage = chunk.Usage
+	}
+	for _, choice := range chunk.Choices {
+		if choice.Index != 0 {
+			continue
+		}
+		if choice.FinishReason != "" {
+			s.finish = choice.FinishReason
+		}
+		if err := s.delta(choice.Delta); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
+}
+func (s *chatStreamState) delta(delta chatMessage) error {
+	s.text.WriteString(delta.Content)
+	if delta.Content != "" && !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventContentDelta, Content: delta.Content}) {
+		return s.ctx.Err()
+	}
+	if delta.Reasoning != "" && !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventThinkingDelta, Content: delta.Reasoning, Thinking: delta.Reasoning}) {
+		return s.ctx.Err()
+	}
+	for _, part := range delta.ToolCalls {
+		call := s.calls[part.Index]
+		if call == nil {
+			call = &chatCall{Index: part.Index}
+			s.calls[part.Index] = call
+		}
+		call.ID += part.ID
+		call.Type += part.Type
+		call.Function.Name += part.Function.Name
+		call.Function.Arguments += part.Function.Arguments
+	}
+	return nil
+}
+func (s *chatStreamState) result() (*ProviderResponse, error) {
+	if s.finish == "" {
+		return nil, fmt.Errorf("provider Chat Completions stream ended without a finish reason")
+	}
+	msg := chatMessage{Content: s.text.String()}
+	for index := 0; index < len(s.calls); index++ {
+		call := s.calls[index]
+		if call == nil {
+			return nil, fmt.Errorf("invalid tool call index")
+		}
+		msg.ToolCalls = append(msg.ToolCalls, *call)
+	}
+	return chatResultFrom(msg, s.finish, s.usage)
 }

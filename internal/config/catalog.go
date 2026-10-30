@@ -44,64 +44,23 @@ func resolveProviderWithVault(backend models.ModelProvider, p Provider, resolveV
 	if p.Disabled {
 		return p, nil
 	}
-	if p.TLSInsecure {
-		u, err := url.Parse(p.BaseURL)
-		if err != nil || u.Scheme != "https" || u.Host == "" || (backend != models.ProviderLocal && backend != models.ProviderOpenAI) || (p.API != "" && p.API != "chat_completions" && p.API != "responses") {
-			return Provider{}, fmt.Errorf("tlsInsecure requires an explicit HTTPS baseURL and an OpenAI-compatible local/openai connection")
-		}
+	if err := validateProviderTLS(backend, p); err != nil {
+		return Provider{}, err
 	}
 	if !knownBackend(backend) {
 		return Provider{}, fmt.Errorf("unsupported backend %q", backend)
 	}
-	if p.BaseURL != "" {
-		if backend == models.ProviderLocal {
-			endpoint, err := models.NormalizeLocalEndpoint(p.BaseURL)
-			if err != nil {
-				return Provider{}, err
-			}
-			p.BaseURL = endpoint
-		} else {
-			u, err := url.Parse(p.BaseURL)
-			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-				return Provider{}, fmt.Errorf("baseURL must be an HTTP API URL without credentials or query")
-			}
-			if models.CatalogEndpoint(backend) == "" {
-				return Provider{}, fmt.Errorf("backend uses its platform-specific endpoint settings")
-			}
-		}
+	var err error
+	p, err = normalizeProviderEndpoint(backend, p)
+	if err != nil {
+		return Provider{}, err
 	}
-	if p.APIKeyRef != "" {
-		p.APIKey = "" // A reference never falls back to a literal or environment key.
-		if resolveVault {
-			secret, err := readVaultCredential(p.APIKeyRef)
-			if err != nil {
-				return Provider{}, err
-			}
-			p.APIKey = secret
-		}
+	p, err = resolveProviderCredential(p, resolveVault)
+	if err != nil {
+		return Provider{}, err
 	}
-	if p.APIKeyEnv != "" {
-		if !validEnvironmentName(p.APIKeyEnv) {
-			return Provider{}, fmt.Errorf("invalid apiKeyEnv name")
-		}
-		p.APIKey = Environment(p.APIKeyEnv)
-		if p.APIKey == "" {
-			return Provider{}, fmt.Errorf("environment variable %s is not set", p.APIKeyEnv)
-		}
-	}
-	probe := models.Model{Provider: backend, API: p.API, APIModel: "validation", ContextWindow: 4096, DefaultMaxTokens: 2048}
-	if p.ContextWindow == 0 {
-		probe.ContextWindow = max(probe.ContextWindow, p.DefaultMaxTokens)
-	}
-	if p.ContextWindow != 0 {
-		probe.ContextWindow = p.ContextWindow
-		probe.DefaultMaxTokens = min(2048, p.ContextWindow/2)
-	}
-	if p.DefaultMaxTokens != 0 {
-		probe.DefaultMaxTokens = p.DefaultMaxTokens
-	}
-	if _, err := normalizeModel("provider-default", probe); err != nil {
-		return Provider{}, fmt.Errorf("invalid model defaults: %w", err)
+	if err := validateProviderModelDefaults(backend, p); err != nil {
+		return Provider{}, err
 	}
 	return p, nil
 }
@@ -127,73 +86,8 @@ func modelCatalog(id models.ModelProvider, profile string, p Provider) func(cont
 	if id == models.ProviderLocal && p.API == "" && selected.Provider == id && selected.ProviderProfile == profile {
 		p.API = selected.API
 	}
-	return func(ctx context.Context) ([]models.Model, error) {
-		p := p // Credential resolution is private to this invocation.
-		if p.Disabled {
-			return nil, fmt.Errorf("provider disabled")
-		}
-		if p.APIKeyRef != "" && p.APIKey == "" {
-			var err error
-			p, err = resolveProvider(id, p)
-			if err != nil {
-				return nil, err
-			}
-		}
-		found, err := models.DiscoverProviderModels(httpclient.WithInsecureTLS(ctx, p.BaseURL, p.TLSInsecure), id, p.BaseURL, p.APIKey)
-		if err != nil {
-			return nil, err
-		}
-		byWire := map[string]models.Model{}
-		// Stable preference: the selected definition, then explicit, then built-in.
-		keys := slices.Sorted(maps.Keys(known))
-		for _, key := range keys {
-			model := known[key]
-			if model.Provider == id && model.ProviderProfile == profile {
-				if _, ok := byWire[model.APIModel]; !ok {
-					byWire[model.APIModel] = model
-				}
-			}
-		}
-		for _, key := range slices.Sorted(maps.Keys(explicit)) {
-			model := known[key]
-			if model.Provider == id && model.ProviderProfile == profile {
-				byWire[model.APIModel] = model
-			}
-		}
-		if selected.Provider == id && selected.ProviderProfile == profile {
-			byWire[selected.APIModel] = selected
-		}
-		for i, model := range found {
-			model = providerModelDefaults(p, model)
-			if existing, ok := byWire[model.APIModel]; ok {
-				_, overridden := explicit[existing.ID]
-				if existing.ContextAuto || !overridden {
-					existing.ContextAuto = true
-					if !model.ContextEstimated || existing.ContextEstimated {
-						existing.ContextWindow = model.ContextWindow
-						existing.ContextEstimated = model.ContextEstimated
-						existing.ContextSource = model.ContextSource
-					} else if existing.ContextSource != "catalog" {
-						existing.ContextSource = "cache"
-					}
-					if configured, ok := explicit[existing.ID]; ok && configured.DefaultMaxTokens > 0 {
-						existing.DefaultMaxTokens = configured.DefaultMaxTokens
-					}
-					existing.DefaultMaxTokens = min(existing.DefaultMaxTokens, existing.ContextWindow/2)
-				}
-				model = existing
-				if _, overridden := explicit[existing.ID]; !overridden || existing.ContextAuto {
-					model = providerModelDefaults(p, model)
-				}
-			}
-			if profile != "" && model.ProviderProfile == "" {
-				model.ID = models.ModelID("profile." + profile + "." + model.APIModel)
-				model.ProviderProfile = profile
-			}
-			found[i] = model
-		}
-		return found, nil
-	}
+	snapshot := providerCatalogSnapshot{id: id, profile: profile, provider: p, known: known, explicit: explicit, selected: selected}
+	return snapshot.discover
 }
 
 func providerModelDefaults(p Provider, model models.Model) models.Model {
@@ -252,4 +146,168 @@ func refreshAutomaticContexts() {
 			}
 		}
 	}
+}
+
+func validateProviderTLS(backend models.ModelProvider, p Provider) error {
+	if p.TLSInsecure {
+		u, err := url.Parse(p.BaseURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || (backend != models.ProviderLocal && backend != models.ProviderOpenAI) || (p.API != "" && p.API != "chat_completions" && p.API != "responses") {
+			return fmt.Errorf("tlsInsecure requires an explicit HTTPS baseURL and an OpenAI-compatible local/openai connection")
+		}
+	}
+	return nil
+}
+
+func normalizeProviderEndpoint(backend models.ModelProvider, p Provider) (Provider, error) {
+	if p.BaseURL == "" {
+		return p, nil
+	}
+	if backend == models.ProviderLocal {
+		endpoint, err := models.NormalizeLocalEndpoint(p.BaseURL)
+		if err != nil {
+			return Provider{}, err
+		}
+		p.BaseURL = endpoint
+	} else {
+		u, err := url.Parse(p.BaseURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return Provider{}, fmt.Errorf("baseURL must be an HTTP API URL without credentials or query")
+		}
+		if models.CatalogEndpoint(backend) == "" {
+			return Provider{}, fmt.Errorf("backend uses its platform-specific endpoint settings")
+		}
+	}
+	return p, nil
+}
+
+func resolveProviderCredential(p Provider, resolveVault bool) (Provider, error) {
+	if p.APIKeyRef != "" {
+		p.APIKey = "" // A reference never falls back to a literal or environment key.
+		if resolveVault {
+			secret, err := readVaultCredential(p.APIKeyRef)
+			if err != nil {
+				return Provider{}, err
+			}
+			p.APIKey = secret
+		}
+	}
+	if p.APIKeyEnv != "" {
+		if !validEnvironmentName(p.APIKeyEnv) {
+			return Provider{}, fmt.Errorf("invalid apiKeyEnv name")
+		}
+		p.APIKey = Environment(p.APIKeyEnv)
+		if p.APIKey == "" {
+			return Provider{}, fmt.Errorf("environment variable %s is not set", p.APIKeyEnv)
+		}
+	}
+	return p, nil
+}
+
+func validateProviderModelDefaults(backend models.ModelProvider, p Provider) error {
+	probe := models.Model{Provider: backend, API: p.API, APIModel: "validation", ContextWindow: 4096, DefaultMaxTokens: 2048}
+	if p.ContextWindow == 0 {
+		probe.ContextWindow = max(probe.ContextWindow, p.DefaultMaxTokens)
+	}
+	if p.ContextWindow != 0 {
+		probe.ContextWindow = p.ContextWindow
+		probe.DefaultMaxTokens = min(2048, p.ContextWindow/2)
+	}
+	if p.DefaultMaxTokens != 0 {
+		probe.DefaultMaxTokens = p.DefaultMaxTokens
+	}
+	if _, err := normalizeModel("provider-default", probe); err != nil {
+		return fmt.Errorf("invalid model defaults: %w", err)
+	}
+	return nil
+}
+
+type providerCatalogSnapshot struct {
+	id              models.ModelProvider
+	profile         string
+	provider        Provider
+	known, explicit map[models.ModelID]models.Model
+	selected        models.Model
+}
+
+func (snapshot providerCatalogSnapshot) discover(ctx context.Context) ([]models.Model, error) {
+	p := snapshot.provider // Credential resolution is private to this invocation.
+	if p.Disabled {
+		return nil, fmt.Errorf("provider disabled")
+	}
+	if p.APIKeyRef != "" && p.APIKey == "" {
+		var err error
+		p, err = resolveProvider(snapshot.id, p)
+		if err != nil {
+			return nil, err
+		}
+	}
+	found, err := models.DiscoverProviderModels(httpclient.WithInsecureTLS(ctx, p.BaseURL, p.TLSInsecure), snapshot.id, p.BaseURL, p.APIKey)
+	if err != nil {
+		return nil, err
+	}
+	byWire := snapshot.modelsByWire()
+	for i, model := range found {
+		model = snapshot.discoveredModel(p, model, byWire)
+		found[i] = model
+	}
+	return found, nil
+}
+
+func (snapshot providerCatalogSnapshot) modelsByWire() map[string]models.Model {
+	byWire := map[string]models.Model{}
+	// Stable preference: the selected definition, then explicit, then built-in.
+	keys := slices.Sorted(maps.Keys(snapshot.known))
+	for _, key := range keys {
+		model := snapshot.known[key]
+		if model.Provider == snapshot.id && model.ProviderProfile == snapshot.profile {
+			if _, ok := byWire[model.APIModel]; !ok {
+				byWire[model.APIModel] = model
+			}
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(snapshot.explicit)) {
+		model := snapshot.known[key]
+		if model.Provider == snapshot.id && model.ProviderProfile == snapshot.profile {
+			byWire[model.APIModel] = model
+		}
+	}
+	if snapshot.selected.Provider == snapshot.id && snapshot.selected.ProviderProfile == snapshot.profile {
+		byWire[snapshot.selected.APIModel] = snapshot.selected
+	}
+	return byWire
+}
+
+func (snapshot providerCatalogSnapshot) discoveredModel(p Provider, model models.Model, byWire map[string]models.Model) models.Model {
+	model = providerModelDefaults(p, model)
+	if existing, ok := byWire[model.APIModel]; ok {
+		_, overridden := snapshot.explicit[existing.ID]
+		existing = snapshot.refreshAutomaticModel(existing, model, overridden)
+		model = existing
+		if _, overridden := snapshot.explicit[existing.ID]; !overridden || existing.ContextAuto {
+			model = providerModelDefaults(p, model)
+		}
+	}
+	if snapshot.profile != "" && model.ProviderProfile == "" {
+		model.ID = models.ModelID("profile." + snapshot.profile + "." + model.APIModel)
+		model.ProviderProfile = snapshot.profile
+	}
+	return model
+}
+
+func (snapshot providerCatalogSnapshot) refreshAutomaticModel(existing, model models.Model, overridden bool) models.Model {
+	if existing.ContextAuto || !overridden {
+		existing.ContextAuto = true
+		if !model.ContextEstimated || existing.ContextEstimated {
+			existing.ContextWindow = model.ContextWindow
+			existing.ContextEstimated = model.ContextEstimated
+			existing.ContextSource = model.ContextSource
+		} else if existing.ContextSource != "catalog" {
+			existing.ContextSource = "cache"
+		}
+		if configured, ok := snapshot.explicit[existing.ID]; ok && configured.DefaultMaxTokens > 0 {
+			existing.DefaultMaxTokens = configured.DefaultMaxTokens
+		}
+		existing.DefaultMaxTokens = min(existing.DefaultMaxTokens, existing.ContextWindow/2)
+	}
+	return existing
 }

@@ -103,44 +103,11 @@ func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, commandKeys.Enter):
-			selectedItem, idx := c.listView.GetSelectedItem()
-			if idx != -1 {
-				return c, util.CmdHandler(CommandSelectedMsg{
-					Command: selectedItem,
-				})
-			}
-		case key.Matches(msg, commandKeys.Escape):
-			return c, util.CmdHandler(CloseCommandDialogMsg{})
-		}
-		if c.activeID != "" && msg.String() != "up" && msg.String() != "down" {
-			return c, nil
-		}
-		if msg.String() != "up" && msg.String() != "down" {
-			var cmd tea.Cmd
-			c.search, cmd = c.search.Update(msg)
-			c.filter()
-			return c, cmd
+		if result0, result1, handled := updateCaseTeaKeyMsgCase(c, &msg); handled {
+			return result0, result1
 		}
 	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			items := c.listView.GetItems()
-			_, selected := c.listView.GetSelectedItem()
-			count := 8
-			if c.height > 0 {
-				count = max(1, min(8, c.height-10))
-			}
-			start := max(0, selected-count+1)
-			row := msg.Y - 5
-			if c.activeID != "" {
-				row = msg.Y - 3
-			}
-			if msg.X >= 3 && row >= 0 && row < count && start+row < len(items) {
-				return c, util.CmdHandler(CommandSelectedMsg{Command: items[start+row]})
-			}
-		}
-		return c, nil
+		return updateCommandDialogCmpMouseMsg(c, &msg)
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
@@ -192,23 +159,7 @@ func (c *commandDialogCmp) View() string {
 		count = max(1, min(count, c.height-10))
 	}
 	start := max(0, selected-count+1)
-	for i := start; i < min(len(items), start+count); i++ {
-		item := items[i]
-		name, _ := commands.Presentation(item.ID, item.Title, item.Description)
-		if c.activeID == "" && maxWidth >= 48 {
-			name = commands.Category(item.ID) + " · " + name
-		}
-		if item.ID == c.activeID {
-			name = "✓ " + name
-		}
-		style := baseStyle.Width(maxWidth)
-		mark := "  "
-		if i == selected {
-			mark = "› "
-			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
-		}
-		rows = append(rows, style.Render(ansi.Truncate(mark+name, maxWidth, "…")))
-	}
+	viewStart(c, t, &baseStyle, maxWidth, &rows, items, selected, count, start)
 	if len(items) == 0 {
 		rows = append(rows, config.Text("Nenhum comando encontrado", "No commands found"))
 	}
@@ -249,7 +200,7 @@ func (c *commandDialogCmp) SetContext(title, activeID string) {
 	c.title, c.activeID = title, activeID
 	for i, item := range c.listView.GetItems() {
 		if item.ID == activeID {
-			for n := 0; n < i; n++ {
+			for range i {
 				c.listView.Update(tea.KeyMsg{Type: tea.KeyDown})
 			}
 			break
@@ -292,5 +243,70 @@ func NewCommandDialogCmp() CommandDialog {
 	return &commandDialogCmp{
 		listView: listView,
 		search:   search,
+	}
+}
+
+func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+		items := c.listView.GetItems()
+		_, selected := c.listView.GetSelectedItem()
+		count := 8
+		if c.height > 0 {
+			count = max(1, min(8, c.height-10))
+		}
+		start := max(0, selected-count+1)
+		row := msg.Y - 5
+		if c.activeID != "" {
+			row = msg.Y - 3
+		}
+		if msg.X >= 3 && row >= 0 && row < count && start+row < len(items) {
+			return c, util.CmdHandler(CommandSelectedMsg{Command: items[start+row]})
+		}
+	}
+	return c, nil
+
+}
+
+func updateCaseTeaKeyMsgCase(c *commandDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	switch {
+	case key.Matches((*msg), commandKeys.Enter):
+		selectedItem, idx := c.listView.GetSelectedItem()
+		if idx != -1 {
+			return c, util.CmdHandler(CommandSelectedMsg{
+				Command: selectedItem,
+			}), true
+		}
+	case key.Matches((*msg), commandKeys.Escape):
+		return c, util.CmdHandler(CloseCommandDialogMsg{}), true
+	}
+	if c.activeID != "" && msg.String() != "up" && msg.String() != "down" {
+		return c, nil, true
+	}
+	if msg.String() != "up" && msg.String() != "down" {
+		var cmd tea.Cmd
+		c.search, cmd = c.search.Update((*msg))
+		c.filter()
+		return c, cmd, true
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func viewStart(c *commandDialogCmp, t theme.Theme, baseStyle *lipgloss.Style, maxWidth int, rows *[]string, items []Command, selected int, count int, start int) {
+	for i := start; i < min(len(items), start+count); i++ {
+		item := items[i]
+		name, _ := commands.Presentation(item.ID, item.Title, item.Description)
+		if c.activeID == "" && maxWidth >= 48 {
+			name = commands.Category(item.ID) + " · " + name
+		}
+		if item.ID == c.activeID {
+			name = "✓ " + name
+		}
+		style := baseStyle.Width(maxWidth)
+		mark := "  "
+		if i == selected {
+			mark = "› "
+			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
+		}
+		(*rows) = append((*rows), style.Render(ansi.Truncate(mark+name, maxWidth, "…")))
 	}
 }

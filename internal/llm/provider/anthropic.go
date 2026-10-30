@@ -42,53 +42,15 @@ func newAnthropicClient(opts providerClientOptions) *anthropicClient {
 func (a *anthropicClient) convertMessages(messages []message.Message) []object {
 	result := []object{}
 	for i, msg := range messages {
-		cache := i > len(messages)-3 && !a.options.disableCache
-		var blocks []any
-		switch msg.Role {
-		case message.User:
-			text := object{"type": "text", "text": msg.Content().String()}
-			if cache {
-				text["cache_control"] = object{"type": "ephemeral"}
-			}
-			blocks = append(blocks, text)
-			for _, image := range msg.BinaryContent() {
-				blocks = append(blocks, object{"type": "image", "source": object{"type": "base64", "media_type": image.MIMEType, "data": image.String(models.ProviderAnthropic)}})
-			}
-		case message.Assistant:
-			if state := providerState(msg, a.providerOptions, "messages"); state != nil {
-				var native []json.RawMessage
-				if json.Unmarshal(state, &native) == nil && len(native) > 0 {
-					for _, block := range native {
-						blocks = append(blocks, block)
-					}
-				}
-			}
-			if len(blocks) == 0 {
-				if text := msg.Content().String(); text != "" {
-					block := object{"type": "text", "text": text}
-					if cache {
-						block["cache_control"] = object{"type": "ephemeral"}
-					}
-					blocks = append(blocks, block)
-				}
-				for _, call := range msg.ToolCalls() {
-					if json.Valid([]byte(call.Input)) {
-						blocks = append(blocks, object{"type": "tool_use", "id": call.ID, "name": call.Name, "input": json.RawMessage(call.Input)})
-					}
-				}
-			}
-		case message.Tool:
-			for _, r := range msg.ToolResults() {
-				blocks = append(blocks, object{"type": "tool_result", "tool_use_id": r.ToolCallID, "content": r.Content, "is_error": r.IsError})
-			}
+		blocks := a.messageBlocks(msg, i > len(messages)-3 && !a.options.disableCache)
+		if len(blocks) == 0 {
+			continue
 		}
-		if len(blocks) > 0 {
-			role := "user"
-			if msg.Role == message.Assistant {
-				role = "assistant"
-			}
-			result = append(result, object{"role": role, "content": blocks})
+		role := "user"
+		if msg.Role == message.Assistant {
+			role = "assistant"
 		}
+		result = append(result, object{"role": role, "content": blocks})
 	}
 	return result
 }
@@ -113,31 +75,7 @@ func (a *anthropicClient) preparedMessages(messages []object, tools []object) ob
 	if len(tools) > 0 {
 		params["tools"] = tools
 	}
-	think := a.providerOptions.model.ThinkingMode == "enabled"
-	// Signed thinking blocks must survive the entire tool loop with thinking enabled.
-	for _, msg := range messages {
-		if msg["role"] == "assistant" {
-			raw, _ := json.Marshal(msg["content"])
-			var blocks []struct{ Type string }
-			_ = json.Unmarshal(raw, &blocks)
-			for _, b := range blocks {
-				think = think || b.Type == "thinking" || b.Type == "redacted_thinking"
-			}
-		}
-	}
-	if len(messages) > 0 && a.options.shouldThink != nil {
-		last := messages[len(messages)-1]
-		if last["role"] == "user" {
-			raw, _ := json.Marshal(last["content"])
-			var blocks []struct{ Type, Text string }
-			_ = json.Unmarshal(raw, &blocks)
-			for _, b := range blocks {
-				if b.Type == "text" && a.options.shouldThink(b.Text) {
-					think = true
-				}
-			}
-		}
-	}
+	think := a.messagesNeedThinking(messages)
 	if a.providerOptions.model.ThinkingMode == "adaptive" {
 		params["thinking"] = object{"type": "adaptive"}
 	} else if think && a.providerOptions.maxTokens > 1024 {
@@ -149,7 +87,7 @@ func (a *anthropicClient) request(messages []message.Message, tools []tools.Base
 	params := a.preparedMessages(a.convertMessages(messages), a.convertTools(tools))
 	params["stream"] = stream
 	if len(messages) == 0 {
-		return "", nil, fmt.Errorf("Anthropic requires at least one message")
+		return "", nil, fmt.Errorf("provider Anthropic requires at least one message")
 	}
 	if a.bedrock != nil {
 		return a.bedrock.request(params, stream)
@@ -176,10 +114,10 @@ func (a *anthropicClient) decodeResponse(raw json.RawMessage) (*ProviderResponse
 		return nil, err
 	}
 	if len(r.Error) > 0 && string(r.Error) != "null" {
-		return nil, fmt.Errorf("Anthropic API error: %s", r.Error)
+		return nil, fmt.Errorf("provider Anthropic API error: %s", r.Error)
 	}
 	if r.StopReason == "" {
-		return nil, fmt.Errorf("Anthropic returned no stop reason")
+		return nil, fmt.Errorf("provider Anthropic returned no stop reason")
 	}
 	result := &ProviderResponse{FinishReason: message.FinishReasonUnknown, Usage: TokenUsage{InputTokens: r.Usage.Input, OutputTokens: r.Usage.Output, CacheCreationTokens: r.Usage.Created, CacheReadTokens: r.Usage.Cached}}
 	switch r.StopReason {
@@ -191,141 +129,27 @@ func (a *anthropicClient) decodeResponse(raw json.RawMessage) (*ProviderResponse
 		result.FinishReason = message.FinishReasonToolUse
 	}
 	for _, rawBlock := range r.Content {
-		var b struct {
-			Type, Text, ID, Name string
-			Input                json.RawMessage
-		}
-		if err := json.Unmarshal(rawBlock, &b); err != nil {
+		if err := appendAnthropicBlock(result, rawBlock, r.StopReason); err != nil {
 			return nil, err
-		}
-		if b.Type == "text" {
-			result.Content += b.Text
-		}
-		if b.Type == "tool_use" {
-			if r.StopReason != "tool_use" || b.ID == "" || b.Name == "" || !json.Valid(b.Input) {
-				return nil, fmt.Errorf("Anthropic returned an incomplete tool call")
-			}
-			result.ToolCalls = append(result.ToolCalls, message.ToolCall{ID: b.ID, Name: b.Name, Input: string(b.Input), Type: "function", Finished: true})
 		}
 	}
 	result.ProviderState = newProviderState(a.providerOptions, "messages", r.Content)
 	return result, nil
 }
 func (a *anthropicClient) readStream(ctx context.Context, r io.Reader, events chan<- ProviderEvent) error {
-	var content []object
-	var inputs []string
-	var closed []bool
-	response := anthropicResponse{}
-	started, stopped := false, false
-	consume := func(_ string, raw json.RawMessage) (bool, error) {
-		var e struct {
-			Type         string
-			Index        int
-			Message      anthropicResponse
-			ContentBlock object `json:"content_block"`
-			Delta        struct {
-				Type, Text, Thinking, Signature string
-				PartialJSON                     string `json:"partial_json"`
-				StopReason                      string `json:"stop_reason"`
-			}
-			Usage object
-			Error json.RawMessage
-		}
-		if err := decodeObject(raw, &e); err != nil {
-			return false, err
-		}
-		switch e.Type {
-		case "error":
-			return false, fmt.Errorf("Anthropic stream error: %s", e.Error)
-		case "message_start":
-			if started {
-				return false, fmt.Errorf("duplicate message_start")
-			}
-			started = true
-			response = e.Message
-		case "content_block_start":
-			if !started || e.Index != len(content) || e.ContentBlock == nil {
-				return false, fmt.Errorf("invalid Anthropic block start")
-			}
-			content = append(content, e.ContentBlock)
-			inputs = append(inputs, "")
-			closed = append(closed, false)
-			if e.ContentBlock["type"] == "tool_use" {
-				call := message.ToolCall{ID: stringField(e.ContentBlock, "id"), Name: stringField(e.ContentBlock, "name"), Type: "function"}
-				if !publishEvent(ctx, events, ProviderEvent{Type: EventToolUseStart, ToolCall: &call}) {
-					return false, ctx.Err()
-				}
-			}
-		case "content_block_delta":
-			if e.Index < 0 || e.Index >= len(content) || closed[e.Index] {
-				return false, fmt.Errorf("invalid Anthropic block index")
-			}
-			b := content[e.Index]
-			switch e.Delta.Type {
-			case "text_delta":
-				b["text"] = stringField(b, "text") + e.Delta.Text
-				if !publishEvent(ctx, events, ProviderEvent{Type: EventContentDelta, Content: e.Delta.Text}) {
-					return false, ctx.Err()
-				}
-			case "thinking_delta":
-				b["thinking"] = stringField(b, "thinking") + e.Delta.Thinking
-				if !publishEvent(ctx, events, ProviderEvent{Type: EventThinkingDelta, Content: e.Delta.Thinking, Thinking: e.Delta.Thinking}) {
-					return false, ctx.Err()
-				}
-			case "signature_delta":
-				b["signature"] = stringField(b, "signature") + e.Delta.Signature
-			case "input_json_delta":
-				inputs[e.Index] += e.Delta.PartialJSON
-			}
-		case "content_block_stop":
-			if e.Index < 0 || e.Index >= len(content) || closed[e.Index] {
-				return false, fmt.Errorf("invalid Anthropic block stop")
-			}
-			b := content[e.Index]
-			closed[e.Index] = true
-			if inputs[e.Index] != "" {
-				if !json.Valid([]byte(inputs[e.Index])) {
-					return false, fmt.Errorf("invalid Anthropic tool JSON")
-				}
-				b["input"] = json.RawMessage(inputs[e.Index])
-			}
-			if b["type"] == "tool_use" {
-				call := message.ToolCall{ID: stringField(b, "id"), Finished: true}
-				if !publishEvent(ctx, events, ProviderEvent{Type: EventToolUseStop, ToolCall: &call}) {
-					return false, ctx.Err()
-				}
-			}
-		case "message_delta":
-			response.StopReason = e.Delta.StopReason
-			// Usage fields in deltas are cumulative, and absent fields must not reset earlier counts.
-			mergeAnthropicUsage(&response.Usage, e.Usage)
-		case "message_stop":
-			stopped = true
-			return true, nil
-		}
-		return false, nil
-	}
+	s := anthropicStreamState{ctx: ctx, events: events}
 	var err error
 	if a.bedrock != nil {
-		err = readBedrockEvents(r, consume)
+		err = readBedrockEvents(r, s.consume)
 	} else {
-		err = readSSE(r, consume)
+		err = readSSE(r, s.consume)
 	}
 	if err != nil {
 		return err
 	}
-	if !started || !stopped {
-		return fmt.Errorf("Anthropic stream ended without message_stop")
-	}
-	for i, block := range content {
-		if !closed[i] {
-			return fmt.Errorf("Anthropic stream ended with an open content block")
-		}
-		raw, err := json.Marshal(block)
-		if err != nil {
-			return err
-		}
-		response.Content = append(response.Content, raw)
+	response, err := s.finalResponse()
+	if err != nil {
+		return err
 	}
 	raw, err := json.Marshal(response)
 	if err != nil {
@@ -369,4 +193,259 @@ func WithAnthropicDisableCache() AnthropicOption {
 func DefaultShouldThinkFn(s string) bool { return strings.Contains(strings.ToLower(s), "think") }
 func WithAnthropicShouldThinkFn(fn func(string) bool) AnthropicOption {
 	return func(o *anthropicOptions) { o.shouldThink = fn }
+}
+
+func (a *anthropicClient) messageBlocks(msg message.Message, cache bool) []any {
+	switch msg.Role {
+	case message.User:
+		return anthropicUserBlocks(msg, cache)
+	case message.Assistant:
+		return a.assistantBlocks(msg, cache)
+	case message.Tool:
+		var blocks []any
+		for _, r := range msg.ToolResults() {
+			blocks = append(blocks, object{"type": "tool_result", "tool_use_id": r.ToolCallID, "content": r.Content, "is_error": r.IsError})
+		}
+		return blocks
+	}
+	return nil
+}
+func anthropicTextBlock(text string, cache bool) object {
+	block := object{"type": "text", "text": text}
+	if cache {
+		block["cache_control"] = object{"type": "ephemeral"}
+	}
+	return block
+}
+func anthropicUserBlocks(msg message.Message, cache bool) []any {
+	blocks := []any{anthropicTextBlock(msg.Content().String(), cache)}
+	for _, image := range msg.BinaryContent() {
+		blocks = append(blocks, object{"type": "image", "source": object{"type": "base64", "media_type": image.MIMEType, "data": image.String(models.ProviderAnthropic)}})
+	}
+	return blocks
+}
+func (a *anthropicClient) assistantBlocks(msg message.Message, cache bool) []any {
+	var blocks []any
+	if state := providerState(msg, a.providerOptions, "messages"); state != nil {
+		var native []json.RawMessage
+		if json.Unmarshal(state, &native) == nil && len(native) > 0 {
+			for _, block := range native {
+				blocks = append(blocks, block)
+			}
+		}
+	}
+	if len(blocks) > 0 {
+		return blocks
+	}
+	if text := msg.Content().String(); text != "" {
+		blocks = append(blocks, anthropicTextBlock(text, cache))
+	}
+	for _, call := range msg.ToolCalls() {
+		if json.Valid([]byte(call.Input)) {
+			blocks = append(blocks, object{"type": "tool_use", "id": call.ID, "name": call.Name, "input": json.RawMessage(call.Input)})
+		}
+	}
+	return blocks
+}
+
+func (a *anthropicClient) messagesNeedThinking(messages []object) bool {
+	think := a.providerOptions.model.ThinkingMode == "enabled"
+	for _, msg := range messages {
+		think = anthropicSignedThinking(msg) || think
+	}
+	return a.requestedThinking(messages) || think
+}
+
+type anthropicStreamEvent struct {
+	Type         string
+	Index        int
+	Message      anthropicResponse
+	ContentBlock object `json:"content_block"`
+	Delta        struct {
+		Type, Text, Thinking, Signature string
+		PartialJSON                     string `json:"partial_json"`
+		StopReason                      string `json:"stop_reason"`
+	}
+	Usage object
+	Error json.RawMessage
+}
+type anthropicStreamState struct {
+	ctx              context.Context
+	events           chan<- ProviderEvent
+	content          []object
+	inputs           []string
+	closed           []bool
+	response         anthropicResponse
+	started, stopped bool
+}
+
+func (s *anthropicStreamState) consume(_ string, raw json.RawMessage) (bool, error) {
+	var e anthropicStreamEvent
+	if err := decodeObject(raw, &e); err != nil {
+		return false, err
+	}
+	switch e.Type {
+	case "error":
+		return false, fmt.Errorf("provider Anthropic stream error: %s", e.Error)
+	case "message_start":
+		return false, s.startMessage(e)
+	case "content_block_start":
+		return false, s.startBlock(e)
+	case "content_block_delta":
+		return false, s.deltaBlock(e)
+	case "content_block_stop":
+		return false, s.stopBlock(e)
+	case "message_delta":
+		s.response.StopReason = e.Delta.StopReason
+		mergeAnthropicUsage(&s.response.Usage, e.Usage)
+	case "message_stop":
+		s.stopped = true
+		return true, nil
+	}
+	return false, nil
+}
+func (s *anthropicStreamState) startMessage(e anthropicStreamEvent) error {
+
+	if s.started {
+		return fmt.Errorf("duplicate message_start")
+	}
+	s.started = true
+	s.response = e.Message
+
+	return nil
+}
+func (s *anthropicStreamState) startBlock(e anthropicStreamEvent) error {
+
+	if !s.started || e.Index != len(s.content) || e.ContentBlock == nil {
+		return fmt.Errorf("invalid Anthropic block start")
+	}
+	s.content = append(s.content, e.ContentBlock)
+	s.inputs = append(s.inputs, "")
+	s.closed = append(s.closed, false)
+	if e.ContentBlock["type"] == "tool_use" {
+		call := message.ToolCall{ID: stringField(e.ContentBlock, "id"), Name: stringField(e.ContentBlock, "name"), Type: "function"}
+		if !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventToolUseStart, ToolCall: &call}) {
+			return s.ctx.Err()
+		}
+	}
+
+	return nil
+}
+func (s *anthropicStreamState) deltaBlock(e anthropicStreamEvent) error {
+
+	if e.Index < 0 || e.Index >= len(s.content) || s.closed[e.Index] {
+		return fmt.Errorf("invalid Anthropic block index")
+	}
+	b := s.content[e.Index]
+	switch e.Delta.Type {
+	case "text_delta":
+		b["text"] = stringField(b, "text") + e.Delta.Text
+		if !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventContentDelta, Content: e.Delta.Text}) {
+			return s.ctx.Err()
+		}
+	case "thinking_delta":
+		b["thinking"] = stringField(b, "thinking") + e.Delta.Thinking
+		if !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventThinkingDelta, Content: e.Delta.Thinking, Thinking: e.Delta.Thinking}) {
+			return s.ctx.Err()
+		}
+	case "signature_delta":
+		b["signature"] = stringField(b, "signature") + e.Delta.Signature
+	case "input_json_delta":
+		s.inputs[e.Index] += e.Delta.PartialJSON
+	}
+
+	return nil
+}
+func (s *anthropicStreamState) stopBlock(e anthropicStreamEvent) error {
+
+	if e.Index < 0 || e.Index >= len(s.content) || s.closed[e.Index] {
+		return fmt.Errorf("invalid Anthropic block stop")
+	}
+	b := s.content[e.Index]
+	s.closed[e.Index] = true
+	if s.inputs[e.Index] != "" {
+		if !json.Valid([]byte(s.inputs[e.Index])) {
+			return fmt.Errorf("invalid Anthropic tool JSON")
+		}
+		b["input"] = json.RawMessage(s.inputs[e.Index])
+	}
+	if b["type"] == "tool_use" {
+		call := message.ToolCall{ID: stringField(b, "id"), Finished: true}
+		if !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventToolUseStop, ToolCall: &call}) {
+			return s.ctx.Err()
+		}
+	}
+
+	return nil
+}
+func (s *anthropicStreamState) finalResponse() (anthropicResponse, error) {
+	if !s.started || !s.stopped {
+		return s.response, fmt.Errorf("provider Anthropic stream ended without message_stop")
+	}
+	for i, block := range s.content {
+		if !s.closed[i] {
+			return s.response, fmt.Errorf("provider Anthropic stream ended with an open content block")
+		}
+		raw, err := json.Marshal(block)
+		if err != nil {
+			return s.response, err
+		}
+		s.response.Content = append(s.response.Content, raw)
+	}
+	return s.response, nil
+}
+
+func appendAnthropicBlock(result *ProviderResponse, rawBlock json.RawMessage, stopReason string) error {
+
+	var b struct {
+		Type, Text, ID, Name string
+		Input                json.RawMessage
+	}
+	if err := json.Unmarshal(rawBlock, &b); err != nil {
+		return err
+	}
+	if b.Type == "text" {
+		result.Content += b.Text
+	}
+	if b.Type == "tool_use" {
+		if stopReason != "tool_use" || b.ID == "" || b.Name == "" || !json.Valid(b.Input) {
+			return fmt.Errorf("provider Anthropic returned an incomplete tool call")
+		}
+		result.ToolCalls = append(result.ToolCalls, message.ToolCall{ID: b.ID, Name: b.Name, Input: string(b.Input), Type: "function", Finished: true})
+	}
+	return nil
+}
+
+func anthropicSignedThinking(msg object) bool {
+	if msg["role"] != "assistant" {
+		return false
+	}
+	raw, _ := json.Marshal(msg["content"])
+	var blocks []struct{ Type string }
+	_ = json.Unmarshal(raw, &blocks)
+	for _, block := range blocks {
+		if block.Type == "thinking" || block.Type == "redacted_thinking" {
+			return true
+		}
+	}
+	return false
+}
+func (a *anthropicClient) requestedThinking(messages []object) bool {
+	if len(messages) == 0 || a.options.shouldThink == nil {
+		return false
+	}
+	last := messages[len(messages)-1]
+	if last["role"] != "user" {
+		return false
+	}
+	raw, _ := json.Marshal(last["content"])
+	var blocks []struct{ Type, Text string }
+	_ = json.Unmarshal(raw, &blocks)
+	think := false
+	for _, block := range blocks {
+		if block.Type == "text" && a.options.shouldThink(block.Text) {
+			think = true
+		}
+	}
+	return think
 }

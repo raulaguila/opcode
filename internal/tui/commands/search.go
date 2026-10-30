@@ -21,19 +21,20 @@ func Match(query, id, description string) bool {
 	if len([]rune(query)) == 1 {
 		return strings.HasPrefix(normalize(canonical), query)
 	}
-	text := id + " " + description
+	var text strings.Builder
+	text.WriteString(id + " " + description)
 	if pair, ok := english[canonical]; ok {
-		text += " " + pair[0] + " " + pair[1]
+		text.WriteString(" " + pair[0] + " " + pair[1])
 	}
 	for _, c := range Builtins {
 		if strings.TrimSpace(c.ID) == strings.Trim(strings.TrimSpace(id), "/") {
-			text += " " + c.Title + " " + c.Description
+			text.WriteString(" " + c.Title + " " + c.Description)
 			title, desc := Presentation(c.ID, c.Title, c.Description)
-			text += " " + title + " " + desc
+			text.WriteString(" " + title + " " + desc)
 			break
 		}
 	}
-	return strings.Contains(normalize(text), query)
+	return strings.Contains(normalize(text.String()), query)
 }
 
 // Prefer command prefixes while retaining the contextual order for equal matches.

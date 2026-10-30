@@ -89,7 +89,7 @@ injetável separa testes do cofre real. Limites e recuperação: [cofre nativo](
 
 ## Entrega e verificação
 
-Go 1.26 ou posterior. O build continua sendo `go build .`; workflows usam a versão declarada no `go.mod`. A verificação comum é `go test -race ./...` e `go vet ./...`. Testes de sandbox usam dados temporários e indicam quando o ambiente não suporta namespaces. Testes externos de geração são separados e optativos.
+Go 1.27 ou posterior. O build continua sendo `go build .`; o módulo recomenda a toolchain Go 1.27.3 e os workflows acompanham os patches `1.27.x`. A verificação comum é `go test -race ./...` e `go vet ./...`. Testes de sandbox usam dados temporários e indicam quando o ambiente não suporta namespaces. Testes externos de geração são separados e optativos.
 
 `scripts/build-release` gera tar.gz (Linux/macOS), ZIP (Windows) e SHA256 locais com metadados fixos, trimpath,
 CGO desativado e versão explícita. `make release-local` e o workflow de build

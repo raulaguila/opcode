@@ -2,8 +2,6 @@ package chat
 
 import (
 	"context"
-	"fmt"
-	"math"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -115,30 +113,8 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.GotoBottom()
 		return m, nil
 	case tea.KeyMsg:
-		if m.TranscriptKey(msg) {
-			return m, nil
-		}
-		if msg.String() == "alt+end" {
-			m.ClearSelection()
-			m.unread = false
-			m.viewport.GotoBottom()
-			return m, nil
-		}
-		if msg.String() == "ctrl+b" {
-			groups := m.groups()
-			if len(groups) > 0 {
-				m.toggleProcess(groups[len(groups)-1].key)
-			}
-			return m, nil
-		}
-		if msg.String() == "ctrl+y" {
-			return m, util.CmdHandler(ResponseActionsMsg{m.LatestResponse()})
-		}
-		if key.Matches(msg, messageKeys.PageUp) || key.Matches(msg, messageKeys.PageDown) ||
-			key.Matches(msg, messageKeys.HalfPageUp) || key.Matches(msg, messageKeys.HalfPageDown) {
-			u, cmd := m.viewport.Update(msg)
-			m.viewport = u
-			cmds = append(cmds, cmd)
+		if result0, result1, handled := updateMessagesCmpKeyMsg(m, &cmds, &msg); handled {
+			return result0, result1
 		}
 	case tea.MouseMsg:
 		if msg.Button == tea.MouseButtonLeft || msg.Action == tea.MouseActionRelease {
@@ -155,81 +131,12 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rendering = false
 		m.viewport.GotoBottom()
 	case pubsub.Event[session.Session]:
-		if msg.Type == pubsub.UpdatedEvent && msg.Payload.ID == m.session.ID {
-			m.session = msg.Payload
-			if m.session.SummaryMessageID == m.currentMsgID {
-				delete(m.cachedContent, m.currentMsgID)
-				m.renderView()
-			}
-		}
+		updateEventSessionSession(m, &msg)
 	case pubsub.Event[message.Message]:
-		needsRerender := false
-		if msg.Type == pubsub.CreatedEvent {
-			if msg.Payload.SessionID == m.session.ID {
-
-				messageExists := false
-				for _, v := range m.messages {
-					if v.ID == msg.Payload.ID {
-						messageExists = true
-						break
-					}
-				}
-
-				if !messageExists {
-					if len(m.messages) > 0 {
-						lastMsgID := m.messages[len(m.messages)-1].ID
-						delete(m.cachedContent, lastMsgID)
-					}
-
-					m.messages = append(m.messages, msg.Payload)
-					delete(m.cachedContent, m.currentMsgID)
-					m.currentMsgID = msg.Payload.ID
-					needsRerender = true
-				}
-			}
-			// There are tool calls from the child task
-			for _, v := range m.messages {
-				for _, c := range v.ToolCalls() {
-					if c.ID == msg.Payload.SessionID {
-						delete(m.cachedContent, v.ID)
-						needsRerender = true
-					}
-				}
-			}
-		} else if msg.Type == pubsub.UpdatedEvent && msg.Payload.SessionID == m.session.ID {
-			for i, v := range m.messages {
-				if v.ID == msg.Payload.ID {
-					m.messages[i] = msg.Payload
-					delete(m.cachedContent, msg.Payload.ID)
-					needsRerender = true
-					break
-				}
-			}
-		}
-		if needsRerender {
-			// Keep following only while the reader is at the bottom. Streaming
-			// updates must not interrupt someone reading earlier messages.
-			follow := !m.selection.engaged() && !m.find.open && (m.viewport.AtBottom() || (msg.Type == pubsub.CreatedEvent &&
-				msg.Payload.SessionID == m.session.ID && msg.Payload.Role == message.User))
-			m.renderView()
-			if follow {
-				m.viewport.GotoBottom()
-				m.unread = false
-			} else {
-				m.unread = true
-			}
-		}
+		updateMessagesCmpMessage(m, &msg)
 	}
 
-	if len(m.messages) > 0 && m.lastWorking != m.IsAgentWorking() {
-		offset, follow := m.viewport.YOffset, m.viewport.AtBottom() && !m.selection.engaged() && !m.find.open
-		m.renderView()
-		if follow {
-			m.viewport.GotoBottom()
-		} else {
-			m.viewport.SetYOffset(offset)
-		}
-	}
+	updateMessagesLastWorkingIsAgentWorking(m)
 	spinner, cmd := m.spinner.Update(msg)
 	m.spinner = spinner
 	cmds = append(cmds, cmd)
@@ -238,18 +145,6 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *messagesCmp) IsAgentWorking() bool {
 	return m.app != nil && m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID)
-}
-
-func formatTimeDifference(unixTime1, unixTime2 int64) string {
-	diffSeconds := float64(math.Abs(float64(unixTime2 - unixTime1)))
-
-	if diffSeconds < 60 {
-		return fmt.Sprintf("%.1fs", diffSeconds)
-	}
-
-	minutes := int(diffSeconds / 60)
-	seconds := int(diffSeconds) % 60
-	return fmt.Sprintf("%dm%ds", minutes, seconds)
 }
 
 func (m *messagesCmp) renderView() { m.renderTurns() }
@@ -354,5 +249,127 @@ func NewMessagesCmp(app *app.App) tea.Model {
 		viewport:      vp,
 		spinner:       s,
 		attachments:   attachmets,
+	}
+}
+
+func updateMessagesCmpMessage(m *messagesCmp, msg *pubsub.Event[message.Message]) {
+	needsRerender := false
+	updateMessagesCmpMessageTypePubsubCreatedEvent(m, msg, &needsRerender)
+	if needsRerender {
+		// Keep following only while the reader is at the bottom. Streaming
+		// updates must not interrupt someone reading earlier messages.
+		follow := !m.selection.engaged() && !m.find.open && (m.viewport.AtBottom() || (msg.Type == pubsub.CreatedEvent &&
+			msg.Payload.SessionID == m.session.ID && msg.Payload.Role == message.User))
+		m.renderView()
+		if follow {
+			m.viewport.GotoBottom()
+			m.unread = false
+		} else {
+			m.unread = true
+		}
+	}
+}
+
+func updateMessagesCmpKeyMsg(m *messagesCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if m.TranscriptKey((*msg)) {
+		return m, nil, true
+	}
+	if msg.String() == "alt+end" {
+		m.ClearSelection()
+		m.unread = false
+		m.viewport.GotoBottom()
+		return m, nil, true
+	}
+	if msg.String() == "ctrl+b" {
+		groups := m.groups()
+		if len(groups) > 0 {
+			m.toggleProcess(groups[len(groups)-1].key)
+		}
+		return m, nil, true
+	}
+	if msg.String() == "ctrl+y" {
+		return m, util.CmdHandler(ResponseActionsMsg{m.LatestResponse()}), true
+	}
+	if key.Matches((*msg), messageKeys.PageUp) || key.Matches((*msg), messageKeys.PageDown) ||
+		key.Matches((*msg), messageKeys.HalfPageUp) || key.Matches((*msg), messageKeys.HalfPageDown) {
+		u, cmd := m.viewport.Update((*msg))
+		m.viewport = u
+		(*cmds) = append((*cmds), cmd)
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateMessagesCmpMessageTypePubsubCreatedEvent(m *messagesCmp, msg *pubsub.Event[message.Message], needsRerender *bool) {
+	if msg.Type == pubsub.CreatedEvent {
+		updateMessagesCmpMessageTypePubsubCreatedEventSessionIDSessionID(m, msg, needsRerender)
+		// There are tool calls from the child task
+		updateMessagesCmpMessageTypePubsubCreatedEventMessages(m, msg, needsRerender)
+	} else if msg.Type == pubsub.UpdatedEvent && msg.Payload.SessionID == m.session.ID {
+		for i, v := range m.messages {
+			if v.ID == msg.Payload.ID {
+				m.messages[i] = msg.Payload
+				delete(m.cachedContent, msg.Payload.ID)
+				(*needsRerender) = true
+				break
+			}
+		}
+	}
+}
+
+func updateMessagesCmpMessageTypePubsubCreatedEventSessionIDSessionID(m *messagesCmp, msg *pubsub.Event[message.Message], needsRerender *bool) {
+	if msg.Payload.SessionID == m.session.ID {
+
+		messageExists := false
+		for _, v := range m.messages {
+			if v.ID == msg.Payload.ID {
+				messageExists = true
+				break
+			}
+		}
+
+		if !messageExists {
+			if len(m.messages) > 0 {
+				lastMsgID := m.messages[len(m.messages)-1].ID
+				delete(m.cachedContent, lastMsgID)
+			}
+
+			m.messages = append(m.messages, msg.Payload)
+			delete(m.cachedContent, m.currentMsgID)
+			m.currentMsgID = msg.Payload.ID
+			(*needsRerender) = true
+		}
+	}
+}
+
+func updateMessagesLastWorkingIsAgentWorking(m *messagesCmp) {
+	if len(m.messages) > 0 && m.lastWorking != m.IsAgentWorking() {
+		offset, follow := m.viewport.YOffset, m.viewport.AtBottom() && !m.selection.engaged() && !m.find.open
+		m.renderView()
+		if follow {
+			m.viewport.GotoBottom()
+		} else {
+			m.viewport.SetYOffset(offset)
+		}
+	}
+}
+
+func updateEventSessionSession(m *messagesCmp, msg *pubsub.Event[session.Session]) {
+	if msg.Type == pubsub.UpdatedEvent && msg.Payload.ID == m.session.ID {
+		m.session = msg.Payload
+		if m.session.SummaryMessageID == m.currentMsgID {
+			delete(m.cachedContent, m.currentMsgID)
+			m.renderView()
+		}
+	}
+}
+
+func updateMessagesCmpMessageTypePubsubCreatedEventMessages(m *messagesCmp, msg *pubsub.Event[message.Message], needsRerender *bool) {
+	for _, v := range m.messages {
+		for _, c := range v.ToolCalls() {
+			if c.ID == msg.Payload.SessionID {
+				delete(m.cachedContent, v.ID)
+				(*needsRerender) = true
+			}
+		}
 	}
 }

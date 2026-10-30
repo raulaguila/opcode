@@ -75,87 +75,102 @@ func processContextPaths(workDir string, paths []string) string {
 		return ""
 	}
 	defer root.Close()
-	seen := map[string]bool{}
-	var blocks []string
-	remaining := 16384
-	count := 0
-	read := func(name string) {
-		name = filepath.Clean(name)
-		if !filepath.IsLocal(name) || seen[strings.ToLower(name)] || count >= 16 || remaining <= 128 {
-			return
-		}
-		full := filepath.Join(workDir, name)
-		if shell.SensitivePath(full) {
-			return
-		}
-		resolved, resolveErr := filepath.EvalSymlinks(full)
-		if resolveErr != nil || shell.SensitivePath(resolved) {
-			return
-		}
-		canonicalRoot, rootErr := filepath.EvalSymlinks(workDir)
-		if rootErr != nil {
-			return
-		}
-		relative, relativeErr := filepath.Rel(canonicalRoot, resolved)
-		if relativeErr != nil || !filepath.IsLocal(relative) {
-			return
-		}
-		info, err := root.Lstat(name)
-		if err != nil || !info.Mode().IsRegular() {
-			return
-		}
-		seen[strings.ToLower(name)] = true
-		file, err := root.Open(relative)
-		if err != nil {
-			return
-		}
-		raw, readErr := io.ReadAll(io.LimitReader(file, int64(min(4096, remaining-128))+1))
-		_ = file.Close()
-		if readErr != nil || strings.IndexByte(string(raw), 0) >= 0 {
-			return
-		}
-		limit := min(4096, remaining-128)
-		text := string(raw)
-		if len(raw) > limit {
-			text = strings.ToValidUTF8(string(raw[:max(0, limit-12)]), "") + "\n[truncated]"
-		}
-		block := "# From:" + full + "\n" + tools.RedactCredentials(text)
-		if len(block) > remaining {
-			block = strings.ToValidUTF8(block[:remaining], "")
-		}
-		blocks = append(blocks, block)
-		remaining -= len(block) + 1
-		count++
+	canonical, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		return ""
 	}
+	reader := contextPathReader{root: root, workDir: workDir, canonicalRoot: canonical, seen: map[string]bool{}, remaining: 16384}
 	for _, path := range paths {
-		if count >= 16 || remaining <= 128 {
+		if reader.full() {
 			break
 		}
 		if filepath.IsAbs(path) || !filepath.IsLocal(filepath.Clean(path)) {
 			continue
 		}
 		if strings.HasSuffix(path, "/") {
-			_ = fs.WalkDir(root.FS(), filepath.ToSlash(filepath.Clean(path)), func(name string, d fs.DirEntry, err error) error {
-				if err != nil {
-					return err
-				}
-				if count >= 16 || remaining <= 128 {
-					return fs.SkipAll
-				}
-				if shell.SensitivePath(filepath.Join(workDir, filepath.FromSlash(name))) {
-					if d.IsDir() {
-						return fs.SkipDir
-					}
-					return nil
-				}
-				if !d.IsDir() {
-					read(filepath.FromSlash(name))
-				}
-				return nil
-			})
+			_ = fs.WalkDir(root.FS(), filepath.ToSlash(filepath.Clean(path)), reader.walk)
 		} else {
-			read(path)
+			reader.read(path)
 		}
 	}
-	return strings.Join(blocks, "\n")
+	return strings.Join(reader.blocks, "\n")
+}
+
+type contextPathReader struct {
+	root                   *os.Root
+	workDir, canonicalRoot string
+	seen                   map[string]bool
+	blocks                 []string
+	remaining, count       int
+}
+
+func (r *contextPathReader) full() bool { return r.count >= 16 || r.remaining <= 128 }
+func (r *contextPathReader) resolve(name string) (string, bool) {
+	if !filepath.IsLocal(name) || r.seen[strings.ToLower(name)] || r.full() {
+		return "", false
+	}
+	full := filepath.Join(r.workDir, name)
+	if shell.SensitivePath(full) {
+		return "", false
+	}
+	resolved, err := filepath.EvalSymlinks(full)
+	if err != nil || shell.SensitivePath(resolved) {
+		return "", false
+	}
+	relative, err := filepath.Rel(r.canonicalRoot, resolved)
+	if err != nil || !filepath.IsLocal(relative) {
+		return "", false
+	}
+	info, err := r.root.Lstat(name)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	return relative, true
+}
+func (r *contextPathReader) read(name string) {
+	name = filepath.Clean(name)
+	relative, ok := r.resolve(name)
+	if !ok {
+		return
+	}
+	r.seen[strings.ToLower(name)] = true
+	file, err := r.root.Open(relative)
+	if err != nil {
+		return
+	}
+	limit := min(4096, r.remaining-128)
+	raw, err := io.ReadAll(io.LimitReader(file, int64(limit)+1))
+	_ = file.Close()
+	if err != nil || strings.IndexByte(string(raw), 0) >= 0 {
+		return
+	}
+	text := string(raw)
+	if len(raw) > limit {
+		text = strings.ToValidUTF8(string(raw[:max(0, limit-12)]), "") + "\n[truncated]"
+	}
+	block := "# From:" + filepath.Join(r.workDir, name) + "\n" + tools.RedactCredentials(text)
+	if len(block) > r.remaining {
+		block = strings.ToValidUTF8(block[:r.remaining], "")
+	}
+	r.blocks = append(r.blocks, block)
+	r.remaining -= len(block) + 1
+	r.count++
+}
+func (r *contextPathReader) walk(name string, d fs.DirEntry, err error) error {
+	if err != nil {
+		return err
+	}
+	if r.full() {
+		return fs.SkipAll
+	}
+	if shell.SensitivePath(filepath.Join(r.workDir, filepath.FromSlash(name))) {
+		if d.IsDir() {
+			return fs.SkipDir
+		}
+		return nil
+	}
+	if !d.IsDir() {
+		r.read(filepath.FromSlash(name))
+	}
+	return nil
 }

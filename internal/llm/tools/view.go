@@ -117,33 +117,7 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	// Check if file exists
 	fileInfo, err := statFile(ctx, filePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// Try to offer suggestions for similarly named files
-			dir := filepath.Dir(filePath)
-			base := filepath.Base(filePath)
-
-			dirEntries, dirErr := os.ReadDir(dir)
-			if dirErr == nil {
-				var suggestions []string
-				for _, entry := range dirEntries {
-					if strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(base)) ||
-						strings.Contains(strings.ToLower(base), strings.ToLower(entry.Name())) {
-						suggestions = append(suggestions, filepath.Join(dir, entry.Name()))
-						if len(suggestions) >= 3 {
-							break
-						}
-					}
-				}
-
-				if len(suggestions) > 0 {
-					return NewTextErrorResponse(fmt.Sprintf("File not found: %s\n\nDid you mean one of these?\n%s",
-						filePath, strings.Join(suggestions, "\n"))), nil
-				}
-			}
-
-			return NewTextErrorResponse(fmt.Sprintf("File not found: %s", filePath)), nil
-		}
-		return ToolResponse{}, fmt.Errorf("error accessing file: %w", err)
+		return viewAccessFailure(filePath, err)
 	}
 
 	// Check if it's a directory
@@ -158,25 +132,13 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 
 	// Check if it's an image file
 	isImage, imageType := isImageFile(filePath)
-	// TODO: handle images
+	// This tool reads text only; image files retain the explicit unsupported response.
 	if isImage {
 		return NewTextErrorResponse(fmt.Sprintf("This is an image file of type: %s\nUse a different tool to process images", imageType)), nil
 	}
 
 	// Read the file content
-	var raw []byte
-	var content string
-	var lineCount int
-	// Read and hash the same snapshot. Very large files retain bounded viewing
-	// without claiming a whole-file receipt that cannot be checked within limits.
-	if fileInfo.Size() <= 16<<20 {
-		raw, err = readFile(ctx, filePath)
-		if err == nil {
-			content, lineCount, err = readTextReader(ctx, bytes.NewReader(raw), params.Offset, params.Limit)
-		}
-	} else {
-		content, lineCount, err = readTextFile(ctx, filePath, params.Offset, params.Limit)
-	}
+	raw, content, lineCount, err := readViewSnapshot(ctx, filePath, fileInfo.Size(), params.Offset, params.Limit)
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("error reading file: %w", err)
 	}
@@ -201,14 +163,7 @@ func (v *viewTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	output += "\n</file>\n"
 	output += getDiagnostics(filePath, v.lspClients)
 	recordFileRead(filePath)
-	preview := content
-	if len(preview) > 1024 {
-		preview = string([]rune(preview)[:min(256, len([]rune(preview)))]) + "\n[Preview abbreviated; full source is in the tool result.]"
-	}
-	metadata := ViewResponseMetadata{FilePath: filePath, Content: preview}
-	if raw != nil && content != "" {
-		metadata.SourceRead = &SourceReadReceipt{Path: filePath, Hash: indexDigest(string(raw)), StartLine: params.Offset + 1, EndLine: params.Offset + len(strings.Split(content, "\n"))}
-	}
+	metadata := viewReadMetadata(filePath, content, params.Offset, raw)
 	return WithResponseMetadata(
 		NewTextResponse(output),
 		metadata,
@@ -265,36 +220,19 @@ func readTextReader(ctx context.Context, source io.Reader, offset, limit int) (s
 		if err := ctx.Err(); err != nil {
 			return "", 0, err
 		}
-		var prefix []byte
-		hasData := false
-		for {
-			fragment, err := reader.ReadSlice('\n')
-			if len(fragment) > 0 {
-				hasData = true
-			}
-			if len(prefix) < MaxLineLength {
-				prefix = append(prefix, fragment[:min(len(fragment), MaxLineLength-len(prefix))]...)
-			}
-			if err == bufio.ErrBufferFull {
-				continue
-			}
-			if err != nil && err != io.EOF {
-				return "", 0, err
-			}
-			if !hasData {
-				return strings.Join(lines, "\n"), lineCount, nil
-			}
-			break
+		prefix, hasData, err := readBoundedTextLine(reader)
+		if err != nil {
+			return "", 0, err
+		}
+		if !hasData {
+			return strings.Join(lines, "\n"), lineCount, nil
 		}
 		if lineCount >= offset {
 			lines = append(lines, strings.TrimRight(string(prefix), "\r\n"))
 		}
 		lineCount++
 		if len(lines) >= limit {
-			if _, err := reader.Peek(1); err == io.EOF {
-				return strings.Join(lines, "\n"), lineCount, nil
-			}
-			return strings.Join(lines, "\n"), lineCount + 1, nil
+			return strings.Join(lines, "\n"), viewLineCountHint(reader, lineCount), nil
 		}
 	}
 }
@@ -339,4 +277,95 @@ func (s *LineScanner) Text() string {
 
 func (s *LineScanner) Err() error {
 	return s.scanner.Err()
+}
+
+func viewAccessFailure(filePath string, err error) (ToolResponse, error) {
+
+	if os.IsNotExist(err) {
+		// Try to offer suggestions for similarly named files
+		suggestions := similarViewPaths(filePath)
+		if len(suggestions) > 0 {
+			return NewTextErrorResponse(fmt.Sprintf("File not found: %s\n\nDid you mean one of these?\n%s", filePath, strings.Join(suggestions, "\n"))), nil
+		}
+
+		return NewTextErrorResponse(fmt.Sprintf("File not found: %s", filePath)), nil
+	}
+	return ToolResponse{}, fmt.Errorf("error accessing file: %w", err)
+
+}
+
+func similarViewPaths(filePath string) []string {
+	dir, base := filepath.Dir(filePath), filepath.Base(filePath)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var suggestions []string
+	for _, entry := range entries {
+		if strings.Contains(strings.ToLower(entry.Name()), strings.ToLower(base)) || strings.Contains(strings.ToLower(base), strings.ToLower(entry.Name())) {
+			suggestions = append(suggestions, filepath.Join(dir, entry.Name()))
+			if len(suggestions) >= 3 {
+				break
+			}
+		}
+	}
+	return suggestions
+}
+
+func readViewSnapshot(ctx context.Context, filePath string, size int64, offset, limit int) (raw []byte, content string, lineCount int, err error) {
+	// Read and hash the same snapshot. Very large files retain bounded viewing
+	// without claiming a whole-file receipt that cannot be checked within limits.
+	if size <= 16<<20 {
+		raw, err = readFile(ctx, filePath)
+		if err == nil {
+			content, lineCount, err = readTextReader(ctx, bytes.NewReader(raw), offset, limit)
+		}
+	} else {
+		content, lineCount, err = readTextFile(ctx, filePath, offset, limit)
+	}
+	return raw, content, lineCount, err
+}
+
+func viewReadMetadata(filePath, content string, offset int, raw []byte) ViewResponseMetadata {
+	preview := content
+	if len(preview) > 1024 {
+		preview = string([]rune(preview)[:min(256, len([]rune(preview)))]) + "\n[Preview abbreviated; full source is in the tool result.]"
+	}
+	metadata := ViewResponseMetadata{FilePath: filePath, Content: preview}
+	if raw != nil && content != "" {
+		metadata.SourceRead = &SourceReadReceipt{Path: filePath, Hash: indexDigest(string(raw)), StartLine: offset + 1, EndLine: offset + len(strings.Split(content, "\n"))}
+	}
+	return metadata
+}
+
+func readBoundedTextLine(reader *bufio.Reader) ([]byte, bool, error) {
+	var prefix []byte
+	hasData := false
+	for {
+		fragment, err := reader.ReadSlice('\n')
+		if len(fragment) > 0 {
+			hasData = true
+		}
+		if len(prefix) < MaxLineLength {
+			prefix = append(prefix, fragment[:min(len(fragment), MaxLineLength-len(prefix))]...)
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil && err != io.EOF {
+			return nil, false, err
+		}
+		if !hasData {
+			return prefix, false, nil
+		}
+		break
+	}
+	return prefix, hasData, nil
+}
+
+func viewLineCountHint(reader *bufio.Reader, count int) int {
+	if _, err := reader.Peek(1); err == io.EOF {
+		return count
+	}
+	return count + 1
 }

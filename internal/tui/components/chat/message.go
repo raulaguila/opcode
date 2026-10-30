@@ -38,13 +38,13 @@ type uiMessage struct {
 	content     string
 }
 
-func toMarkdown(content string, focused bool, width int) string {
+func toMarkdown(content string, _ bool, width int) string {
 	r := styles.GetMarkdownRenderer(width)
 	rendered, _ := r.Render(content)
 	return rendered
 }
 
-func renderMessage(msg string, isUser bool, isFocused bool, width int, info ...string) string {
+func renderMessage(msg string, isUser bool, _ bool, width int, info ...string) string {
 	t := theme.CurrentTheme()
 
 	style := styles.BaseStyle().
@@ -117,7 +117,7 @@ func renderUserMessage(msg message.Message, isFocused bool, width int, position 
 // Returns multiple uiMessages because of the tool calls
 func renderAssistantMessage(
 	msg message.Message,
-	msgIndex int,
+	_ int,
 	allMessages []message.Message, // we need this to get tool results and the user message
 	messagesService message.Service, // We need this to get the task tool messages
 	focusedUIMessageId string,
@@ -127,8 +127,6 @@ func renderAssistantMessage(
 ) []uiMessage {
 	messages := []uiMessage{}
 	content := msg.Content().String()
-	thinking := msg.IsThinking()
-	thinkingContent := msg.ReasoningContent().Thinking
 	finished := msg.IsFinished()
 	finishData := msg.FinishPart()
 	info := []string{}
@@ -184,9 +182,6 @@ func renderAssistantMessage(
 		})
 		position += messages[0].height
 		position++ // for the space
-	} else if thinking && thinkingContent != "" {
-		// Render the thinking content
-		content = renderMessage(thinkingContent, false, msg.ID == focusedUIMessageId, width)
 	}
 
 	for i, toolCall := range msg.ToolCalls() {
@@ -318,18 +313,10 @@ func renderParams(paramsWidth int, params ...string) string {
 
 func removeWorkingDirPrefix(path string) string {
 	wd := config.WorkingDirectory()
-	if strings.HasPrefix(path, wd) {
-		path = strings.TrimPrefix(path, wd)
-	}
-	if strings.HasPrefix(path, "/") {
-		path = strings.TrimPrefix(path, "/")
-	}
-	if strings.HasPrefix(path, "./") {
-		path = strings.TrimPrefix(path, "./")
-	}
-	if strings.HasPrefix(path, "../") {
-		path = strings.TrimPrefix(path, "../")
-	}
+	path = strings.TrimPrefix(path, wd)
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimPrefix(path, "./")
+	path = strings.TrimPrefix(path, "../")
 	return path
 }
 
@@ -377,22 +364,7 @@ func renderToolParams(paramWidth int, toolCall message.ToolCall) string {
 		}
 		return renderParams(paramWidth, toolParams...)
 	case tools.GrepToolName:
-		var params tools.GrepParams
-		json.Unmarshal([]byte(toolCall.Input), &params)
-		pattern := params.Pattern
-		toolParams := []string{
-			pattern,
-		}
-		if params.Path != "" {
-			toolParams = append(toolParams, "path", params.Path)
-		}
-		if params.Include != "" {
-			toolParams = append(toolParams, "include", params.Include)
-		}
-		if params.LiteralText {
-			toolParams = append(toolParams, "literal", "true")
-		}
-		return renderParams(paramWidth, toolParams...)
+		return renderToolParamsCaseToolsGrepToolName(paramWidth, &toolCall)
 	case tools.LSToolName:
 		var params tools.LSParams
 		json.Unmarshal([]byte(toolCall.Input), &params)
@@ -567,7 +539,7 @@ func renderToolMessage(
 		progressText := baseStyle.
 			Width(width - 2 - lipgloss.Width(toolNameText)).
 			Foreground(t.TextMuted()).
-			Render(fmt.Sprintf("%s", toolAction))
+			Render(toolAction)
 
 		content := style.Render(lipgloss.JoinHorizontal(lipgloss.Left, toolNameText, progressText))
 		toolMsg := uiMessage{
@@ -661,4 +633,24 @@ func formatTimestampDiff(start, end int64) string {
 		return fmt.Sprintf("%ds", seconds)
 	}
 	return fmt.Sprintf("%dm%02ds", seconds/60, seconds%60)
+}
+
+func renderToolParamsCaseToolsGrepToolName(paramWidth int, toolCall *message.ToolCall) (extractedResult0 string) {
+	var params tools.GrepParams
+	json.Unmarshal([]byte(toolCall.Input), &params)
+	pattern := params.Pattern
+	toolParams := []string{
+		pattern,
+	}
+	if params.Path != "" {
+		toolParams = append(toolParams, "path", params.Path)
+	}
+	if params.Include != "" {
+		toolParams = append(toolParams, "include", params.Include)
+	}
+	if params.LiteralText {
+		toolParams = append(toolParams, "literal", "true")
+	}
+	return renderParams(paramWidth, toolParams...)
+
 }

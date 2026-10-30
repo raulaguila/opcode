@@ -48,10 +48,9 @@ func (p *chatPage) editContract(kind string) tea.Cmd {
 		p.closeWorkspace()
 		return tea.Batch(created, p.resizeContent())
 	}
-	current := workflow.Contract{Kind: kind}
+	current := workflow.Contract{}
 	if p.workflow.task.Contract != nil {
 		current = *p.workflow.task.Contract
-		current.Kind = kind
 	}
 	p.showWorkspace("contract", config.Text("Configurar tarefa: ", "Configure task: ")+kind, "")
 	p.workspace.contractKind = kind
@@ -72,7 +71,7 @@ func (p *chatPage) editContract(kind string) tea.Cmd {
 }
 func splitContractField(s, separator string) []string {
 	var result []string
-	for _, v := range strings.Split(s, separator) {
+	for v := range strings.SplitSeq(s, separator) {
 		if v = strings.TrimSpace(v); v != "" {
 			result = append(result, v)
 		}
@@ -80,26 +79,8 @@ func splitContractField(s, separator string) []string {
 	return result
 }
 func (p *chatPage) contractKey(msg tea.KeyMsg) tea.Cmd {
-	if e := p.workspace.itemEditor; e != nil {
-		done, save, cmd := e.Update(msg)
-		if done {
-			if save {
-				if p.workspace.itemValues == nil {
-					p.workspace.itemValues = map[int][]string{}
-					p.workspace.itemText = map[int]string{}
-				}
-				i := p.workspace.focus
-				separator := ","
-				if i == 1 {
-					separator = ";"
-				}
-				p.workspace.itemValues[i] = e.Items()
-				p.workspace.itemText[i] = strings.Join(e.Items(), separator+" ")
-				p.workspace.fields[i].SetValue(p.workspace.itemText[i])
-			}
-			p.workspace.itemEditor = nil
-		}
-		return cmd
+	if result0, handled := contractKeyWorkspaceItemEditor(p, &msg); handled {
+		return result0
 	}
 
 	switch msg.String() {
@@ -119,29 +100,7 @@ func (p *chatPage) contractKey(msg tea.KeyMsg) tea.Cmd {
 		p.workspace.focus = (p.workspace.focus + step + len(p.workspace.fields)) % len(p.workspace.fields)
 		return p.workspace.fields[p.workspace.focus].Focus()
 	case "ctrl+s":
-		if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
-			return util.ReportWarn(config.Text("Aguarde a execução.", "Wait for the current run."))
-		}
-		c := workflow.Contract{Kind: p.workspace.contractKind, Targets: p.contractItems(0), Acceptance: p.contractItems(1), Checks: p.contractItems(2)}
-		if err := c.Validate(); err != nil {
-			p.workspace.note = err.Error()
-			return nil
-		}
-		for _, check := range c.Checks {
-			if config.Get().Checks[check].Command == "" {
-				p.workspace.note = config.Text("Verificação não configurada: ", "Check not configured: ") + panelText(check)
-				return nil
-			}
-		}
-		if err := p.app.CoderAgent.SetMode(context.Background(), p.session.ID, p.workflow.task.Mode); err != nil {
-			return util.ReportError(err)
-		}
-		if _, err := p.app.Workflows.SetContract(context.Background(), p.session.ID, &c); err != nil {
-			return util.ReportError(err)
-		}
-		p.refreshWorkflow()
-		p.closeWorkspace()
-		return tea.Batch(p.resizeContent(), util.ReportInfo(config.Text("Contrato salvo. Use /mode para escolher o nível de execução.", "Contract saved. Use /mode to choose execution permissions.")))
+		return contractKeyChatPageCtrlS(p)
 	}
 	var cmd tea.Cmd
 	p.workspace.fields[p.workspace.focus], cmd = p.workspace.fields[p.workspace.focus].Update(msg)
@@ -193,4 +152,56 @@ func (p *chatPage) contractItems(i int) []string {
 		separator = ";"
 	}
 	return splitContractField(p.workspace.fields[i].Value(), separator)
+}
+
+func contractKeyChatPageCtrlS(p *chatPage) (extractedResult0 tea.Cmd) {
+	if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
+		return util.ReportWarn(config.Text("Aguarde a execução.", "Wait for the current run."))
+	}
+	c := workflow.Contract{Kind: p.workspace.contractKind, Targets: p.contractItems(0), Acceptance: p.contractItems(1), Checks: p.contractItems(2)}
+	if err := c.Validate(); err != nil {
+		p.workspace.note = err.Error()
+		return nil
+	}
+	for _, check := range c.Checks {
+		if config.Get().Checks[check].Command == "" {
+			p.workspace.note = config.Text("Verificação não configurada: ", "Check not configured: ") + panelText(check)
+			return nil
+		}
+	}
+	if err := p.app.CoderAgent.SetMode(context.Background(), p.session.ID, p.workflow.task.Mode); err != nil {
+		return util.ReportError(err)
+	}
+	if _, err := p.app.Workflows.SetContract(context.Background(), p.session.ID, &c); err != nil {
+		return util.ReportError(err)
+	}
+	p.refreshWorkflow()
+	p.closeWorkspace()
+	return tea.Batch(p.resizeContent(), util.ReportInfo(config.Text("Contrato salvo. Use /mode para escolher o nível de execução.", "Contract saved. Use /mode to choose execution permissions.")))
+
+}
+
+func contractKeyWorkspaceItemEditor(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+	if e := p.workspace.itemEditor; e != nil {
+		done, save, cmd := e.Update((*msg))
+		if done {
+			if save {
+				if p.workspace.itemValues == nil {
+					p.workspace.itemValues = map[int][]string{}
+					p.workspace.itemText = map[int]string{}
+				}
+				i := p.workspace.focus
+				separator := ","
+				if i == 1 {
+					separator = ";"
+				}
+				p.workspace.itemValues[i] = e.Items()
+				p.workspace.itemText[i] = strings.Join(e.Items(), separator+" ")
+				p.workspace.fields[i].SetValue(p.workspace.itemText[i])
+			}
+			p.workspace.itemEditor = nil
+		}
+		return cmd, true
+	}
+	return extractedResult0, false
 }

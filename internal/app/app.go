@@ -147,24 +147,7 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 		defer spinner.Stop()
 	}
 
-	const maxPromptLengthForTitle = 100
-	titlePrefix := "Non-interactive: "
-	var titleSuffix string
-
-	if len(prompt) > maxPromptLengthForTitle {
-		titleSuffix = prompt[:maxPromptLengthForTitle] + "..."
-	} else {
-		titleSuffix = prompt
-	}
-	title := titlePrefix + titleSuffix
-
-	var sess session.Session
-	var err error
-	if len(resumeIDs) > 0 && resumeIDs[0] != "" {
-		sess, err = a.Sessions.Get(ctx, resumeIDs[0])
-	} else {
-		sess, err = a.Sessions.Create(ctx, title)
-	}
+	sess, err := a.nonInteractiveSession(ctx, prompt, resumeIDs)
 	if err != nil {
 		return fmt.Errorf("failed to create session for non-interactive mode: %w", err)
 	}
@@ -253,4 +236,26 @@ func (app *App) Shutdown() {
 		}
 		cancel()
 	}
+}
+
+func (a *App) nonInteractiveSession(ctx context.Context, prompt string, resumeIDs []string) (session.Session, error) {
+	const maxPromptLengthForTitle = 100
+	titlePrefix := "Non-interactive: "
+	var titleSuffix string
+
+	if len(prompt) > maxPromptLengthForTitle {
+		titleSuffix = prompt[:maxPromptLengthForTitle] + "..."
+	} else {
+		titleSuffix = prompt
+	}
+	title := titlePrefix + titleSuffix
+
+	var sess session.Session
+	var err error
+	if len(resumeIDs) > 0 && resumeIDs[0] != "" {
+		sess, err = a.Sessions.Get(ctx, resumeIDs[0])
+	} else {
+		sess, err = a.Sessions.Create(ctx, title)
+	}
+	return sess, err
 }

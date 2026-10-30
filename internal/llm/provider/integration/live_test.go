@@ -32,31 +32,33 @@ func TestLiveProviders(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, test := range cases {
-		t.Run(test.spec.name, func(t *testing.T) {
-			for name, value := range test.environment {
-				t.Setenv(name, value)
-			}
-			c := test.config
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
-			defer cancel()
-			// Do not expose values through panic diagnostics from credential discovery.
-			defer func() {
-				if recover() != nil {
-					t.Fatal("provider panicked; details suppressed to protect credentials")
-				}
-			}()
-			client, err := provider.NewProvider(test.spec.provider,
-				provider.WithAPIKey(c.APIKey),
-				provider.WithModel(models.Model{ID: models.ModelID(test.spec.name + "-integration"), Provider: test.spec.provider, APIModel: c.Model, API: test.spec.api, CanReason: c.CanReason, ThinkingMode: c.ThinkingMode}),
-				provider.WithMaxTokens(c.MaxTokens),
-				provider.WithSystemMessage("You are running a synthetic API integration test. Follow the requested output format. Only the supplied harmless probe tool is available. Never request external commands, files or secrets."),
-				provider.WithOpenAIOptions(provider.WithReasoningEffort(c.ReasoningEffort)),
-				provider.WithCopilotOptions(provider.WithCopilotReasoningEffort(c.ReasoningEffort)),
-			)
-			if err != nil {
-				t.Fatal("provider initialization failed:", safeLiveError(err))
-			}
-			runLiveChecks(t, ctx, client, c.Tools == nil || *c.Tools)
-		})
+		t.Run(test.spec.name, func(t *testing.T) { runLiveProvider(t, test, timeout) })
 	}
+}
+
+func runLiveProvider(t *testing.T, test liveCase, timeout int) {
+	for name, value := range test.environment {
+		t.Setenv(name, value)
+	}
+	c := test.config
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+	// Do not expose values through panic diagnostics from credential discovery.
+	defer func() {
+		if recover() != nil {
+			t.Fatal("provider panicked; details suppressed to protect credentials")
+		}
+	}()
+	client, err := provider.NewProvider(test.spec.provider,
+		provider.WithAPIKey(c.APIKey),
+		provider.WithModel(models.Model{ID: models.ModelID(test.spec.name + "-integration"), Provider: test.spec.provider, APIModel: c.Model, API: test.spec.api, CanReason: c.CanReason, ThinkingMode: c.ThinkingMode}),
+		provider.WithMaxTokens(c.MaxTokens),
+		provider.WithSystemMessage("You are running a synthetic API integration test. Follow the requested output format. Only the supplied harmless probe tool is available. Never request external commands, files or secrets."),
+		provider.WithOpenAIOptions(provider.WithReasoningEffort(c.ReasoningEffort)),
+		provider.WithCopilotOptions(provider.WithCopilotReasoningEffort(c.ReasoningEffort)),
+	)
+	if err != nil {
+		t.Fatal("provider initialization failed:", safeLiveError(err))
+	}
+	runLiveChecks(t, ctx, client, c.Tools == nil || *c.Tools)
 }

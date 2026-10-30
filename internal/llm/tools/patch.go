@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -105,70 +106,20 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 
 	// Identify all files needed for the patch and verify they've been read
 	filesToRead := diff.IdentifyFilesNeeded(params.PatchText)
-	for _, filePath := range filesToRead {
-		absPath := filePath
-		if !filepath.IsAbs(absPath) {
-			wd := config.WorkingDirectory()
-			absPath = filepath.Join(wd, absPath)
-		}
-
-		if getLastReadTime(absPath).IsZero() {
-			return NewTextErrorResponse(fmt.Sprintf("you must read the file %s before patching it. Use the view tool first", filePath)), nil
-		}
-
-		fileInfo, err := statFile(ctx, absPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return NewTextErrorResponse(fmt.Sprintf("file not found: %s", absPath)), nil
-			}
-			return ToolResponse{}, fmt.Errorf("failed to access file: %w", err)
-		}
-
-		if fileInfo.IsDir() {
-			return NewTextErrorResponse(fmt.Sprintf("path is a directory, not a file: %s", absPath)), nil
-		}
-
-		modTime := fileInfo.ModTime()
-		lastRead := getLastReadTime(absPath)
-		if modTime.After(lastRead) {
-			return NewTextErrorResponse(
-				fmt.Sprintf("file %s has been modified since it was last read (mod time: %s, last read: %s)",
-					absPath, modTime.Format(time.RFC3339), lastRead.Format(time.RFC3339),
-				)), nil
-		}
+	if response, err := validatePatchSources(ctx, filesToRead); err != nil || response.IsError {
+		return response, err
 	}
 
 	// Check for new files to ensure they don't already exist
 	filesToAdd := diff.IdentifyFilesAdded(params.PatchText)
-	for _, filePath := range filesToAdd {
-		absPath := filePath
-		if !filepath.IsAbs(absPath) {
-			wd := config.WorkingDirectory()
-			absPath = filepath.Join(wd, absPath)
-		}
-
-		_, err := statFile(ctx, absPath)
-		if err == nil {
-			return NewTextErrorResponse(fmt.Sprintf("file already exists and cannot be added: %s", absPath)), nil
-		} else if !os.IsNotExist(err) {
-			return ToolResponse{}, fmt.Errorf("failed to check file: %w", err)
-		}
+	if response, err := checkPatchAdditions(ctx, filesToAdd); err != nil || response.IsError {
+		return response, err
 	}
 
 	// Load all required files
-	currentFiles := make(map[string]string)
-	for _, filePath := range filesToRead {
-		absPath := filePath
-		if !filepath.IsAbs(absPath) {
-			wd := config.WorkingDirectory()
-			absPath = filepath.Join(wd, absPath)
-		}
-
-		content, err := readFile(ctx, absPath)
-		if err != nil {
-			return ToolResponse{}, fmt.Errorf("failed to read file %s: %w", absPath, err)
-		}
-		currentFiles[filePath] = string(content)
+	currentFiles, err := readPatchSourceContents(ctx, filesToRead)
+	if err != nil {
+		return ToolResponse{}, err
 	}
 
 	// Process the patch
@@ -194,6 +145,10 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	if params.Preview {
 		return jsonToolResult(map[string]any{"preview_id": previewID, "before_hashes": beforeHashes, "after_hashes": afterHashes, "diff": preview, "applied": false, "authorization": "preview grants no permission; applying requests normal approvals"}), nil
 	}
+	return p.applyPreparedPatch(ctx, &commit, PatchResponseMetadata{ReceiptID: previewID, BeforeHashes: beforeHashes, AfterHashes: afterHashes})
+}
+
+func (p *patchTool) applyPreparedPatch(ctx context.Context, commit *diff.Commit, receipt PatchResponseMetadata) (ToolResponse, error) {
 	// Get session ID and message ID
 	sessionID, messageID := GetContextValues(ctx)
 	if sessionID == "" || messageID == "" {
@@ -202,187 +157,22 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 
 	// Request permission for all changes
 	for path, change := range commit.Changes {
-		absPath := path
-		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(config.WorkingDirectory(), absPath)
-		}
-		absPath = filepath.Clean(absPath)
-		if change.MovePath != nil {
-			destination := *change.MovePath
-			if !filepath.IsAbs(destination) {
-				destination = filepath.Join(config.WorkingDirectory(), destination)
-			}
-			destination = filepath.Clean(destination)
-			if destination == absPath {
-				// Applying a move onto itself would write the file and then delete it.
-				change.MovePath = nil
-			} else {
-				if _, err := statFile(ctx, destination); err == nil {
-					return NewTextErrorResponse(fmt.Sprintf("move destination already exists: %s", destination)), nil
-				} else if !os.IsNotExist(err) {
-					return ToolResponse{}, fmt.Errorf("failed to check move destination: %w", err)
-				}
-				change.MovePath = &destination
-			}
-			commit.Changes[path] = change
-		}
-		switch change.Type {
-		case diff.ActionAdd:
-			dir := filepath.Dir(absPath)
-			patchDiff, _, _ := diff.GenerateDiff("", *change.NewContent, path)
-			allowed := p.permissions.Request(ctx,
-				permission.CreatePermissionRequest{
-					SessionID:   sessionID,
-					Path:        dir,
-					ToolName:    PatchToolName,
-					Action:      "create",
-					Description: fmt.Sprintf("Create file %s", path),
-					Params: EditPermissionsParams{
-						FilePath: path,
-						Diff:     patchDiff,
-					},
-				},
-			)
-			if !allowed {
-				return ToolResponse{}, permission.ErrorPermissionDenied
-			}
-		case diff.ActionUpdate:
-			currentContent := ""
-			if change.OldContent != nil {
-				currentContent = *change.OldContent
-			}
-			newContent := ""
-			if change.NewContent != nil {
-				newContent = *change.NewContent
-			}
-			patchDiff, _, _ := diff.GenerateDiff(currentContent, newContent, path)
-			dir := filepath.Dir(absPath)
-			allowed := p.permissions.Request(ctx,
-				permission.CreatePermissionRequest{
-					SessionID:   sessionID,
-					Path:        dir,
-					ToolName:    PatchToolName,
-					Action:      "update",
-					Description: fmt.Sprintf("Update file %s", path),
-					Params: EditPermissionsParams{
-						FilePath: path,
-						Diff:     patchDiff,
-					},
-				},
-			)
-			if !allowed {
-				return ToolResponse{}, permission.ErrorPermissionDenied
-			}
-			if change.MovePath != nil {
-				destination := *change.MovePath
-				moveDiff, _, _ := diff.GenerateDiff("", newContent, destination)
-				if !p.permissions.Request(ctx, permission.CreatePermissionRequest{
-					SessionID:   sessionID,
-					Path:        filepath.Dir(destination),
-					ToolName:    PatchToolName,
-					Action:      "create",
-					Description: fmt.Sprintf("Move file %s to %s", path, destination),
-					Params:      EditPermissionsParams{FilePath: destination, Diff: moveDiff},
-				}) {
-					return ToolResponse{}, permission.ErrorPermissionDenied
-				}
-			}
-		case diff.ActionDelete:
-			dir := filepath.Dir(absPath)
-			patchDiff, _, _ := diff.GenerateDiff(*change.OldContent, "", path)
-			allowed := p.permissions.Request(ctx,
-				permission.CreatePermissionRequest{
-					SessionID:   sessionID,
-					Path:        dir,
-					ToolName:    PatchToolName,
-					Action:      "delete",
-					Description: fmt.Sprintf("Delete file %s", path),
-					Params: EditPermissionsParams{
-						FilePath: path,
-						Diff:     patchDiff,
-					},
-				},
-			)
-			if !allowed {
-				return ToolResponse{}, permission.ErrorPermissionDenied
-			}
+		if response, err := authorizePatchChange(p, ctx, commit, sessionID, path, &change); err != nil || response.IsError {
+			return response, err
 		}
 	}
 
 	changes := map[string]fileChange{}
-	put := func(path string, change fileChange) error {
-		if _, exists := changes[path]; exists {
-			return fmt.Errorf("patch contains conflicting destinations")
-		}
-		changes[path] = change
-		return nil
+	if response, err := collectPatchFileChanges(commit, changes); err != nil || response.IsError {
+		return response, err
 	}
-	for path, change := range commit.Changes {
-		abs := absolutePath(path)
-		switch change.Type {
-		case diff.ActionAdd:
-			if err := put(abs, fileChange{next: change.NewContent}); err != nil {
-				return ToolResponse{}, err
-			}
-		case diff.ActionDelete:
-			if err := put(abs, fileChange{old: change.OldContent}); err != nil {
-				return ToolResponse{}, err
-			}
-		case diff.ActionUpdate:
-			if change.MovePath != nil {
-				destination := absolutePath(*change.MovePath)
-				if _, exists := changes[destination]; exists {
-					return NewTextErrorResponse("conflicting patch destinations"), nil
-				}
-				if err := put(destination, fileChange{next: change.NewContent}); err != nil {
-					return ToolResponse{}, err
-				}
-				if err := put(abs, fileChange{old: change.OldContent}); err != nil {
-					return ToolResponse{}, err
-				}
-			} else {
-				if err := put(abs, fileChange{old: change.OldContent, next: change.NewContent}); err != nil {
-					return ToolResponse{}, err
-				}
-			}
-		}
-	}
-	if err = applyFiles(ctx, changes); err != nil {
+	if err := applyFiles(ctx, changes); err != nil {
 		return ToolResponse{}, err
 	}
 
 	// Update file history for all modified files
-	changedFiles := []string{}
-	totalAdditions := 0
-	totalRemovals := 0
-
-	historyFailed := false
-	for path, change := range changes {
-		changedFiles = append(changedFiles, path)
-		oldContent, newContent := "", ""
-		if change.old != nil {
-			oldContent = *change.old
-		}
-		if change.next != nil {
-			newContent = *change.next
-		}
-		_, additions, removals := diff.GenerateDiff(oldContent, newContent, path)
-		totalAdditions += additions
-		totalRemovals += removals
-		file, historyErr := p.files.GetByPathAndSession(ctx, path, sessionID)
-		if historyErr != nil {
-			file, historyErr = p.files.Create(ctx, sessionID, path, oldContent)
-		}
-		if historyErr == nil && file.Content != oldContent {
-			_, historyErr = p.files.CreateVersion(ctx, sessionID, path, oldContent)
-		}
-		if historyErr == nil {
-			_, historyErr = p.files.CreateVersion(ctx, sessionID, path, newContent)
-		}
-		historyFailed = historyFailed || historyErr != nil
-		recordFileWrite(path)
-		recordFileRead(path)
-	}
+	summary := p.recordAppliedPatchHistory(ctx, sessionID, changes)
+	changedFiles, totalAdditions, totalRemovals, historyFailed := summary.files, summary.additions, summary.removals, summary.failed
 	sort.Strings(changedFiles)
 
 	// Run LSP diagnostics on all changed files
@@ -396,20 +186,20 @@ func (p *patchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	if historyFailed {
 		result += "; filesystem updated but file history could not be fully saved"
 	}
-	diagnosticsText := ""
+	var diagnosticsText strings.Builder
 	for _, filePath := range changedFiles {
-		diagnosticsText += getDiagnostics(filePath, p.lspClients)
+		diagnosticsText.WriteString(getDiagnostics(filePath, p.lspClients))
 	}
 
-	if diagnosticsText != "" {
-		result += "\n\nDiagnostics:\n" + diagnosticsText
+	if diagnosticsText.String() != "" {
+		result += "\n\nDiagnostics:\n" + diagnosticsText.String()
 	}
 
 	response := WithResponseMetadata(
 		NewTextResponse(result),
 		PatchResponseMetadata{
 			FilesChanged: changedFiles,
-			ReceiptID:    previewID, BeforeHashes: beforeHashes, AfterHashes: afterHashes,
+			ReceiptID:    receipt.ReceiptID, BeforeHashes: receipt.BeforeHashes, AfterHashes: receipt.AfterHashes,
 			Additions: totalAdditions,
 			Removals:  totalRemovals,
 		})
@@ -446,4 +236,294 @@ func patchPreview(patch string, commit *diff.Commit) (string, map[string]string,
 		}
 	}
 	return indexDigest(patch + signature), before, after, preview
+}
+
+func validatePatchRead(ctx context.Context, filePath string) (ToolResponse, error) {
+	absPath := filePath
+	if !filepath.IsAbs(absPath) {
+		wd := config.WorkingDirectory()
+		absPath = filepath.Join(wd, absPath)
+	}
+
+	if getLastReadTime(absPath).IsZero() {
+		return NewTextErrorResponse(fmt.Sprintf("you must read the file %s before patching it. Use the view tool first", filePath)), nil
+	}
+
+	fileInfo, err := statFile(ctx, absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return NewTextErrorResponse(fmt.Sprintf("file not found: %s", absPath)), nil
+		}
+		return ToolResponse{}, fmt.Errorf("failed to access file: %w", err)
+	}
+
+	if fileInfo.IsDir() {
+		return NewTextErrorResponse(fmt.Sprintf("path is a directory, not a file: %s", absPath)), nil
+	}
+
+	modTime := fileInfo.ModTime()
+	lastRead := getLastReadTime(absPath)
+	if modTime.After(lastRead) {
+		return NewTextErrorResponse(
+			fmt.Sprintf("file %s has been modified since it was last read (mod time: %s, last read: %s)",
+				absPath, modTime.Format(time.RFC3339), lastRead.Format(time.RFC3339),
+			)), nil
+	}
+	return ToolResponse{}, nil
+}
+
+func authorizePatchChange(p *patchTool, ctx context.Context, commit *diff.Commit, sessionID string, path string, change *diff.FileChange) (ToolResponse, error) {
+	absPath := path
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(config.WorkingDirectory(), absPath)
+	}
+	absPath = filepath.Clean(absPath)
+	if change.MovePath != nil {
+		if response, err := normalizePatchMoveDestination(ctx, commit, path, change, absPath); err != nil || response.IsError {
+			return response, err
+		}
+	}
+	switch change.Type {
+	case diff.ActionAdd:
+		dir := filepath.Dir(absPath)
+		patchDiff, _, _ := diff.GenerateDiff("", *change.NewContent, path)
+		allowed := p.permissions.Request(ctx,
+			permission.CreatePermissionRequest{
+				SessionID:   sessionID,
+				Path:        dir,
+				ToolName:    PatchToolName,
+				Action:      "create",
+				Description: fmt.Sprintf("Create file %s", path),
+				Params: EditPermissionsParams{
+					FilePath: path,
+					Diff:     patchDiff,
+				},
+			},
+		)
+		if !allowed {
+			return ToolResponse{}, permission.ErrorPermissionDenied
+		}
+	case diff.ActionUpdate:
+		if response, err := authorizeUpdatedPatchFile(p, ctx, sessionID, path, change, absPath); err != nil || response.IsError {
+			return response, err
+		}
+	case diff.ActionDelete:
+		dir := filepath.Dir(absPath)
+		patchDiff, _, _ := diff.GenerateDiff(*change.OldContent, "", path)
+		allowed := p.permissions.Request(ctx,
+			permission.CreatePermissionRequest{
+				SessionID:   sessionID,
+				Path:        dir,
+				ToolName:    PatchToolName,
+				Action:      "delete",
+				Description: fmt.Sprintf("Delete file %s", path),
+				Params: EditPermissionsParams{
+					FilePath: path,
+					Diff:     patchDiff,
+				},
+			},
+		)
+		if !allowed {
+			return ToolResponse{}, permission.ErrorPermissionDenied
+		}
+	}
+	return ToolResponse{}, nil
+}
+
+func putPatchFileChange(changes map[string]fileChange, path string, change fileChange) error {
+	if _, exists := changes[path]; exists {
+		return fmt.Errorf("patch contains conflicting destinations")
+	}
+	changes[path] = change
+	return nil
+}
+
+func collectPatchFileChanges(commit *diff.Commit, changes map[string]fileChange) (ToolResponse, error) {
+	for path, change := range commit.Changes {
+		abs := absolutePath(path)
+		switch change.Type {
+		case diff.ActionAdd:
+			if err := putPatchFileChange(changes, abs, fileChange{next: change.NewContent}); err != nil {
+				return ToolResponse{}, err
+			}
+		case diff.ActionDelete:
+			if err := putPatchFileChange(changes, abs, fileChange{old: change.OldContent}); err != nil {
+				return ToolResponse{}, err
+			}
+		case diff.ActionUpdate:
+			if response, err := collectUpdatedPatchFile(changes, &change, abs); err != nil || response.IsError {
+				return response, err
+			}
+		}
+	}
+	return ToolResponse{}, nil
+}
+
+func collectUpdatedPatchFile(changes map[string]fileChange, change *diff.FileChange, abs string) (ToolResponse, error) {
+	if change.MovePath != nil {
+		destination := absolutePath(*change.MovePath)
+		if _, exists := changes[destination]; exists {
+			return NewTextErrorResponse("conflicting patch destinations"), nil
+		}
+		if err := putPatchFileChange(changes, destination, fileChange{next: change.NewContent}); err != nil {
+			return ToolResponse{}, err
+		}
+		if err := putPatchFileChange(changes, abs, fileChange{old: change.OldContent}); err != nil {
+			return ToolResponse{}, err
+		}
+	} else {
+		if err := putPatchFileChange(changes, abs, fileChange{old: change.OldContent, next: change.NewContent}); err != nil {
+			return ToolResponse{}, err
+		}
+	}
+	return ToolResponse{}, nil
+}
+
+func authorizeUpdatedPatchFile(p *patchTool, ctx context.Context, sessionID string, path string, change *diff.FileChange, absPath string) (ToolResponse, error) {
+	currentContent := ""
+	if change.OldContent != nil {
+		currentContent = *change.OldContent
+	}
+	newContent := ""
+	if change.NewContent != nil {
+		newContent = *change.NewContent
+	}
+	patchDiff, _, _ := diff.GenerateDiff(currentContent, newContent, path)
+	dir := filepath.Dir(absPath)
+	allowed := p.permissions.Request(ctx,
+		permission.CreatePermissionRequest{
+			SessionID:   sessionID,
+			Path:        dir,
+			ToolName:    PatchToolName,
+			Action:      "update",
+			Description: fmt.Sprintf("Update file %s", path),
+			Params: EditPermissionsParams{
+				FilePath: path,
+				Diff:     patchDiff,
+			},
+		},
+	)
+	if !allowed {
+		return ToolResponse{}, permission.ErrorPermissionDenied
+	}
+	if change.MovePath != nil {
+		destination := *change.MovePath
+		moveDiff, _, _ := diff.GenerateDiff("", newContent, destination)
+		if !p.permissions.Request(ctx, permission.CreatePermissionRequest{
+			SessionID:   sessionID,
+			Path:        filepath.Dir(destination),
+			ToolName:    PatchToolName,
+			Action:      "create",
+			Description: fmt.Sprintf("Move file %s to %s", path, destination),
+			Params:      EditPermissionsParams{FilePath: destination, Diff: moveDiff},
+		}) {
+			return ToolResponse{}, permission.ErrorPermissionDenied
+		}
+	}
+	return ToolResponse{}, nil
+}
+
+func checkPatchAdditions(ctx context.Context, filesToAdd []string) (ToolResponse, error) {
+	for _, filePath := range filesToAdd {
+		absPath := filePath
+		if !filepath.IsAbs(absPath) {
+			wd := config.WorkingDirectory()
+			absPath = filepath.Join(wd, absPath)
+		}
+
+		_, err := statFile(ctx, absPath)
+		if err == nil {
+			return NewTextErrorResponse(fmt.Sprintf("file already exists and cannot be added: %s", absPath)), nil
+		} else if !os.IsNotExist(err) {
+			return ToolResponse{}, fmt.Errorf("failed to check file: %w", err)
+		}
+	}
+	return ToolResponse{}, nil
+}
+
+func validatePatchSources(ctx context.Context, filesToRead []string) (ToolResponse, error) {
+	for _, filePath := range filesToRead {
+		if response, err := validatePatchRead(ctx, filePath); err != nil || response.IsError {
+			return response, err
+		}
+	}
+	return ToolResponse{}, nil
+}
+
+type patchHistorySummary struct {
+	files               []string
+	additions, removals int
+	failed              bool
+}
+
+func (p *patchTool) recordAppliedPatchHistory(ctx context.Context, sessionID string, changes map[string]fileChange) patchHistorySummary {
+	summary := patchHistorySummary{files: []string{}}
+
+	for path, change := range changes {
+		summary.files = append(summary.files, path)
+		oldContent, newContent := "", ""
+		if change.old != nil {
+			oldContent = *change.old
+		}
+		if change.next != nil {
+			newContent = *change.next
+		}
+		_, additions, removals := diff.GenerateDiff(oldContent, newContent, path)
+		summary.additions += additions
+		summary.removals += removals
+		file, historyErr := p.files.GetByPathAndSession(ctx, path, sessionID)
+		if historyErr != nil {
+			file, historyErr = p.files.Create(ctx, sessionID, path, oldContent)
+		}
+		if historyErr == nil && file.Content != oldContent {
+			_, historyErr = p.files.CreateVersion(ctx, sessionID, path, oldContent)
+		}
+		if historyErr == nil {
+			_, historyErr = p.files.CreateVersion(ctx, sessionID, path, newContent)
+		}
+		summary.failed = summary.failed || historyErr != nil
+		recordFileWrite(path)
+		recordFileRead(path)
+	}
+	return summary
+}
+
+func normalizePatchMoveDestination(ctx context.Context, commit *diff.Commit, path string, change *diff.FileChange, absPath string) (ToolResponse, error) {
+	destination := *change.MovePath
+	if !filepath.IsAbs(destination) {
+		destination = filepath.Join(config.WorkingDirectory(), destination)
+	}
+	destination = filepath.Clean(destination)
+	if destination == absPath {
+		// Applying a move onto itself would write the file and then delete it.
+		change.MovePath = nil
+	} else {
+		if _, err := statFile(ctx, destination); err == nil {
+			return NewTextErrorResponse(fmt.Sprintf("move destination already exists: %s", destination)), nil
+		} else if !os.IsNotExist(err) {
+			return ToolResponse{}, fmt.Errorf("failed to check move destination: %w", err)
+		}
+		change.MovePath = &destination
+	}
+	commit.Changes[path] = (*change)
+	return ToolResponse{}, nil
+}
+
+func readPatchSourceContents(ctx context.Context, filesToRead []string) (map[string]string, error) {
+	currentFiles := make(map[string]string)
+	for _, filePath := range filesToRead {
+		absPath := filePath
+		if !filepath.IsAbs(absPath) {
+			wd := config.WorkingDirectory()
+			absPath = filepath.Join(wd, absPath)
+		}
+
+		content, err := readFile(ctx, absPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %s: %w", absPath, err)
+		}
+		currentFiles[filePath] = string(content)
+	}
+
+	return currentFiles, nil
 }

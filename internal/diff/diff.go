@@ -141,87 +141,7 @@ func ParseUnifiedDiff(diff string) (DiffResult, error) {
 	var oldLine, newLine int
 	inFileHeader := true
 
-	for _, line := range lines {
-		// Parse file headers
-		if inFileHeader {
-			if strings.HasPrefix(line, "--- a/") {
-				result.OldFile = strings.TrimPrefix(line, "--- a/")
-				continue
-			}
-			if strings.HasPrefix(line, "+++ b/") {
-				result.NewFile = strings.TrimPrefix(line, "+++ b/")
-				inFileHeader = false
-				continue
-			}
-		}
-
-		// Parse hunk headers
-		if matches := hunkHeaderRe.FindStringSubmatch(line); matches != nil {
-			if currentHunk != nil {
-				result.Hunks = append(result.Hunks, *currentHunk)
-			}
-			currentHunk = &Hunk{
-				Header: line,
-				Lines:  []DiffLine{},
-			}
-
-			oldStart, _ := strconv.Atoi(matches[1])
-			newStart, _ := strconv.Atoi(matches[3])
-			oldLine = oldStart
-			newLine = newStart
-			continue
-		}
-
-		// Ignore "No newline at end of file" markers
-		if strings.HasPrefix(line, "\\ No newline at end of file") {
-			continue
-		}
-
-		if currentHunk == nil {
-			continue
-		}
-
-		// Process the line based on its prefix
-		if len(line) > 0 {
-			switch line[0] {
-			case '+':
-				currentHunk.Lines = append(currentHunk.Lines, DiffLine{
-					OldLineNo: 0,
-					NewLineNo: newLine,
-					Kind:      LineAdded,
-					Content:   line[1:],
-				})
-				newLine++
-			case '-':
-				currentHunk.Lines = append(currentHunk.Lines, DiffLine{
-					OldLineNo: oldLine,
-					NewLineNo: 0,
-					Kind:      LineRemoved,
-					Content:   line[1:],
-				})
-				oldLine++
-			default:
-				currentHunk.Lines = append(currentHunk.Lines, DiffLine{
-					OldLineNo: oldLine,
-					NewLineNo: newLine,
-					Kind:      LineContext,
-					Content:   line,
-				})
-				oldLine++
-				newLine++
-			}
-		} else {
-			// Handle empty lines
-			currentHunk.Lines = append(currentHunk.Lines, DiffLine{
-				OldLineNo: oldLine,
-				NewLineNo: newLine,
-				Kind:      LineContext,
-				Content:   "",
-			})
-			oldLine++
-			newLine++
-		}
-	}
+	parseUnifiedDiffLines(&result, &currentHunk, hunkHeaderRe, lines, &oldLine, &newLine, &inFileHeader)
 
 	// Add the last hunk if there is one
 	if currentHunk != nil {
@@ -565,18 +485,6 @@ func createStyles(t theme.Theme) (removedLineStyle, addedLineStyle, contextLineS
 // Rendering Functions
 // -------------------------------------------------------------------------
 
-func lipglossToHex(color lipgloss.Color) string {
-	r, g, b, a := color.RGBA()
-
-	// Scale uint32 values (0-65535) to uint8 (0-255).
-	r8 := uint8(r >> 8)
-	g8 := uint8(g >> 8)
-	b8 := uint8(b >> 8)
-	a8 := uint8(a >> 8)
-
-	return fmt.Sprintf("#%02x%02x%02x%02x", r8, g8, b8, a8)
-}
-
 // applyHighlighting applies intra-line highlighting to a piece of text
 func applyHighlighting(content string, segments []Segment, segmentType LineType, highlightBg lipgloss.AdaptiveColor) string {
 	// Find all ANSI sequences in the content
@@ -620,61 +528,7 @@ func applyHighlighting(content string, segments []Segment, segmentType LineType,
 	bgColor := lipgloss.Color(getColor(highlightBg))
 	fgColor := lipgloss.Color(getColor(theme.CurrentTheme().Background()))
 
-	for i := 0; i < len(content); {
-		// Check if we're at an ANSI sequence
-		isAnsi := false
-		for _, match := range ansiMatches {
-			if match[0] == i {
-				sb.WriteString(content[match[0]:match[1]]) // Preserve ANSI sequence
-				i = match[1]
-				isAnsi = true
-				break
-			}
-		}
-		if isAnsi {
-			continue
-		}
-
-		// Check for segment boundaries
-		for _, seg := range segments {
-			if seg.Type == segmentType {
-				if currentPos == seg.Start {
-					inSelection = true
-				}
-				if currentPos == seg.End {
-					inSelection = false
-				}
-			}
-		}
-
-		// Get current character
-		char := string(content[i])
-
-		if inSelection {
-			// Get the current styling
-			currentStyle := ansiSequences[currentPos]
-
-			// Apply foreground and background highlight
-			sb.WriteString("\x1b[38;2;")
-			r, g, b, _ := fgColor.RGBA()
-			sb.WriteString(fmt.Sprintf("%d;%d;%dm", r>>8, g>>8, b>>8))
-			sb.WriteString("\x1b[48;2;")
-			r, g, b, _ = bgColor.RGBA()
-			sb.WriteString(fmt.Sprintf("%d;%d;%dm", r>>8, g>>8, b>>8))
-			sb.WriteString(char)
-			// Reset foreground and background
-			sb.WriteString("\x1b[39m")
-
-			// Reapply the original ANSI sequence
-			sb.WriteString(currentStyle)
-		} else {
-			// Not in selection, just copy the character
-			sb.WriteString(char)
-		}
-
-		currentPos++
-		i++
-	}
+	applyHighlightingState(content, segments, segmentType, ansiMatches, ansiSequences, &sb, &inSelection, &currentPos, bgColor, fgColor)
 
 	return sb.String()
 }
@@ -885,4 +739,158 @@ func GenerateDiff(beforeContent, afterContent, fileName string) (string, int, in
 	}
 
 	return unified, additions, removals
+}
+
+func applyHighlightingState(content string, segments []Segment, segmentType LineType, ansiMatches [][]int, ansiSequences map[int]string, sb *strings.Builder, inSelection *bool, currentPos *int, bgColor lipgloss.Color, fgColor lipgloss.Color) {
+	for i := 0; i < len(content); {
+		// Check if we're at an ANSI sequence
+		isAnsi := false
+		for _, match := range ansiMatches {
+			if match[0] == i {
+				sb.WriteString(content[match[0]:match[1]]) // Preserve ANSI sequence
+				i = match[1]
+				isAnsi = true
+				break
+			}
+		}
+		if isAnsi {
+			continue
+		}
+
+		// Check for segment boundaries
+		applyHighlightingStateSegments(segments, segmentType, inSelection, currentPos)
+
+		// Get current character
+		char := string(content[i])
+
+		if *inSelection {
+			// Get the current styling
+			currentStyle := ansiSequences[(*currentPos)]
+
+			// Apply foreground and background highlight
+			sb.WriteString("\x1b[38;2;")
+			r, g, b, _ := fgColor.RGBA()
+			sb.WriteString(fmt.Sprintf("%d;%d;%dm", r>>8, g>>8, b>>8))
+			sb.WriteString("\x1b[48;2;")
+			r, g, b, _ = bgColor.RGBA()
+			sb.WriteString(fmt.Sprintf("%d;%d;%dm", r>>8, g>>8, b>>8))
+			sb.WriteString(char)
+			// Reset foreground and background
+			sb.WriteString("\x1b[39m")
+
+			// Reapply the original ANSI sequence
+			sb.WriteString(currentStyle)
+		} else {
+			// Not in selection, just copy the character
+			sb.WriteString(char)
+		}
+
+		(*currentPos)++
+		i++
+	}
+}
+
+func parseUnifiedDiffLines(result *DiffResult, currentHunk **Hunk, hunkHeaderRe *regexp.Regexp, lines []string, oldLine *int, newLine *int, inFileHeader *bool) {
+	for _, line := range lines {
+		if *inFileHeader && readUnifiedFileHeader(result, line, inFileHeader) {
+			continue
+		}
+
+		// Parse hunk headers
+		if matches := hunkHeaderRe.FindStringSubmatch(line); matches != nil {
+			if (*currentHunk) != nil {
+				result.Hunks = append(result.Hunks, *(*currentHunk))
+			}
+			(*currentHunk) = &Hunk{
+				Header: line,
+				Lines:  []DiffLine{},
+			}
+
+			oldStart, _ := strconv.Atoi(matches[1])
+			newStart, _ := strconv.Atoi(matches[3])
+			(*oldLine) = oldStart
+			(*newLine) = newStart
+			continue
+		}
+
+		// Ignore "No newline at end of file" markers
+		if strings.HasPrefix(line, "\\ No newline at end of file") {
+			continue
+		}
+
+		if (*currentHunk) == nil {
+			continue
+		}
+
+		// Process the line based on its prefix
+		parseUnifiedDiffLinesLine(currentHunk, oldLine, newLine, line)
+	}
+}
+
+func applyHighlightingStateSegments(segments []Segment, segmentType LineType, inSelection *bool, currentPos *int) {
+	for _, seg := range segments {
+		if seg.Type == segmentType {
+			if (*currentPos) == seg.Start {
+				(*inSelection) = true
+			}
+			if (*currentPos) == seg.End {
+				(*inSelection) = false
+			}
+		}
+	}
+}
+
+func parseUnifiedDiffLinesLine(currentHunk **Hunk, oldLine *int, newLine *int, line string) {
+	if len(line) > 0 {
+		switch line[0] {
+		case '+':
+			(*currentHunk).Lines = append((*currentHunk).Lines, DiffLine{
+				OldLineNo: 0,
+				NewLineNo: (*newLine),
+				Kind:      LineAdded,
+				Content:   line[1:],
+			})
+			(*newLine)++
+		case '-':
+			(*currentHunk).Lines = append((*currentHunk).Lines, DiffLine{
+				OldLineNo: (*oldLine),
+				NewLineNo: 0,
+				Kind:      LineRemoved,
+				Content:   line[1:],
+			})
+			(*oldLine)++
+		default:
+			(*currentHunk).Lines = append((*currentHunk).Lines, DiffLine{
+				OldLineNo: (*oldLine),
+				NewLineNo: (*newLine),
+				Kind:      LineContext,
+				Content:   line,
+			})
+			(*oldLine)++
+			(*newLine)++
+		}
+	} else {
+		// Handle empty lines
+		(*currentHunk).Lines = append((*currentHunk).Lines, DiffLine{
+			OldLineNo: (*oldLine),
+			NewLineNo: (*newLine),
+			Kind:      LineContext,
+			Content:   "",
+		})
+		(*oldLine)++
+		(*newLine)++
+	}
+}
+
+func readUnifiedFileHeader(result *DiffResult, line string, inHeader *bool) bool {
+	if after, ok := strings.CutPrefix(line, "--- a/"); ok {
+		result.OldFile = after
+		return true
+	}
+	if after, ok := strings.CutPrefix(line, "+++ b/"); ok {
+		result.NewFile = after
+		*inHeader = false
+		return true
+	}
+	return false
 }

@@ -30,12 +30,8 @@ func (m *messagesCmp) TranscriptKey(msg tea.KeyMsg) bool {
 	}
 	// Existing custom global shortcuts retain precedence. Slash commands still
 	// expose both actions when these optional defaults are already occupied.
-	if msg.String() == "alt+f" || msg.String() == "alt+s" {
-		for action := range config.DefaultKeybindings {
-			if config.Shortcut(action) == msg.String() {
-				return false
-			}
-		}
+	if result0, handled := transcriptKeyAltF(&msg); handled {
+		return result0
 	}
 	switch msg.String() {
 	case "alt+f":
@@ -259,4 +255,15 @@ func (m *messagesCmp) navigationHint() string {
 		return ansi.Truncate(note, m.width, "…")
 	}
 	return ansi.Truncate(config.Text("Setas movem · Shift+setas amplia · Ctrl+C copia · Esc", "Arrows move · Shift+arrows extend · Ctrl+C copy · Esc"), m.width, "…")
+}
+
+func transcriptKeyAltF(msg *tea.KeyMsg) (extractedResult0 bool, handled bool) {
+	if msg.String() == "alt+f" || msg.String() == "alt+s" {
+		for action := range config.DefaultKeybindings {
+			if config.Shortcut(action) == msg.String() {
+				return false, true
+			}
+		}
+	}
+	return extractedResult0, false
 }

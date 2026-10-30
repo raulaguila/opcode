@@ -42,22 +42,10 @@ func (s *Questions) Pending(session string) (Question, bool) {
 	return q, ok
 }
 func (s *Questions) Ask(ctx context.Context, q Question) (string, error) {
-	if strings.TrimSpace(q.SessionID) == "" {
-		return "", fmt.Errorf("question requires a session")
-	}
-	if len(q.Questions) > 0 {
-		var err error
-		q, err = normalizeBatch(q)
-		if err != nil {
-			return "", err
-		}
-	} else if strings.TrimSpace(q.Question) == "" || len(q.Question) > 500 || len(q.Explanation) > 1000 || len(q.Choices) > 5 {
-		return "", fmt.Errorf("question requires text (up to 500 bytes), explanation up to 1000 and at most five choices")
-	}
-	for _, choice := range q.Choices {
-		if strings.TrimSpace(choice) == "" || len(choice) > 300 {
-			return "", fmt.Errorf("invalid question choice")
-		}
+	var err error
+	q, err = normalizeQuestion(q)
+	if err != nil {
+		return "", err
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err
@@ -121,4 +109,25 @@ func (s *Questions) Answer(session, id, text string) error {
 	default:
 		return fmt.Errorf("question already answered")
 	}
+}
+
+func normalizeQuestion(q Question) (Question, error) {
+	if strings.TrimSpace(q.SessionID) == "" {
+		return q, fmt.Errorf("question requires a session")
+	}
+	if len(q.Questions) > 0 {
+		var err error
+		q, err = normalizeBatch(q)
+		if err != nil {
+			return q, err
+		}
+	} else if strings.TrimSpace(q.Question) == "" || len(q.Question) > 500 || len(q.Explanation) > 1000 || len(q.Choices) > 5 {
+		return q, fmt.Errorf("question requires text (up to 500 bytes), explanation up to 1000 and at most five choices")
+	}
+	for _, choice := range q.Choices {
+		if strings.TrimSpace(choice) == "" || len(choice) > 300 {
+			return q, fmt.Errorf("invalid question choice")
+		}
+	}
+	return q, nil
 }

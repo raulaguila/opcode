@@ -68,18 +68,25 @@ func ServerMatches(c config.LSPConfig, path string) bool {
 	if err != nil || !filepath.IsLocal(relative) {
 		return false
 	}
+	if result0, handled := serverMatchesFilepathDirPath(path, markers, root); handled {
+		return result0
+	}
+	return false
+}
+
+func serverMatchesFilepathDirPath(path string, markers []string, root string) (extractedResult0 bool, handled bool) {
 	for dir := filepath.Dir(path); ; dir = filepath.Dir(dir) {
 		for _, marker := range markers {
 			if !filepath.IsLocal(marker) || len(marker) > 160 {
 				continue
 			}
 			if info, err := os.Lstat(filepath.Join(dir, marker)); err == nil && info.Mode().IsRegular() {
-				return true
+				return true, true
 			}
 		}
 		if dir == root || filepath.Dir(dir) == dir {
 			break
 		}
 	}
-	return false
+	return extractedResult0, false
 }

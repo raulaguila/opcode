@@ -18,7 +18,7 @@ func TestInsecureTLSIsOptInAndConfinedToOneOrigin(t *testing.T) {
 	defer other.Close()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/redirect" {
-			http.Redirect(w, r, other.URL, 302)
+			http.Redirect(w, r, other.URL, http.StatusFound)
 			return
 		}
 		w.WriteHeader(200)

@@ -20,7 +20,6 @@ import (
 const (
 	ProviderLocal ModelProvider = "local"
 
-	localModelsPath        = "v1/models"
 	lmStudioBetaModelsPath = "api/v0/models"
 )
 
@@ -134,21 +133,7 @@ func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey 
 	if err != nil {
 		return nil, fmt.Errorf("local server returned an invalid model list")
 	}
-	var result []localModel
-	for _, raw := range page.Data {
-		var model localModel
-		if json.Unmarshal(raw, &model) != nil {
-			continue
-		}
-		if !validCatalogID(model.ID) || (model.Type != "" && model.Type != "llm") || (lmStudio && model.Object != "model") {
-			continue
-		}
-		if !lmStudio && (model.LoadedContextLength > 0 || model.MaxContextLength > 0 || model.ReportedContext > 0) {
-			model.ContextSource = "provider"
-		}
-		result = append(result, model)
-	}
-	return result, nil
+	return catalogLocalModels(page, lmStudio), nil
 }
 
 func convertLocalModel(model localModel) Model {
@@ -195,9 +180,9 @@ func friendlyModelName(modelID string) string {
 		mainID = mainID[slash+1:]
 	}
 
-	if at := strings.Index(modelID, "@"); at != -1 {
-		mainID = modelID[:at]
-		tag = modelID[at+1:]
+	if before, after, ok := strings.Cut(modelID, "@"); ok {
+		mainID = before
+		tag = after
 	}
 
 	match := modelInfoRegex.FindStringSubmatch(mainID)
@@ -241,4 +226,22 @@ func friendlyModelName(modelID string) string {
 	}
 
 	return strings.Join(parts, " ")
+}
+
+func catalogLocalModels(page catalogPage, lmStudio bool) []localModel {
+	var result []localModel
+	for _, raw := range page.Data {
+		var model localModel
+		if json.Unmarshal(raw, &model) != nil {
+			continue
+		}
+		if !validCatalogID(model.ID) || (model.Type != "" && model.Type != "llm") || (lmStudio && model.Object != "model") {
+			continue
+		}
+		if !lmStudio && (model.LoadedContextLength > 0 || model.MaxContextLength > 0 || model.ReportedContext > 0) {
+			model.ContextSource = "provider"
+		}
+		result = append(result, model)
+	}
+	return result
 }

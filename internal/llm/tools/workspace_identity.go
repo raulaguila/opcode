@@ -35,6 +35,11 @@ func OpcodeWorkspace(ctx context.Context) bool {
 	if err != nil || len(raw) > 16<<10 || ctx.Err() != nil {
 		return false
 	}
+	matched := opcodeModuleManifest(raw)
+	return ctx.Err() == nil && matched
+}
+
+func opcodeModuleManifest(raw []byte) bool {
 	var tokens scanner.Scanner
 	tokens.Init(strings.NewReader(string(raw)))
 	tokens.Mode = scanner.ScanIdents | scanner.ScanStrings | scanner.ScanComments | scanner.SkipComments
@@ -50,12 +55,13 @@ func OpcodeWorkspace(ctx context.Context) bool {
 		}
 		name := path.String()
 		if strings.HasPrefix(name, `"`) {
-			name, err = strconv.Unquote(name)
+			unquoted, err := strconv.Unquote(name)
 			if err != nil {
 				return false
 			}
+			name = unquoted
 		}
-		return ctx.Err() == nil && tokens.ErrorCount == 0 && name == "github.com/raulaguila/opcode"
+		return tokens.ErrorCount == 0 && name == "github.com/raulaguila/opcode"
 	}
 	return false
 }

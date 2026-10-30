@@ -30,20 +30,8 @@ func (m *modelDialogCmp) reasoningModel() models.Model {
 	return model
 }
 func (m *modelDialogCmp) reasoningUpdate(msg tea.Msg) (tea.Cmd, bool) {
-	if mouse, ok := msg.(tea.MouseMsg); ok && m.reasoningOpen {
-		levels := m.reasoningModel().ReasoningChoices()
-		if mouse.Button == tea.MouseButtonWheelUp {
-			m.reasoningIndex = max(0, m.reasoningIndex-1)
-		}
-		if mouse.Button == tea.MouseButtonWheelDown {
-			m.reasoningIndex = min(max(0, len(levels)-1), m.reasoningIndex+1)
-		}
-		rows, start := m.reasoningRows()
-		index := start + mouse.Y - 4
-		if mouse.Action == tea.MouseActionPress && mouse.Button == tea.MouseButtonLeft && mouse.X >= 3 && mouse.X < max(4, m.width-3) && mouse.Y >= 4 && mouse.Y < 4+rows && index < len(levels) {
-			m.reasoningIndex = index
-		}
-		return nil, true
+	if result0, result1, handled := reasoningUpdateTeaMouseMsg(m, msg); handled {
+		return result0, result1
 	}
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -115,4 +103,23 @@ func (m *modelDialogCmp) reasoningRows() (rows, start int) {
 	rows = max(1, height-8)
 	start = max(0, m.reasoningIndex-rows+1)
 	return
+}
+
+func reasoningUpdateTeaMouseMsg(m *modelDialogCmp, msg tea.Msg) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
+	if mouse, ok := msg.(tea.MouseMsg); ok && m.reasoningOpen {
+		levels := m.reasoningModel().ReasoningChoices()
+		if mouse.Button == tea.MouseButtonWheelUp {
+			m.reasoningIndex = max(0, m.reasoningIndex-1)
+		}
+		if mouse.Button == tea.MouseButtonWheelDown {
+			m.reasoningIndex = min(max(0, len(levels)-1), m.reasoningIndex+1)
+		}
+		rows, start := m.reasoningRows()
+		index := start + mouse.Y - 4
+		if mouse.Action == tea.MouseActionPress && mouse.Button == tea.MouseButtonLeft && mouse.X >= 3 && mouse.X < max(4, m.width-3) && mouse.Y >= 4 && mouse.Y < 4+rows && index < len(levels) {
+			m.reasoningIndex = index
+		}
+		return nil, true, true
+	}
+	return extractedResult0, extractedResult1, false
 }

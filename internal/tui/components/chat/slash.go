@@ -30,7 +30,6 @@ type slashState struct {
 
 type CommandContextMsg struct{ Priorities []string }
 
-func slashOptions(value string) ([]slashOption, bool) { return slashOptionsWith(value, nil) }
 func slashOptionsWith(value string, priorities []string) ([]slashOption, bool) {
 	value = strings.TrimLeft(value, " \t")
 	if !strings.HasPrefix(value, "/") || strings.ContainsAny(value, "\r\n") || strings.Contains(value[1:], "/") {
@@ -38,21 +37,8 @@ func slashOptionsWith(value string, priorities []string) ([]slashOption, bool) {
 	}
 	query := strings.ToLower(value)
 	var options []slashOption
-	if query == "/" {
-		seen := map[string]bool{}
-		for _, id := range append(append([]string{}, priorities...), "new", "models", "settings", "files", "terminal", "sessions", "commands") {
-			if seen[id] || len(options) >= 7 {
-				continue
-			}
-			seen[id] = true
-			for _, cmd := range commands.Builtins {
-				if cmd.ID == id {
-					cmd = commands.Localized(cmd)
-					options = append(options, slashOption{"/" + cmd.ID, cmd.Description, cmd.Group})
-				}
-			}
-		}
-		return options, true
+	if result0, result1, handled := slashOptionsWithState(priorities, query, &options); handled {
+		return result0, result1
 	}
 	for _, cmd := range commands.Builtins {
 		cmd = commands.Localized(cmd)
@@ -169,4 +155,24 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 	}
 	rows = append(rows, styles.BaseStyle().Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text(" ↑/↓ escolhe · Tab completa · Enter seleciona · Esc fecha", " ↑/↓ choose · Tab complete · Enter select · Esc close"), rowWidth, "…")))
 	return styles.BaseStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderNormal()).Width(rowWidth).Render(strings.Join(rows, "\n"))
+}
+
+func slashOptionsWithState(priorities []string, query string, options *[]slashOption) (extractedResult0 []slashOption, extractedResult1 bool, handled bool) {
+	if query == "/" {
+		seen := map[string]bool{}
+		for _, id := range append(append([]string{}, priorities...), "new", "models", "settings", "files", "terminal", "sessions", "commands") {
+			if seen[id] || len((*options)) >= 7 {
+				continue
+			}
+			seen[id] = true
+			for _, cmd := range commands.Builtins {
+				if cmd.ID == id {
+					cmd = commands.Localized(cmd)
+					(*options) = append((*options), slashOption{"/" + cmd.ID, cmd.Description, cmd.Group})
+				}
+			}
+		}
+		return (*options), true, true
+	}
+	return extractedResult0, extractedResult1, false
 }

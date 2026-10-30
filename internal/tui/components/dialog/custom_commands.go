@@ -80,96 +80,15 @@ func LoadCustomCommands() ([]Command, error) {
 // loadCommandsFromDir loads commands from a specific directory with the given prefix
 func loadCommandsFromDir(commandsDir string, prefix string) ([]Command, error) {
 	// Check if the commands directory exists
-	if _, err := os.Stat(commandsDir); os.IsNotExist(err) {
-		// Create the commands directory if it doesn't exist
-		if err := os.MkdirAll(commandsDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create commands directory %s: %w", commandsDir, err)
-		}
-		// Return empty list since we just created the directory
-		return []Command{}, nil
+	if result0, result1, handled := loadCommandsFromDirOsStatCommandsDir(commandsDir); handled {
+		return result0, result1
 	}
 
 	var commands []Command
 
 	// Walk through the commands directory and load all .md files
 	err := filepath.Walk(commandsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories
-		if info.IsDir() {
-			return nil
-		}
-
-		// Only process markdown files
-		if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
-			return nil
-		}
-
-		// Read the file content
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read command file %s: %w", path, err)
-		}
-
-		// Get the command ID from the file name without the .md extension
-		commandID := strings.TrimSuffix(info.Name(), filepath.Ext(info.Name()))
-
-		// Get relative path from commands directory
-		relPath, err := filepath.Rel(commandsDir, path)
-		if err != nil {
-			return fmt.Errorf("failed to get relative path for %s: %w", path, err)
-		}
-
-		// Create the command ID from the relative path
-		// Replace directory separators with colons
-		commandIDPath := strings.ReplaceAll(filepath.Dir(relPath), string(filepath.Separator), ":")
-		if commandIDPath != "." {
-			commandID = commandIDPath + ":" + commandID
-		}
-
-		// Create a command
-		command := Command{
-			ID:          prefix + commandID,
-			Title:       prefix + commandID,
-			Description: fmt.Sprintf("Custom command from %s", relPath),
-			Handler: func(cmd Command) tea.Cmd {
-				commandContent := string(content)
-
-				// Check for named arguments
-				matches := namedArgPattern.FindAllStringSubmatch(commandContent, -1)
-				if len(matches) > 0 {
-					// Extract unique argument names
-					argNames := make([]string, 0)
-					argMap := make(map[string]bool)
-
-					for _, match := range matches {
-						argName := match[1] // Group 1 is the name without $
-						if !argMap[argName] {
-							argMap[argName] = true
-							argNames = append(argNames, argName)
-						}
-					}
-
-					// Show multi-arguments dialog for all named arguments
-					return util.CmdHandler(ShowMultiArgumentsDialogMsg{
-						CommandID: cmd.ID,
-						Content:   commandContent,
-						ArgNames:  argNames,
-					})
-				}
-
-				// No arguments needed, run command directly
-				return util.CmdHandler(CommandRunCustomMsg{
-					Content: commandContent,
-					Args:    nil, // No arguments
-				})
-			},
-		}
-
-		commands = append(commands, command)
-		return nil
+		return loadCommandsFromDirCallback(&commandsDir, &prefix, &commands, path, info, err)
 	})
 
 	if err != nil {
@@ -183,4 +102,103 @@ func loadCommandsFromDir(commandsDir string, prefix string) ([]Command, error) {
 type CommandRunCustomMsg struct {
 	Content string
 	Args    map[string]string // Map of argument names to values
+}
+
+func loadCommandsFromDirMatches(cmd *Command, commandContent string, matches [][]string) (extractedResult0 tea.Cmd, handled bool) {
+	if len(matches) > 0 {
+		// Extract unique argument names
+		argNames := make([]string, 0)
+		argMap := make(map[string]bool)
+
+		for _, match := range matches {
+			argName := match[1] // Group 1 is the name without $
+			if !argMap[argName] {
+				argMap[argName] = true
+				argNames = append(argNames, argName)
+			}
+		}
+
+		// Show multi-arguments dialog for all named arguments
+		return util.CmdHandler(ShowMultiArgumentsDialogMsg{
+			CommandID: cmd.ID,
+			Content:   commandContent,
+			ArgNames:  argNames,
+		}), true
+	}
+	return extractedResult0, false
+}
+
+func loadCommandsFromDirOsStatCommandsDir(commandsDir string) (extractedResult0 []Command, extractedResult1 error, handled bool) {
+	if _, err := os.Stat(commandsDir); os.IsNotExist(err) {
+		// Create the commands directory if it doesn't exist
+		if err := os.MkdirAll(commandsDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create commands directory %s: %w", commandsDir, err), true
+		}
+		// Return empty list since we just created the directory
+		return []Command{}, nil, true
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func loadCommandsFromDirCallback(commandsDir *string, prefix *string, commands *[]Command, path string, info os.FileInfo, err error) error {
+	if err != nil {
+		return err
+	}
+
+	// Skip directories
+	if info.IsDir() {
+		return nil
+	}
+
+	// Only process markdown files
+	if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
+		return nil
+	}
+
+	// Read the file content
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read command file %s: %w", path, err)
+	}
+
+	// Get the command ID from the file name without the .md extension
+	commandID := strings.TrimSuffix(info.Name(), filepath.Ext(info.Name()))
+
+	// Get relative path from commands directory
+	relPath, err := filepath.Rel((*commandsDir), path)
+	if err != nil {
+		return fmt.Errorf("failed to get relative path for %s: %w", path, err)
+	}
+
+	// Create the command ID from the relative path
+	// Replace directory separators with colons
+	commandIDPath := strings.ReplaceAll(filepath.Dir(relPath), string(filepath.Separator), ":")
+	if commandIDPath != "." {
+		commandID = commandIDPath + ":" + commandID
+	}
+
+	// Create a command
+	command := Command{
+		ID:          (*prefix) + commandID,
+		Title:       (*prefix) + commandID,
+		Description: fmt.Sprintf("Custom command from %s", relPath),
+		Handler: func(cmd Command) tea.Cmd {
+			commandContent := string(content)
+
+			// Check for named arguments
+			matches := namedArgPattern.FindAllStringSubmatch(commandContent, -1)
+			if result0, handled := loadCommandsFromDirMatches(&cmd, commandContent, matches); handled {
+				return result0
+			}
+
+			// No arguments needed, run command directly
+			return util.CmdHandler(CommandRunCustomMsg{
+				Content: commandContent,
+				Args:    nil, // No arguments
+			})
+		},
+	}
+
+	(*commands) = append((*commands), command)
+	return nil
 }

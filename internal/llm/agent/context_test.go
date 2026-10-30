@@ -117,7 +117,7 @@ func (h *hookDenyTool) Run(context.Context, tools.ToolCall) (tools.ToolResponse,
 func TestHookPermissionDenialStopsOperation(t *testing.T) {
 	a, _, _, _ := runtimeAgent(t, workflow.Execute)
 	config.Get().Extensions = config.ExtensionsConfig{Hooks: []config.HookConfig{{Event: "before_tool", Command: "touch must-require-permission"}}}
-	deny := &hookDenyTool{countedTool: countedTool{name: "bash"}}
+	deny := &hookDenyTool{name: "bash"}
 	a.tools = []tools.BaseTool{deny}
 	err := a.runHooks(context.Background(), &generationRun{mode: workflow.Execute}, "before_tool", "write")
 	require.ErrorIs(t, err, permission.ErrorPermissionDenied)

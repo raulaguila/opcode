@@ -29,7 +29,7 @@ func (c *resourceMCPStub) ReadResource(_ context.Context, request mcp.ReadResour
 	return c.read, nil
 }
 func TestMCPResourcesBoundSinglePageAndText(t *testing.T) {
-	client := &resourceMCPStub{list: &mcp.ListResourcesResult{PaginatedResult: mcp.PaginatedResult{NextCursor: "next"}, Resources: []mcp.Resource{{URI: "doc://guide", Name: "Guide"}}}}
+	client := &resourceMCPStub{list: &mcp.ListResourcesResult{NextCursor: "next", Resources: []mcp.Resource{{URI: "doc://guide", Name: "Guide"}}}}
 	response, err := runMCPResource(context.Background(), client, "list_mcp_resources", "", "cursor")
 	require.NoError(t, err)
 	require.False(t, response.IsError)

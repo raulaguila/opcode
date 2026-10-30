@@ -28,28 +28,7 @@ func TestCatalogAuthenticationFilteringAndPagination(t *testing.T) {
 				calls++
 				require.Equal(t, "/prefix/models", req.URL.Path)
 				require.NotContains(t, req.URL.String(), "private-key")
-				body := `{"data":[{"id":"gpt-new"},{"id":"text-embedding-3-small"},{"id":"gpt-image-1"},{"id":"gpt-new"},{"id":"bad\u001b[31m"}]}`
-				switch provider {
-				case ProviderOpenAI:
-					require.Equal(t, "Bearer private-key", req.Header.Get("Authorization"))
-				case ProviderAnthropic:
-					require.Equal(t, "private-key", req.Header.Get("x-api-key"))
-					require.Equal(t, "2023-06-01", req.Header.Get("anthropic-version"))
-					if calls == 1 {
-						body = `{"data":[{"id":"claude-new","display_name":"Claude New","max_input_tokens":200000}],"has_more":true,"last_id":"claude-new"}`
-					} else {
-						require.Equal(t, "claude-new", req.URL.Query().Get("after_id"))
-						body = `{"data":[{"id":"claude-next"}]}`
-					}
-				case ProviderGemini:
-					require.Equal(t, "private-key", req.Header.Get("x-goog-api-key"))
-					if calls == 1 {
-						body = `{"models":[{"name":"models/gemini-new","displayName":"Gemini New","inputTokenLimit":32000,"outputTokenLimit":4096,"supportedGenerationMethods":["generateContent"]},{"name":"models/embedding","supportedGenerationMethods":["embedContent"]}],"nextPageToken":"next"}`
-					} else {
-						require.Equal(t, "next", req.URL.Query().Get("pageToken"))
-						body = `{"models":[{"name":"models/gemini-next","supportedGenerationMethods":["generateContent"]}]}`
-					}
-				}
+				body := catalogAuthenticationBody(t, provider, req, calls)
 				return catalogResponse(req, 200, body), nil
 			})
 			found, err := DiscoverProviderModels(context.Background(), provider, "https://provider.invalid/prefix", "private-key")
@@ -106,4 +85,32 @@ func TestCatalogFailuresDoNotExposeSecretsOrFollowRedirects(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	_, err = DiscoverProviderModels(context.Background(), ProviderAzure, "", "")
 	require.ErrorIs(t, err, ErrCatalogUnsupported)
+}
+
+func catalogAuthenticationBody(t *testing.T, provider ModelProvider, req *http.Request, calls int) string {
+	t.Helper()
+	body := `{"data":[{"id":"gpt-new"},{"id":"text-embedding-3-small"},{"id":"gpt-image-1"},{"id":"gpt-new"},{"id":"bad\u001b[31m"}]}`
+	switch provider {
+	case ProviderOpenAI:
+		require.Equal(t, "Bearer private-key", req.Header.Get("Authorization"))
+	case ProviderAnthropic:
+		require.Equal(t, "private-key", req.Header.Get("x-api-key"))
+		require.Equal(t, "2023-06-01", req.Header.Get("anthropic-version"))
+		if calls == 1 {
+			body = `{"data":[{"id":"claude-new","display_name":"Claude New","max_input_tokens":200000}],"has_more":true,"last_id":"claude-new"}`
+		} else {
+			require.Equal(t, "claude-new", req.URL.Query().Get("after_id"))
+			body = `{"data":[{"id":"claude-next"}]}`
+		}
+	case ProviderGemini:
+		require.Equal(t, "private-key", req.Header.Get("x-goog-api-key"))
+		if calls == 1 {
+			body = `{"models":[{"name":"models/gemini-new","displayName":"Gemini New","inputTokenLimit":32000,"outputTokenLimit":4096,"supportedGenerationMethods":["generateContent"]},{"name":"models/embedding","supportedGenerationMethods":["embedContent"]}],"nextPageToken":"next"}`
+		} else {
+			require.Equal(t, "next", req.URL.Query().Get("pageToken"))
+			body = `{"models":[{"name":"models/gemini-next","supportedGenerationMethods":["generateContent"]}]}`
+		}
+	}
+
+	return body
 }

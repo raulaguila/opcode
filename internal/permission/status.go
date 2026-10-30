@@ -1,5 +1,7 @@
 package permission
 
+import "slices"
+
 // PendingRequests exposes current requests only. Timed-out or cancelled
 // requests disappear even if a client disconnects before seeing their result.
 func (s *permissionService) PendingRequests(session string) []PermissionRequest {
@@ -26,11 +28,8 @@ func (s *permissionService) SessionGrants(session string) []PermissionRequest {
 			grants = append(grants, p)
 		}
 	}
-	for _, id := range s.autoApproveSessions {
-		if id == session {
-			grants = append(grants, PermissionRequest{SessionID: session, ToolName: "all", Action: "auto_approve", Description: "Sessão explicitamente autoaprovada"})
-			break
-		}
+	if slices.Contains(s.autoApproveSessions, session) {
+		grants = append(grants, PermissionRequest{SessionID: session, ToolName: "all", Action: "auto_approve", Description: "Sessão explicitamente autoaprovada"})
 	}
 	return grants
 }

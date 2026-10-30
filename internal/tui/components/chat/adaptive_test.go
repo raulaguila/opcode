@@ -63,7 +63,7 @@ func TestComposerCanUseEightRowsAtOrdinaryTerminalHeights(t *testing.T) {
 
 func TestAttachmentRenderingIsBoundedAndUnicodeSafe(t *testing.T) {
 	m := &editorCmp{textarea: CreateTextArea(nil)}
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		m.attachments = append(m.attachments, message.Attachment{FileName: "ação-漢字-um-arquivo-muito-longo.txt"})
 	}
 	for _, width := range []int{20, 36, 80} {
@@ -99,7 +99,7 @@ func TestComposerFocusChangesPreserveTextAndHideCursor(t *testing.T) {
 func BenchmarkLongConversationViewport(b *testing.B) {
 	m := NewMessagesCmp(&app.App{CoderAgent: benchmarkAgent{}}).(*messagesCmp)
 	m.SetSize(100, 30)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		role := message.Assistant
 		if i%2 == 0 {
 			role = message.User
@@ -111,9 +111,9 @@ func BenchmarkLongConversationViewport(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m.viewport.LineUp(1)
+		m.viewport.ScrollUp(1)
 		_ = m.View()
-		m.viewport.LineDown(1)
+		m.viewport.ScrollDown(1)
 	}
 }
 

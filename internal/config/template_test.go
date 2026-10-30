@@ -155,7 +155,7 @@ func TestTemplateConcurrentStartupIsAtomicAndNeverOverwritesLegacy(t *testing.T)
 	isolateMigrationConfig(t)
 	var group sync.WaitGroup
 	errors := make(chan error, 16)
-	for i := 0; i < 16; i++ {
+	for range 16 {
 		group.Add(1)
 		go func() {
 			defer group.Done()
@@ -220,7 +220,7 @@ func TestEveryStartupRestoresReferenceExampleWithoutCopyingUserSettings(t *testi
 	require.NoError(t, err)
 	_, err = os.Stat(example)
 	require.True(t, os.IsNotExist(err), "offline commands do not create examples")
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		cfg = nil
 		viper.Reset()
 		_, err := Load(project, false)

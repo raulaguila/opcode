@@ -34,7 +34,7 @@ func TestProfileJSONKeepsBackendSeparateAndNeverSavesResolvedKey(t *testing.T) {
 	require.Equal(t, "https://office.invalid/v1", p.BaseURL)
 	require.Equal(t, "environment-secret-value", p.APIKey)
 	require.Equal(t, models.ProviderOpenAI, model.Provider)
-	require.NoError(t, SaveProviderProfile("office", ProviderProfile{Name: "Renamed", Backend: models.ProviderOpenAI, Provider: Provider{APIKeyEnv: "PROFILE_TEST_KEY", BaseURL: p.BaseURL, API: "responses"}}))
+	require.NoError(t, SaveProviderProfile("office", ProviderProfile{Name: "Renamed", Backend: models.ProviderOpenAI, APIKeyEnv: "PROFILE_TEST_KEY", BaseURL: p.BaseURL, API: "responses"}))
 	require.NoError(t, UpdateAgentModelDefinition(AgentCoder, model))
 	saved, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestFirstModelSelectionCreatesAuxiliaryRolesAndRecentList(t *testing.T) {
 func TestProfileValidationAndPersistenceFailureAreAtomic(t *testing.T) {
 	isolateModelConfig(t)
 	cfg = &Config{WorkingDir: t.TempDir(), ProviderProfiles: map[string]ProviderProfile{}}
-	profile := ProviderProfile{Backend: models.ProviderLocal, Provider: Provider{BaseURL: "http://localhost:11434/v1", API: "ollama"}}
+	profile := ProviderProfile{Backend: models.ProviderLocal, BaseURL: "http://localhost:11434/v1", API: "ollama"}
 	for _, id := range []string{"", "a.b", "a/b", "bad\n"} {
 		_, err := PreviewProviderProfile(id, profile)
 		require.Error(t, err)

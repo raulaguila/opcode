@@ -35,38 +35,9 @@ func (a *App) ProbeIntegration(ctx context.Context, candidate config.Integration
 	scope := "settings-" + uuid.NewString()
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, scope)
 	defer a.Permissions.RevokeSession(scope)
-	sanitize := func(s string) string {
-		s = tools.RedactCredentials(s)
-		s = strings.Map(func(r rune) rune {
-			if unicode.IsControl(r) {
-				return -1
-			}
-			return r
-		}, s)
-		if len(s) > 512 {
-			s = s[:512]
-		}
-		return s
-	}
+
 	if candidate.Kind == "mcp" {
-		result, err := agent.ProbeMCPServer(ctx, candidate.Name, candidate.MCP, a.Permissions)
-		if err != nil {
-			return nil, err
-		}
-		lines := []string{fmt.Sprintf("Connected · %d tools · %d resources on this page", len(result.Tools), len(result.Resources))}
-		for _, name := range result.Tools {
-			lines = append(lines, "Tool: "+sanitize(name))
-		}
-		for _, uri := range result.Resources {
-			lines = append(lines, "Resource: "+sanitize(uri))
-		}
-		if result.NextToolsCursor != "" || result.NextResourcesCursor != "" {
-			lines = append(lines, "More entries exist; the test shows one bounded page.")
-		}
-		if result.ResourceError != "" {
-			lines = append(lines, "Resources: "+sanitize(result.ResourceError))
-		}
-		return lines, nil
+		return a.probeMCPIntegration(ctx, candidate)
 	}
 	if candidate.LSP.Disabled {
 		return nil, fmt.Errorf("LSP integration is disabled")
@@ -78,14 +49,53 @@ func (a *App) ProbeIntegration(ctx context.Context, candidate config.Integration
 	defer cancel()
 	client, err := lsp.NewClient(testCtx, candidate.LSP.Command, candidate.LSP.Args...)
 	if err != nil {
-		return nil, fmt.Errorf("cannot start language server: %s", sanitize(err.Error()))
+		return nil, fmt.Errorf("cannot start language server: %s", sanitizeProbeText(err.Error()))
 	}
 	defer client.Close()
 	result, err := client.InitializeLSPClient(testCtx, config.WorkingDirectory())
 	if err != nil {
-		return nil, fmt.Errorf("language server initialization failed: %s", sanitize(err.Error()))
+		return nil, fmt.Errorf("language server initialization failed: %s", sanitizeProbeText(err.Error()))
 	}
-	raw, err := json.Marshal(result.Capabilities)
+	return probeCapabilityLines(result.Capabilities)
+}
+
+func sanitizeProbeText(s string) string {
+	s = tools.RedactCredentials(s)
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+	if len(s) > 512 {
+		s = s[:512]
+	}
+	return s
+}
+
+func (a *App) probeMCPIntegration(ctx context.Context, candidate config.Integration) ([]string, error) {
+	result, err := agent.ProbeMCPServer(ctx, candidate.Name, candidate.MCP, a.Permissions)
+	if err != nil {
+		return nil, err
+	}
+	lines := []string{fmt.Sprintf("Connected · %d tools · %d resources on this page", len(result.Tools), len(result.Resources))}
+	for _, name := range result.Tools {
+		lines = append(lines, "Tool: "+sanitizeProbeText(name))
+	}
+	for _, uri := range result.Resources {
+		lines = append(lines, "Resource: "+sanitizeProbeText(uri))
+	}
+	if result.NextToolsCursor != "" || result.NextResourcesCursor != "" {
+		lines = append(lines, "More entries exist; the test shows one bounded page.")
+	}
+	if result.ResourceError != "" {
+		lines = append(lines, "Resources: "+sanitizeProbeText(result.ResourceError))
+	}
+	return lines, nil
+}
+
+func probeCapabilityLines(capabilities any) ([]string, error) {
+	raw, err := json.Marshal(capabilities)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read language server capabilities")
 	}
@@ -102,7 +112,7 @@ func (a *App) ProbeIntegration(ctx context.Context, candidate config.Integration
 	sort.Strings(names)
 	lines := []string{fmt.Sprintf("Connected · %d declared capabilities", len(names))}
 	for _, name := range names {
-		lines = append(lines, "Capability: "+sanitize(name))
+		lines = append(lines, "Capability: "+sanitizeProbeText(name))
 	}
 	return lines, nil
 }

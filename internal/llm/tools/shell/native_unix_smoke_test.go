@@ -45,28 +45,7 @@ func TestNativeSmokeUnixPTYPrimitive(t *testing.T) {
 			}
 		}
 	}()
-	go func() {
-		buffer := make([]byte, 512)
-		total := 0
-		announced := false
-		for total < 8192 {
-			n, readErr := terminal.Read(buffer[:min(len(buffer), 8192-total)])
-			if n > 0 {
-				total += n
-				_, _ = output.Write(buffer[:n])
-				text, _ := output.Snapshot()
-				if !announced && strings.Contains(text, "NATIVE_PTY_READY") {
-					close(ready)
-					announced = true
-				}
-			}
-			if readErr != nil {
-				readDone <- readErr
-				return
-			}
-		}
-		readDone <- fmt.Errorf("PTY fixture output exceeded 8192 bytes")
-	}()
+	go readNativePTYFixture(terminal, &output, ready, readDone)
 	snapshot := func() string { text, _ := output.Snapshot(); return text }
 	// Wait for the child to initialize its terminal before sending user input.
 	// Readiness is live output, not inferred from exec.Start completing.
@@ -104,4 +83,29 @@ func TestNativeSmokeUnixPTYPrimitive(t *testing.T) {
 	}
 	require.Contains(t, snapshot(), "NATIVE_PTY_READY")
 	require.Contains(t, snapshot(), "NATIVE_PTY_ACK:fixture-input")
+}
+
+func readNativePTYFixture(terminal io.Reader, output *Buffer, ready chan struct{}, readDone chan error) {
+
+	buffer := make([]byte, 512)
+	total := 0
+	announced := false
+	for total < 8192 {
+		n, readErr := terminal.Read(buffer[:min(len(buffer), 8192-total)])
+		if n > 0 {
+			total += n
+			_, _ = output.Write(buffer[:n])
+			text, _ := output.Snapshot()
+			if !announced && strings.Contains(text, "NATIVE_PTY_READY") {
+				close(ready)
+				announced = true
+			}
+		}
+		if readErr != nil {
+			readDone <- readErr
+			return
+		}
+	}
+	readDone <- fmt.Errorf("PTY fixture output exceeded 8192 bytes")
+
 }

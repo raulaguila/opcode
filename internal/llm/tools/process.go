@@ -90,11 +90,7 @@ func (m *ProcessManager) startProcess(parent context.Context, owner string, para
 	if err := parent.Err(); err != nil {
 		return nil, err
 	}
-	if params.Timeout <= 0 {
-		params.Timeout = DefaultTimeout
-	}
-	params.Timeout = min(params.Timeout, MaxTimeout)
-	params.Cols, params.Rows = terminalSize(params.Cols, params.Rows)
+	params = normalizeProcessParams(params)
 	base := parent
 	if detached {
 		base = context.WithoutCancel(parent)
@@ -115,14 +111,7 @@ func (m *ProcessManager) startProcess(parent context.Context, owner string, para
 		started: time.Now(), exit: -1, cols: params.Cols, rows: params.Rows,
 	}
 	m.mu.Lock()
-	running := 0
-	for id, process := range m.processes {
-		if !process.finished {
-			running++
-		} else if len(m.processes) >= 32 {
-			delete(m.processes, id)
-		}
-	}
+	running := m.pruneFinishedProcessesLocked()
 	if m.closed || running >= 4 || len(m.processes) >= 32 {
 		m.mu.Unlock()
 		cancel()
@@ -130,27 +119,7 @@ func (m *ProcessManager) startProcess(parent context.Context, owner string, para
 	}
 	readDone := make(chan struct{})
 	if params.PTY {
-		record.screen = vt10x.New(vt10x.WithSize(params.Cols, params.Rows))
-		record.input = make(chan []byte, 32)
-		record.pty, err = shell.StartPTY(cmd, params.Cols, params.Rows)
-		if err == nil {
-			go func() {
-				defer close(readDone)
-				io.Copy(terminalOutput{record}, record.pty)
-			}()
-			go func() {
-				for {
-					select {
-					case data := <-record.input:
-						if _, err := record.pty.Write(data); err != nil {
-							return
-						}
-					case <-ctx.Done():
-						return
-					}
-				}
-			}()
-		}
+		err = record.startPTY(ctx, readDone)
 	} else {
 		cmd.Stdout, cmd.Stderr = record.stdout, record.stderr
 		err = cmd.Start()
@@ -163,28 +132,7 @@ func (m *ProcessManager) startProcess(parent context.Context, owner string, para
 	}
 	m.processes[record.id] = record
 	m.mu.Unlock()
-	go func() {
-		cmd.Wait()
-		// Descendants may still hold the slave; bound draining before closing
-		// the master so cancellation releases readers and input writers.
-		select {
-		case <-readDone:
-		case <-time.After(500 * time.Millisecond):
-		}
-		if record.pty != nil {
-			record.pty.Close()
-		}
-		<-readDone
-		m.mu.Lock()
-		record.finished = true
-		if cmd.ProcessState != nil {
-			record.exit = cmd.ProcessState.ExitCode()
-		}
-		record.timedOut = ctx.Err() == context.DeadlineExceeded
-		m.mu.Unlock()
-		cancel()
-		close(record.done)
-	}()
+	go m.reapProcess(ctx, record, readDone)
 	return record, nil
 }
 
@@ -304,4 +252,77 @@ func (m *ProcessManager) Close() error {
 		<-record.done
 	}
 	return nil
+}
+
+func normalizeProcessParams(params ProcessParams) ProcessParams {
+	if params.Timeout <= 0 {
+		params.Timeout = DefaultTimeout
+	}
+	params.Timeout = min(params.Timeout, MaxTimeout)
+	params.Cols, params.Rows = terminalSize(params.Cols, params.Rows)
+
+	return params
+}
+
+func (m *ProcessManager) pruneFinishedProcessesLocked() int {
+	running := 0
+	for id, process := range m.processes {
+		if !process.finished {
+			running++
+		} else if len(m.processes) >= 32 {
+			delete(m.processes, id)
+		}
+	}
+
+	return running
+}
+
+func (record *managedProcess) startPTY(ctx context.Context, readDone chan struct{}) error {
+	var err error
+
+	record.screen = vt10x.New(vt10x.WithSize(record.cols, record.rows))
+	record.input = make(chan []byte, 32)
+	record.pty, err = shell.StartPTY(record.cmd, record.cols, record.rows)
+	if err == nil {
+		go func() {
+			defer close(readDone)
+			io.Copy(terminalOutput{record}, record.pty)
+		}()
+		go func() {
+			for {
+				select {
+				case data := <-record.input:
+					if _, err := record.pty.Write(data); err != nil {
+						return
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+	return err
+}
+
+func (m *ProcessManager) reapProcess(ctx context.Context, record *managedProcess, readDone <-chan struct{}) {
+	record.cmd.Wait()
+	// Descendants may still hold the slave; bound draining before closing
+	// the master so cancellation releases readers and input writers.
+	select {
+	case <-readDone:
+	case <-time.After(500 * time.Millisecond):
+	}
+	if record.pty != nil {
+		record.pty.Close()
+	}
+	<-readDone
+	m.mu.Lock()
+	record.finished = true
+	if record.cmd.ProcessState != nil {
+		record.exit = record.cmd.ProcessState.ExitCode()
+	}
+	record.timedOut = ctx.Err() == context.DeadlineExceeded
+	m.mu.Unlock()
+	record.cancel()
+	close(record.done)
 }

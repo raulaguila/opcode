@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -55,8 +56,8 @@ func removeDuplicateBindings(bindings []key.Binding) []key.Binding {
 	result := make([]key.Binding, 0, len(bindings))
 
 	// Process bindings in reverse order
-	for i := len(bindings) - 1; i >= 0; i-- {
-		b := bindings[i]
+	for _, b := range slices.Backward(bindings) {
+
 		k := strings.Join(b.Keys(), " ")
 		if _, ok := seen[k]; ok {
 			// duplicate, skip

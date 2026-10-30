@@ -71,174 +71,10 @@ func TestRoutedModalRegressionMatrix(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "config.json")
 	require.NoError(t, os.WriteFile(file, []byte(`{}`), 0600))
 	viper.SetConfigFile(file)
-	for _, profile := range []struct {
-		name  string
-		dark  bool
-		color termenv.Profile
-	}{{"dark", true, termenv.TrueColor}, {"light", false, termenv.TrueColor}, {"NO_COLOR", false, termenv.Ascii}} {
-		t.Run(profile.name, func(t *testing.T) {
-			lipgloss.SetHasDarkBackground(profile.dark)
-			lipgloss.SetColorProfile(profile.color)
-			for _, size := range [][2]int{{60, 20}, {80, 24}, {120, 36}, {180, 40}} {
-				t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
-					for _, name := range []string{"commands", "mode", "permissions", "quit", "init", "sessions", "arguments", "files", "themes", "help", "connections", "integrations", "models"} {
-						t.Run(name, func(t *testing.T) {
-							a, probe := matrixRoot(size)
-							openMatrixModal(t, &a, name)
-							a.syncInputFocus()
-							require.False(t, probe.focused, "modal must suspend composer focus")
-							assertMatrixFrame(t, a, size)
-							u, _ := a.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
-							a = u.(appModel)
-							assertMatrixFrame(t, a, [2]int{60, 20})
-							u, _ = a.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
-							a = u.(appModel)
-							switch name {
-							case "commands", "mode":
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyDown})
-								a = u.(appModel)
-								if name == "mode" {
-									before := a.commandDialog.View()
-									u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("invisible filter")})
-									a = u.(appModel)
-									require.Equal(t, before, a.commandDialog.View())
-								}
-								_, cmd := matrixClick(t, a, "Matrix second")
-								require.NotNil(t, cmd)
-								chosen := cmd().(dialog.CommandSelectedMsg)
-								require.Equal(t, "matrix-second", chosen.Command.ID)
-								u, _ = a.Update(chosen)
-								a = u.(appModel)
-								require.False(t, a.showCommandDialog)
-							case "permissions":
-								u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.NotNil(t, cmd)
-								denial := cmd().(dialog.PermissionResponseMsg)
-								require.Equal(t, dialog.PermissionDeny, denial.Action)
-								require.Equal(t, "matrix-request", denial.Permission.ID)
-								u, _ = a.Update(denial)
-								a = u.(appModel)
-							case "quit":
-								var cmd tea.Cmd
-								a, cmd = matrixClick(t, a, "Continue")
-								require.NotNil(t, cmd)
-								u, _ = a.Update(cmd())
-								a = u.(appModel)
-								require.False(t, a.showQuit)
-							case "sessions":
-								a, _ = matrixClick(t, a, "Matrix session B")
-								_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
-								require.NotNil(t, cmd)
-								selected := cmd().(dialog.SessionSelectedMsg)
-								require.Equal(t, "matrix-b", selected.Session.ID)
-								u, _ = a.Update(selected)
-								a = u.(appModel)
-								require.False(t, a.showSessionDialog)
-							case "arguments":
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
-								a = u.(appModel)
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ação 漢字")})
-								a = u.(appModel)
-								require.Contains(t, ansi.Strip(a.View()), "ação 漢字")
-								u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.NotNil(t, cmd)
-								result := cmd().(dialog.CloseMultiArgumentsDialogMsg)
-								require.False(t, result.Submit)
-								u, _ = a.Update(result)
-								a = u.(appModel)
-							case "files":
-								require.Contains(t, ansi.Strip(a.View()), "Empty directory")
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEnter})
-								a = u.(appModel)
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-								a = u.(appModel)
-								require.True(t, a.showFilepicker)
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.False(t, a.showFilepicker)
-							case "themes":
-								before := a.themeDialog.View()
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyDown})
-								a = u.(appModel)
-								require.NotEqual(t, before, a.themeDialog.View())
-								require.Contains(t, ansi.Strip(a.themeDialog.View()), "›")
-								u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.NotNil(t, cmd)
-								u, _ = a.Update(cmd())
-								a = u.(appModel)
-								require.False(t, a.showThemeDialog)
-							case "help":
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyPgDown})
-								a = u.(appModel)
-								a, _ = matrixClick(t, a, "Keyboard shortcuts")
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.False(t, a.showHelp)
-							case "connections":
-								a, _ = matrixClick(t, a, "[Preferences]")
-								require.Contains(t, ansi.Strip(a.View()), "Preferences")
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.NotNil(t, cmd)
-								u, _ = a.Update(cmd())
-								a = u.(appModel)
-								require.False(t, a.showProviderDialog)
-							case "integrations":
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-								a = u.(appModel)
-								require.Contains(t, ansi.Strip(a.View()), "Configure MCP")
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
-								a = u.(appModel)
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.NotNil(t, cmd)
-								u, _ = a.Update(cmd())
-								a = u.(appModel)
-								require.False(t, a.showIntegrationDialog)
-							case "models":
-								u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("no-such-matrix-model")})
-								a = u.(appModel)
-								require.Contains(t, ansi.Strip(a.View()), "No models found")
-								u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
-								a = u.(appModel)
-								require.NotNil(t, cmd)
-								u, _ = a.Update(cmd())
-								a = u.(appModel)
-								require.False(t, a.showModelDialog)
-							case "init":
-								// Initialization is refused by mouse. Never ask the agent to create files.
-								var cmd tea.Cmd
-								a, cmd = matrixClick(t, a, "Not now")
-								require.NotNil(t, cmd)
-								result := cmd().(dialog.CloseInitDialogMsg)
-								require.False(t, result.Initialize)
-								u, _ = a.Update(result)
-								a = u.(appModel)
-								require.False(t, a.showInitDialog)
-							}
-							a.syncInputFocus()
-							require.True(t, probe.focused, "closing must return composer focus")
-							for _, msg := range probe.received {
-								_, leaked := msg.(tea.KeyMsg)
-								require.False(t, leaked, "modal key leaked to background composer")
-							}
-							assertMatrixFrame(t, a, size)
-						})
-					}
-				})
-			}
-		})
-	}
+	testRoutedModalRegressionMatrixStruct(t)
 }
 func matrixRoot(size [2]int) (appModel, *matrixPageProbe) {
-	probe := &matrixPageProbe{focusPageProbe: focusPageProbe{content: "Matrix retained composer"}}
+	probe := &matrixPageProbe{content: "Matrix retained composer"}
 	application := &app.App{CoderAgent: &terminalAgent{}, Messages: &terminalMessages{}, Sessions: &terminalSessions{}, Permissions: permission.NewPermissionService()}
 	a := appModel{app: application, currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: probe}, status: core.NewStatusCmp(nil), help: dialog.NewHelpCmp(), quit: dialog.NewQuitCmp(), sessionDialog: dialog.NewSessionDialogCmp(), commandDialog: dialog.NewCommandDialogCmp(), modelDialog: dialog.NewModelDialogCmp(), permissions: dialog.NewPermissionDialogCmp(), initDialog: dialog.NewInitDialogCmp(), themeDialog: dialog.NewThemeDialogCmp(), providerDialog: dialog.NewProviderDialogCmp(), integrationDialog: dialog.NewIntegrationDialogCmp(nil), filepicker: dialog.NewFilepickerCmp(application)}
 	a.help.SetBindings([]key.Binding{key.NewBinding(key.WithKeys("enter"), key.WithHelp("Enter", "send")), key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("Ctrl+P", "terminal"))})
@@ -294,8 +130,8 @@ func openMatrixModal(t *testing.T, a *appModel, name string) {
 func matrixClick(t *testing.T, a appModel, label string) (appModel, tea.Cmd) {
 	t.Helper()
 	for y, line := range strings.Split(ansi.Strip(a.View()), "\n") {
-		if at := strings.Index(line, label); at >= 0 {
-			u, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(line[:at]) + 1, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+		if before, _, ok := strings.Cut(line, label); ok {
+			u, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(before) + 1, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 			return u.(appModel), cmd
 		}
 	}
@@ -331,4 +167,180 @@ func (matrixCatalogTransport) RoundTrip(req *http.Request) (*http.Response, erro
 		status = 200
 	}
 	return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
+}
+
+func testRoutedModalRegressionMatrixStruct(t *testing.T) {
+	for _, profile := range []struct {
+		name  string
+		dark  bool
+		color termenv.Profile
+	}{{"dark", true, termenv.TrueColor}, {"light", false, termenv.TrueColor}, {"NO_COLOR", false, termenv.Ascii}} {
+		t.Run(profile.name, func(t *testing.T) {
+			lipgloss.SetHasDarkBackground(profile.dark)
+			lipgloss.SetColorProfile(profile.color)
+			testRoutedModalRegressionMatrixStructState(t)
+		})
+	}
+}
+
+func testRoutedModalRegressionMatrixStructState(t *testing.T) {
+	for _, size := range [][2]int{{60, 20}, {80, 24}, {120, 36}, {180, 40}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			testRoutedModalRegressionMatrixStructStateState(&size, t)
+		})
+	}
+}
+
+func testRoutedModalRegressionMatrixStructStateState(size *[2]int, t *testing.T) {
+	for _, name := range []string{"commands", "mode", "permissions", "quit", "init", "sessions", "arguments", "files", "themes", "help", "connections", "integrations", "models"} {
+		t.Run(name, func(t *testing.T) {
+			a, probe := matrixRoot((*size))
+			openMatrixModal(t, &a, name)
+			a.syncInputFocus()
+			require.False(t, probe.focused, "modal must suspend composer focus")
+			assertMatrixFrame(t, a, (*size))
+			u, _ := a.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+			a = u.(appModel)
+			assertMatrixFrame(t, a, [2]int{60, 20})
+			u, _ = a.Update(tea.WindowSizeMsg{Width: (*size)[0], Height: (*size)[1]})
+			a = u.(appModel)
+			switch name {
+			case "commands", "mode":
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyDown})
+				a = u.(appModel)
+				if name == "mode" {
+					before := a.commandDialog.View()
+					u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("invisible filter")})
+					a = u.(appModel)
+					require.Equal(t, before, a.commandDialog.View())
+				}
+				_, cmd := matrixClick(t, a, "Matrix second")
+				require.NotNil(t, cmd)
+				chosen := cmd().(dialog.CommandSelectedMsg)
+				require.Equal(t, "matrix-second", chosen.Command.ID)
+				u, _ = a.Update(chosen)
+				a = u.(appModel)
+				require.False(t, a.showCommandDialog)
+			case "permissions":
+				u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.NotNil(t, cmd)
+				denial := cmd().(dialog.PermissionResponseMsg)
+				require.Equal(t, dialog.PermissionDeny, denial.Action)
+				require.Equal(t, "matrix-request", denial.Permission.ID)
+				u, _ = a.Update(denial)
+				a = u.(appModel)
+			case "quit":
+				var cmd tea.Cmd
+				a, cmd = matrixClick(t, a, "Continue")
+				require.NotNil(t, cmd)
+				u, _ = a.Update(cmd())
+				a = u.(appModel)
+				require.False(t, a.showQuit)
+			case "sessions":
+				a, _ = matrixClick(t, a, "Matrix session B")
+				_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				require.NotNil(t, cmd)
+				selected := cmd().(dialog.SessionSelectedMsg)
+				require.Equal(t, "matrix-b", selected.Session.ID)
+				u, _ = a.Update(selected)
+				a = u.(appModel)
+				require.False(t, a.showSessionDialog)
+			case "arguments":
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
+				a = u.(appModel)
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ação 漢字")})
+				a = u.(appModel)
+				require.Contains(t, ansi.Strip(a.View()), "ação 漢字")
+				u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.NotNil(t, cmd)
+				result := cmd().(dialog.CloseMultiArgumentsDialogMsg)
+				require.False(t, result.Submit)
+				u, _ = a.Update(result)
+				a = u.(appModel)
+			case "files":
+				require.Contains(t, ansi.Strip(a.View()), "Empty directory")
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				a = u.(appModel)
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+				a = u.(appModel)
+				require.True(t, a.showFilepicker)
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.False(t, a.showFilepicker)
+			case "themes":
+				before := a.themeDialog.View()
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyDown})
+				a = u.(appModel)
+				require.NotEqual(t, before, a.themeDialog.View())
+				require.Contains(t, ansi.Strip(a.themeDialog.View()), "›")
+				u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.NotNil(t, cmd)
+				u, _ = a.Update(cmd())
+				a = u.(appModel)
+				require.False(t, a.showThemeDialog)
+			case "help":
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+				a = u.(appModel)
+				a, _ = matrixClick(t, a, "Keyboard shortcuts")
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.False(t, a.showHelp)
+			case "connections":
+				a, _ = matrixClick(t, a, "[Preferences]")
+				require.Contains(t, ansi.Strip(a.View()), "Preferences")
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.NotNil(t, cmd)
+				u, _ = a.Update(cmd())
+				a = u.(appModel)
+				require.False(t, a.showProviderDialog)
+			case "integrations":
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+				a = u.(appModel)
+				require.Contains(t, ansi.Strip(a.View()), "Configure MCP")
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyTab})
+				a = u.(appModel)
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.NotNil(t, cmd)
+				u, _ = a.Update(cmd())
+				a = u.(appModel)
+				require.False(t, a.showIntegrationDialog)
+			case "models":
+				u, _ = a.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("no-such-matrix-model")})
+				a = u.(appModel)
+				require.Contains(t, ansi.Strip(a.View()), "No models found")
+				u, cmd := a.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				a = u.(appModel)
+				require.NotNil(t, cmd)
+				u, _ = a.Update(cmd())
+				a = u.(appModel)
+				require.False(t, a.showModelDialog)
+			case "init":
+				// Initialization is refused by mouse. Never ask the agent to create files.
+				var cmd tea.Cmd
+				a, cmd = matrixClick(t, a, "Not now")
+				require.NotNil(t, cmd)
+				result := cmd().(dialog.CloseInitDialogMsg)
+				require.False(t, result.Initialize)
+				u, _ = a.Update(result)
+				a = u.(appModel)
+				require.False(t, a.showInitDialog)
+			}
+			a.syncInputFocus()
+			require.True(t, probe.focused, "closing must return composer focus")
+			for _, msg := range probe.received {
+				_, leaked := msg.(tea.KeyMsg)
+				require.False(t, leaked, "modal key leaked to background composer")
+			}
+			assertMatrixFrame(t, a, (*size))
+		})
+	}
 }

@@ -104,18 +104,7 @@ func (t *mcpCatalogTool) Run(ctx context.Context, call tools.ToolCall) (tools.To
 	if p.Limit == 0 {
 		p.Limit = 8
 	}
-	items := []any{}
-	for _, entry := range page.Tools {
-		if p.Tool != "" {
-			if entry.Name == p.Tool {
-				items = append(items, entry)
-			}
-			continue
-		}
-		if p.Query == "" || strings.Contains(strings.ToLower(entry.Name+" "+entry.Description), strings.ToLower(p.Query)) {
-			items = append(items, map[string]any{"name": entry.Name, "description": clip(entry.Description, 140), "source": "mcp", "read_only": "unknown; opaque execution approval required"})
-		}
-	}
+	items := mcpCatalogEntries(page.Tools, p.Tool, p.Query)
 	start := min(p.Offset, len(items))
 	end := min(start+p.Limit, len(items))
 	var next *int
@@ -196,4 +185,21 @@ func (t *mcpCallTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolR
 	}
 	input, _ := json.Marshal(p.Arguments)
 	return runTool(ctx, c, p.Tool, string(input))
+}
+
+func mcpCatalogEntries(entries []mcp.Tool, toolName, query string) []any {
+	items := []any{}
+	for _, entry := range entries {
+		if toolName != "" {
+			if entry.Name == toolName {
+				items = append(items, entry)
+			}
+			continue
+		}
+		if query == "" || strings.Contains(strings.ToLower(entry.Name+" "+entry.Description), strings.ToLower(query)) {
+			items = append(items, map[string]any{"name": entry.Name, "description": clip(entry.Description, 140), "source": "mcp", "read_only": "unknown; opaque execution approval required"})
+		}
+	}
+
+	return items
 }

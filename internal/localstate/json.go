@@ -48,42 +48,15 @@ func OpenPrivateRoot(directory string, create bool) (*os.Root, error) {
 	if relative == "." {
 		return root, nil
 	}
-	for _, component := range strings.Split(relative, string(filepath.Separator)) {
-		if component == "" || component == "." || component == ".." {
-			root.Close()
-			return nil, fmt.Errorf("invalid private directory component")
-		}
-		before, err := root.Lstat(component)
-		if os.IsNotExist(err) && create {
-			if mkdirErr := root.Mkdir(component, 0700); mkdirErr != nil && !os.IsExist(mkdirErr) {
-				root.Close()
-				return nil, mkdirErr
-			}
-			before, err = root.Lstat(component)
-		}
-		if err != nil {
-			root.Close()
-			return nil, err
-		}
-		if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
-			root.Close()
-			return nil, fmt.Errorf("private state directory cannot contain symbolic links or non-directories")
-		}
-		child, err := root.OpenRoot(component)
-		if err != nil {
-			root.Close()
-			return nil, err
-		}
-		opened, err := child.Stat(".")
-		after, afterErr := root.Lstat(component)
-		if err != nil || afterErr != nil || !os.SameFile(before, opened) || !os.SameFile(before, after) || !after.IsDir() || after.Mode()&os.ModeSymlink != 0 {
-			child.Close()
-			root.Close()
-			return nil, fmt.Errorf("private state directory changed during access")
-		}
+	for component := range strings.SplitSeq(relative, string(filepath.Separator)) {
+		child, err := openPrivateComponent(root, component, create)
 		root.Close()
+		if err != nil {
+			return nil, err
+		}
 		root = child
 	}
+
 	return root, nil
 }
 func Read(path string, limit int64, value any) error {
@@ -180,4 +153,34 @@ func WriteBytes(path string, data []byte) error {
 		return fmt.Errorf("application state destination appeared during write")
 	}
 	return root.Rename(temp, name)
+}
+
+func openPrivateComponent(root *os.Root, component string, create bool) (*os.Root, error) {
+	if component == "" || component == "." || component == ".." {
+		return nil, fmt.Errorf("invalid private directory component")
+	}
+	before, err := root.Lstat(component)
+	if os.IsNotExist(err) && create {
+		if mkdirErr := root.Mkdir(component, 0700); mkdirErr != nil && !os.IsExist(mkdirErr) {
+			return nil, mkdirErr
+		}
+		before, err = root.Lstat(component)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("private state directory cannot contain symbolic links or non-directories")
+	}
+	child, err := root.OpenRoot(component)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := child.Stat(".")
+	after, afterErr := root.Lstat(component)
+	if err != nil || afterErr != nil || !os.SameFile(before, opened) || !os.SameFile(before, after) || !after.IsDir() || after.Mode()&os.ModeSymlink != 0 {
+		child.Close()
+		return nil, fmt.Errorf("private state directory changed during access")
+	}
+	return child, nil
 }

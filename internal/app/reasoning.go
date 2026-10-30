@@ -29,7 +29,7 @@ func (p *configurableCoder) SetReasoning(role config.AgentName, id models.ModelI
 		return connectionErr
 	}
 	if model.API == "ollama" || connection.API == "ollama" {
-		return fmt.Errorf("Ollama effort controls are not advertised by this adapter")
+		return fmt.Errorf("ollama effort controls are not advertised by this adapter")
 	}
 	candidate := old
 	candidate.ReasoningEffort = effort

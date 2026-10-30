@@ -48,27 +48,7 @@ func (t TUIConfig) Validate() error {
 	if t.Notifications != "" && t.Notifications != "off" && t.Notifications != "bell" && t.Notifications != "auto" && t.Notifications != "native" && t.Notifications != "osc" {
 		return fmt.Errorf("notifications: off/bell/auto/native/osc")
 	}
-	seen := map[string]bool{}
-	for action, fallback := range DefaultKeybindings {
-		shortcut := t.Keybindings[action]
-		if shortcut == "" {
-			shortcut = fallback
-		}
-		reserved := map[string]bool{"ctrl+c": true, "ctrl+h": true, "ctrl+l": true, "ctrl+n": true, "ctrl+e": true, "ctrl+b": true, "ctrl+y": true, "ctrl+r": true}
-		if reserved[shortcut] || !validShortcut(shortcut) {
-			return fmt.Errorf("invalid shortcut for %s: use a free ctrl+letter or alt+letter", action)
-		}
-		if seen[shortcut] {
-			return fmt.Errorf("shortcut %s is assigned twice", shortcut)
-		}
-		seen[shortcut] = true
-	}
-	for action := range t.Keybindings {
-		if _, ok := DefaultKeybindings[action]; !ok {
-			return fmt.Errorf("unknown shortcut action %s", action)
-		}
-	}
-	return nil
+	return t.validateKeybindings()
 }
 func validShortcut(s string) bool {
 	p := strings.Split(s, "+")
@@ -121,17 +101,8 @@ const maxSettingsDocument = 4 << 20
 
 func readSettingsDocument(path string) (map[string]any, error) {
 	empty := map[string]any{}
-	for parent := filepath.Dir(path); parent != "."; parent = filepath.Dir(parent) {
-		stat, e := os.Lstat(parent)
-		if e != nil && !errors.Is(e, os.ErrNotExist) {
-			return nil, fmt.Errorf("cannot inspect configuration parent")
-		}
-		if e == nil && (!stat.IsDir() || stat.Mode()&os.ModeSymlink != 0) {
-			return nil, fmt.Errorf("configuration parents must not be symlinks")
-		}
-		if filepath.Dir(parent) == parent {
-			break
-		}
+	if err := inspectSettingsParents(path); err != nil {
+		return nil, err
 	}
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -160,8 +131,7 @@ func readSettingsDocument(path string) (map[string]any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	if err := decoder.Decode(&doc); err != nil {
-		var syntax *json.SyntaxError
-		if errors.As(err, &syntax) {
+		if syntax, ok := errors.AsType[*json.SyntaxError](err); ok {
 			offset := min(len(data), max(0, int(syntax.Offset)-1))
 			line := bytes.Count(data[:offset], []byte("\n")) + 1
 			column := offset - bytes.LastIndexByte(data[:offset], '\n')
@@ -202,7 +172,7 @@ func referenceEnvironment(name string) string {
 
 func atPath(doc map[string]any, path string) (any, bool) {
 	var v any = doc
-	for _, p := range strings.Split(path, ".") {
+	for p := range strings.SplitSeq(path, ".") {
 		m, ok := v.(map[string]any)
 		if !ok {
 			return nil, false
@@ -231,76 +201,14 @@ func EffectiveConfiguration() []EffectiveValue {
 	_ = json.Unmarshal(data, &doc)
 	global := configDocument(configuredFilePath())
 	project := configDocument(ProjectConfigPath(cfg.WorkingDir))
-	out := []EffectiveValue{}
-	var walk func(map[string]any, string)
-	walk = func(m map[string]any, prefix string) {
-		for k, v := range m {
-			path := k
-			if prefix != "" {
-				path = prefix + "." + k
-			}
-			if nested, ok := v.(map[string]any); ok && !sensitiveName(k) {
-				walk(nested, path)
-				continue
-			}
-			origin := "default"
-			if _, ok := atPath(global, path); ok {
-				origin = "global"
-			}
-			if _, ok := atPath(project, path); ok && !strings.HasPrefix(path, "security.") && !strings.HasPrefix(path, "extensions.") {
-				origin = "project"
-			}
-			secret := sensitiveName(k) || k == "args"
-			value := v
-			if secret {
-				if v != nil && fmt.Sprint(v) != "" {
-					value = "[redacted]"
-				}
-			} else if s, ok := v.(string); ok {
-				value = safeValue(s)
-			}
-			out = append(out, EffectiveValue{path, value, origin, secret})
-		}
-	}
-	walk(doc, "")
-	for _, s := range UserSettings {
-		if _, ok := atPath(doc, s.Path); !ok {
-			origin := "default"
-			if _, ok := atPath(global, s.Path); ok {
-				origin = "global"
-			}
-			if _, ok := atPath(project, s.Path); ok {
-				origin = "project"
-			}
-			out = append(out, EffectiveValue{s.Path, s.Default, origin, false})
-		}
-	}
+	projection := effectiveConfigProjection{global: global, project: project, values: []EffectiveValue{}}
+	projection.walk(doc, "")
+	projection.appendDefaults(doc)
+	out := projection.values
+
 	// Environment references are attributed without revealing resolved values.
 	for i := range out {
-		e := &out[i]
-		if name := environmentSettingOrigin(e.Path); name != "" {
-			e.Origin = "environment (" + name + ")"
-		}
-		if strings.HasPrefix(e.Path, "providerProfiles.") || strings.HasPrefix(e.Path, "providers.") {
-			parts := strings.Split(e.Path, ".")
-			if len(parts) == 3 && parts[2] == "apiKey" {
-				prefix := parts[0] + "." + parts[1]
-				if ref, ok := atPath(doc, prefix+".apiKeyRef"); ok && ref != "" {
-					e.Origin = "native vault"
-				} else if ref, ok := atPath(doc, prefix+".apiKeyEnv"); ok && ref != "" {
-					if name := referenceEnvironment(fmt.Sprint(ref)); name != "" {
-						e.Origin = "environment (" + name + ")"
-					}
-				} else if parts[0] == "providers" {
-					if name := referenceEnvironment(ProviderEnvironmentName(models.ModelProvider(parts[1]))); name != "" {
-						e.Origin = "environment (" + name + ")"
-					}
-				}
-			}
-			if e.Path == "providers.local.baseURL" && referenceEnvironment("LOCAL_ENDPOINT") != "" {
-				e.Origin = "environment (LOCAL_ENDPOINT)"
-			}
-		}
+		attributeEffectiveOrigin(&out[i], doc)
 	}
 	for _, p := range []string{configuredFilePath(), ProjectConfigPath(cfg.WorkingDir)} {
 		if _, err := readSettingsDocument(p); err != nil {
@@ -345,13 +253,7 @@ func SaveUserSetting(path, input string, reset bool) error {
 	if cfg == nil {
 		return fmt.Errorf("config not loaded")
 	}
-	var setting *Setting
-	for i := range UserSettings {
-		if UserSettings[i].Path == path {
-			setting = &UserSettings[i]
-			break
-		}
-	}
+	setting := editableSetting(path)
 	if setting == nil {
 		return fmt.Errorf("setting is not editable")
 	}
@@ -374,34 +276,13 @@ func SaveUserSetting(path, input string, reset bool) error {
 		targetPath, target = projectPath, project
 	}
 	originalDocument, _ := json.Marshal(target)
-	var value any
-	if !reset {
-		switch setting.Default.(type) {
-		case bool:
-			if input != "true" && input != "false" {
-				return fmt.Errorf("use true or false")
-			}
-			value = input == "true"
-		case int:
-			var n int
-			if _, e := fmt.Sscanf(input, "%d", &n); e != nil || fmt.Sprint(n) != strings.TrimSpace(input) {
-				return fmt.Errorf("use an integer")
-			}
-			value = n
-		default:
-			value = strings.TrimSpace(input)
-		}
+	value, err := settingValue(setting, input, reset)
+	if err != nil {
+		return err
 	}
 	parts := strings.Split(path, ".")
 	node := target
-	for _, p := range parts[:len(parts)-1] {
-		child, ok := node[p].(map[string]any)
-		if !ok {
-			child = map[string]any{}
-			node[p] = child
-		}
-		node = child
-	}
+	node = settingParentNode(node, parts)
 	if reset {
 		delete(node, parts[len(parts)-1])
 	} else {
@@ -414,10 +295,186 @@ func SaveUserSetting(path, input string, reset bool) error {
 			value = v
 		}
 	}
-	raw, _ := json.Marshal(cfg)
-	var candidate map[string]any
-	_ = json.Unmarshal(raw, &candidate)
-	node = candidate
+	next, err := candidateSetting(parts, value)
+	if err != nil {
+		return err
+	}
+	if err := writeSettingDocument(targetPath, target, originalDocument); err != nil {
+		return err
+	}
+	cfg.TUI = next.TUI
+	cfg.Preferences = next.Preferences
+	cfg.Runtime = next.Runtime.Defaults()
+	return nil
+}
+
+type ProviderPreset struct {
+	ID      string
+	Profile ProviderProfile
+}
+
+var ProviderPresets = []ProviderPreset{
+	{"ollama", ProviderProfile{Name: "Ollama", Backend: models.ProviderLocal, BaseURL: "http://127.0.0.1:11434/v1", API: "ollama", ContextWindow: 0, DefaultMaxTokens: 2048}},
+	{"lmstudio", ProviderProfile{Name: "LM Studio", Backend: models.ProviderLocal, BaseURL: "http://127.0.0.1:1234/v1", API: "chat_completions", ContextWindow: 0, DefaultMaxTokens: 2048}},
+	{"openai", ProviderProfile{Name: "OpenAI", Backend: models.ProviderOpenAI, APIKeyEnv: "OPENAI_API_KEY"}},
+	{"anthropic", ProviderProfile{Name: "Anthropic", Backend: models.ProviderAnthropic, APIKeyEnv: "ANTHROPIC_API_KEY"}},
+	{"gemini", ProviderProfile{Name: "Gemini", Backend: models.ProviderGemini, APIKeyEnv: "GEMINI_API_KEY"}},
+	{"openrouter", ProviderProfile{Name: "OpenRouter", Backend: models.ProviderOpenRouter, APIKeyEnv: "OPENROUTER_API_KEY"}},
+	{"openai-compatible", ProviderProfile{Name: "OpenAI compatible", Backend: models.ProviderLocal, API: "chat_completions"}},
+}
+
+func (t TUIConfig) validateKeybindings() error {
+	seen := map[string]bool{}
+	for action, fallback := range DefaultKeybindings {
+		shortcut := t.Keybindings[action]
+		if shortcut == "" {
+			shortcut = fallback
+		}
+		reserved := map[string]bool{"ctrl+c": true, "ctrl+h": true, "ctrl+l": true, "ctrl+n": true, "ctrl+e": true, "ctrl+b": true, "ctrl+y": true, "ctrl+r": true}
+		if reserved[shortcut] || !validShortcut(shortcut) {
+			return fmt.Errorf("invalid shortcut for %s: use a free ctrl+letter or alt+letter", action)
+		}
+		if seen[shortcut] {
+			return fmt.Errorf("shortcut %s is assigned twice", shortcut)
+		}
+		seen[shortcut] = true
+	}
+	for action := range t.Keybindings {
+		if _, ok := DefaultKeybindings[action]; !ok {
+			return fmt.Errorf("unknown shortcut action %s", action)
+		}
+	}
+	return nil
+}
+
+func inspectSettingsParents(path string) error {
+	for parent := filepath.Dir(path); parent != "."; parent = filepath.Dir(parent) {
+		stat, e := os.Lstat(parent)
+		if e != nil && !errors.Is(e, os.ErrNotExist) {
+			return fmt.Errorf("cannot inspect configuration parent")
+		}
+		if e == nil && (!stat.IsDir() || stat.Mode()&os.ModeSymlink != 0) {
+			return fmt.Errorf("configuration parents must not be symlinks")
+		}
+		if filepath.Dir(parent) == parent {
+			break
+		}
+	}
+	return nil
+}
+
+type effectiveConfigProjection struct {
+	global, project map[string]any
+	values          []EffectiveValue
+}
+
+func (p *effectiveConfigProjection) walk(m map[string]any, prefix string) {
+
+	for k, v := range m {
+		path := k
+		if prefix != "" {
+			path = prefix + "." + k
+		}
+		if nested, ok := v.(map[string]any); ok && !sensitiveName(k) {
+			p.walk(nested, path)
+			continue
+		}
+		p.values = append(p.values, p.leaf(k, path, v))
+	}
+
+}
+func (p *effectiveConfigProjection) appendDefaults(doc map[string]any) {
+	for _, s := range UserSettings {
+		if _, ok := atPath(doc, s.Path); !ok {
+			origin := "default"
+			if _, ok := atPath(p.global, s.Path); ok {
+				origin = "global"
+			}
+			if _, ok := atPath(p.project, s.Path); ok {
+				origin = "project"
+			}
+			p.values = append(p.values, EffectiveValue{s.Path, s.Default, origin, false})
+		}
+	}
+}
+
+func (p *effectiveConfigProjection) leaf(k, path string, v any) EffectiveValue {
+	origin := "default"
+	if _, ok := atPath(p.global, path); ok {
+		origin = "global"
+	}
+	if _, ok := atPath(p.project, path); ok && !strings.HasPrefix(path, "security.") && !strings.HasPrefix(path, "extensions.") {
+		origin = "project"
+	}
+	secret := sensitiveName(k) || k == "args"
+	value := v
+	if secret {
+		if v != nil && fmt.Sprint(v) != "" {
+			value = "[redacted]"
+		}
+	} else if s, ok := v.(string); ok {
+		value = safeValue(s)
+	}
+	return EffectiveValue{path, value, origin, secret}
+}
+
+func attributeEffectiveOrigin(e *EffectiveValue, doc map[string]any) {
+
+	if name := environmentSettingOrigin(e.Path); name != "" {
+		e.Origin = "environment (" + name + ")"
+	}
+	if strings.HasPrefix(e.Path, "providerProfiles.") || strings.HasPrefix(e.Path, "providers.") {
+		parts := strings.Split(e.Path, ".")
+		if len(parts) == 3 && parts[2] == "apiKey" {
+			attributeAPIKeyOrigin(e, doc, parts)
+		}
+		if e.Path == "providers.local.baseURL" && referenceEnvironment("LOCAL_ENDPOINT") != "" {
+			e.Origin = "environment (LOCAL_ENDPOINT)"
+		}
+	}
+
+}
+
+func attributeAPIKeyOrigin(e *EffectiveValue, doc map[string]any, parts []string) {
+
+	prefix := parts[0] + "." + parts[1]
+	if ref, ok := atPath(doc, prefix+".apiKeyRef"); ok && ref != "" {
+		e.Origin = "native vault"
+	} else if ref, ok := atPath(doc, prefix+".apiKeyEnv"); ok && ref != "" {
+		if name := referenceEnvironment(fmt.Sprint(ref)); name != "" {
+			e.Origin = "environment (" + name + ")"
+		}
+	} else if parts[0] == "providers" {
+		if name := referenceEnvironment(ProviderEnvironmentName(models.ModelProvider(parts[1]))); name != "" {
+			e.Origin = "environment (" + name + ")"
+		}
+	}
+
+}
+
+func editableSettingValue(setting *Setting, input string) (any, error) {
+	var value any
+
+	switch setting.Default.(type) {
+	case bool:
+		if input != "true" && input != "false" {
+			return nil, fmt.Errorf("use true or false")
+		}
+		value = input == "true"
+	case int:
+		var n int
+		if _, e := fmt.Sscanf(input, "%d", &n); e != nil || fmt.Sprint(n) != strings.TrimSpace(input) {
+			return nil, fmt.Errorf("use an integer")
+		}
+		value = n
+	default:
+		value = strings.TrimSpace(input)
+	}
+
+	return value, nil
+}
+
+func settingParentNode(node map[string]any, parts []string) map[string]any {
 	for _, p := range parts[:len(parts)-1] {
 		child, ok := node[p].(map[string]any)
 		if !ok {
@@ -426,18 +483,31 @@ func SaveUserSetting(path, input string, reset bool) error {
 		}
 		node = child
 	}
+	return node
+}
+
+func candidateSetting(parts []string, value any) (Config, error) {
+	raw, _ := json.Marshal(cfg)
+	var candidate map[string]any
+	_ = json.Unmarshal(raw, &candidate)
+	node := candidate
+	node = settingParentNode(node, parts)
 	node[parts[len(parts)-1]] = value
 	raw, _ = json.Marshal(candidate)
 	var next Config
 	if err := json.Unmarshal(raw, &next); err != nil {
-		return err
+		return Config{}, err
 	}
 	if err := next.TUI.Validate(); err != nil {
-		return err
+		return Config{}, err
 	}
 	if err := next.Runtime.Validate(); err != nil {
-		return err
+		return Config{}, err
 	}
+	return next, nil
+}
+
+func writeSettingDocument(targetPath string, target map[string]any, originalDocument []byte) error {
 	currentDocument, err := readSettingsDocument(targetPath)
 	if err != nil {
 		return err
@@ -475,23 +545,23 @@ func SaveUserSetting(path, input string, reset bool) error {
 	if err = os.Rename(temp, targetPath); err != nil {
 		return err
 	}
-	cfg.TUI = next.TUI
-	cfg.Preferences = next.Preferences
-	cfg.Runtime = next.Runtime.Defaults()
 	return nil
 }
 
-type ProviderPreset struct {
-	ID      string
-	Profile ProviderProfile
+func editableSetting(path string) *Setting {
+	var setting *Setting
+	for i := range UserSettings {
+		if UserSettings[i].Path == path {
+			setting = &UserSettings[i]
+			break
+		}
+	}
+	return setting
 }
 
-var ProviderPresets = []ProviderPreset{
-	{"ollama", ProviderProfile{Name: "Ollama", Backend: models.ProviderLocal, Provider: Provider{BaseURL: "http://127.0.0.1:11434/v1", API: "ollama", ContextWindow: 0, DefaultMaxTokens: 2048}}},
-	{"lmstudio", ProviderProfile{Name: "LM Studio", Backend: models.ProviderLocal, Provider: Provider{BaseURL: "http://127.0.0.1:1234/v1", API: "chat_completions", ContextWindow: 0, DefaultMaxTokens: 2048}}},
-	{"openai", ProviderProfile{Name: "OpenAI", Backend: models.ProviderOpenAI, Provider: Provider{APIKeyEnv: "OPENAI_API_KEY"}}},
-	{"anthropic", ProviderProfile{Name: "Anthropic", Backend: models.ProviderAnthropic, Provider: Provider{APIKeyEnv: "ANTHROPIC_API_KEY"}}},
-	{"gemini", ProviderProfile{Name: "Gemini", Backend: models.ProviderGemini, Provider: Provider{APIKeyEnv: "GEMINI_API_KEY"}}},
-	{"openrouter", ProviderProfile{Name: "OpenRouter", Backend: models.ProviderOpenRouter, Provider: Provider{APIKeyEnv: "OPENROUTER_API_KEY"}}},
-	{"openai-compatible", ProviderProfile{Name: "OpenAI compatible", Backend: models.ProviderLocal, Provider: Provider{API: "chat_completions"}}},
+func settingValue(setting *Setting, input string, reset bool) (any, error) {
+	if reset {
+		return nil, nil
+	}
+	return editableSettingValue(setting, input)
 }

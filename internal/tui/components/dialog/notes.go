@@ -10,23 +10,8 @@ import (
 )
 
 func (m *providerDialogCmp) noteUpdate(msg tea.Msg) bool {
-	if k, ok := msg.(tea.KeyMsg); ok {
-		if k.String() == "ctrl+d" && m.note != "" && m.screen != "list" {
-			m.noteFull = !m.noteFull
-			m.noteOffset = 0
-			return true
-		}
-		if m.noteFull {
-			switch k.String() {
-			case "esc":
-				m.noteFull = false
-			case "up", "pgup":
-				m.noteOffset = max(0, m.noteOffset-1)
-			case "down", "pgdown":
-				m.noteOffset++
-			}
-			return true
-		}
+	if result0, handled := noteUpdateTeaKeyMsg(m, msg); handled {
+		return result0
 	}
 	if m.noteFull {
 		switch event := msg.(type) {
@@ -60,4 +45,26 @@ func (m *providerDialogCmp) noteView() string {
 	body := append([]string{config.Text("Detalhes", "Details")}, lines[m.noteOffset:min(len(lines), m.noteOffset+rows)]...)
 	body = append(body, config.Text("↑↓ rola · Esc volta", "↑↓ scroll · Esc back"))
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Width(width + 4).Render(strings.Join(body, "\n"))
+}
+
+func noteUpdateTeaKeyMsg(m *providerDialogCmp, msg tea.Msg) (extractedResult0 bool, handled bool) {
+	if k, ok := msg.(tea.KeyMsg); ok {
+		if k.String() == "ctrl+d" && m.note != "" && m.screen != "list" {
+			m.noteFull = !m.noteFull
+			m.noteOffset = 0
+			return true, true
+		}
+		if m.noteFull {
+			switch k.String() {
+			case "esc":
+				m.noteFull = false
+			case "up", "pgup":
+				m.noteOffset = max(0, m.noteOffset-1)
+			case "down", "pgdown":
+				m.noteOffset++
+			}
+			return true, true
+		}
+	}
+	return extractedResult0, false
 }

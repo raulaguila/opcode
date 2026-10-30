@@ -123,42 +123,7 @@ func InspectLanguageSupport(ctx context.Context, detectProject bool) (LanguageSu
 	sort.Strings(names)
 	cfg := config.Get()
 	for _, name := range names {
-		entry := LanguageSupportEntry{Language: name, Recognition: name != "text", LocalParser: name == "go" || localParsers[name] != nil,
-			SemanticReferences: "configured LSP only", ConfiguredServers: []LanguageServerState{}, ConfiguredChecks: []string{}, SuggestedServers: []LanguageServerSuggestion{}, ProjectFiles: languages[name]}
-		entry.ParserFixture = registered[name].ParserFixture
-		if cfg != nil {
-			for key, server := range cfg.LSP {
-				types := server.FileTypes
-				if len(types) == 0 {
-					types = lsp.Presets[filepath.Base(server.Command)].Languages
-				}
-				if languageServerMatches(name, types) {
-					_, err := exec.LookPath(server.Command)
-					entry.ConfiguredServers = append(entry.ConfiguredServers, LanguageServerState{Name: key, Disabled: server.Disabled, ExecutableAvailable: err == nil})
-				}
-			}
-			for check := range cfg.Checks {
-				entry.ConfiguredChecks = append(entry.ConfiguredChecks, check)
-			}
-		}
-		sort.Slice(entry.ConfiguredServers, func(i, j int) bool { return entry.ConfiguredServers[i].Name < entry.ConfiguredServers[j].Name })
-		sort.Strings(entry.ConfiguredChecks)
-		servers := []string{}
-		for command, preset := range lsp.Presets {
-			if languageServerMatches(name, preset.Languages) {
-				servers = append(servers, command)
-			}
-		}
-		sort.Strings(servers)
-		for _, command := range servers[:min(2, len(servers))] {
-			_, err := exec.LookPath(command)
-			args := slices.Clone(languageServerArgs[command])
-			if args == nil {
-				args = []string{}
-			}
-			entry.SuggestedServers = append(entry.SuggestedServers, LanguageServerSuggestion{Command: command, Args: args, ExecutableAvailable: err == nil, RootMarkers: slices.Clone(lsp.Presets[command].RootMarkers)})
-		}
-		report.Languages = append(report.Languages, entry)
+		report.Languages = append(report.Languages, languageSupportEntry(name, languages[name], registered[name].ParserFixture, cfg))
 	}
 	return report, nil
 }
@@ -176,37 +141,12 @@ func (*languageSupportTool) Info() ToolInfo {
 }
 
 func (*languageSupportTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
-	var p struct {
-		Language string `json:"language"`
-		Offset   int    `json:"offset"`
-		Limit    int    `json:"limit"`
-		Detect   bool   `json:"detect_project"`
-		Summary  bool   `json:"summary"`
-	}
+	var p languageInventoryParams
 	if call.Input != "" && (json.Unmarshal([]byte(call.Input), &p) != nil || p.Offset < 0 || p.Limit < 0 || len(p.Language) > 80) {
 		return NewTextErrorResponse("invalid language inventory parameters"), nil
 	}
 	if p.Summary {
-		if err := ctx.Err(); err != nil {
-			return ToolResponse{}, err
-		}
-		if p.Detect {
-			return NewTextErrorResponse("summary inventories Opcode parsers only; use a separate call for detect_project"), nil
-		}
-		if p.Language != "" {
-			return NewTextErrorResponse("summary returns paged profile names; use the full inventory for language filtering"), nil
-		}
-		names := []string{}
-		for _, entry := range RegisteredLanguageSupport() {
-			names = append(names, entry.Language)
-		}
-		limit := p.Limit
-		if limit == 0 {
-			limit = 10
-		}
-		start := min(p.Offset, len(names))
-		end := min(start+min(limit, 20), len(names))
-		return jsonToolResult(map[string]any{"scope": "opcode_parser_capabilities", "profile_count": len(names), "supported_languages": names[start:end], "more": end < len(names), "next_offset": end, "note": "Includes the standard Go parser. This inventories Opcode tooling, not a third-party project's features. Detected project file types are not parser profiles."}), nil
+		return languageInventorySummary(ctx, p)
 	}
 	report, err := InspectLanguageSupport(ctx, p.Detect)
 	if err != nil {
@@ -228,4 +168,84 @@ func (*languageSupportTool) Run(ctx context.Context, call ToolCall) (ToolRespons
 	end := min(start+min(limit, 20), len(items))
 	return jsonToolResult(map[string]any{"profile_count": len(RegisteredLanguageSupport()), "languages": items[start:end], "total": len(items), "next_offset": end, "more": end < len(items), "project_inspected": report.ProjectInspected, "files_inspected": report.FilesInspected, "truncated": report.Truncated, "note": report.Note,
 		"other_languages": "text search and optional configured LSP", "parser": fmt.Sprintf("Go standard parser and %d selected pure Go gotreesitter grammars", len(localParsers))}), nil
+}
+
+func languageSupportEntry(name string, files int, fixture bool, cfg *config.Config) LanguageSupportEntry {
+	entry := LanguageSupportEntry{Language: name, Recognition: name != "text", LocalParser: name == "go" || localParsers[name] != nil,
+		SemanticReferences: "configured LSP only", ConfiguredServers: configuredLanguageServers(name, cfg), ConfiguredChecks: []string{}, SuggestedServers: suggestedLanguageServers(name), ProjectFiles: files, ParserFixture: fixture}
+	if cfg != nil {
+		for check := range cfg.Checks {
+			entry.ConfiguredChecks = append(entry.ConfiguredChecks, check)
+		}
+	}
+	sort.Slice(entry.ConfiguredServers, func(i, j int) bool { return entry.ConfiguredServers[i].Name < entry.ConfiguredServers[j].Name })
+	sort.Strings(entry.ConfiguredChecks)
+	return entry
+}
+func configuredLanguageServers(name string, cfg *config.Config) []LanguageServerState {
+	servers := []LanguageServerState{}
+	if cfg == nil {
+		return servers
+	}
+	for key, server := range cfg.LSP {
+		types := server.FileTypes
+		if len(types) == 0 {
+			types = lsp.Presets[filepath.Base(server.Command)].Languages
+		}
+		if languageServerMatches(name, types) {
+			_, err := exec.LookPath(server.Command)
+			servers = append(servers, LanguageServerState{Name: key, Disabled: server.Disabled, ExecutableAvailable: err == nil})
+		}
+	}
+	return servers
+}
+func suggestedLanguageServers(name string) []LanguageServerSuggestion {
+	servers := []string{}
+	for command, preset := range lsp.Presets {
+		if languageServerMatches(name, preset.Languages) {
+			servers = append(servers, command)
+		}
+	}
+	sort.Strings(servers)
+	suggestions := []LanguageServerSuggestion{}
+	for _, command := range servers[:min(2, len(servers))] {
+		_, err := exec.LookPath(command)
+		args := slices.Clone(languageServerArgs[command])
+		if args == nil {
+			args = []string{}
+		}
+		suggestions = append(suggestions, LanguageServerSuggestion{Command: command, Args: args, ExecutableAvailable: err == nil, RootMarkers: slices.Clone(lsp.Presets[command].RootMarkers)})
+	}
+	return suggestions
+}
+
+type languageInventoryParams struct {
+	Language string `json:"language"`
+	Offset   int    `json:"offset"`
+	Limit    int    `json:"limit"`
+	Detect   bool   `json:"detect_project"`
+	Summary  bool   `json:"summary"`
+}
+
+func languageInventorySummary(ctx context.Context, p languageInventoryParams) (ToolResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return ToolResponse{}, err
+	}
+	if p.Detect {
+		return NewTextErrorResponse("summary inventories Opcode parsers only; use a separate call for detect_project"), nil
+	}
+	if p.Language != "" {
+		return NewTextErrorResponse("summary returns paged profile names; use the full inventory for language filtering"), nil
+	}
+	names := []string{}
+	for _, entry := range RegisteredLanguageSupport() {
+		names = append(names, entry.Language)
+	}
+	limit := p.Limit
+	if limit == 0 {
+		limit = 10
+	}
+	start := min(p.Offset, len(names))
+	end := min(start+min(limit, 20), len(names))
+	return jsonToolResult(map[string]any{"scope": "opcode_parser_capabilities", "profile_count": len(names), "supported_languages": names[start:end], "more": end < len(names), "next_offset": end, "note": "Includes the standard Go parser. This inventories Opcode tooling, not a third-party project's features. Detected project file types are not parser profiles."}), nil
 }

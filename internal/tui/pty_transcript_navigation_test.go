@@ -68,7 +68,7 @@ func TestPTYTranscriptSearchAndKeyboardSelection(t *testing.T) {
 	h.wait("keyboard selection", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "Shift+arrows") && !strings.Contains(frame, "Find:")
 	})
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		h.send("\x1b[57351;2u")
 	}
 	h.send("\x03")

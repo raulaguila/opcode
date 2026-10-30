@@ -47,7 +47,11 @@ func (s MCPServer) ValidateOAuth() error {
 	if o.ClientSecretEnv != "" && !validEnvironmentName(o.ClientSecretEnv) {
 		return fmt.Errorf("OAuth clientSecretEnv requires an environment variable name")
 	}
-	for _, scope := range o.Scopes {
+	return validateOAuthScopesAndHeaders(s)
+}
+
+func validateOAuthScopesAndHeaders(s MCPServer) error {
+	for _, scope := range s.OAuth.Scopes {
 		if scope == "" || len(scope) > 256 || strings.ContainsAny(scope, " \r\n\x00\t") {
 			return fmt.Errorf("invalid OAuth scope")
 		}

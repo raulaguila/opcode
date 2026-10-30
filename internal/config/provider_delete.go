@@ -26,118 +26,27 @@ func DeleteProvider(id string, legacy bool) error {
 	} else if _, ok := cfg.ProviderProfiles[id]; !ok {
 		return fmt.Errorf("provider profile not configured")
 	}
-	matches := func(key models.ModelID, model models.Model) bool {
-		if model.Provider == "" {
-			if known, ok := models.SupportedModels[key]; ok {
-				model = known
-			}
-		}
-		if legacy {
-			return model.ProviderProfile == "" && (model.Provider == models.ModelProvider(id) || model.Provider == "" && strings.HasPrefix(string(key), id+"."))
-		}
-		return model.ProviderProfile == id || strings.HasPrefix(string(key), "profile."+id+".")
-	}
-	checkAgents := func(c *Config) error {
-		var users []string
-		for name, agent := range c.Agents {
-			if agent.Model != "" && matches(agent.Model, c.Models[agent.Model]) {
-				users = append(users, string(name))
-			}
-		}
-		slices.Sort(users)
-		if len(users) > 0 {
-			return fmt.Errorf(Text("Conexão usada por %s; escolha outros modelos antes de excluir", "Connection used by %s; choose replacement models before deleting"), strings.Join(users, ", "))
-		}
-		return nil
-	}
-	if err := checkAgents(cfg); err != nil {
+	d := providerDeletion{id: id, legacy: legacy}
+	if err := d.checkAgents(cfg); err != nil {
 		return err
 	}
-	type snapshot struct {
-		path string
-		raw  []byte
-	}
-	var snapshots []snapshot
-	seen := map[string]bool{}
-	for _, path := range []string{configuredFilePath(), ProjectConfigPath(cfg.WorkingDir)} {
-		if path == "" {
-			continue
-		}
-		path = filepath.Clean(path)
-		if seen[path] {
-			continue
-		}
-		seen[path] = true
-		raw, err := os.ReadFile(path)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("cannot read configuration for deletion: %w", err)
-		}
-		var file Config
-		var object map[string]json.RawMessage
-		if json.Unmarshal(raw, &file) != nil || json.Unmarshal(raw, &object) != nil || object == nil {
-			return fmt.Errorf("invalid configuration JSON; nothing deleted")
-		}
-		if err := checkAgents(&file); err != nil {
-			return err
-		}
-		_, touched := file.ProviderProfiles[id]
-		if legacy {
-			_, touched = file.Providers[models.ModelProvider(id)]
-			touched = touched || path == filepath.Clean(configuredFilePath())
-		}
-		for key, model := range file.Models {
-			touched = touched || matches(key, model)
-		}
-		if !touched {
-			continue
-		}
-		snapshots = append(snapshots, snapshot{path, raw})
+	snapshots, err := d.snapshots()
+	if err != nil {
+		return err
 	}
 	if len(snapshots) == 0 {
 		return fmt.Errorf("no configuration file available for deletion")
 	}
-	remove := func(c *Config) {
-		if legacy {
-			if c.Providers == nil {
-				c.Providers = map[models.ModelProvider]Provider{}
-			}
-			c.Providers[models.ModelProvider(id)] = Provider{Disabled: true}
-		} else {
-			delete(c.ProviderProfiles, id)
-		}
-		for key, model := range c.Models {
-			if matches(key, model) {
-				delete(c.Models, key)
-			}
-		}
-	}
-	for i, file := range snapshots {
-		raw := file.raw
-		var err error
-		if legacy {
-			raw, err = legacyRemovalMarker(raw, id)
-		}
-		if err == nil {
-			err = patchConfigFile(file.path, raw, remove)
-		}
-		if err != nil {
-			for j := i - 1; j >= 0; j-- {
-				if restoreErr := restoreProviderConfig(snapshots[j].path, snapshots[j].raw); restoreErr != nil {
-					err = errors.Join(err, fmt.Errorf("cannot restore prior configuration: %w", restoreErr))
-				}
-			}
-			return err
-		}
+
+	if err := d.apply(snapshots); err != nil {
+		return err
 	}
 	credentialMu.Lock()
-	remove(cfg)
+	d.remove(cfg)
 	credentialMu.Unlock()
 	if !legacy {
 		for key, model := range models.SupportedModels {
-			if matches(key, model) {
+			if d.matches(key, model) {
 				delete(models.SupportedModels, key)
 			}
 		}
@@ -188,4 +97,131 @@ func restoreProviderConfig(path string, raw []byte) error {
 		return err
 	}
 	return os.Rename(f.Name(), path)
+}
+
+type providerDeletion struct {
+	id     string
+	legacy bool
+}
+
+func (d providerDeletion) matches(key models.ModelID, model models.Model) bool {
+	if model.Provider == "" {
+		if known, ok := models.SupportedModels[key]; ok {
+			model = known
+		}
+	}
+	if d.legacy {
+		return model.ProviderProfile == "" && (model.Provider == models.ModelProvider(d.id) || model.Provider == "" && strings.HasPrefix(string(key), d.id+"."))
+	}
+	return model.ProviderProfile == d.id || strings.HasPrefix(string(key), "profile."+d.id+".")
+}
+func (d providerDeletion) checkAgents(c *Config) error {
+	var users []string
+	for name, agent := range c.Agents {
+		if agent.Model != "" && d.matches(agent.Model, c.Models[agent.Model]) {
+			users = append(users, string(name))
+		}
+	}
+	slices.Sort(users)
+	if len(users) > 0 {
+		return fmt.Errorf(Text("Conexão usada por %s; escolha outros modelos antes de excluir", "Connection used by %s; choose replacement models before deleting"), strings.Join(users, ", "))
+	}
+	return nil
+}
+
+type providerConfigSnapshot struct {
+	path string
+	raw  []byte
+}
+
+func (d providerDeletion) snapshots() ([]providerConfigSnapshot, error) {
+	var snapshots []providerConfigSnapshot
+	seen := map[string]bool{}
+	for _, path := range []string{configuredFilePath(), ProjectConfigPath(cfg.WorkingDir)} {
+		if path == "" {
+			continue
+		}
+		path = filepath.Clean(path)
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		raw, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("cannot read configuration for deletion: %w", err)
+		}
+		touched, err := d.touchesFile(path, raw)
+		if err != nil {
+			return nil, err
+		}
+		if !touched {
+			continue
+		}
+		snapshots = append(snapshots, providerConfigSnapshot{path, raw})
+	}
+	return snapshots, nil
+}
+
+func (d providerDeletion) remove(c *Config) {
+	if d.legacy {
+		if c.Providers == nil {
+			c.Providers = map[models.ModelProvider]Provider{}
+		}
+		c.Providers[models.ModelProvider(d.id)] = Provider{Disabled: true}
+	} else {
+		delete(c.ProviderProfiles, d.id)
+	}
+	for key, model := range c.Models {
+		if d.matches(key, model) {
+			delete(c.Models, key)
+		}
+	}
+}
+
+func (d providerDeletion) apply(snapshots []providerConfigSnapshot) error {
+	for i, file := range snapshots {
+		raw := file.raw
+		var err error
+		if d.legacy {
+			raw, err = legacyRemovalMarker(raw, d.id)
+		}
+		if err == nil {
+			err = patchConfigFile(file.path, raw, d.remove)
+		}
+		if err != nil {
+			for j := i - 1; j >= 0; j-- {
+				if restoreErr := restoreProviderConfig(snapshots[j].path, snapshots[j].raw); restoreErr != nil {
+					err = errors.Join(err, fmt.Errorf("cannot restore prior configuration: %w", restoreErr))
+				}
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (d providerDeletion) touchesFile(path string, raw []byte) (bool, error) {
+	var file Config
+	var object map[string]json.RawMessage
+	if json.Unmarshal(raw, &file) != nil || json.Unmarshal(raw, &object) != nil || object == nil {
+		return false, fmt.Errorf("invalid configuration JSON; nothing deleted")
+	}
+	if err := d.checkAgents(&file); err != nil {
+		return false, err
+	}
+	_, touched := file.ProviderProfiles[d.id]
+	if d.legacy {
+		_, touched = file.Providers[models.ModelProvider(d.id)]
+		touched = touched || path == filepath.Clean(configuredFilePath())
+	}
+	for key, model := range file.Models {
+		touched = touched || d.matches(key, model)
+	}
+	if !touched {
+		return false, nil
+	}
+	return true, nil
 }

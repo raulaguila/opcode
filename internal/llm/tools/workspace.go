@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"io/fs"
 	"os"
@@ -24,73 +25,90 @@ func WorkspaceDigest(ctx context.Context) (string, error) {
 		return "", err
 	}
 	defer root.Close()
-	hash := sha256.New()
-	count := 0
-	var total int64
-	err = fs.WalkDir(root.FS(), ".", func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		full := filepath.Join(rootPath, filepath.FromSlash(path))
-		if path != "." {
-			skip := shell.SensitivePath(full)
-			if cfg := config.Get(); cfg != nil && cfg.Data.Directory != "" && inside(absolutePath(cfg.Data.Directory), full) {
-				skip = true
-			}
-			if entry.IsDir() {
-				switch entry.Name() {
-				case "node_modules", "vendor", ".venv", "venv", "__pycache__", "target", "dist", "build", ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache", "htmlcov", "coverage":
-					skip = true
-				}
-				if skip {
-					return fs.SkipDir
-				}
-			} else if skip {
-				return nil
-			}
-		}
-		if entry.IsDir() {
-			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			fmt.Fprintf(hash, "link:%s\x00", path)
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			return nil
-		}
-		count++
-		total += info.Size()
-		if count > 20000 || total > 128<<20 || info.Size() > 16<<20 {
-			return fmt.Errorf("workspace exceeds validation fingerprint limit (20000 files, 128 MiB total, 16 MiB per file)")
-		}
-		file, err := root.Open(filepath.FromSlash(path))
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(hash, "%d:%s:%d\x00", len(path), path, info.Size())
-		_, readErr := io.Copy(hash, io.LimitReader(file, 16<<20+1))
-		closeErr := file.Close()
-		if readErr != nil {
-			return readErr
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-		fmt.Fprint(hash, "\x00")
-		return nil
-	})
-	if err != nil {
+	walker := workspaceHasher{ctx: ctx, root: root, rootPath: rootPath, digest: sha256.New()}
+	if err := fs.WalkDir(root.FS(), ".", walker.visit); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
+	return hex.EncodeToString(walker.digest.Sum(nil)), nil
+}
+
+type workspaceHasher struct {
+	ctx      context.Context
+	root     *os.Root
+	rootPath string
+	digest   hash.Hash
+	count    int
+	total    int64
+}
+
+func (w *workspaceHasher) visit(path string, entry fs.DirEntry, walkErr error) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	if err := w.ctx.Err(); err != nil {
+		return err
+	}
+	if path != "." && w.excluded(path, entry) {
+		if entry.IsDir() {
+			return fs.SkipDir
+		}
+		return nil
+	}
+	if entry.IsDir() {
+		return nil
+	}
+	if entry.Type()&os.ModeSymlink != 0 {
+		fmt.Fprintf(w.digest, "link:%s\x00", path)
+		return nil
+	}
+	info, err := entry.Info()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return nil
+	}
+	w.count++
+	w.total += info.Size()
+	if w.count > 20000 || w.total > 128<<20 || info.Size() > 16<<20 {
+		return fmt.Errorf("workspace exceeds validation fingerprint limit (20000 files, 128 MiB total, 16 MiB per file)")
+	}
+	return w.writeFile(path, info.Size())
+}
+
+func (w *workspaceHasher) excluded(path string, entry fs.DirEntry) bool {
+	full := filepath.Join(w.rootPath, filepath.FromSlash(path))
+	if shell.SensitivePath(full) {
+		return true
+	}
+	if cfg := config.Get(); cfg != nil && cfg.Data.Directory != "" && inside(absolutePath(cfg.Data.Directory), full) {
+		return true
+	}
+	if !entry.IsDir() {
+		return false
+	}
+	switch entry.Name() {
+	case "node_modules", "vendor", ".venv", "venv", "__pycache__", "target", "dist", "build", ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache", "htmlcov", "coverage":
+		return true
+	}
+	return false
+}
+func (w *workspaceHasher) writeFile(path string, size int64) error {
+	file, err := w.root.Open(filepath.FromSlash(path))
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(w.digest, "%d:%s:%d\x00", len(path), path, size)
+	_, readErr := io.Copy(w.digest, io.LimitReader(file, 16<<20+1))
+	closeErr := file.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	fmt.Fprint(w.digest, "\x00")
+	return nil
 }
 
 func ProjectContextPaths(question string) []string {
@@ -120,12 +138,8 @@ func ProjectContextPaths(question string) []string {
 	groups := [][]string{{"README.md", "readme.md", "README.rst", "README"}, {"go.mod", "package.json", "pyproject.toml", "Cargo.toml", "pom.xml"}, {"main.go", "src/main.rs", "src/main.ts", "src/main.py", "main.py", "src/index.ts", "index.js"}, {"AGENTS.md"}}
 	var paths []string
 	for _, group := range groups {
-		for _, path := range group {
-			info, err := root.Lstat(path)
-			if err == nil && info.Mode().IsRegular() && !shell.SensitivePath(filepath.Join(config.WorkingDirectory(), path)) {
-				paths = append(paths, path)
-				break
-			}
+		if path := firstProjectContextPath(root, group); path != "" {
+			paths = append(paths, path)
 		}
 	}
 	return paths
@@ -150,4 +164,14 @@ func FileFingerprint(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func firstProjectContextPath(root *os.Root, paths []string) string {
+	for _, path := range paths {
+		info, err := root.Lstat(path)
+		if err == nil && info.Mode().IsRegular() && !shell.SensitivePath(filepath.Join(config.WorkingDirectory(), path)) {
+			return path
+		}
+	}
+	return ""
 }

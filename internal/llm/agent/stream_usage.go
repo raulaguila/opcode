@@ -52,6 +52,34 @@ func (a *agent) observeStreamUsage(s *streamUsage, event provider.ProviderEvent)
 }
 
 func (a *agent) observeStreamUsageAt(s *streamUsage, event provider.ProviderEvent, now time.Time) {
+	text := streamEventText(event)
+	if text == "" {
+		return
+	}
+	a.contextMu.Lock()
+	defer a.contextMu.Unlock()
+	s.outputBytes += int64(len(text))
+	s.samples++
+	if s.samples == 1 {
+		s.firstOutput, s.firstBytes = now, s.outputBytes
+	}
+	if s.sampleTokens(text, now) {
+		return
+	}
+	s.lastSample, s.source = now, "bytes/4 estimate"
+	s.tokens = float64(s.outputBytes-s.firstBytes) / 4
+}
+
+func (a *agent) finishStreamUsage(id string, s *streamUsage) {
+	a.contextMu.Lock()
+	defer a.contextMu.Unlock()
+	if a.streamUsages[id] == s {
+		delete(a.streamUsages, id)
+	}
+	s.text, s.codec = "", nil
+}
+
+func streamEventText(event provider.ProviderEvent) string {
 	var text string
 	switch event.Type {
 	case provider.EventContentDelta:
@@ -67,46 +95,32 @@ func (a *agent) observeStreamUsageAt(s *streamUsage, event provider.ProviderEven
 			text = event.ToolCall.Input
 		}
 	}
-	if text == "" {
-		return
-	}
-	a.contextMu.Lock()
-	defer a.contextMu.Unlock()
-	s.outputBytes += int64(len(text))
-	s.samples++
-	if s.samples == 1 {
-		s.firstOutput, s.firstBytes = now, s.outputBytes
-	}
-	if s.codec != nil {
-		if len(s.text)+len(text) <= streamTokenizerLimit {
-			s.text += text
-			// Count bounded text at most four times per second, not on UI ticks.
-			if s.samples == 1 || now.Sub(s.lastSample) >= 250*time.Millisecond {
-				if count, err := s.codec.Count(s.text); err == nil {
-					if s.samples == 1 {
-						s.firstTokens = count
-					}
-					s.tokens = float64(max(0, count-s.firstTokens))
-					s.lastSample, s.source = now, "compatible "+s.codec.GetName()+" estimate"
-					return
-				}
-				s.codec, s.text = nil, ""
-			} else {
-				return
-			}
-		} else {
-			s.codec, s.text = nil, ""
-		}
-	}
-	s.lastSample, s.source = now, "bytes/4 estimate"
-	s.tokens = float64(s.outputBytes-s.firstBytes) / 4
+
+	return text
 }
 
-func (a *agent) finishStreamUsage(id string, s *streamUsage) {
-	a.contextMu.Lock()
-	defer a.contextMu.Unlock()
-	if a.streamUsages[id] == s {
-		delete(a.streamUsages, id)
+// Caller holds contextMu; tokenization remains bounded and rate limited.
+func (s *streamUsage) sampleTokens(text string, now time.Time) bool {
+	if s.codec == nil {
+		return false
 	}
-	s.text, s.codec = "", nil
+	if len(s.text)+len(text) > streamTokenizerLimit {
+		s.codec, s.text = nil, ""
+		return false
+	}
+	s.text += text
+	if s.samples != 1 && now.Sub(s.lastSample) < 250*time.Millisecond {
+		return true
+	}
+	count, err := s.codec.Count(s.text)
+	if err != nil {
+		s.codec, s.text = nil, ""
+		return false
+	}
+	if s.samples == 1 {
+		s.firstTokens = count
+	}
+	s.tokens = float64(max(0, count-s.firstTokens))
+	s.lastSample, s.source = now, "compatible "+s.codec.GetName()+" estimate"
+	return true
 }

@@ -104,8 +104,8 @@ func SkipHidden(path string) bool {
 		"jspm_packages":    true,
 	}
 
-	parts := strings.Split(path, string(os.PathSeparator))
-	for _, part := range parts {
+	parts := strings.SplitSeq(path, string(os.PathSeparator))
+	for part := range parts {
 		if commonIgnoredDirs[part] {
 			return true
 		}
@@ -116,36 +116,16 @@ func SkipHidden(path string) bool {
 func GlobWithDoublestar(pattern, searchPath string, limit int) ([]string, bool, error) {
 	fsys := os.DirFS(searchPath)
 	relPattern := strings.TrimPrefix(pattern, "/")
-	var matches []FileInfo
+	collector := globCollector{searchPath: searchPath, limit: limit}
 
 	err := doublestar.GlobWalk(fsys, relPattern, func(path string, d fs.DirEntry) error {
-		if d.IsDir() {
-			return nil
-		}
-		if SkipHidden(path) {
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil {
-			return nil
-		}
-		absPath := path
-		if !strings.HasPrefix(absPath, searchPath) && searchPath != "." {
-			absPath = filepath.Join(searchPath, absPath)
-		} else if !strings.HasPrefix(absPath, "/") && searchPath == "." {
-			absPath = filepath.Join(searchPath, absPath) // Ensure relative paths are joined correctly
-		}
-
-		matches = append(matches, FileInfo{Path: absPath, ModTime: info.ModTime()})
-		if limit > 0 && len(matches) >= limit*2 {
-			return fs.SkipAll
-		}
-		return nil
+		return collector.collect(path, d)
 	})
 	if err != nil {
 		return nil, false, fmt.Errorf("glob walk error: %w", err)
 	}
 
+	matches := collector.matches
 	sort.Slice(matches, func(i, j int) bool {
 		return matches[i].ModTime.After(matches[j].ModTime)
 	})
@@ -161,4 +141,35 @@ func GlobWithDoublestar(pattern, searchPath string, limit int) ([]string, bool, 
 		results[i] = m.Path
 	}
 	return results, truncated, nil
+}
+
+type globCollector struct {
+	searchPath string
+	limit      int
+	matches    []FileInfo
+}
+
+func (c *globCollector) collect(path string, d fs.DirEntry) error {
+	if d.IsDir() {
+		return nil
+	}
+	if SkipHidden(path) {
+		return nil
+	}
+	info, err := d.Info()
+	if err != nil {
+		return nil
+	}
+	absPath := path
+	if !strings.HasPrefix(absPath, c.searchPath) && c.searchPath != "." {
+		absPath = filepath.Join(c.searchPath, absPath)
+	} else if !strings.HasPrefix(absPath, "/") && c.searchPath == "." {
+		absPath = filepath.Join(c.searchPath, absPath) // Ensure relative paths are joined correctly
+	}
+
+	c.matches = append(c.matches, FileInfo{Path: absPath, ModTime: info.ModTime()})
+	if c.limit > 0 && len(c.matches) >= c.limit*2 {
+		return fs.SkipAll
+	}
+	return nil
 }

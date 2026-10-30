@@ -34,7 +34,7 @@ func TestCredentialRedactionWhileSavingProvidersAndMCP(t *testing.T) {
 	t.Setenv("OPCODE_TEST_SOURCE_A", profileSecret)
 	t.Setenv("OPCODE_TEST_SOURCE_B", mcpSecret)
 	t.Setenv("OPCODE_TEST_SOURCE_C", legacySecret)
-	profile := config.ProviderProfile{Backend: models.ProviderLocal, Provider: config.Provider{BaseURL: "http://local.invalid/v1", API: "ollama", APIKeyEnv: "OPCODE_TEST_SOURCE_A"}}
+	profile := config.ProviderProfile{Backend: models.ProviderLocal, BaseURL: "http://local.invalid/v1", API: "ollama", APIKeyEnv: "OPCODE_TEST_SOURCE_A"}
 	server := config.MCPServer{Type: config.MCPHTTP, URL: "https://mcp.invalid/service", HeadersEnv: map[string]string{"Authorization": "OPCODE_TEST_SOURCE_B"}}
 	legacy := config.Provider{BaseURL: "http://local.invalid/v1", APIKeyEnv: "OPCODE_TEST_SOURCE_C"}
 	require.NoError(t, config.SaveProviderProfile("initial", profile))
@@ -43,27 +43,7 @@ func TestCredentialRedactionWhileSavingProvidersAndMCP(t *testing.T) {
 	stopped := make(chan struct{})
 	finished := make(chan int, 1)
 	failures := make(chan string, 1)
-	go func() {
-		count := 0
-		defer func() { finished <- count }()
-		payload := profileSecret + " " + mcpSecret + " " + legacySecret
-		for {
-			select {
-			case <-stopped:
-				return
-			default:
-			}
-			redacted := RedactCredentials(payload)
-			count++
-			if strings.Contains(redacted, profileSecret) || strings.Contains(redacted, mcpSecret) || strings.Contains(redacted, legacySecret) {
-				select {
-				case failures <- "configured credential survived redaction":
-				default:
-				}
-				return
-			}
-		}
-	}()
+	go observeCredentialRedaction(stopped, finished, failures, profileSecret, mcpSecret, legacySecret)
 	defer func() {
 		close(stopped)
 		require.Positive(t, <-finished)
@@ -73,7 +53,7 @@ func TestCredentialRedactionWhileSavingProvidersAndMCP(t *testing.T) {
 		default:
 		}
 	}()
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		profile.Name = fmt.Sprintf("Connection %d", i)
 		require.NoError(t, config.SaveProviderProfile(fmt.Sprintf("profile-%d", i), profile))
 		require.NoError(t, config.SaveIntegration(config.Integration{Kind: "mcp", Name: fmt.Sprintf("mcp-%d", i), MCP: server}))
@@ -85,4 +65,28 @@ func TestCredentialRedactionWhileSavingProvidersAndMCP(t *testing.T) {
 	for _, secret := range []string{profileSecret, mcpSecret, legacySecret} {
 		require.NotContains(t, string(data), secret)
 	}
+}
+
+func observeCredentialRedaction(stopped <-chan struct{}, finished chan<- int, failures chan<- string, profileSecret, mcpSecret, legacySecret string) {
+
+	count := 0
+	defer func() { finished <- count }()
+	payload := profileSecret + " " + mcpSecret + " " + legacySecret
+	for {
+		select {
+		case <-stopped:
+			return
+		default:
+		}
+		redacted := RedactCredentials(payload)
+		count++
+		if strings.Contains(redacted, profileSecret) || strings.Contains(redacted, mcpSecret) || strings.Contains(redacted, legacySecret) {
+			select {
+			case failures <- "configured credential survived redaction":
+			default:
+			}
+			return
+		}
+	}
+
 }

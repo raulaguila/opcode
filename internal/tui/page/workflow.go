@@ -88,18 +88,7 @@ func modeLabel(mode workflow.Mode) string {
 func (p *chatPage) planRows() []string {
 	task := p.workflow.task
 	rows := []string{config.Text(" Sessão: ", " Session: ") + p.session.ID}
-	if task.Contract != nil {
-		rows = append(rows, " "+config.Text("Resultado esperado: ", "Expected outcome: ")+task.Contract.Kind)
-		for _, target := range task.Contract.Targets {
-			rows = append(rows, " "+config.Text("Alvo: ", "Target: ")+panelText(target))
-		}
-		if len(task.Contract.Checks) > 0 {
-			rows = append(rows, " "+config.Text("Checks exigidos: ", "Required checks: ")+strings.Join(task.Contract.Checks, ", "))
-		}
-		for _, criterion := range task.Contract.Acceptance {
-			rows = append(rows, " "+config.Text("Aceite: ", "Acceptance: ")+panelText(criterion))
-		}
-	}
+	planRowsTaskContract(&task, &rows)
 	if task.Objective != "" {
 		rows = append(rows, " "+panelText(task.Objective))
 	}
@@ -174,15 +163,7 @@ func (p *chatPage) workflowView() string {
 	w := max(1, p.width-2)
 	task := p.workflow.task
 	line := fmt.Sprintf(" %s · /mode ask|plan|execute · /plan", modeLabel(p.mode()))
-	if len(task.Steps) > 0 {
-		done := 0
-		for _, step := range task.Steps {
-			if step.Status == "completed" {
-				done++
-			}
-		}
-		line = fmt.Sprintf(config.Text(" %s · Plano %d/%d · %s · /plan", " %s · Plan %d/%d · %s · /plan"), modeLabel(p.mode()), done, len(task.Steps), task.Status)
-	}
+	workflowViewTaskSteps(p, &task, &line)
 	if task.Contract != nil {
 		line = fmt.Sprintf(" %s · %s: %s · /contract · /plan", modeLabel(p.mode()), config.Text("Tarefa", "Task"), contractLabel(task.Contract.Kind))
 	}
@@ -207,23 +188,7 @@ func (p *chatPage) workflowView() string {
 		p.workflow.detailView.SetContent(ansi.Hardwrap(strings.Join(rows, "\n\n"), w, true))
 		return strings.Join([]string{lines[0], p.workflow.detailView.View(), " F2/Esc volta · ↑/↓/PgUp/PgDn rola"}, "\n")
 	}
-	if q.ID != "" {
-		// Keep the decision and answer visible even when the plan is expanded.
-		lines = lines[:1]
-		lines = append(lines, ansi.Truncate(config.Text(" Decisão: ", " Decision: ")+panelText(q.Question), w, "…"))
-		if q.Explanation != "" {
-			lines = append(lines, ansi.Truncate(" "+panelText(q.Explanation), w, "…"))
-		}
-		for i, choice := range q.Choices {
-			mark := " "
-			if p.workflow.choice == i {
-				mark = "›"
-			}
-			lines = append(lines, ansi.Truncate(fmt.Sprintf(" %s %d. %s", mark, i+1, panelText(choice)), w, "…"))
-		}
-		p.workflow.answer.Width = max(1, w-4)
-		lines = append(lines, " "+p.workflow.answer.View(), config.Text(" ↑/↓ escolhe · digitar responde · Enter envia · F2 detalhes · Esc cancela", " ↑/↓ choose · type to answer · Enter send · F2 details · Esc cancel"))
-	}
+	workflowViewQID(p, w, &lines, &q)
 	if len(lines) > height {
 		lines = lines[len(lines)-height:]
 	}
@@ -242,31 +207,15 @@ func (p *chatPage) questionKey(msg tea.KeyMsg) tea.Cmd {
 		p.workflow.details = !p.workflow.details
 		return p.resizeContent()
 	}
-	if p.workflow.details {
-		if msg.String() == "esc" || msg.String() == "enter" {
-			p.workflow.details = false
-			return p.resizeContent()
-		}
-		var cmd tea.Cmd
-		p.workflow.detailView, cmd = p.workflow.detailView.Update(msg)
-		return cmd
+	if result0, handled := questionKeyWorkflowDetails(p, &msg); handled {
+		return result0
 	}
 	switch msg.String() {
 	case "esc":
 		p.app.CoderAgent.Cancel(p.session.ID)
 		return nil
 	case "up", "down":
-		if len(q.Choices) > 0 {
-			if msg.String() == "down" {
-				p.workflow.choice = (p.workflow.choice + 1) % len(q.Choices)
-			} else {
-				if p.workflow.choice < 0 {
-					p.workflow.choice = 0
-				}
-				p.workflow.choice = (p.workflow.choice + len(q.Choices) - 1) % len(q.Choices)
-			}
-			p.workflow.answer.SetValue("")
-		}
+		questionKeyQChoices(p, &msg, &q)
 		return nil
 	case "enter":
 		answer := p.workflow.answer.Value()
@@ -314,23 +263,7 @@ func (p *chatPage) applyWorkflowCommand(command, value string) (tea.Cmd, error) 
 		p.refreshWorkflow()
 		return tea.Batch(p.resizeContent(), util.ReportInfo(config.Text("Modo: ", "Mode: ")+modeLabel(p.mode()))), nil
 	case "plan", "task":
-		if (command == "task" || command == "plan" && p.workflow.task.Objective != "") && value == "" {
-			return p.openTask(), nil
-		}
-		if value == "new" {
-			if err := p.app.CoderAgent.SetMode(ctx, p.session.ID, p.mode()); err != nil {
-				return nil, err
-			}
-			if _, err := p.app.Workflows.Reset(ctx, p.session.ID); err != nil {
-				return nil, err
-			}
-		}
-		p.workflow.expanded = !p.workflow.expanded
-		if p.workflow.expanded {
-			p.workflow.offset = -1
-		}
-		p.refreshWorkflow()
-		return p.resizeContent(), nil
+		return applyWorkflowCommandCasePlanTask(p, command, value, ctx)
 	case "resume":
 		return p.submitAgentMessage(resumeInstruction, nil, resumeInstruction), nil
 	}
@@ -364,4 +297,99 @@ func panelText(value string) string {
 		}
 		return r
 	}, ansi.Strip(tools.RedactCredentials(value)))
+}
+
+func workflowViewQID(p *chatPage, w int, lines *[]string, q *interaction.Question) {
+	if q.ID != "" {
+		// Keep the decision and answer visible even when the plan is expanded.
+		(*lines) = (*lines)[:1]
+		(*lines) = append((*lines), ansi.Truncate(config.Text(" Decisão: ", " Decision: ")+panelText(q.Question), w, "…"))
+		if q.Explanation != "" {
+			(*lines) = append((*lines), ansi.Truncate(" "+panelText(q.Explanation), w, "…"))
+		}
+		for i, choice := range q.Choices {
+			mark := " "
+			if p.workflow.choice == i {
+				mark = "›"
+			}
+			(*lines) = append((*lines), ansi.Truncate(fmt.Sprintf(" %s %d. %s", mark, i+1, panelText(choice)), w, "…"))
+		}
+		p.workflow.answer.Width = max(1, w-4)
+		(*lines) = append((*lines), " "+p.workflow.answer.View(), config.Text(" ↑/↓ escolhe · digitar responde · Enter envia · F2 detalhes · Esc cancela", " ↑/↓ choose · type to answer · Enter send · F2 details · Esc cancel"))
+	}
+}
+
+func questionKeyWorkflowDetails(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+	if p.workflow.details {
+		if msg.String() == "esc" || msg.String() == "enter" {
+			p.workflow.details = false
+			return p.resizeContent(), true
+		}
+		var cmd tea.Cmd
+		p.workflow.detailView, cmd = p.workflow.detailView.Update((*msg))
+		return cmd, true
+	}
+	return extractedResult0, false
+}
+
+func applyWorkflowCommandCasePlanTask(p *chatPage, command string, value string, ctx context.Context) (extractedResult0 tea.Cmd, extractedResult1 error) {
+	if (command == "task" || command == "plan" && p.workflow.task.Objective != "") && value == "" {
+		return p.openTask(), nil
+	}
+	if value == "new" {
+		if err := p.app.CoderAgent.SetMode(ctx, p.session.ID, p.mode()); err != nil {
+			return nil, err
+		}
+		if _, err := p.app.Workflows.Reset(ctx, p.session.ID); err != nil {
+			return nil, err
+		}
+	}
+	p.workflow.expanded = !p.workflow.expanded
+	if p.workflow.expanded {
+		p.workflow.offset = -1
+	}
+	p.refreshWorkflow()
+	return p.resizeContent(), nil
+
+}
+
+func workflowViewTaskSteps(p *chatPage, task *workflow.Task, line *string) {
+	if len(task.Steps) > 0 {
+		done := 0
+		for _, step := range task.Steps {
+			if step.Status == "completed" {
+				done++
+			}
+		}
+		(*line) = fmt.Sprintf(config.Text(" %s · Plano %d/%d · %s · /plan", " %s · Plan %d/%d · %s · /plan"), modeLabel(p.mode()), done, len(task.Steps), task.Status)
+	}
+}
+
+func questionKeyQChoices(p *chatPage, msg *tea.KeyMsg, q *interaction.Question) {
+	if len(q.Choices) > 0 {
+		if msg.String() == "down" {
+			p.workflow.choice = (p.workflow.choice + 1) % len(q.Choices)
+		} else {
+			if p.workflow.choice < 0 {
+				p.workflow.choice = 0
+			}
+			p.workflow.choice = (p.workflow.choice + len(q.Choices) - 1) % len(q.Choices)
+		}
+		p.workflow.answer.SetValue("")
+	}
+}
+
+func planRowsTaskContract(task *workflow.Task, rows *[]string) {
+	if task.Contract != nil {
+		(*rows) = append((*rows), " "+config.Text("Resultado esperado: ", "Expected outcome: ")+task.Contract.Kind)
+		for _, target := range task.Contract.Targets {
+			(*rows) = append((*rows), " "+config.Text("Alvo: ", "Target: ")+panelText(target))
+		}
+		if len(task.Contract.Checks) > 0 {
+			(*rows) = append((*rows), " "+config.Text("Checks exigidos: ", "Required checks: ")+strings.Join(task.Contract.Checks, ", "))
+		}
+		for _, criterion := range task.Contract.Acceptance {
+			(*rows) = append((*rows), " "+config.Text("Aceite: ", "Acceptance: ")+panelText(criterion))
+		}
+	}
 }

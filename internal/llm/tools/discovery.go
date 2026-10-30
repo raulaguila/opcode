@@ -89,18 +89,12 @@ func ExclusionReason(root, path string) string {
 		if info, err := os.Lstat(full); err == nil && info.Mode()&os.ModeSymlink != 0 {
 			return "symlink"
 		}
-		if shouldSkip(full, nil) || part == ".opcode-worktrees" || part == "venv" || part == ".venv" {
+		if fixedDiscoveryExclusion(full, part) {
 			return "hidden, generated or dependency path"
 		}
 		suffix := filepath.ToSlash(filepath.Join(parts[i:]...))
-		for _, name := range []string{".gitignore", ".opcodeignore"} {
-			matcher, e := directoryIgnore(dir, name)
-			if e != nil {
-				return "unreadable or unsafe ignore policy"
-			}
-			if matcher != nil && matcher.MatchesPath(suffix) {
-				return filepath.ToSlash(filepath.Join(strings.Join(parts[:i], "/"), name))
-			}
+		if reason := ignoreExclusionReason(dir, suffix, strings.Join(parts[:i], "/")); reason != "" {
+			return reason
 		}
 		if i < len(parts)-1 {
 			dir = full
@@ -138,4 +132,21 @@ func discoveryPolicyRoot(root string) string {
 		return filepath.Dir(root)
 	}
 	return root
+}
+
+func ignoreExclusionReason(dir, suffix, prefix string) string {
+	for _, name := range []string{".gitignore", ".opcodeignore"} {
+		matcher, e := directoryIgnore(dir, name)
+		if e != nil {
+			return "unreadable or unsafe ignore policy"
+		}
+		if matcher != nil && matcher.MatchesPath(suffix) {
+			return filepath.ToSlash(filepath.Join(prefix, name))
+		}
+	}
+	return ""
+}
+
+func fixedDiscoveryExclusion(full, part string) bool {
+	return shouldSkip(full, nil) || part == ".opcode-worktrees" || part == "venv" || part == ".venv"
 }

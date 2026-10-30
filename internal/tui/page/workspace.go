@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -367,8 +368,8 @@ func (p *chatPage) openChanges() tea.Cmd {
 	if err != nil {
 		return util.ReportError(err)
 	}
-	for i := len(turns) - 1; i >= 0; i-- {
-		turn := turns[i]
+	for _, turn := range slices.Backward(turns) {
+
 		state := "aplicado"
 		if turn.Undone {
 			state = "desfeito"
@@ -546,31 +547,7 @@ func (p *chatPage) openResponseActions(text string) tea.Cmd {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf(config.Text("Copiar código %d", "Copy code %d"), i+1), kind: "copy", text: match[1]})
 	}
 	seen := map[string]bool{}
-	for _, match := range regexp.MustCompile("`([^`\\n]+)`|([[:alnum:]_./-]+\\.[[:alnum:]]+:[0-9]+)").FindAllStringSubmatch(text, 40) {
-		path := match[1]
-		if path == "" {
-			path = match[2]
-		}
-		line := 1
-		if ix := strings.LastIndex(path, ":"); ix > 0 {
-			if _, err := fmt.Sscanf(path[ix+1:], "%d", &line); err == nil {
-				path = path[:ix]
-			}
-		}
-		if strings.ContainsAny(path, "\n\x00") || strings.Contains(path, "://") || seen[path] {
-			continue
-		}
-		absolute := path
-		if !filepath.IsAbs(absolute) {
-			absolute = filepath.Join(config.WorkingDirectory(), path)
-		}
-		info, err := os.Lstat(absolute)
-		if err != nil || info.IsDir() {
-			continue
-		}
-		seen[path] = true
-		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: config.Text("Abrir fonte · ", "Open source · ") + path, kind: "file", path: absolute, line: line})
-	}
+	appendCitationActions(p, text, seen)
 	p.workspace.body = config.Text("Escolha uma ação. Prévia de arquivo é leitura local e não libera alterações para o agente.", "Choose an action. File preview is a local read and does not authorize agent edits.")
 	return nil
 }
@@ -591,14 +568,7 @@ func (p *chatPage) openFile(path string, line int) tea.Cmd {
 func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 	previous := p.workspace
 	defer func() {
-		if previous.kind != "" && p.workspace.kind != "" && previous.kind != p.workspace.kind {
-			previous.cancel = nil
-			previous.loading = false
-			p.workspaceHistory = append(p.workspaceHistory, previous)
-			if len(p.workspaceHistory) > 8 {
-				p.workspaceHistory = p.workspaceHistory[len(p.workspaceHistory)-8:]
-			}
-		}
+		workspaceChooseKindWorkspaceKind(p, &previous)
 	}()
 	if p.workspace.loading {
 		return nil
@@ -619,14 +589,7 @@ func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 	case "setup-details", "setup-providers", "setup-models", "setup-probe", "setup-read", "setup-done", "setup-probe-confirm", "setup-read-confirm", "local-status":
 		return p.setupChoose(item.kind)
 	case "diff-file":
-		rendered := dialog.RenderReviewDiff(p.workspace.body, max(1, p.width-4), p.workspace.diffMode)
-		for i, line := range strings.Split(ansi.Strip(rendered), "\n") {
-			if strings.Contains(line, item.path) && (strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "File:") || strings.HasPrefix(line, "Arquivo:")) {
-				p.workspace.view.SetYOffset(i)
-				break
-			}
-		}
-		return nil
+		return workspaceChooseCaseDiffFile(p, &item)
 	case "queue":
 		return p.takeQueue(true)
 	case "skill":
@@ -642,110 +605,27 @@ func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 	case "file":
 		return p.openFile(item.path, item.line)
 	case "copy":
-		text := item.text
-		if clipboard.Remote() {
-			sequence, err := clipboard.OSC52(text)
-			if err != nil {
-				return util.ReportError(err)
-			}
-			p.workspace.seq++
-			p.workspace.loading = true
-			return util.CmdHandler(TerminalClipboardMsg{Sequence: sequence, Session: p.session.ID, Request: p.workspace.seq})
-		}
-		p.workspace.seq++
-		p.workspace.loading = true
-		id, seq := p.session.ID, p.workspace.seq
-		return util.CmdHandler(util.CopyTextMsg{Text: text, Result: func(confirmed bool, err error) tea.Msg {
-			body := config.Text("Conteúdo copiado para a área de transferência.", "Content copied to clipboard.")
-			if err != nil {
-				err = fmt.Errorf(config.Text("clipboard indisponível; use Shift+arrastar ou Selecionar texto: %w", "clipboard unavailable; use Shift+drag or Select text: %w"), err)
-			}
-			if !confirmed {
-				body = config.Text("Cópia enviada ao terminal; recebimento não confirmado. Selecionar texto continua disponível.", "Copy sent to terminal; receipt unconfirmed. Text selection remains available.")
-			}
-			return WorkspaceResultMsg{session: id, seq: seq, body: body, err: err}
-		}})
+		return workspaceChooseCaseCopy(p, &item)
 	}
 	return nil
 }
 func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
-	if contextPanel(p.workspace.kind) && strings.Contains("1234", msg.String()) && len(msg.String()) == 1 {
-		return p.contextTab(msg.String())
+	if result0, handled := workspaceKeyContainsStringString(p, &msg); handled {
+		return result0
 	}
 	if p.workspace.kind == "contract" {
 		return p.contractKey(msg)
 	}
-	if p.workspace.loading && msg.String() != "esc" {
-		p.workspace.view, _ = p.workspace.view.Update(msg)
-		return nil
+	if result0, handled := workspaceKeyLoadingStringEsc(p, &msg); handled {
+		return result0
 	}
-	switch msg.String() {
-	case "m":
-		p.workspace.allActions = !p.workspace.allActions
-		return nil
-	case "d":
-		if p.workspace.details != "" {
-			p.workspace.showDetails = !p.workspace.showDetails
-			p.workspace.view.GotoTop()
-		}
-		return nil
-	case "t":
-		if p.workspace.kind == "turn" || p.workspace.kind == "review" {
-			switch p.workspace.diffMode {
-			case "unified":
-				p.workspace.diffMode = "split"
-			case "split":
-				p.workspace.diffMode = "auto"
-			default:
-				p.workspace.diffMode = "unified"
-			}
-		}
-		return nil
-	case "esc":
-		p.backWorkspace()
-		return nil
-	case "enter":
-		return p.workspaceChoose()
-	case "ctrl+j", "ctrl+enter":
-		if p.workspace.kind == "review" {
-			return p.applyReversal()
-		}
-	case "up":
-		if len(p.workspace.actions) > 0 {
-			p.workspace.selected = max(0, p.workspace.selected-1)
-			return nil
-		}
-	case "down":
-		if len(p.workspace.actions) > 0 {
-			p.workspace.selected = min(len(p.workspace.actions)-1, p.workspace.selected+1)
-			return nil
-		}
-	case "delete", "backspace":
-		if p.workspace.kind == "queue" {
-			return p.takeQueue(false)
-		}
-	case "u":
-		if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
-			return p.previewReversal(false)
-		}
-	case "r":
-		if p.workspace.kind == "context" {
-			return p.recalibrateContext()
-		}
-		if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
-			return p.previewReversal(true)
-		}
-		if p.workspace.kind == "permissions" {
-			p.app.Permissions.RevokeSession(p.session.ID)
-			return p.openPermissions()
-		}
-	case "c":
-		if p.workspace.kind == "context" {
-			return p.openContext(true)
-		}
-	case "ctrl+r":
-		return p.workspaceCommand(p.workspace.kind, "")
+	if cmd, handled := p.workspaceNavigationKey(msg); handled {
+		return cmd
 	}
+	if cmd, handled := p.workspaceActionKey(msg); handled {
+		return cmd
+	}
+
 	p.workspace.view, _ = p.workspace.view.Update(msg)
 	return nil
 }
@@ -761,24 +641,7 @@ func (p *chatPage) workspaceView() string {
 		h--
 	}
 	help := config.Text("↑↓/PgUp/PgDn rola · Ctrl+R atualiza · Esc volta", "↑↓/PgUp/PgDn scroll · Ctrl+R refresh · Esc back")
-	if len(p.workspace.actions) > 0 {
-		_, maxRows, start := p.workspaceActionGeometry()
-		for i := start; i < min(len(p.workspace.actions), start+maxRows); i++ {
-			style := styles.BaseStyle().Width(w)
-			mark := " "
-			if i == p.workspace.selected {
-				style = style.Background(t.Primary()).Foreground(t.Background())
-				mark = "›"
-			}
-			lines = append(lines, style.Render(ansi.Truncate(mark+" "+panelText(p.workspace.actions[i].label), w, "…")))
-		}
-		help = config.Text("↑↓ escolhe · Enter abre · Esc volta", "↑↓ choose · Enter open · Esc back")
-		h -= min(maxRows, len(p.workspace.actions))
-		if len(p.workspace.actions) > 3 {
-			lines = append(lines, config.Text("M mais/menos ações", "M more/fewer actions"))
-			h--
-		}
-	}
+	workspaceViewWorkspaceActions(p, w, &h, t, &lines, &help)
 	if p.workspace.kind == "queue" {
 		help = config.Text("Enter edita · Delete remove · Ctrl+R atualiza · Esc volta", "Enter edit · Delete remove · Ctrl+R refresh · Esc back")
 	}
@@ -796,15 +659,7 @@ func (p *chatPage) workspaceView() string {
 	}
 	p.workspace.view.Width = w
 	p.workspace.view.Height = max(1, h)
-	if p.workspace.kind == "turn" || p.workspace.kind == "review" {
-		p.workspace.view.SetContent(dialog.RenderReviewDiff(p.workspace.body, w, p.workspace.diffMode))
-	} else {
-		body := p.workspace.body
-		if p.workspace.showDetails {
-			body += "\n\n" + p.workspace.details
-		}
-		p.workspace.view.SetContent(ansi.Hardwrap(safePanel(body), w, true))
-	}
+	workspaceViewTurn(p, w)
 	if contextPanel(p.workspace.kind) {
 		lines = append(lines, ansi.Truncate(config.Text("1 Orçamento · 2 Índice · 3 Alocação · 4 Diagnóstico", "1 Budget · 2 Index · 3 Allocation · 4 Diagnostics"), w, "…"))
 		p.workspace.view.Height = max(1, p.workspace.view.Height-1)
@@ -861,24 +716,8 @@ func cloneUserAttachments(items []message.Attachment) []message.Attachment {
 	return result
 }
 func (p *chatPage) workspaceMouse(msg tea.MouseMsg) tea.Cmd {
-	if p.workspace.kind == "contract" {
-		if p.workspace.itemEditor != nil {
-			return nil
-		}
-		if msg.Button == tea.MouseButtonWheelUp {
-			return p.contractKey(tea.KeyMsg{Type: tea.KeyUp})
-		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			return p.contractKey(tea.KeyMsg{Type: tea.KeyDown})
-		}
-		count := max(1, min(len(p.workspace.fields), (p.height-7)/2))
-		start := max(0, min(p.workspace.focus-count+1, len(p.workspace.fields)-count))
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.Y >= 2 && msg.Y < 2+count*2 {
-			p.workspace.fields[p.workspace.focus].Blur()
-			p.workspace.focus = start + (msg.Y-2)/2
-			return p.workspace.fields[p.workspace.focus].Focus()
-		}
-		return nil
+	if result0, handled := workspaceMouseContract(p, &msg); handled {
+		return result0
 	}
 
 	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
@@ -906,8 +745,8 @@ func (p *chatPage) retryRequest(draft string) tea.Cmd {
 		err := fmt.Errorf("%s", config.Text("nenhuma pergunta anterior disponível", "no previous question available"))
 		return tea.Batch(util.ReportError(err), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: err}))
 	}
-	if strings.HasPrefix(p.lastRequest.Text, "/skill ") {
-		return p.invokeSkill(strings.TrimPrefix(p.lastRequest.Text, "/skill "), draft)
+	if after, ok := strings.CutPrefix(p.lastRequest.Text, "/skill "); ok {
+		return p.invokeSkill(after, draft)
 	}
 	text := p.lastRequest.Text + "\n\nRetome conferindo o progresso e o estado atual dos arquivos. Reutilize resultados existentes quando válidos e evite repetir operações já aplicadas."
 	original := p.lastRequest
@@ -1000,4 +839,265 @@ func (p *chatPage) workspaceActionGeometry() (first, rows, start int) {
 	}
 	start = max(0, min(p.workspace.selected-rows+1, len(p.workspace.actions)-rows))
 	return
+}
+
+func workspaceKeyChatPageR(p *chatPage) (extractedResult0 tea.Cmd, handled bool) {
+	if p.workspace.kind == "context" {
+		return p.recalibrateContext(), true
+	}
+	if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
+		return p.previewReversal(true), true
+	}
+	if p.workspace.kind == "permissions" {
+		p.app.Permissions.RevokeSession(p.session.ID)
+		return p.openPermissions(), true
+	}
+	return extractedResult0, false
+}
+
+func workspaceKeyChatPageT(p *chatPage) (extractedResult0 tea.Cmd) {
+	if p.workspace.kind == "turn" || p.workspace.kind == "review" {
+		switch p.workspace.diffMode {
+		case "unified":
+			p.workspace.diffMode = "split"
+		case "split":
+			p.workspace.diffMode = "auto"
+		default:
+			p.workspace.diffMode = "unified"
+		}
+	}
+	return nil
+
+}
+
+func workspaceChooseCaseDiffFile(p *chatPage, item *workspaceAction) (extractedResult0 tea.Cmd) {
+	rendered := dialog.RenderReviewDiff(p.workspace.body, max(1, p.width-4), p.workspace.diffMode)
+	for i, line := range strings.Split(ansi.Strip(rendered), "\n") {
+		if strings.Contains(line, item.path) && (strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "File:") || strings.HasPrefix(line, "Arquivo:")) {
+			p.workspace.view.SetYOffset(i)
+			break
+		}
+	}
+	return nil
+
+}
+
+func workspaceKeyContainsStringString(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+	if contextPanel(p.workspace.kind) && strings.Contains("1234", msg.String()) && len(msg.String()) == 1 {
+		return p.contextTab(msg.String()), true
+	}
+	return extractedResult0, false
+}
+
+func workspaceKeyLoadingStringEsc(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+	if p.workspace.loading && msg.String() != "esc" {
+		p.workspace.view, _ = p.workspace.view.Update((*msg))
+		return nil, true
+	}
+	return extractedResult0, false
+}
+
+func workspaceViewWorkspaceActions(p *chatPage, w int, h *int, t theme.Theme, lines *[]string, help *string) {
+	if len(p.workspace.actions) > 0 {
+		_, maxRows, start := p.workspaceActionGeometry()
+		for i := start; i < min(len(p.workspace.actions), start+maxRows); i++ {
+			style := styles.BaseStyle().Width(w)
+			mark := " "
+			if i == p.workspace.selected {
+				style = style.Background(t.Primary()).Foreground(t.Background())
+				mark = "›"
+			}
+			(*lines) = append((*lines), style.Render(ansi.Truncate(mark+" "+panelText(p.workspace.actions[i].label), w, "…")))
+		}
+		(*help) = config.Text("↑↓ escolhe · Enter abre · Esc volta", "↑↓ choose · Enter open · Esc back")
+		(*h) -= min(maxRows, len(p.workspace.actions))
+		if len(p.workspace.actions) > 3 {
+			(*lines) = append((*lines), config.Text("M mais/menos ações", "M more/fewer actions"))
+			(*h)--
+		}
+	}
+}
+
+func workspaceKeyCaseU(p *chatPage) (extractedResult0 tea.Cmd, handled bool) {
+	if p.workspace.kind == "changes" || p.workspace.kind == "turn" {
+		return p.previewReversal(false), true
+	}
+	return extractedResult0, false
+}
+
+func workspaceChooseKindWorkspaceKind(p *chatPage, previous *workspacePanel) {
+	if previous.kind != "" && p.workspace.kind != "" && previous.kind != p.workspace.kind {
+		previous.cancel = nil
+		previous.loading = false
+		p.workspaceHistory = append(p.workspaceHistory, (*previous))
+		if len(p.workspaceHistory) > 8 {
+			p.workspaceHistory = p.workspaceHistory[len(p.workspaceHistory)-8:]
+		}
+	}
+}
+
+func workspaceMouseContract(p *chatPage, msg *tea.MouseMsg) (extractedResult0 tea.Cmd, handled bool) {
+	if p.workspace.kind == "contract" {
+		if p.workspace.itemEditor != nil {
+			return nil, true
+		}
+		if msg.Button == tea.MouseButtonWheelUp {
+			return p.contractKey(tea.KeyMsg{Type: tea.KeyUp}), true
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			return p.contractKey(tea.KeyMsg{Type: tea.KeyDown}), true
+		}
+		count := max(1, min(len(p.workspace.fields), (p.height-7)/2))
+		start := max(0, min(p.workspace.focus-count+1, len(p.workspace.fields)-count))
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.Y >= 2 && msg.Y < 2+count*2 {
+			p.workspace.fields[p.workspace.focus].Blur()
+			p.workspace.focus = start + (msg.Y-2)/2
+			return p.workspace.fields[p.workspace.focus].Focus(), true
+		}
+		return nil, true
+	}
+	return extractedResult0, false
+}
+
+func appendCitationActions(p *chatPage, text string, seen map[string]bool) {
+	for _, match := range regexp.MustCompile("`([^`\\n]+)`|([[:alnum:]_./-]+\\.[[:alnum:]]+:[0-9]+)").FindAllStringSubmatch(text, 40) {
+		path := match[1]
+		if path == "" {
+			path = match[2]
+		}
+		line := 1
+		splitCitationLine(&path, &line)
+		if strings.ContainsAny(path, "\n\x00") || strings.Contains(path, "://") || seen[path] {
+			continue
+		}
+		absolute := path
+		if !filepath.IsAbs(absolute) {
+			absolute = filepath.Join(config.WorkingDirectory(), path)
+		}
+		info, err := os.Lstat(absolute)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		seen[path] = true
+		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: config.Text("Abrir fonte · ", "Open source · ") + path, kind: "file", path: absolute, line: line})
+	}
+}
+
+func splitCitationLine(path *string, line *int) {
+	if ix := strings.LastIndex((*path), ":"); ix > 0 {
+		if _, err := fmt.Sscanf((*path)[ix+1:], "%d", line); err == nil {
+			(*path) = (*path)[:ix]
+		}
+	}
+}
+
+func workspaceViewTurn(p *chatPage, w int) {
+	if p.workspace.kind == "turn" || p.workspace.kind == "review" {
+		p.workspace.view.SetContent(dialog.RenderReviewDiff(p.workspace.body, w, p.workspace.diffMode))
+	} else {
+		body := p.workspace.body
+		if p.workspace.showDetails {
+			body += "\n\n" + p.workspace.details
+		}
+		p.workspace.view.SetContent(ansi.Hardwrap(safePanel(body), w, true))
+	}
+}
+
+func workspaceChooseCaseCopy(p *chatPage, item *workspaceAction) (extractedResult0 tea.Cmd) {
+	text := item.text
+	if clipboard.Remote() {
+		sequence, err := clipboard.OSC52(text)
+		if err != nil {
+			return util.ReportError(err)
+		}
+		p.workspace.seq++
+		p.workspace.loading = true
+		return util.CmdHandler(TerminalClipboardMsg{Sequence: sequence, Session: p.session.ID, Request: p.workspace.seq})
+	}
+	p.workspace.seq++
+	p.workspace.loading = true
+	id, seq := p.session.ID, p.workspace.seq
+	return util.CmdHandler(util.CopyTextMsg{Text: text, Result: func(confirmed bool, err error) tea.Msg {
+		body := config.Text("Conteúdo copiado para a área de transferência.", "Content copied to clipboard.")
+		if err != nil {
+			err = fmt.Errorf(config.Text("clipboard indisponível; use Shift+arrastar ou Selecionar texto: %w", "clipboard unavailable; use Shift+drag or Select text: %w"), err)
+		}
+		if !confirmed {
+			body = config.Text("Cópia enviada ao terminal; recebimento não confirmado. Selecionar texto continua disponível.", "Copy sent to terminal; receipt unconfirmed. Text selection remains available.")
+		}
+		return WorkspaceResultMsg{session: id, seq: seq, body: body, err: err}
+	}})
+
+}
+
+func (p *chatPage) workspaceNavigationKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "m":
+		p.workspace.allActions = !p.workspace.allActions
+		return nil, true
+
+	case "d":
+		if p.workspace.details != "" {
+			p.workspace.showDetails = !p.workspace.showDetails
+			p.workspace.view.GotoTop()
+		}
+		return nil, true
+
+	case "esc":
+		p.backWorkspace()
+		return nil, true
+
+	case "enter":
+		return p.workspaceChoose(), true
+
+	case "up":
+		if len(p.workspace.actions) > 0 {
+			p.workspace.selected = max(0, p.workspace.selected-1)
+			return nil, true
+		}
+
+	case "down":
+		if len(p.workspace.actions) > 0 {
+			p.workspace.selected = min(len(p.workspace.actions)-1, p.workspace.selected+1)
+			return nil, true
+		}
+
+	}
+	return nil, false
+}
+
+func (p *chatPage) workspaceActionKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "t":
+		return workspaceKeyChatPageT(p), true
+
+	case "ctrl+j", "ctrl+enter":
+		if p.workspace.kind == "review" {
+			return p.applyReversal(), true
+		}
+
+	case "delete", "backspace":
+		if p.workspace.kind == "queue" {
+			return p.takeQueue(false), true
+		}
+
+	case "u":
+		if result0, handled := workspaceKeyCaseU(p); handled {
+			return result0, true
+		}
+
+	case "r":
+		if result0, handled := workspaceKeyChatPageR(p); handled {
+			return result0, true
+		}
+
+	case "c":
+		if p.workspace.kind == "context" {
+			return p.openContext(true), true
+		}
+
+	case "ctrl+r":
+		return p.workspaceCommand(p.workspace.kind, ""), true
+	}
+	return nil, false
 }

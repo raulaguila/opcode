@@ -79,7 +79,7 @@ func TestCitationRepairIsBoundedAndDoesNotFabricateReferences(t *testing.T) {
 	done, err := a.Run(context.Background(), "s", "Explain this code")
 	require.NoError(t, err)
 	replyTools(nextGeneration(t, p), toolCall("view", `{"file_path":"source.go"}`))
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		nextGeneration(t, p).reply <- provider.ProviderResponse{Content: "Uncited explanation", FinishReason: message.FinishReasonEndTurn}
 	}
 	failure := finishGeneration(t, done).Error

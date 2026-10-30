@@ -15,7 +15,7 @@ import (
 
 func TestDeleteProviderRequiresExplicitConfirmationAndHonorsBusyGuard(t *testing.T) {
 	m := settingsDialog(t)
-	require.NoError(t, config.SaveProviderProfile("office", config.ProviderProfile{Name: "Office", Backend: models.ProviderLocal, Provider: config.Provider{BaseURL: "http://office.invalid/v1", APIKey: "fake-private-key"}}))
+	require.NoError(t, config.SaveProviderProfile("office", config.ProviderProfile{Name: "Office", Backend: models.ProviderLocal, BaseURL: "http://office.invalid/v1", APIKey: "fake-private-key"}))
 	m.Open()
 	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 	require.Equal(t, "delete-provider", m.screen)

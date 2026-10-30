@@ -93,23 +93,24 @@ func (s *Store) get(ctx context.Context, id string) (Task, error) {
 		if t, ok := s.memory[id]; ok {
 			return clone(t), nil
 		}
-	} else {
-		var root, raw string
-		err := s.db.QueryRowContext(ctx, "SELECT root, state FROM agent_workflows WHERE session_id = ?", id).Scan(&root, &raw)
-		if err == nil {
-			if root != s.root {
-				return Task{}, fmt.Errorf("task belongs to another project")
-			}
-			var t Task
-			if len(raw) > 262144 || json.Unmarshal([]byte(raw), &t) != nil || t.SessionID != id || !t.Mode.Valid() {
-				return Task{}, fmt.Errorf("invalid saved task")
-			}
-			return t, nil
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return Task{}, err
-		}
+		return Task{SessionID: id, Mode: s.initial, Status: "idle"}, nil
 	}
+	var root, raw string
+	err := s.db.QueryRowContext(ctx, "SELECT root, state FROM agent_workflows WHERE session_id = ?", id).Scan(&root, &raw)
+	if err == nil {
+		if root != s.root {
+			return Task{}, fmt.Errorf("task belongs to another project")
+		}
+		var t Task
+		if len(raw) > 262144 || json.Unmarshal([]byte(raw), &t) != nil || t.SessionID != id || !t.Mode.Valid() {
+			return Task{}, fmt.Errorf("invalid saved task")
+		}
+		return t, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return Task{}, err
+	}
+
 	return Task{SessionID: id, Mode: s.initial, Status: "idle"}, nil
 }
 func (s *Store) Get(ctx context.Context, id string) (Task, error) {
@@ -162,17 +163,8 @@ func (s *Store) UpdatePlan(ctx context.Context, id, objective string, steps []St
 	if strings.TrimSpace(objective) == "" || len(objective) > 2000 || len(steps) < 1 || len(steps) > 24 || len(criteria) < 1 || len(criteria) > 16 || len(checks) > 16 {
 		return Task{}, fmt.Errorf("plan requires objective, 1–24 steps, 1–16 criteria and at most 16 checks")
 	}
-	doing := 0
-	for _, step := range steps {
-		if strings.TrimSpace(step.Title) == "" || len(step.Title) > 500 || (step.Status != "pending" && step.Status != "in_progress" && step.Status != "completed") {
-			return Task{}, fmt.Errorf("invalid plan step")
-		}
-		if step.Status == "in_progress" {
-			doing++
-		}
-	}
-	if doing > 1 {
-		return Task{}, fmt.Errorf("only one step may be in progress")
+	if err := validatePlanSteps(steps); err != nil {
+		return Task{}, err
 	}
 	for _, text := range append(slices.Clone(criteria), checks...) {
 		if strings.TrimSpace(text) == "" || len(text) > 500 {
@@ -250,32 +242,14 @@ func (s *Store) RecordCheck(ctx context.Context, id string, r Receipt) error {
 	return err
 }
 func (t Task) ValidationProblem(commands map[string]string) string {
-	required := slices.Clone(t.Checks)
-	if t.Contract != nil {
-		for _, name := range t.Contract.Checks {
-			if !slices.Contains(required, name) {
-				required = append(required, name)
-			}
-		}
-	}
+	required := t.requiredValidationNames()
 	if len(required) == 0 && t.Changed {
-		for _, r := range t.Validation {
-			if !slices.Contains(required, r.Name) {
-				required = append(required, r.Name)
-			}
-		}
-		if len(required) == 0 {
-			return "Changes require checks for the current revision; configure checks and run run_checks"
-		}
+		return "Changes require checks for the current revision; configure checks and run run_checks"
 	}
+
 	for _, name := range required {
-		valid := false
-		for _, r := range t.Validation {
-			if r.Name == name && r.Passed && r.Digest != "" && r.Digest == t.Digest && r.Revision == t.Revision && commands[name] != "" && fmt.Sprintf("%x", sha256.Sum256([]byte(commands[name]))) == r.Command {
-				valid = true
-			}
-		}
-		if !valid {
+
+		if !t.hasCurrentValidation(name, commands) {
 			return "Missing or outdated validation: " + name
 		}
 	}
@@ -313,20 +287,8 @@ func (s *Store) FinishWithReason(ctx context.Context, id, status, summary, noCha
 	}
 	return s.update(ctx, id, func(t *Task) error {
 		if status == "completed" {
-			t.NoChangeReason = strings.TrimSpace(noChangeReason)
-			if problem := t.CompletionProblem(); problem != "" {
-				return errors.New(problem)
-			}
-			if t.Mode != Execute {
-				return fmt.Errorf("completion requires execute mode")
-			}
-			for _, step := range t.Steps {
-				if step.Status != "completed" {
-					return fmt.Errorf("plan has incomplete steps")
-				}
-			}
-			if problem := t.ValidationProblem(commands); problem != "" {
-				return errors.New(problem)
+			if err := t.validateCompletion(noChangeReason, commands); err != nil {
+				return err
 			}
 		}
 		if status == "planned" && len(t.Steps) == 0 {
@@ -339,4 +301,69 @@ func (s *Store) FinishWithReason(ctx context.Context, id, status, summary, noCha
 }
 func (s *Store) Reset(ctx context.Context, id string) (Task, error) {
 	return s.update(ctx, id, func(t *Task) error { *t = Task{SessionID: id, Mode: t.Mode, Status: "idle"}; return nil })
+}
+
+func validatePlanSteps(steps []Step) error {
+	doing := 0
+	for _, step := range steps {
+		if strings.TrimSpace(step.Title) == "" || len(step.Title) > 500 || (step.Status != "pending" && step.Status != "in_progress" && step.Status != "completed") {
+			return fmt.Errorf("invalid plan step")
+		}
+		if step.Status == "in_progress" {
+			doing++
+		}
+	}
+	if doing > 1 {
+		return fmt.Errorf("only one step may be in progress")
+	}
+	return nil
+}
+
+func (t Task) requiredValidationNames() []string {
+	required := slices.Clone(t.Checks)
+	if t.Contract != nil {
+		for _, name := range t.Contract.Checks {
+			if !slices.Contains(required, name) {
+				required = append(required, name)
+			}
+		}
+	}
+	if len(required) == 0 && t.Changed {
+		for _, r := range t.Validation {
+			if !slices.Contains(required, r.Name) {
+				required = append(required, r.Name)
+			}
+		}
+	}
+
+	return required
+}
+
+func (t Task) hasCurrentValidation(name string, commands map[string]string) bool {
+	valid := false
+	for _, r := range t.Validation {
+		if r.Name == name && r.Passed && r.Digest != "" && r.Digest == t.Digest && r.Revision == t.Revision && commands[name] != "" && fmt.Sprintf("%x", sha256.Sum256([]byte(commands[name]))) == r.Command {
+			valid = true
+		}
+	}
+	return valid
+}
+
+func (t *Task) validateCompletion(noChangeReason string, commands map[string]string) error {
+	t.NoChangeReason = strings.TrimSpace(noChangeReason)
+	if problem := t.CompletionProblem(); problem != "" {
+		return errors.New(problem)
+	}
+	if t.Mode != Execute {
+		return fmt.Errorf("completion requires execute mode")
+	}
+	for _, step := range t.Steps {
+		if step.Status != "completed" {
+			return fmt.Errorf("plan has incomplete steps")
+		}
+	}
+	if problem := t.ValidationProblem(commands); problem != "" {
+		return errors.New(problem)
+	}
+	return nil
 }

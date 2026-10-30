@@ -73,23 +73,7 @@ func ProbeModel(ctx context.Context, model models.Model, connection config.Provi
 	}
 	response, err := p.SendMessages(ctx, []message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Call opcode_health_check with challenge " + nonce}}}}, []tools.BaseTool{probeTool{}})
 	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		var httpError *provider.HTTPError
-		if errors.As(err, &httpError) {
-			kind := "provider response"
-			switch {
-			case httpError.StatusCode == 401 || httpError.StatusCode == 403:
-				kind = "authentication"
-			case httpError.StatusCode == 429:
-				kind = "rate limit"
-			case httpError.StatusCode >= 500:
-				kind = "provider unavailable"
-			}
-			return &ProbeError{Kind: kind, StatusCode: httpError.StatusCode}
-		}
-		return &ProbeError{Kind: "request failed"}
+		return probeRequestError(ctx, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -112,4 +96,23 @@ func (probeTool) Info() tools.ToolInfo {
 }
 func (probeTool) Run(context.Context, tools.ToolCall) (tools.ToolResponse, error) {
 	return tools.ToolResponse{}, errors.New("diagnostic probe tools must never execute")
+}
+
+func probeRequestError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if httpError, ok := errors.AsType[*provider.HTTPError](err); ok {
+		kind := "provider response"
+		switch {
+		case httpError.StatusCode == 401 || httpError.StatusCode == 403:
+			kind = "authentication"
+		case httpError.StatusCode == 429:
+			kind = "rate limit"
+		case httpError.StatusCode >= 500:
+			kind = "provider unavailable"
+		}
+		return &ProbeError{Kind: kind, StatusCode: httpError.StatusCode}
+	}
+	return &ProbeError{Kind: "request failed"}
 }

@@ -52,33 +52,10 @@ func (w *writer) Write(p []byte) (int, error) {
 			Time: time.Now(),
 		}
 		for d.ScanKeyval() {
-			switch string(d.Key()) {
-			case "time":
-				parsed, err := time.Parse(time.RFC3339, string(d.Value()))
-				if err != nil {
-					return 0, fmt.Errorf("parsing time: %w", err)
-				}
-				msg.Time = parsed
-			case "level":
-				msg.Level = strings.ToLower(string(d.Value()))
-			case "msg":
-				msg.Message = string(d.Value())
-			default:
-				if string(d.Key()) == persistKeyArg {
-					msg.Persist = true
-				} else if string(d.Key()) == PersistTimeArg {
-					parsed, err := time.ParseDuration(string(d.Value()))
-					if err != nil {
-						continue
-					}
-					msg.PersistTime = parsed
-				} else {
-					msg.Attributes = append(msg.Attributes, Attr{
-						Key:   string(d.Key()),
-						Value: string(d.Value()),
-					})
-				}
+			if err := decodeLogField(&msg, string(d.Key()), string(d.Value())); err != nil {
+				return 0, err
 			}
+
 		}
 		defaultLogData.Add(msg)
 	}
@@ -99,4 +76,35 @@ func Subscribe(ctx context.Context) <-chan pubsub.Event[LogMessage] {
 
 func List() []LogMessage {
 	return defaultLogData.List()
+}
+
+func decodeLogField(msg *LogMessage, key, value string) error {
+	switch key {
+	case "time":
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			return fmt.Errorf("parsing time: %w", err)
+		}
+		msg.Time = parsed
+	case "level":
+		msg.Level = strings.ToLower(value)
+	case "msg":
+		msg.Message = value
+	default:
+		if key == persistKeyArg {
+			msg.Persist = true
+		} else if key == PersistTimeArg {
+			parsed, err := time.ParseDuration(value)
+			if err != nil {
+				return nil
+			}
+			msg.PersistTime = parsed
+		} else {
+			msg.Attributes = append(msg.Attributes, Attr{
+				Key:   key,
+				Value: value,
+			})
+		}
+	}
+	return nil
 }

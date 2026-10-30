@@ -40,7 +40,7 @@ func planArguments(run *generationRun, raw string) (string, []workflow.Step, []s
 	}
 	lines := func(value string) []string {
 		var out []string
-		for _, line := range strings.Split(value, "\n") {
+		for line := range strings.SplitSeq(value, "\n") {
 			if line = strings.TrimSpace(line); line != "" {
 				out = append(out, line)
 			}

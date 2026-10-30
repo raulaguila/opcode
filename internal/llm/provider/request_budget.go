@@ -60,28 +60,42 @@ func (p *baseProvider) RequestFootprint(history []message.Message, definitions [
 		return footprint, err
 	}
 	footprint.ASCIIBytes, footprint.OtherBytes = countBytes(raw)
-	var counter tokenizer.Codec
-	if p.options.model.Provider == models.ProviderOpenAI {
-		counter, _ = tokenizer.ForModel(tokenizer.Model(p.options.model.APIModel))
-		if counter != nil {
-			if count, err := counter.Count(string(raw)); err == nil {
-				footprint.TokenizedPayloadTokens = int64(count)
-				footprint.CompatibleTokenizer = counter.GetName()
-			}
-		}
-	}
-	// Native HTTP adapters place schemas under tools. Gemini uses tools with
-	// functionDeclarations; fallback SDK payloads use the same envelope key.
-	encoded := map[string]json.RawMessage{}
-	if json.Unmarshal(raw, &encoded) == nil {
-		if schemas, ok := encoded["tools"]; ok {
-			footprint.SchemaASCIIBytes, footprint.SchemaOtherBytes = countBytes(schemas)
-			if counter != nil {
-				if count, err := counter.Count(string(schemas)); err == nil {
-					footprint.TokenizedSchemaTokens = int64(count)
-				}
-			}
-		}
-	}
+	counter := p.footprintTokenizer()
+	footprint.countPayload(counter, raw)
+	footprint.countSchemas(counter, raw)
 	return footprint, nil
+}
+
+func (p *baseProvider) footprintTokenizer() tokenizer.Codec {
+	if p.options.model.Provider != models.ProviderOpenAI {
+		return nil
+	}
+	counter, _ := tokenizer.ForModel(tokenizer.Model(p.options.model.APIModel))
+	return counter
+}
+func (f *RequestFootprint) countPayload(counter tokenizer.Codec, raw []byte) {
+	if counter == nil {
+		return
+	}
+	if count, err := counter.Count(string(raw)); err == nil {
+		f.TokenizedPayloadTokens = int64(count)
+		f.CompatibleTokenizer = counter.GetName()
+	}
+}
+func (f *RequestFootprint) countSchemas(counter tokenizer.Codec, raw []byte) {
+	encoded := map[string]json.RawMessage{}
+	if json.Unmarshal(raw, &encoded) != nil {
+		return
+	}
+	schemas, ok := encoded["tools"]
+	if !ok {
+		return
+	}
+	f.SchemaASCIIBytes, f.SchemaOtherBytes = countBytes(schemas)
+	if counter == nil {
+		return
+	}
+	if count, err := counter.Count(string(schemas)); err == nil {
+		f.TokenizedSchemaTokens = int64(count)
+	}
 }

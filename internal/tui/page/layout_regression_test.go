@@ -37,19 +37,7 @@ func TestChatFrameFitsWithDraftPlanRecoveryAndQuestion(t *testing.T) {
 				text = strings.Repeat("ação 漢字\n", 7) + "última linha"
 			}
 			p.editor.Update(chat.RestoreDraftMsg{Text: text})
-			for _, size := range [][2]int{{180, 40}, {80, 24}, {60, 18}, {36, 12}} {
-				p.SetSize(size[0], size[1])
-				view := p.View()
-				require.Equal(t, size[1], lipgloss.Height(view), state)
-				require.LessOrEqual(t, lipgloss.Width(view), size[0], state)
-				prompts := 0
-				for _, line := range strings.Split(ansi.Strip(view), "\n") {
-					if strings.HasPrefix(strings.TrimSpace(line), ">") {
-						prompts++
-					}
-				}
-				require.Equal(t, 1, prompts, state)
-			}
+			testChatFrameFitsWithDraftPlanRecoveryAndQuestionState(state, t, p)
 		})
 	}
 }
@@ -113,4 +101,20 @@ func TestBareModeOpensChooserWithoutChangingSessionMode(t *testing.T) {
 	}
 	require.True(t, found)
 	require.Equal(t, before, p.mode())
+}
+
+func testChatFrameFitsWithDraftPlanRecoveryAndQuestionState(state string, t *testing.T, p *chatPage) {
+	for _, size := range [][2]int{{180, 40}, {80, 24}, {60, 18}, {36, 12}} {
+		p.SetSize(size[0], size[1])
+		view := p.View()
+		require.Equal(t, size[1], lipgloss.Height(view), state)
+		require.LessOrEqual(t, lipgloss.Width(view), size[0], state)
+		prompts := 0
+		for line := range strings.SplitSeq(ansi.Strip(view), "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), ">") {
+				prompts++
+			}
+		}
+		require.Equal(t, 1, prompts, state)
+	}
 }

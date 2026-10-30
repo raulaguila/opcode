@@ -47,50 +47,20 @@ func UpdateAgentModelDefinition(name AgentName, model models.Model) error {
 		configured.ContextAuto = false
 	}
 	update := func(file *Config) {
-		if file.Agents == nil {
-			file.Agents = map[AgentName]Agent{}
-		}
-		if file.Models == nil {
-			file.Models = map[models.ModelID]models.Model{}
-		}
+		ensureModelSelectionMaps(file)
 		file.Agents[name] = agent
 		file.Models[model.ID] = configured
 		file.Preferences.RecentModels = uniqueModels(append([]models.ModelID{model.ID}, cfg.Preferences.RecentModels...), 20)
-		if name == AgentCoder {
-			for _, auxiliary := range []AgentName{AgentTitle, AgentSummarizer, AgentTask} {
-				if cfg.Agents[auxiliary].Model == "" {
-					inherited := agent
-					if auxiliary == AgentTitle {
-						inherited.MaxTokens = min(80, agent.MaxTokens)
-					}
-					file.Agents[auxiliary] = inherited
-				}
-			}
-		}
+		inheritModelSelection(file, name, agent)
 	}
 	err = updateModelSelectionFile(name, update)
 	if err != nil {
 		return err
 	}
-	if cfg.Agents == nil {
-		cfg.Agents = map[AgentName]Agent{}
-	}
-	if cfg.Models == nil {
-		cfg.Models = map[models.ModelID]models.Model{}
-	}
+	ensureModelSelectionMaps(cfg)
 	cfg.Agents[name] = agent
 	cfg.Preferences.RecentModels = uniqueModels(append([]models.ModelID{model.ID}, cfg.Preferences.RecentModels...), 20)
-	if name == AgentCoder {
-		for _, auxiliary := range []AgentName{AgentTitle, AgentSummarizer, AgentTask} {
-			if cfg.Agents[auxiliary].Model == "" {
-				inherited := agent
-				if auxiliary == AgentTitle {
-					inherited.MaxTokens = min(80, agent.MaxTokens)
-				}
-				cfg.Agents[auxiliary] = inherited
-			}
-		}
-	}
+	inheritModelSelection(cfg, name, agent)
 	cfg.Models[model.ID] = configured
 	models.SupportedModels[model.ID] = model
 	return nil
@@ -186,4 +156,27 @@ func mergeChangedJSON(original, before, after json.RawMessage) json.RawMessage {
 	}
 	result, _ := json.Marshal(a)
 	return result
+}
+
+func inheritModelSelection(target *Config, name AgentName, agent Agent) {
+	if name == AgentCoder {
+		for _, auxiliary := range []AgentName{AgentTitle, AgentSummarizer, AgentTask} {
+			if cfg.Agents[auxiliary].Model == "" {
+				inherited := agent
+				if auxiliary == AgentTitle {
+					inherited.MaxTokens = min(80, agent.MaxTokens)
+				}
+				target.Agents[auxiliary] = inherited
+			}
+		}
+	}
+}
+
+func ensureModelSelectionMaps(file *Config) {
+	if file.Agents == nil {
+		file.Agents = map[AgentName]Agent{}
+	}
+	if file.Models == nil {
+		file.Models = map[models.ModelID]models.Model{}
+	}
 }

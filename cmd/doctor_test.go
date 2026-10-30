@@ -140,8 +140,8 @@ func TestModelProbeChecksRealStructuredChallengeWithoutExecuting(t *testing.T) {
 					text += part.Text
 				}
 			}
-			if strings.HasPrefix(text, "Call opcode_health_check with challenge ") {
-				challenge = strings.TrimPrefix(text, "Call opcode_health_check with challenge ")
+			if after, ok := strings.CutPrefix(text, "Call opcode_health_check with challenge "); ok {
+				challenge = after
 			}
 		}
 		args, _ := json.Marshal(map[string]string{"challenge": challenge})

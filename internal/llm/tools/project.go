@@ -69,24 +69,12 @@ func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 	if p.ExpectedHash != "" && p.ExpectedHash != indexDigest(string(raw)) {
 		return NewTextErrorResponse("file changed; read the current outline again"), nil
 	}
-	var symbols []codeSymbol
-	if sourceLanguage(path) == "go" || localParsers[sourceLanguage(path)] != nil {
-		symbols, err = localOutline(ctx, path, raw)
-	} else {
-		symbols, err = t.lspOutline(ctx, path)
-	}
+	symbols, err := t.outlineSource(ctx, path, raw)
 	if err != nil {
 		return NewTextErrorResponse(err.Error()), nil
 	}
 	if t.name == "get_file_outline" {
-		limit := p.Limit
-		if limit <= 0 {
-			limit = 100
-		}
-		limit = min(limit, 500)
-		start := min(p.Offset, len(symbols))
-		end := min(start+limit, len(symbols))
-		return jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbols": symbols[start:end], "next_offset": end, "more": end < len(symbols), "total": len(symbols)}), nil
+		return sourceOutlineResponse(path, raw, symbols, p.Offset, p.Limit), nil
 	}
 	if p.Symbol == "" {
 		return NewTextErrorResponse("symbol is required"), nil
@@ -95,25 +83,7 @@ func (t *projectTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 		if symbol.Name != p.Symbol {
 			continue
 		}
-		limit := p.Limit
-		if limit <= 0 {
-			limit = 100
-		}
-		limit = min(limit, 500)
-		start := symbol.Start - 1 + p.Offset
-		if start >= symbol.End {
-			return NewTextErrorResponse("offset exceeds symbol range"), nil
-		}
-		content, _, err := readTextReader(ctx, bytes.NewReader(raw), start, min(limit, symbol.End-start))
-		if err != nil {
-			return ToolResponse{}, err
-		}
-		recordFileRead(path)
-		response := jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbol": symbol, "content": addLineNumbers(content, start+1), "next_offset": p.Offset + len(strings.Split(content, "\n")), "more": start+len(strings.Split(content, "\n")) < symbol.End})
-		if content != "" {
-			response = sourceReadMetadata(response, path, raw, start+1, start+len(strings.Split(content, "\n")))
-		}
-		return response, nil
+		return sourceSymbolResponse(ctx, path, raw, symbol, p.Offset, p.Limit)
 	}
 	return NewTextErrorResponse("declaration not found; inspect get_file_outline for exact names"), nil
 }
@@ -121,43 +91,15 @@ func goOutline(path string, raw []byte) ([]codeSymbol, error) {
 	set := token.NewFileSet()
 	file, err := parser.ParseFile(set, path, raw, parser.SkipObjectResolution)
 	if err != nil {
-		return nil, fmt.Errorf("Go file cannot be parsed: %w", err)
+		return nil, fmt.Errorf("cannot parse Go file: %w", err)
 	}
 	result := []codeSymbol{}
 	for _, decl := range file.Decls {
 		switch node := decl.(type) {
 		case *ast.FuncDecl:
-			name := node.Name.Name
-			kind := "function"
-			if node.Recv != nil && len(node.Recv.List) > 0 {
-				kind = "method"
-				recv := node.Recv.List[0].Type
-				if star, ok := recv.(*ast.StarExpr); ok {
-					recv = star.X
-				}
-				if ident, ok := recv.(*ast.Ident); ok {
-					name = ident.Name + "." + name
-				}
-			}
-			result = append(result, codeSymbol{name, kind, set.Position(node.Pos()).Line, set.Position(node.End()).Line})
+			goOutlineFuncDecl(set, &result, node)
 		case *ast.GenDecl:
-			for _, spec := range node.Specs {
-				switch s := spec.(type) {
-				case *ast.TypeSpec:
-					kind := "type"
-					switch s.Type.(type) {
-					case *ast.StructType:
-						kind = "struct"
-					case *ast.InterfaceType:
-						kind = "interface"
-					}
-					result = append(result, codeSymbol{s.Name.Name, kind, set.Position(s.Pos()).Line, set.Position(s.End()).Line})
-				case *ast.ValueSpec:
-					for _, name := range s.Names {
-						result = append(result, codeSymbol{name.Name, node.Tok.String(), set.Position(s.Pos()).Line, set.Position(s.End()).Line})
-					}
-				}
-			}
+			goOutlineGenDecl(set, &result, node)
 		}
 	}
 	return result, nil
@@ -179,60 +121,156 @@ func (t *projectTool) lspOutline(ctx context.Context, path string) ([]codeSymbol
 	}
 	sort.Strings(keys)
 	for _, key := range keys {
-		client := clients[key]
-		if client == nil {
-			continue
-		}
-		if client.OpenFile(ctx, path) != nil {
-			continue
-		}
-		var raw json.RawMessage
-		if client.Call(ctx, "textDocument/documentSymbol", map[string]any{"textDocument": map[string]any{"uri": protocol.URIFromPath(path)}}, &raw) != nil {
-			continue
-		}
-		if len(raw) > 2<<20 {
-			return nil, fmt.Errorf("LSP outline exceeds size limit")
-		}
-		var symbols []documentSymbol
-		if json.Unmarshal(raw, &symbols) != nil {
-			continue
-		}
-		result := []codeSymbol{}
-		var flatten func([]documentSymbol, string, int) error
-		flatten = func(nodes []documentSymbol, prefix string, depth int) error {
-			if depth > 64 {
-				return fmt.Errorf("LSP outline exceeds nesting limit")
-			}
-			for _, node := range nodes {
-				if len(result) >= 5000 {
-					return fmt.Errorf("LSP outline exceeds 5000 symbols")
-				}
-				if node.Location != nil {
-					local, err := localURI(string(node.Location.URI))
-					if err != nil || filepath.Clean(local) != filepath.Clean(path) {
-						continue
-					}
-					node.Range = node.Location.Range
-				}
-				name := node.Name
-				if prefix != "" {
-					name = prefix + "." + name
-				}
-				end := int(node.Range.End.Line) + 1
-				if node.Range.End.Character == 0 && node.Range.End.Line > node.Range.Start.Line {
-					end--
-				}
-				result = append(result, codeSymbol{Name: name, Kind: "symbol", Start: int(node.Range.Start.Line) + 1, End: end})
-				if err := flatten(node.Children, name, depth+1); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-		if err := flatten(symbols, "", 0); err != nil {
+		symbols, available, err := clientSourceOutline(ctx, path, clients[key])
+		if err != nil {
 			return nil, err
 		}
-		return result, nil
+		if available {
+			return symbols, nil
+		}
 	}
 	return nil, fmt.Errorf("no configured LSP supports document outlines for this file")
+}
+func clientSourceOutline(ctx context.Context, path string, client *lsp.Client) ([]codeSymbol, bool, error) {
+	if client == nil {
+		return nil, false, nil
+	}
+	if client.OpenFile(ctx, path) != nil {
+		return nil, false, nil
+	}
+	var raw json.RawMessage
+	if client.Call(ctx, "textDocument/documentSymbol", map[string]any{"textDocument": map[string]any{"uri": protocol.URIFromPath(path)}}, &raw) != nil {
+		return nil, false, nil
+	}
+	if len(raw) > 2<<20 {
+		return nil, false, fmt.Errorf("LSP outline exceeds size limit")
+	}
+	var symbols []documentSymbol
+	if json.Unmarshal(raw, &symbols) != nil {
+		return nil, false, nil
+	}
+	walker := sourceOutlineWalker{path: path, result: []codeSymbol{}}
+	if err := walker.flatten(symbols, "", 0); err != nil {
+		return nil, false, err
+	}
+	return walker.result, true, nil
+}
+
+type sourceOutlineWalker struct {
+	path   string
+	result []codeSymbol
+}
+
+func (w *sourceOutlineWalker) flatten(nodes []documentSymbol, prefix string, depth int) error {
+	if depth > 64 {
+		return fmt.Errorf("LSP outline exceeds nesting limit")
+	}
+	for _, node := range nodes {
+		if len(w.result) >= 5000 {
+			return fmt.Errorf("LSP outline exceeds 5000 symbols")
+		}
+		symbol, ok := w.symbol(node, prefix)
+		if !ok {
+			continue
+		}
+		w.result = append(w.result, symbol)
+		if err := w.flatten(node.Children, symbol.Name, depth+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (w *sourceOutlineWalker) symbol(node documentSymbol, prefix string) (codeSymbol, bool) {
+	if node.Location != nil {
+		local, err := localURI(string(node.Location.URI))
+		if err != nil || filepath.Clean(local) != filepath.Clean(w.path) {
+			return codeSymbol{}, false
+		}
+		node.Range = node.Location.Range
+	}
+	name := node.Name
+	if prefix != "" {
+		name = prefix + "." + name
+	}
+	end := int(node.Range.End.Line) + 1
+	if node.Range.End.Character == 0 && node.Range.End.Line > node.Range.Start.Line {
+		end--
+	}
+	return codeSymbol{Name: name, Kind: "symbol", Start: int(node.Range.Start.Line) + 1, End: end}, true
+}
+
+func goOutlineFuncDecl(set *token.FileSet, result *[]codeSymbol, node *ast.FuncDecl) {
+	name := node.Name.Name
+	kind := "function"
+	if node.Recv != nil && len(node.Recv.List) > 0 {
+		kind = "method"
+		recv := node.Recv.List[0].Type
+		if star, ok := recv.(*ast.StarExpr); ok {
+			recv = star.X
+		}
+		if ident, ok := recv.(*ast.Ident); ok {
+			name = ident.Name + "." + name
+		}
+	}
+	(*result) = append((*result), codeSymbol{name, kind, set.Position(node.Pos()).Line, set.Position(node.End()).Line})
+}
+
+func sourceOutlineResponse(path string, raw []byte, symbols []codeSymbol, offset, limit int) ToolResponse {
+	if limit <= 0 {
+		limit = 100
+	}
+	limit = min(limit, 500)
+	start := min(offset, len(symbols))
+	end := min(start+limit, len(symbols))
+	return jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbols": symbols[start:end], "next_offset": end, "more": end < len(symbols), "total": len(symbols)})
+}
+
+func sourceSymbolResponse(ctx context.Context, path string, raw []byte, symbol codeSymbol, offset, limit int) (ToolResponse, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	limit = min(limit, 500)
+	start := symbol.Start - 1 + offset
+	if start >= symbol.End {
+		return NewTextErrorResponse("offset exceeds symbol range"), nil
+	}
+	content, _, err := readTextReader(ctx, bytes.NewReader(raw), start, min(limit, symbol.End-start))
+	if err != nil {
+		return ToolResponse{}, err
+	}
+	lineCount := strings.Count(content, "\n") + 1
+	recordFileRead(path)
+	response := jsonToolResult(map[string]any{"file_hash": indexDigest(string(raw)), "file_path": path, "symbol": symbol, "content": addLineNumbers(content, start+1), "next_offset": offset + lineCount, "more": start+lineCount < symbol.End})
+	if content != "" {
+		response = sourceReadMetadata(response, path, raw, start+1, start+lineCount)
+	}
+	return response, nil
+}
+
+func goOutlineGenDecl(set *token.FileSet, result *[]codeSymbol, node *ast.GenDecl) {
+	for _, spec := range node.Specs {
+		switch s := spec.(type) {
+		case *ast.TypeSpec:
+			kind := "type"
+			switch s.Type.(type) {
+			case *ast.StructType:
+				kind = "struct"
+			case *ast.InterfaceType:
+				kind = "interface"
+			}
+			*result = append(*result, codeSymbol{s.Name.Name, kind, set.Position(s.Pos()).Line, set.Position(s.End()).Line})
+		case *ast.ValueSpec:
+			for _, name := range s.Names {
+				*result = append(*result, codeSymbol{name.Name, node.Tok.String(), set.Position(s.Pos()).Line, set.Position(s.End()).Line})
+			}
+		}
+	}
+}
+
+func (t *projectTool) outlineSource(ctx context.Context, path string, raw []byte) ([]codeSymbol, error) {
+	language := sourceLanguage(path)
+	if language == "go" || localParsers[language] != nil {
+		return localOutline(ctx, path, raw)
+	}
+	return t.lspOutline(ctx, path)
 }

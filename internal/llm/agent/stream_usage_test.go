@@ -21,7 +21,7 @@ func TestStreamUsageCountsOutputNotPacketsOrDuplicatedThinking(t *testing.T) {
 	split := a.startStreamUsage("split", "m")
 	text := "ação 漢字 code"
 	a.observeStreamUsage(whole, provider.ProviderEvent{Type: provider.EventContentDelta, Content: text})
-	for _, fragment := range strings.Split(text, "") {
+	for fragment := range strings.SplitSeq(text, "") {
 		a.observeStreamUsage(split, provider.ProviderEvent{Type: provider.EventContentDelta, Content: fragment})
 	}
 	require.Equal(t, whole.outputBytes, split.outputBytes)

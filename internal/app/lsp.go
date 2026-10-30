@@ -21,56 +21,7 @@ func (app *App) initLSPClients(parent context.Context) {
 	// Remember only configuration fingerprints, never executable arguments.
 	unavailable := map[string][32]byte{}
 	app.lspUnregister = lsp.RegisterLazyClients(app.LSPClients, func(ctx context.Context, path string) error {
-		app.lspStartMu.Lock()
-		defer app.lspStartMu.Unlock()
-		if err := lifetime.Err(); err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		cfg := config.Get()
-		keys := []string{}
-		for name := range cfg.LSP {
-			keys = append(keys, name)
-		}
-		sort.Strings(keys)
-		for _, name := range keys {
-			entry := cfg.LSP[name]
-			if entry.Disabled || !lsp.ServerMatches(entry, path) {
-				continue
-			}
-			if lsp.SnapshotClients(app.LSPClients)[name] != nil {
-				continue
-			}
-			if err := lsp.CheckExecutable(entry.Command, cfg.WorkingDir); err != nil {
-				data, _ := json.Marshal(entry)
-				fingerprint := sha256.Sum256(data)
-				if previous, seen := unavailable[name]; !seen || previous != fingerprint {
-					logging.Warn(err.Error())
-					unavailable[name] = fingerprint
-				}
-				return err
-			}
-			delete(unavailable, name)
-			startCtx, stop := context.WithCancel(lifetime)
-			done := context.AfterFunc(ctx, stop)
-			app.createAndStartLSPClient(startCtx, name, entry.Command, entry.Args...)
-			done()
-			if ctx.Err() != nil {
-				if client := lsp.SnapshotClients(app.LSPClients)[name]; client != nil {
-					client.Close()
-					lsp.DeleteClient(app.LSPClients, name)
-				}
-				stop()
-				return ctx.Err()
-			}
-			if lsp.SnapshotClients(app.LSPClients)[name] == nil {
-				stop()
-				return fmt.Errorf("%s: %s", lsp.ExecutableLabel(entry.Command), config.Text("falha ao iniciar; veja /integrations", "failed to start; see /integrations"))
-			}
-		}
-		return nil
+		return app.ensureLSPClients(ctx, lifetime, path, unavailable)
 	})
 }
 
@@ -128,7 +79,7 @@ func (app *App) createAndStartLSPClient(ctx context.Context, name string, comman
 	watchCtx, cancelFunc := context.WithCancel(ctx)
 
 	// Create a context with the server name for better identification
-	watchCtx = context.WithValue(watchCtx, "serverName", name)
+	watchCtx = watcher.WithServerName(watchCtx, name)
 
 	// Create the workspace watcher
 	workspaceWatcher := watcher.NewWorkspaceWatcher(lspClient)
@@ -189,4 +140,71 @@ func (app *App) restartLSPClient(ctx context.Context, name string) {
 	// Create a new client using the shared function
 	app.createAndStartLSPClient(ctx, name, clientConfig.Command, clientConfig.Args...)
 	logging.Info("Successfully restarted LSP client", "client", name)
+}
+
+func checkLazyLSPExecutable(entry config.LSPConfig, name, directory string, unavailable map[string][32]byte) error {
+	if err := lsp.CheckExecutable(entry.Command, directory); err != nil {
+		data, _ := json.Marshal(entry)
+		fingerprint := sha256.Sum256(data)
+		if previous, seen := unavailable[name]; !seen || previous != fingerprint {
+			logging.Warn(err.Error())
+			unavailable[name] = fingerprint
+		}
+		return err
+	}
+	return nil
+}
+
+func (app *App) startLazyLSPClient(ctx, lifetime context.Context, name string, entry config.LSPConfig) error {
+	startCtx, stop := context.WithCancel(lifetime)
+	done := context.AfterFunc(ctx, stop)
+	app.createAndStartLSPClient(startCtx, name, entry.Command, entry.Args...)
+	done()
+	if ctx.Err() != nil {
+		if client := lsp.SnapshotClients(app.LSPClients)[name]; client != nil {
+			client.Close()
+			lsp.DeleteClient(app.LSPClients, name)
+		}
+		stop()
+		return ctx.Err()
+	}
+	if lsp.SnapshotClients(app.LSPClients)[name] == nil {
+		stop()
+		return fmt.Errorf("%s: %s", lsp.ExecutableLabel(entry.Command), config.Text("falha ao iniciar; veja /integrations", "failed to start; see /integrations"))
+	}
+	return nil
+}
+
+func (app *App) ensureLSPClients(ctx, lifetime context.Context, path string, unavailable map[string][32]byte) error {
+	app.lspStartMu.Lock()
+	defer app.lspStartMu.Unlock()
+	if err := lifetime.Err(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	cfg := config.Get()
+	keys := []string{}
+	for name := range cfg.LSP {
+		keys = append(keys, name)
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		entry := cfg.LSP[name]
+		if entry.Disabled || !lsp.ServerMatches(entry, path) {
+			continue
+		}
+		if lsp.SnapshotClients(app.LSPClients)[name] != nil {
+			continue
+		}
+		if err := checkLazyLSPExecutable(entry, name, cfg.WorkingDir, unavailable); err != nil {
+			return err
+		}
+		delete(unavailable, name)
+		if err := app.startLazyLSPClient(ctx, lifetime, name, entry); err != nil {
+			return err
+		}
+	}
+	return nil
 }

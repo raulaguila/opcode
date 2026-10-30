@@ -58,10 +58,7 @@ func choiceKey(field *textinput.Model, options []string, msg tea.Msg) bool {
 		// Navigation and save/cancel belong to the surrounding form.
 		return k.Type == tea.KeyRunes || k.Type == tea.KeyBackspace || k.Type == tea.KeyDelete
 	}
-	i := slices.Index(options, field.Value())
-	if i < 0 {
-		i = 0
-	}
+	i := max(slices.Index(options, field.Value()), 0)
 	field.SetValue(options[(i+step+len(options))%len(options)])
 	return true
 }

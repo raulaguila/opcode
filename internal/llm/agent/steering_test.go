@@ -231,7 +231,7 @@ func TestInstructionQueueIsBoundedAndCancellationClearsIt(t *testing.T) {
 	events, err := a.Run(context.Background(), "session", "task")
 	require.NoError(t, err)
 	_ = nextGeneration(t, p)
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		_, queued, err := a.Submit(context.Background(), "session", fmt.Sprintf("queued %d", i))
 		require.NoError(t, err)
 		require.True(t, queued)

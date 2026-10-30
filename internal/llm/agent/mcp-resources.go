@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -45,16 +44,7 @@ func (t *mcpResourceTool) Run(ctx context.Context, call tools.ToolCall) (tools.T
 		return tools.NewTextErrorResponse("configuration unavailable"), nil
 	}
 	if p.Server == "" && t.name == "list_mcp_resources" {
-		names := []string{}
-		for name, server := range cfg.MCPServers {
-			if server.Disabled {
-				continue
-			}
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		raw, _ := json.Marshal(map[string]any{"servers": names})
-		return tools.NewTextResponse(string(raw)), nil
+		return listMCPServers(), nil
 	}
 	server, ok := cfg.MCPServers[p.Server]
 	if !ok || server.Disabled {
@@ -91,47 +81,14 @@ func runMCPResource(ctx context.Context, c mcpResourceClient, kind, uri, cursor 
 		return tools.NewTextErrorResponse(tools.RedactCredentials(err.Error())), nil
 	}
 	var payload any
+	var err error
 	if kind == "list_mcp_resources" {
-		request := mcp.ListResourcesRequest{}
-		request.Params.Cursor = mcp.Cursor(cursor)
-		result, err := c.ListResourcesByPage(ctx, request)
-		if err != nil {
-			return tools.NewTextErrorResponse(tools.RedactCredentials(err.Error())), nil
-		}
-		if result == nil || len(result.Resources) > 1000 {
-			return tools.NewTextErrorResponse("MCP resource page exceeds 1000 entries"), nil
-		}
-		payload = result
+		payload, err = listMCPResourcePayload(ctx, c, cursor)
 	} else {
-		request := mcp.ReadResourceRequest{}
-		request.Params.URI = uri
-		result, err := c.ReadResource(ctx, request)
-		if err != nil {
-			return tools.NewTextErrorResponse(tools.RedactCredentials(err.Error())), nil
-		}
-		if result == nil || len(result.Contents) > 100 {
-			return tools.NewTextErrorResponse("MCP resource response exceeds 100 contents"), nil
-		}
-		text := []mcp.TextResourceContents{}
-		total := 0
-		for _, content := range result.Contents {
-			switch item := content.(type) {
-			case mcp.TextResourceContents:
-				total += len(item.Text)
-				text = append(text, item)
-			case *mcp.TextResourceContents:
-				if item != nil {
-					total += len(item.Text)
-					text = append(text, *item)
-				}
-			default:
-				return tools.NewTextErrorResponse("only text MCP resources are supported; binary content was omitted"), nil
-			}
-			if total > 1<<20 {
-				return tools.NewTextErrorResponse("MCP resource text exceeds 1 MiB"), nil
-			}
-		}
-		payload = map[string]any{"contents": text, "untrusted_resource_data": true}
+		payload, err = readMCPResourcePayload(ctx, c, uri)
+	}
+	if err != nil {
+		return tools.NewTextErrorResponse(tools.RedactCredentials(err.Error())), nil
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -141,4 +98,48 @@ func runMCPResource(ctx context.Context, c mcpResourceClient, kind, uri, cursor 
 		return tools.NewTextErrorResponse("MCP resource result exceeds size limit"), nil
 	}
 	return tools.NewTextResponse(tools.RedactCredentials(string(raw))), nil
+}
+
+func listMCPResourcePayload(ctx context.Context, c mcpResourceClient, cursor string) (any, error) {
+	request := mcp.ListResourcesRequest{}
+	request.Params.Cursor = mcp.Cursor(cursor)
+	result, err := c.ListResourcesByPage(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || len(result.Resources) > 1000 {
+		return nil, fmt.Errorf("MCP resource page exceeds 1000 entries")
+	}
+	return result, nil
+}
+func readMCPResourcePayload(ctx context.Context, c mcpResourceClient, uri string) (any, error) {
+	request := mcp.ReadResourceRequest{}
+	request.Params.URI = uri
+	result, err := c.ReadResource(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil || len(result.Contents) > 100 {
+		return nil, fmt.Errorf("MCP resource response exceeds 100 contents")
+	}
+	text := []mcp.TextResourceContents{}
+	total := 0
+	for _, content := range result.Contents {
+		switch item := content.(type) {
+		case mcp.TextResourceContents:
+			total += len(item.Text)
+			text = append(text, item)
+		case *mcp.TextResourceContents:
+			if item != nil {
+				total += len(item.Text)
+				text = append(text, *item)
+			}
+		default:
+			return nil, fmt.Errorf("only text MCP resources are supported; binary content was omitted")
+		}
+		if total > 1<<20 {
+			return nil, fmt.Errorf("MCP resource text exceeds 1 MiB")
+		}
+	}
+	return map[string]any{"contents": text, "untrusted_resource_data": true}, nil
 }

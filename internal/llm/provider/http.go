@@ -63,54 +63,20 @@ func (t *apiTransport) post(ctx context.Context, path string, payload any, strea
 	if err != nil {
 		return nil, fmt.Errorf("encode provider request: %w", err)
 	}
-	endpoint, err := url.Parse(t.baseURL + path)
-	if err != nil || endpoint.Host == "" || endpoint.User != nil || (endpoint.Scheme != "https" && endpoint.Scheme != "http") {
-		return nil, fmt.Errorf("invalid provider endpoint")
+	endpoint, err := providerRequestURL(t.baseURL + path)
+	if err != nil {
+		return nil, err
 	}
 	refreshed := false
 	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint.String(), bytes.NewReader(body))
+		resp, err := t.postOnce(ctx, endpoint, body, stream)
 		if err != nil {
 			return nil, err
-		}
-		req.Header = t.headers.Clone()
-		req.Header.Set("Content-Type", "application/json")
-		if stream {
-			req.Header.Set("Accept", "text/event-stream")
-		} else {
-			req.Header.Set("Accept", "application/json")
-		}
-		if t.authorize != nil {
-			if err := t.authorize(ctx, req, body); err != nil {
-				return nil, fmt.Errorf("authenticate provider request: %w", err)
-			}
-		}
-		resp, err := t.client.Do(req)
-		// A transport failure may happen after the server accepted the request.
-		// Replaying it could duplicate generation or charges, so do not retry it.
-		if err != nil {
-			return nil, fmt.Errorf("provider request: %w", err)
 		}
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return resp, nil
 		}
-		raw, readErr := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-		resp.Body.Close()
-		if readErr != nil {
-			return nil, fmt.Errorf("read provider error: %w", readErr)
-		}
-		failure := &HTTPError{StatusCode: resp.StatusCode, RequestID: requestID(resp.Header), Body: string(raw)}
-		if resp.StatusCode == http.StatusUnauthorized && t.refresh != nil && !refreshed {
-			refreshed = true
-			if err := t.refresh(ctx); err != nil {
-				return nil, fmt.Errorf("refresh provider credential: %w", err)
-			}
-			continue
-		}
-		if attempt >= maxRetries || !retryable(resp.StatusCode) {
-			return nil, failure
-		}
-		if err := waitRetry(ctx, retryDelay(resp.Header, attempt)); err != nil {
+		if err := t.retryProviderFailure(ctx, resp, attempt, &refreshed); err != nil {
 			return nil, err
 		}
 	}
@@ -273,4 +239,55 @@ func toolSchema(tool tools.BaseTool) object {
 		properties = object{}
 	}
 	return object{"type": "object", "properties": properties, "required": required}
+}
+
+func providerRequestURL(endpoint string) (string, error) {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+		return "", fmt.Errorf("invalid provider endpoint")
+	}
+	return parsed.String(), nil
+}
+func (t *apiTransport) postOnce(ctx context.Context, endpoint string, body []byte, stream bool) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header = t.headers.Clone()
+	req.Header.Set("Content-Type", "application/json")
+	if stream {
+		req.Header.Set("Accept", "text/event-stream")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
+	if t.authorize != nil {
+		if err := t.authorize(ctx, req, body); err != nil {
+			return nil, fmt.Errorf("authenticate provider request: %w", err)
+		}
+	}
+	// A transport error can follow server acceptance: never replay it.
+	resp, err := t.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("provider request: %w", err)
+	}
+	return resp, nil
+}
+func (t *apiTransport) retryProviderFailure(ctx context.Context, resp *http.Response, attempt int, refreshed *bool) error {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("read provider error: %w", err)
+	}
+	failure := &HTTPError{StatusCode: resp.StatusCode, RequestID: requestID(resp.Header), Body: string(raw)}
+	if resp.StatusCode == http.StatusUnauthorized && t.refresh != nil && !*refreshed {
+		*refreshed = true
+		if err := t.refresh(ctx); err != nil {
+			return fmt.Errorf("refresh provider credential: %w", err)
+		}
+		return nil
+	}
+	if attempt >= maxRetries || !retryable(resp.StatusCode) {
+		return failure
+	}
+	return waitRetry(ctx, retryDelay(resp.Header, attempt))
 }

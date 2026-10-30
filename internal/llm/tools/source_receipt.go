@@ -65,31 +65,8 @@ func VisibleSourceReadReceipt(name, content, metadata string) (SourceReadReceipt
 		first = page.Offset + 1
 		last = first + strings.Count(strings.TrimSuffix(page.Content, "\n"), "\n")
 	case "view", "read_symbol":
-		if name == "read_symbol" {
-			var page struct {
-				Content string `json:"content"`
-			}
-			if json.Unmarshal([]byte(content), &page) != nil {
-				return r, false
-			}
-			content = page.Content
-		} else {
-			// Diagnostics/notes outside the source cannot enlarge the interval.
-			_, content, ok = strings.Cut(content, "<file>\n")
-			if !ok {
-				return r, false
-			}
-			content, _, _ = strings.Cut(content, "\n</file>")
-		}
-		for _, match := range numberedSourceLine.FindAllStringSubmatch(content, 2001) {
-			line, _ := strconv.Atoi(match[1])
-			if first == 0 {
-				first = line
-			}
-			if line != first && line != last+1 {
-				return r, false
-			}
-			last = line
+		if result0, result1, handled := visibleSourceReadReceiptView(name, &content, &r, &ok, &first, &last); handled {
+			return result0, result1
 		}
 	default:
 		return r, false
@@ -129,4 +106,34 @@ func SourceReadCurrent(ctx context.Context, receipt SourceReadReceipt) bool {
 	}
 	raw, err := readFile(ctx, path)
 	return err == nil && ctx.Err() == nil && receipt.StartLine > 0 && receipt.EndLine >= receipt.StartLine && receipt.EndLine <= strings.Count(string(raw), "\n")+1 && indexDigest(string(raw)) == receipt.Hash
+}
+
+func visibleSourceReadReceiptView(name string, content *string, r *SourceReadReceipt, ok *bool, first *int, last *int) (extractedResult0 SourceReadReceipt, extractedResult1 bool, handled bool) {
+	if name == "read_symbol" {
+		var page struct {
+			Content string `json:"content"`
+		}
+		if json.Unmarshal([]byte((*content)), &page) != nil {
+			return (*r), false, true
+		}
+		(*content) = page.Content
+	} else {
+		// Diagnostics/notes outside the source cannot enlarge the interval.
+		_, (*content), (*ok) = strings.Cut((*content), "<file>\n")
+		if !(*ok) {
+			return (*r), false, true
+		}
+		(*content), _, _ = strings.Cut((*content), "\n</file>")
+	}
+	for _, match := range numberedSourceLine.FindAllStringSubmatch((*content), 2001) {
+		line, _ := strconv.Atoi(match[1])
+		if (*first) == 0 {
+			(*first) = line
+		}
+		if line != (*first) && line != (*last)+1 {
+			return (*r), false, true
+		}
+		(*last) = line
+	}
+	return extractedResult0, extractedResult1, false
 }

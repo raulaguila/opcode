@@ -59,27 +59,7 @@ func localEmbeddings(ctx context.Context, c config.EmbeddingConfig, texts []stri
 	if len(body) > 2<<20 {
 		return nil, fmt.Errorf("embedding response exceeds 2 MiB")
 	}
-	var out struct {
-		Embeddings [][]float64 `json:"embeddings"`
-	}
-	if json.Unmarshal(body, &out) != nil || len(out.Embeddings) != len(texts) {
-		return nil, fmt.Errorf("invalid embedding response")
-	}
-	dims := 0
-	for _, v := range out.Embeddings {
-		if dims == 0 {
-			dims = len(v)
-		}
-		if dims < 1 || dims > 4096 || len(v) != dims {
-			return nil, fmt.Errorf("embedding dimensions must match and be 1–4096")
-		}
-		for _, x := range v {
-			if math.IsInf(x, 0) || math.IsNaN(x) {
-				return nil, fmt.Errorf("non-finite embedding")
-			}
-		}
-	}
-	return out.Embeddings, nil
+	return decodeLocalEmbeddings(body, len(texts))
 }
 func cosine(a, b []float64) float64 {
 	if len(a) == 0 || len(a) != len(b) {
@@ -144,8 +124,50 @@ func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	misses := 16
-	// Include a bounded semantic pool so synonyms absent from lexical matches can
-	// be recovered. Cache warming is deliberately incremental, at most 16 misses.
+	pool, err := embeddingCandidatePool(ctx, db, candidates, scoped, kind)
+	if err != nil {
+		return candidates, "lexical fallback: semantic pool unavailable"
+	}
+	queryVector, err := embeddingVector(ctx, db, c, query, &misses)
+	if err != nil {
+		return candidates, "lexical fallback: local embeddings unavailable"
+	}
+	root, err := canonicalPath(config.WorkingDirectory())
+	if err != nil {
+		return candidates, "lexical fallback: current workspace unavailable"
+	}
+	scores, err := scoreSemanticPool(ctx, db, c, queryVector, pool, root, &misses)
+	if err != nil {
+		return candidates, "lexical fallback: local embeddings unavailable"
+	}
+	return fuseSemanticCandidates(query, candidates, pool, scores), "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request"
+}
+
+func decodeLocalEmbeddings(body []byte, count int) ([][]float64, error) {
+	var out struct {
+		Embeddings [][]float64 `json:"embeddings"`
+	}
+	if json.Unmarshal(body, &out) != nil || len(out.Embeddings) != count {
+		return nil, fmt.Errorf("invalid embedding response")
+	}
+	dims := 0
+	for _, v := range out.Embeddings {
+		if dims == 0 {
+			dims = len(v)
+		}
+		if dims < 1 || dims > 4096 || len(v) != dims {
+			return nil, fmt.Errorf("embedding dimensions must match and be 1–4096")
+		}
+		for _, x := range v {
+			if math.IsInf(x, 0) || math.IsNaN(x) {
+				return nil, fmt.Errorf("non-finite embedding")
+			}
+		}
+	}
+	return out.Embeddings, nil
+}
+
+func embeddingCandidatePool(ctx context.Context, db *sql.DB, candidates []codeIndexHit, scoped bool, kind string) ([]codeIndexHit, error) {
 	q := `SELECT path,symbol,signature,kind,language,start_line,end_line,content,digest,0 FROM chunks WHERE 1=1`
 	args := []any{}
 	if scoped {
@@ -158,7 +180,7 @@ func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates 
 	q += ` ORDER BY (kind='text'),path,start_line LIMIT 128`
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return candidates, "lexical fallback: semantic pool unavailable"
+		return nil, err
 	}
 	pool := append([]codeIndexHit(nil), candidates...)
 	seen := map[string]bool{}
@@ -167,9 +189,9 @@ func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates 
 	}
 	for rows.Next() {
 		var h codeIndexHit
-		if rows.Scan(&h.Path, &h.Symbol, &h.Signature, &h.Kind, &h.Language, &h.Start, &h.End, &h.Preview, &h.Hash, &h.Rank) != nil {
+		if scanErr := rows.Scan(&h.Path, &h.Symbol, &h.Signature, &h.Kind, &h.Language, &h.Start, &h.End, &h.Preview, &h.Hash, &h.Rank); scanErr != nil {
 			rows.Close()
-			return candidates, "lexical fallback: semantic pool unavailable"
+			return nil, scanErr
 		}
 		key := fmt.Sprintf("%s:%d", h.Path, h.Start)
 		if !seen[key] {
@@ -180,16 +202,13 @@ func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates 
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return candidates, "lexical fallback: semantic pool unavailable"
+		return nil, err
 	}
-	queryVector, err := embeddingVector(ctx, db, c, query, &misses)
-	if err != nil {
-		return candidates, "lexical fallback: local embeddings unavailable"
-	}
-	root, err := canonicalPath(config.WorkingDirectory())
-	if err != nil {
-		return candidates, "lexical fallback: current workspace unavailable"
-	}
+
+	return pool, nil
+}
+
+func scoreSemanticPool(ctx context.Context, db *sql.DB, c config.EmbeddingConfig, queryVector []float64, pool []codeIndexHit, root string, misses *int) (map[string]float64, error) {
 	verified := map[string]string{}
 	scores := map[string]float64{}
 
@@ -198,37 +217,51 @@ func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates 
 			break
 		}
 		h := pool[i]
-		path := filepath.Join(root, filepath.FromSlash(h.Path))
-		if !retrievalPathAllowed(root, path, nil) {
-			continue
-		}
-		hash, ok := verified[path]
+		hash, ok := verifiedSemanticHash(ctx, root, h.Path, verified)
 		if !ok {
-			resolved, e := authorizeFile(ctx, path, "read")
-			if e != nil || resolved != path {
-				continue
-			}
-			raw, e := readFile(ctx, resolved)
-			if e != nil {
-				continue
-			}
-			hash = indexDigest(string(raw))
-			verified[path] = hash
+			continue
 		}
 		if hash != h.Hash {
 			continue
 		}
 		text := compactPreview(h.Path+" "+h.Symbol+" "+h.Preview, 2000)
-		v, err := embeddingVector(ctx, db, c, text, &misses)
+		v, err := embeddingVector(ctx, db, c, text, misses)
 		if errors.Is(err, errEmbeddingWarmBudget) {
 			continue
 		}
 		if err != nil {
-			return candidates, "lexical fallback: local embeddings unavailable"
+			return nil, err
 		}
 		key := fmt.Sprintf("%s:%d", h.Path, h.Start)
 		scores[key] = cosine(queryVector, v)
 	}
+
+	return scores, nil
+}
+
+func verifiedSemanticHash(ctx context.Context, root, relative string, verified map[string]string) (string, bool) {
+	path := filepath.Join(root, filepath.FromSlash(relative))
+	if !retrievalPathAllowed(root, path, nil) {
+		return "", false
+	}
+	hash, ok := verified[path]
+	if !ok {
+		resolved, e := authorizeFile(ctx, path, "read")
+		if e != nil || resolved != path {
+			return "", false
+		}
+		raw, e := readFile(ctx, resolved)
+		if e != nil {
+			return "", false
+		}
+		hash = indexDigest(string(raw))
+		verified[path] = hash
+	}
+
+	return hash, true
+}
+
+func fuseSemanticCandidates(query string, candidates, pool []codeIndexHit, scores map[string]float64) []codeIndexHit {
 	indices := make([]int, 0, len(scores))
 	for i, h := range pool {
 		if _, ok := scores[fmt.Sprintf("%s:%d", h.Path, h.Start)]; ok {
@@ -261,5 +294,5 @@ func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates 
 			filtered = append(filtered, h)
 		}
 	}
-	return filtered, "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request"
+	return filtered
 }

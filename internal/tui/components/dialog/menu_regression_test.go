@@ -58,11 +58,11 @@ func TestSessionAndThemeSelectionRemainVisible(t *testing.T) {
 	m := NewSessionDialogCmp().(*sessionDialogCmp)
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
 	var ss []session.Session
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ss = append(ss, session.Session{ID: strings.Repeat("x", i+1), Title: strings.Repeat("x", i+1)})
 	}
 	m.SetSessions(ss)
-	for i := 0; i < 9; i++ {
+	for range 9 {
 		m.move(1)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})

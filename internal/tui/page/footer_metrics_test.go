@@ -30,7 +30,7 @@ func TestFooterUsesActiveProviderContextEvenBeforeFirstMessage(t *testing.T) {
 	t.Cleanup(func() { cfg.Agents = old })
 	cfg.Agents = map[config.AgentName]config.Agent{config.AgentCoder: {Model: models.GPT41}}
 	p.session.ID = ""
-	p.app.CoderAgent = &footerProbe{workflowProbe: workflowProbe{store: p.app.Workflows}, metrics: agent.UsageMetrics{ActiveModel: models.GPT41, ActiveContextWindow: 4096, ActiveContextSource: "learned after provider context/memory failure"}}
+	p.app.CoderAgent = &footerProbe{store: p.app.Workflows, metrics: agent.UsageMetrics{ActiveModel: models.GPT41, ActiveContextWindow: 4096, ActiveContextSource: "learned after provider context/memory failure"}}
 	state := p.FooterState()
 	require.EqualValues(t, 4096, state.ContextWindow, "initial footer must match the bound provider, not its advertised capacity")
 	require.False(t, state.ContextKnown, "no token usage exists before a request")
@@ -46,7 +46,7 @@ func TestFooterUsesEffectiveCachedContextAndSessionModelScopedSpeed(t *testing.T
 	old := cfg.Agents
 	t.Cleanup(func() { cfg.Agents = old })
 	cfg.Agents = map[config.AgentName]config.Agent{config.AgentCoder: {Model: models.GPT41}}
-	p.app.CoderAgent = &footerProbe{workflowProbe: workflowProbe{store: p.app.Workflows}, metrics: agent.UsageMetrics{LastModel: models.GPT41, LastOutputTokens: 50, LastOutputDurationNS: 2_000_000_000, LastDurationSource: "provider", ContextWindow: 16384, ContextTokens: 4000}}
+	p.app.CoderAgent = &footerProbe{store: p.app.Workflows, metrics: agent.UsageMetrics{LastModel: models.GPT41, LastOutputTokens: 50, LastOutputDurationNS: 2_000_000_000, LastDurationSource: "provider", ContextWindow: 16384, ContextTokens: 4000}}
 	state := p.FooterState()
 	require.EqualValues(t, 16384, state.ContextWindow)
 	require.EqualValues(t, 4000, state.ContextTokens)
@@ -66,7 +66,7 @@ func TestFooterShowsCurrentStreamWithoutReusingPreviousSpeed(t *testing.T) {
 	old := cfg.Agents
 	t.Cleanup(func() { cfg.Agents = old })
 	cfg.Agents = map[config.AgentName]config.Agent{config.AgentCoder: {Model: models.GPT41}}
-	probe := &footerProbe{workflowProbe: workflowProbe{store: p.app.Workflows, busy: true}, metrics: agent.UsageMetrics{
+	probe := &footerProbe{store: p.app.Workflows, busy: true, metrics: agent.UsageMetrics{
 		LastModel: models.GPT41, LastOutputTokens: 50, LastOutputDurationNS: 2_000_000_000,
 		StreamModel: models.GPT41, StreamActive: true,
 	}}

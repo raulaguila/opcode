@@ -24,7 +24,6 @@ type SourcegraphResponseMetadata struct {
 }
 
 type sourcegraphTool struct {
-	client      *http.Client
 	permissions permission.Service
 }
 
@@ -253,13 +252,7 @@ func formatSourcegraphResults(result map[string]any, contextWindow int) (string,
 
 	if errors, ok := result["errors"].([]any); ok && len(errors) > 0 {
 		buffer.WriteString("## Sourcegraph API Error\n\n")
-		for _, err := range errors {
-			if errMap, ok := err.(map[string]any); ok {
-				if message, ok := errMap["message"].(string); ok {
-					buffer.WriteString(fmt.Sprintf("- %s\n", message))
-				}
-			}
-		}
+		writeSourcegraphErrors(&buffer, errors)
 		return buffer.String(), nil
 	}
 
@@ -303,77 +296,78 @@ func formatSourcegraphResults(result map[string]any, contextWindow int) (string,
 	}
 
 	for i, res := range results {
-		fileMatch, ok := res.(map[string]any)
+		writeSourcegraphFile(&buffer, i, res, contextWindow)
+	}
+	return buffer.String(), nil
+}
+
+func writeSourcegraphErrors(buffer *strings.Builder, errors []any) {
+	for _, item := range errors {
+		errMap, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-
-		typeName, _ := fileMatch["__typename"].(string)
-		if typeName != "FileMatch" {
-			continue
-		}
-
-		repo, _ := fileMatch["repository"].(map[string]any)
-		file, _ := fileMatch["file"].(map[string]any)
-		lineMatches, _ := fileMatch["lineMatches"].([]any)
-
-		if repo == nil || file == nil {
-			continue
-		}
-
-		repoName, _ := repo["name"].(string)
-		filePath, _ := file["path"].(string)
-		fileURL, _ := file["url"].(string)
-		fileContent, _ := file["content"].(string)
-
-		buffer.WriteString(fmt.Sprintf("## Result %d: %s/%s\n\n", i+1, repoName, filePath))
-
-		if fileURL != "" {
-			buffer.WriteString(fmt.Sprintf("URL: %s\n\n", fileURL))
-		}
-
-		if len(lineMatches) > 0 {
-			for _, lm := range lineMatches {
-				lineMatch, ok := lm.(map[string]any)
-				if !ok {
-					continue
-				}
-
-				lineNumber, _ := lineMatch["lineNumber"].(float64)
-				preview, _ := lineMatch["preview"].(string)
-
-				if fileContent != "" {
-					lines := strings.Split(fileContent, "\n")
-
-					buffer.WriteString("```\n")
-
-					startLine := max(1, int(lineNumber)-contextWindow)
-
-					for j := startLine - 1; j < int(lineNumber)-1 && j < len(lines); j++ {
-						if j >= 0 {
-							buffer.WriteString(fmt.Sprintf("%d| %s\n", j+1, lines[j]))
-						}
-					}
-
-					buffer.WriteString(fmt.Sprintf("%d|  %s\n", int(lineNumber), preview))
-
-					endLine := int(lineNumber) + contextWindow
-
-					for j := int(lineNumber); j < endLine && j < len(lines); j++ {
-						if j < len(lines) {
-							buffer.WriteString(fmt.Sprintf("%d| %s\n", j+1, lines[j]))
-						}
-					}
-
-					buffer.WriteString("```\n\n")
-				} else {
-					buffer.WriteString("```\n")
-					buffer.WriteString(fmt.Sprintf("%d| %s\n", int(lineNumber), preview))
-					buffer.WriteString("```\n\n")
-				}
-			}
+		if message, ok := errMap["message"].(string); ok {
+			fmt.Fprintf(buffer, "- %s\n", message)
 		}
 	}
+}
 
-	return buffer.String(), nil
+func writeSourcegraphFile(buffer *strings.Builder, index int, result any, contextWindow int) {
+	fileMatch, ok := result.(map[string]any)
+	if !ok {
+		return
+	}
+	typeName, _ := fileMatch["__typename"].(string)
+	if typeName != "FileMatch" {
+		return
+	}
+	repo, _ := fileMatch["repository"].(map[string]any)
+	file, _ := fileMatch["file"].(map[string]any)
+	if repo == nil || file == nil {
+		return
+	}
+	repoName, _ := repo["name"].(string)
+	filePath, _ := file["path"].(string)
+	fileURL, _ := file["url"].(string)
+	fileContent, _ := file["content"].(string)
+	fmt.Fprintf(buffer, "## Result %d: %s/%s\n\n", index+1, repoName, filePath)
+	if fileURL != "" {
+		fmt.Fprintf(buffer, "URL: %s\n\n", fileURL)
+	}
+	// A file can have many matches; split its source once per file, not once
+	// per match. Keep nil to distinguish absent content from an empty line.
+	var lines []string
+	if fileContent != "" {
+		lines = strings.Split(fileContent, "\n")
+	}
+	lineMatches, _ := fileMatch["lineMatches"].([]any)
+	for _, match := range lineMatches {
+		if lineMatch, ok := match.(map[string]any); ok {
+			writeSourcegraphMatch(buffer, lineMatch, lines, contextWindow)
+		}
+	}
+}
+
+func writeSourcegraphMatch(buffer *strings.Builder, match map[string]any, lines []string, contextWindow int) {
+	line, _ := match["lineNumber"].(float64)
+	number := int(line)
+	preview, _ := match["preview"].(string)
+	buffer.WriteString("```\n")
+	if lines == nil {
+		fmt.Fprintf(buffer, "%d| %s\n", number, preview)
+		buffer.WriteString("```\n\n")
+		return
+	}
+	start := max(1, number-contextWindow)
+	for j := start - 1; j < number-1 && j < len(lines); j++ {
+		if j >= 0 {
+			fmt.Fprintf(buffer, "%d| %s\n", j+1, lines[j])
+		}
+	}
+	fmt.Fprintf(buffer, "%d|  %s\n", number, preview)
+	for j := max(0, number); j < number+contextWindow && j < len(lines); j++ {
+		fmt.Fprintf(buffer, "%d| %s\n", j+1, lines[j])
+	}
+	buffer.WriteString("```\n\n")
 }

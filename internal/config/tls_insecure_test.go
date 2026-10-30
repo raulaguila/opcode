@@ -24,7 +24,7 @@ func TestProfileTLSOptInReachesCatalogWithoutChangingOtherProfiles(t *testing.T)
 	}))
 	defer server.Close()
 	server.Config.ErrorLog = log.New(io.Discard, "", 0)
-	profile := ProviderProfile{Name: "TLS", Backend: models.ProviderLocal, Provider: Provider{BaseURL: server.URL + "/v1", API: "chat_completions"}}
+	profile := ProviderProfile{Name: "TLS", Backend: models.ProviderLocal, BaseURL: server.URL + "/v1", API: "chat_completions"}
 	_, err := TestProviderProfile("tls", profile)(models.WithoutCatalogMetadata(context.Background()))
 	require.Error(t, err)
 	profile.TLSInsecure = true

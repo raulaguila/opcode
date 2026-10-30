@@ -102,30 +102,37 @@ func modelMatchScore(query, label string) (int, bool) {
 	}
 	chars := []rune(label)
 	next, first, last, count := 0, -1, -1, 0
-	for _, r := range query {
-		if unicode.IsSpace(r) {
-			continue
-		}
-		found := false
-		for next < len(chars) {
-			pos := next
-			next++
-			if chars[pos] == r {
-				if first < 0 {
-					first = pos
-				}
-				last = pos
-				count++
-				found = true
-				break
-			}
-		}
-		if !found {
-			return 0, false
-		}
+	if result0, result1, handled := modelMatchScoreQuery(query, chars, &next, &first, &last, &count); handled {
+		return result0, result1
 	}
 	if count == 0 {
 		return 0, true
 	}
 	return 1000 + first + (last-first+1-count)*4, true
+}
+
+func modelMatchScoreQuery(query string, chars []rune, next *int, first *int, last *int, count *int) (extractedResult0 int, extractedResult1 bool, handled bool) {
+	for _, r := range query {
+		if unicode.IsSpace(r) {
+			continue
+		}
+		found := false
+		for (*next) < len(chars) {
+			pos := (*next)
+			(*next)++
+			if chars[pos] == r {
+				if (*first) < 0 {
+					(*first) = pos
+				}
+				(*last) = pos
+				(*count)++
+				found = true
+				break
+			}
+		}
+		if !found {
+			return 0, false, true
+		}
+	}
+	return extractedResult0, extractedResult1, false
 }

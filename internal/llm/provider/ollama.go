@@ -40,10 +40,7 @@ func (o *ollamaClient) convertMessages(history []message.Message) ([]object, err
 		item := object{"role": msg.Role, "content": msg.Content().String()}
 		switch msg.Role {
 		case message.User:
-			var images []string
-			for _, image := range msg.BinaryContent() {
-				images = append(images, image.String(models.ProviderLocal))
-			}
+			images := ollamaHistoryImages(msg)
 			if len(images) > 0 {
 				item["images"] = images
 			}
@@ -51,21 +48,15 @@ func (o *ollamaClient) convertMessages(history []message.Message) ([]object, err
 			if thinking := msg.ReasoningContent().String(); thinking != "" {
 				item["thinking"] = thinking
 			}
-			var calls []object
-			for _, call := range msg.ToolCalls() {
-				if !ollamaArgumentsValid(json.RawMessage(call.Input)) {
-					return nil, fmt.Errorf("invalid Ollama tool arguments in history")
-				}
-				names[call.ID] = call.Name
-				calls = append(calls, object{"id": call.ID, "type": "function", "function": object{"name": call.Name, "arguments": json.RawMessage(call.Input)}})
+			calls, err := ollamaHistoryCalls(msg, names)
+			if err != nil {
+				return nil, err
 			}
 			if len(calls) > 0 {
 				item["tool_calls"] = calls
 			}
 		case message.Tool:
-			for _, value := range msg.ToolResults() {
-				result = append(result, object{"role": "tool", "tool_call_id": value.ToolCallID, "tool_name": cmp.Or(value.Name, names[value.ToolCallID]), "content": value.Content})
-			}
+			result = append(result, ollamaHistoryResults(msg, names)...)
 			continue
 		}
 		result = append(result, item)
@@ -87,7 +78,7 @@ func (o *ollamaClient) request(history []message.Message, definitions []tools.Ba
 	for _, tool := range definitions {
 		info := tool.Info()
 		if info.Name == ollamaFinalAnswer || info.Name == ollamaSourceAnswer {
-			return "", nil, fmt.Errorf("Ollama tool name final_answer is reserved for replies")
+			return "", nil, fmt.Errorf("provider Ollama tool name final_answer is reserved for replies")
 		}
 		functions = append(functions, object{"type": "function", "function": object{"name": info.Name, "description": info.Description, "parameters": toolSchema(tool)}})
 	}
@@ -146,10 +137,9 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 		return nil, ollamaFailure(value.Error)
 	}
 	if !value.Done {
-		return nil, fmt.Errorf("Ollama response ended without done=true")
+		return nil, fmt.Errorf("provider Ollama response ended without done=true")
 	}
-	response := &ProviderResponse{Content: value.Message.Content, FinishReason: message.FinishReasonEndTurn,
-		Usage: TokenUsage{InputTokens: value.PromptEvalCount, OutputTokens: value.EvalCount, OutputDurationNS: value.EvalDuration, DurationSource: "provider"}}
+	response := &ProviderResponse{Content: value.Message.Content, FinishReason: message.FinishReasonEndTurn, Usage: TokenUsage{InputTokens: value.PromptEvalCount, OutputTokens: value.EvalCount, OutputDurationNS: value.EvalDuration, DurationSource: "provider"}}
 	if value.EvalDuration <= 0 {
 		response.Usage.DurationSource = ""
 		response.Usage.OutputDurationNS = 0
@@ -157,53 +147,13 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 	if value.DoneReason == "length" {
 		response.FinishReason = message.FinishReasonMaxTokens
 	} else if value.DoneReason != "" && value.DoneReason != "stop" {
-		return nil, fmt.Errorf("Ollama returned an unexpected completion reason")
+		return nil, fmt.Errorf("provider Ollama returned an unexpected completion reason")
 	}
-	finalAnswer := ""
-	for _, call := range value.Message.ToolCalls {
-		if response.FinishReason == message.FinishReasonMaxTokens || call.Function.Name == "" || !ollamaArgumentsValid(call.Function.Arguments) {
-			if response.FinishReason != message.FinishReasonMaxTokens && (call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer) {
-				return nil, fmt.Errorf("%w: incomplete Ollama reply arguments", ErrInvalidFinalAnswer)
-			}
-			return nil, fmt.Errorf("Ollama returned an incomplete tool call")
-		}
-		if call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer {
-			var args struct {
-				Answer      string `json:"answer"`
-				Citations   string `json:"citations_text"`
-				Source      string `json:"source"`
-				Explanation string `json:"explanation"`
-			}
-			if finalAnswer != "" || json.Unmarshal(call.Function.Arguments, &args) != nil {
-				return nil, fmt.Errorf("%w: invalid Ollama final answer", ErrInvalidFinalAnswer)
-			}
-			if call.Function.Name == ollamaSourceAnswer {
-				if strings.TrimSpace(args.Source) == "" || strings.TrimSpace(args.Explanation) == "" {
-					return nil, fmt.Errorf("%w: invalid Ollama source answer", ErrInvalidFinalAnswer)
-				}
-				args.Answer, args.Citations = args.Explanation, args.Source
-			}
-			if strings.TrimSpace(args.Answer) == "" {
-				return nil, fmt.Errorf("%w: invalid Ollama final answer", ErrInvalidFinalAnswer)
-			}
-			finalAnswer = args.Answer
-			if len(args.Citations) > 2048 {
-				return nil, fmt.Errorf("%w: Ollama final answer citations exceed limit", ErrInvalidFinalAnswer)
-			}
-			if strings.TrimSpace(args.Citations) != "" {
-				// These are model-provided references, not application assertions.
-				// The agent still verifies every path/range/hash before completion.
-				finalAnswer += "\n\n" + strings.TrimSpace(args.Citations)
-			}
-			continue
-		}
-		response.ToolCalls = append(response.ToolCalls, message.ToolCall{ID: cmp.Or(call.ID, uuid.NewString()), Name: call.Function.Name,
-			Input: string(call.Function.Arguments), Type: "function", Finished: true})
+	finalAnswer, err := appendOllamaCalls(response, value.Message.ToolCalls)
+	if err != nil {
+		return nil, err
 	}
 	if len(response.ToolCalls) > 0 {
-		// A premature answer cannot conclude a batch of operations whose results
-		// the model has not seen. Discard it; the ordinary agent loop executes
-		// the real calls under its existing mode/approval checks, then asks again.
 		response.FinishReason = message.FinishReasonToolUse
 	} else {
 		response.Content += finalAnswer
@@ -222,57 +172,17 @@ func (o *ollamaClient) decodeResponse(raw json.RawMessage) (*ProviderResponse, e
 func (o *ollamaClient) readStream(ctx context.Context, reader io.Reader, events chan<- ProviderEvent) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 4096), maxProviderBytes)
-	var content strings.Builder
-	var calls []ollamaCall
-	total := 0
+	s := ollamaStreamState{ctx: ctx, events: events}
 	for scanner.Scan() {
-		if err := ctx.Err(); err != nil {
+		done, err := s.line(scanner.Bytes())
+		if err != nil || done {
 			return err
-		}
-		raw := scanner.Bytes()
-		total += len(raw)
-		if total > maxProviderBytes {
-			return fmt.Errorf("Ollama stream exceeds maximum size")
-		}
-		if len(strings.TrimSpace(string(raw))) == 0 {
-			continue
-		}
-		var value ollamaResponse
-		if err := json.Unmarshal(raw, &value); err != nil {
-			return fmt.Errorf("invalid Ollama stream JSON")
-		}
-		if len(value.Error) > 0 && string(value.Error) != "null" {
-			return ollamaFailure(value.Error)
-		}
-		content.WriteString(value.Message.Content)
-		calls = append(calls, value.Message.ToolCalls...)
-		for _, event := range []ProviderEvent{{Type: EventContentDelta, Content: value.Message.Content}, {Type: EventThinkingDelta, Content: value.Message.Thinking, Thinking: value.Message.Thinking}} {
-			if event.Content != "" && !publishEvent(ctx, events, event) {
-				return ctx.Err()
-			}
-		}
-		if value.Done {
-			value.Message.Content = content.String()
-			value.Message.ToolCalls = calls
-			response, err := ollamaResult(value)
-			if err != nil {
-				return err
-			}
-			if answer := strings.TrimPrefix(response.Content, value.Message.Content); answer != "" {
-				if !publishEvent(ctx, events, ProviderEvent{Type: EventContentDelta, Content: answer}) {
-					return ctx.Err()
-				}
-			}
-			if !publishEvent(ctx, events, ProviderEvent{Type: EventComplete, Response: response}) {
-				return ctx.Err()
-			}
-			return nil
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return err
 	}
-	return fmt.Errorf("Ollama stream ended without done=true")
+	return fmt.Errorf("provider Ollama stream ended without done=true")
 }
 
 // Retain a safe classification without exposing the provider's raw error body.
@@ -280,13 +190,157 @@ func ollamaFailure(raw json.RawMessage) error {
 	text := strings.ToLower(string(raw))
 	for _, term := range []string{"out of memory", "requires more system memory", "unable to allocate"} {
 		if strings.Contains(text, term) {
-			return fmt.Errorf("Ollama out of memory; reduce context or select a smaller model")
+			return fmt.Errorf("provider Ollama out of memory; reduce context or select a smaller model")
 		}
 	}
 	for _, term := range []string{"context length", "context window", "too many tokens"} {
 		if strings.Contains(text, term) {
-			return fmt.Errorf("Ollama context window exceeded")
+			return fmt.Errorf("provider Ollama context window exceeded")
 		}
 	}
-	return fmt.Errorf("Ollama returned an error")
+	return fmt.Errorf("provider Ollama returned an error")
+}
+
+func appendOllamaCalls(response *ProviderResponse, calls []ollamaCall) (string, error) {
+	finalAnswer := ""
+	for _, call := range calls {
+		if err := validateOllamaCall(call, response.FinishReason); err != nil {
+			return "", err
+		}
+		if call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer {
+			answer, err := ollamaFinalText(call, finalAnswer)
+			if err != nil {
+				return "", err
+			}
+			finalAnswer = answer
+			continue
+		}
+		response.ToolCalls = append(response.ToolCalls, message.ToolCall{ID: cmp.Or(call.ID, uuid.NewString()), Name: call.Function.Name, Input: string(call.Function.Arguments), Type: "function", Finished: true})
+	}
+	return finalAnswer, nil
+}
+func validateOllamaCall(call ollamaCall, finish message.FinishReason) error {
+	if finish != message.FinishReasonMaxTokens && call.Function.Name != "" && ollamaArgumentsValid(call.Function.Arguments) {
+		return nil
+	}
+	if finish != message.FinishReasonMaxTokens && (call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer) {
+		return fmt.Errorf("%w: incomplete Ollama reply arguments", ErrInvalidFinalAnswer)
+	}
+	return fmt.Errorf("provider Ollama returned an incomplete tool call")
+}
+func ollamaFinalText(call ollamaCall, previous string) (string, error) {
+	var args struct {
+		Answer      string `json:"answer"`
+		Citations   string `json:"citations_text"`
+		Source      string `json:"source"`
+		Explanation string `json:"explanation"`
+	}
+	if previous != "" || json.Unmarshal(call.Function.Arguments, &args) != nil {
+		return "", fmt.Errorf("%w: invalid Ollama final answer", ErrInvalidFinalAnswer)
+	}
+	if call.Function.Name == ollamaSourceAnswer {
+		if strings.TrimSpace(args.Source) == "" || strings.TrimSpace(args.Explanation) == "" {
+			return "", fmt.Errorf("%w: invalid Ollama source answer", ErrInvalidFinalAnswer)
+		}
+		args.Answer, args.Citations = args.Explanation, args.Source
+	}
+	if strings.TrimSpace(args.Answer) == "" {
+		return "", fmt.Errorf("%w: invalid Ollama final answer", ErrInvalidFinalAnswer)
+	}
+	if len(args.Citations) > 2048 {
+		return "", fmt.Errorf("%w: Ollama final answer citations exceed limit", ErrInvalidFinalAnswer)
+	}
+	if strings.TrimSpace(args.Citations) != "" {
+		args.Answer += "\n\n" + strings.TrimSpace(args.Citations)
+	}
+	return args.Answer, nil
+}
+
+type ollamaStreamState struct {
+	ctx     context.Context
+	events  chan<- ProviderEvent
+	content strings.Builder
+	calls   []ollamaCall
+	total   int
+}
+
+func (s *ollamaStreamState) line(raw []byte) (bool, error) {
+	if err := s.ctx.Err(); err != nil {
+		return false, err
+	}
+	s.total += len(raw)
+	if s.total > maxProviderBytes {
+		return false, fmt.Errorf("provider Ollama stream exceeds maximum size")
+	}
+	if len(strings.TrimSpace(string(raw))) == 0 {
+		return false, nil
+	}
+	var value ollamaResponse
+	if json.Unmarshal(raw, &value) != nil {
+		return false, fmt.Errorf("invalid Ollama stream JSON")
+	}
+	if len(value.Error) > 0 && string(value.Error) != "null" {
+		return false, ollamaFailure(value.Error)
+	}
+	s.content.WriteString(value.Message.Content)
+	s.calls = append(s.calls, value.Message.ToolCalls...)
+	if err := s.publishDeltas(value); err != nil {
+		return false, err
+	}
+	if value.Done {
+		return true, s.complete(value)
+	}
+	return false, nil
+}
+func (s *ollamaStreamState) publishDeltas(value ollamaResponse) error {
+	for _, event := range []ProviderEvent{{Type: EventContentDelta, Content: value.Message.Content}, {Type: EventThinkingDelta, Content: value.Message.Thinking, Thinking: value.Message.Thinking}} {
+		if event.Content != "" && !publishEvent(s.ctx, s.events, event) {
+			return s.ctx.Err()
+		}
+	}
+	return nil
+}
+func (s *ollamaStreamState) complete(value ollamaResponse) error {
+	value.Message.Content = s.content.String()
+	value.Message.ToolCalls = s.calls
+	response, err := ollamaResult(value)
+	if err != nil {
+		return err
+	}
+	if answer := strings.TrimPrefix(response.Content, value.Message.Content); answer != "" {
+		if !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventContentDelta, Content: answer}) {
+			return s.ctx.Err()
+		}
+	}
+	if !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventComplete, Response: response}) {
+		return s.ctx.Err()
+	}
+	return nil
+}
+
+func ollamaHistoryCalls(msg message.Message, names map[string]string) ([]object, error) {
+	var calls []object
+	for _, call := range msg.ToolCalls() {
+		if !ollamaArgumentsValid(json.RawMessage(call.Input)) {
+			return nil, fmt.Errorf("invalid Ollama tool arguments in history")
+		}
+		names[call.ID] = call.Name
+		calls = append(calls, object{"id": call.ID, "type": "function", "function": object{"name": call.Name, "arguments": json.RawMessage(call.Input)}})
+	}
+	return calls, nil
+}
+
+func ollamaHistoryImages(msg message.Message) []string {
+	var images []string
+	for _, image := range msg.BinaryContent() {
+		images = append(images, image.String(models.ProviderLocal))
+	}
+	return images
+}
+func ollamaHistoryResults(msg message.Message, names map[string]string) []object {
+	var result []object
+	for _, value := range msg.ToolResults() {
+		result = append(result, object{"role": "tool", "tool_call_id": value.ToolCallID, "tool_name": cmp.Or(value.Name, names[value.ToolCallID]), "content": value.Content})
+	}
+	return result
 }

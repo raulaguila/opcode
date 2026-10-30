@@ -46,7 +46,7 @@ func newCopilotClient(opts providerClientOptions) (*copilotClient, error) {
 		githubToken, _ = config.LoadGitHubToken()
 	}
 	if githubToken == "" && options.bearerToken == "" {
-		return nil, fmt.Errorf("GitHub token is required for Copilot")
+		return nil, fmt.Errorf("provider GitHub token is required for Copilot")
 	}
 	opts.openaiOptions = append(opts.openaiOptions, WithOpenAIBaseURL("https://api.githubcopilot.com"), WithReasoningEffort(options.reasoningEffort))
 	c := &copilotClient{openaiClient: newOpenAIClient(opts), options: options, githubToken: githubToken, token: options.bearerToken, httpClient: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
@@ -79,7 +79,7 @@ func newCopilotClient(opts providerClientOptions) (*copilotClient, error) {
 // Caller holds tokenMu, so concurrent requests share refreshed credentials.
 func (c *copilotClient) refreshToken(ctx context.Context) error {
 	if c.githubToken == "" {
-		return fmt.Errorf("Copilot bearer token expired; a GitHub token is required to refresh it")
+		return fmt.Errorf("provider Copilot bearer token expired; a GitHub token is required to refresh it")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/copilot_internal/v2/token", nil)
 	if err != nil {
@@ -93,7 +93,7 @@ func (c *copilotClient) refreshToken(ctx context.Context) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Copilot token exchange HTTP %d", resp.StatusCode)
+		return fmt.Errorf("provider Copilot token exchange HTTP %d", resp.StatusCode)
 	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if err != nil {
@@ -104,7 +104,7 @@ func (c *copilotClient) refreshToken(ctx context.Context) error {
 		return err
 	}
 	if result.Token == "" {
-		return fmt.Errorf("Copilot token exchange returned an empty token")
+		return fmt.Errorf("provider Copilot token exchange returned an empty token")
 	}
 	c.token = result.Token
 	c.expiresAt = time.Time{}

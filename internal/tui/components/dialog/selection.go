@@ -21,10 +21,10 @@ func clickedLabel(view, label string, m tea.MouseMsg) bool {
 		return false
 	}
 	line := lines[m.Y]
-	i := strings.Index(line, label)
-	if i < 0 {
+	before, _, ok := strings.Cut(line, label)
+	if !ok {
 		return false
 	}
-	x := ansi.StringWidth(line[:i])
+	x := ansi.StringWidth(before)
 	return m.X >= x && m.X < x+ansi.StringWidth(label)
 }

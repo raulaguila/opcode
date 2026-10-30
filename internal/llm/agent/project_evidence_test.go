@@ -63,7 +63,7 @@ func TestBootstrapReusesOnlyCurrentVisibleSourcesAndProjectsOnce(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# UNIQUE_REPOSITORY_FACT\nRepository evidence.\n"), 0600))
 	read := &citationReadTool{BaseTool: tools.NewViewTool(nil)}
 	a.tools = []tools.BaseTool{read}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if i == 2 {
 			require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# UNIQUE_REPOSITORY_FACT\nChanged evidence.\n"), 0600))
 		}

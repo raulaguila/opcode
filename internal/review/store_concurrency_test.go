@@ -34,7 +34,7 @@ func TestUndoApprovalDoesNotHoldJournalWhileAnotherCommitRecords(t *testing.T) {
 	a, b := filepath.Join(root, "a"), filepath.Join(root, "b")
 	require.NoError(t, os.WriteFile(a, []byte("a-new"), 0600))
 	require.NoError(t, os.WriteFile(b, []byte("b-old"), 0600))
-	require.NoError(t, store.Record("s", "turn-a", []tools.FileChange{{Path: a, Before: ptr("a-old"), After: ptr("a-new")}}))
+	require.NoError(t, store.Record("s", "turn-a", []tools.FileChange{{Path: a, Before: new("a-old"), After: new("a-new")}}))
 	preview, err := store.Preview("s", "turn-a", false)
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -50,7 +50,7 @@ func TestUndoApprovalDoesNotHoldJournalWhileAnotherCommitRecords(t *testing.T) {
 	committed := make(chan error, 1)
 	go func() {
 		run := tools.WithChangeObserver(ctx, func(changes []tools.FileChange) error { return store.Record("other", "turn-b", changes) })
-		committed <- tools.ApplyFileChanges(run, []tools.FileChange{{Path: b, Before: ptr("b-old"), After: ptr("b-new")}})
+		committed <- tools.ApplyFileChanges(run, []tools.FileChange{{Path: b, Before: new("b-old"), After: new("b-new")}})
 	}()
 	select {
 	case err := <-committed:

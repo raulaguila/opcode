@@ -94,36 +94,8 @@ func (t *themeDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if msg.String() == "ctrl+e" {
-			return t, t.openEditor()
-		}
-		switch {
-		case key.Matches(msg, themeKeys.Up) || key.Matches(msg, themeKeys.K):
-			if t.selectedIdx > 0 {
-				t.selectedIdx--
-			}
-			return t, t.preview()
-		case key.Matches(msg, themeKeys.Down) || key.Matches(msg, themeKeys.J):
-			if t.selectedIdx < len(t.themes)-1 {
-				t.selectedIdx++
-			}
-			return t, t.preview()
-		case key.Matches(msg, themeKeys.Enter):
-			if len(t.themes) > 0 {
-				previousTheme := t.currentTheme
-				selectedTheme := t.themes[t.selectedIdx]
-				if previousTheme == selectedTheme {
-					return t, util.CmdHandler(CloseThemeDialogMsg{})
-				}
-				if err := theme.SetTheme(selectedTheme); err != nil {
-					return t, util.ReportError(err)
-				}
-				return t, util.CmdHandler(ThemeChangedMsg{
-					ThemeName: selectedTheme,
-				})
-			}
-		case key.Matches(msg, themeKeys.Escape):
-			return t, util.CmdHandler(CloseThemeDialogMsg{RestoreTheme: t.currentTheme})
+		if result0, result1, handled := updateThemeDialogCmpKeyMsg(t, &msg); handled {
+			return result0, result1
 		}
 	case tea.MouseMsg:
 		count := len(t.themes)
@@ -237,4 +209,46 @@ func (t *themeDialogCmp) preview() tea.Cmd {
 		return util.ReportError(err)
 	}
 	return util.CmdHandler(ThemeChangedMsg{ThemeName: name, Preview: true})
+}
+
+func updateThemeDialogCmpKeyMsg(t *themeDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if msg.String() == "ctrl+e" {
+		return t, t.openEditor(), true
+	}
+	switch {
+	case key.Matches((*msg), themeKeys.Up) || key.Matches((*msg), themeKeys.K):
+		if t.selectedIdx > 0 {
+			t.selectedIdx--
+		}
+		return t, t.preview(), true
+	case key.Matches((*msg), themeKeys.Down) || key.Matches((*msg), themeKeys.J):
+		if t.selectedIdx < len(t.themes)-1 {
+			t.selectedIdx++
+		}
+		return t, t.preview(), true
+	case key.Matches((*msg), themeKeys.Enter):
+		if result0, result1, result2, handled := updateThemeDialogCmpKeyMsgMatchesThemeKeysEnter(t); handled {
+			return result0, result1, result2
+		}
+	case key.Matches((*msg), themeKeys.Escape):
+		return t, util.CmdHandler(CloseThemeDialogMsg{RestoreTheme: t.currentTheme}), true
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateThemeDialogCmpKeyMsgMatchesThemeKeysEnter(t *themeDialogCmp) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if len(t.themes) > 0 {
+		previousTheme := t.currentTheme
+		selectedTheme := t.themes[t.selectedIdx]
+		if previousTheme == selectedTheme {
+			return t, util.CmdHandler(CloseThemeDialogMsg{}), true, true
+		}
+		if err := theme.SetTheme(selectedTheme); err != nil {
+			return t, util.ReportError(err), true, true
+		}
+		return t, util.CmdHandler(ThemeChangedMsg{
+			ThemeName: selectedTheme,
+		}), true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
 }

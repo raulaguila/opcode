@@ -136,57 +136,8 @@ func (p *Parser) readStr(prefix string, returnEverything bool) string {
 func (p *Parser) Parse() error {
 	endPatchPrefixes := []string{"*** End Patch"}
 
-	for !p.isDone(endPatchPrefixes) {
-		path := p.readStr("*** Update File: ", false)
-		if path != "" {
-			if _, exists := p.patch.Actions[path]; exists {
-				return fileError("Update", "Duplicate Path", path)
-			}
-			moveTo := p.readStr("*** Move to: ", false)
-			if _, exists := p.currentFiles[path]; !exists {
-				return fileError("Update", "Missing File", path)
-			}
-			text := p.currentFiles[path]
-			action, err := p.parseUpdateFile(text)
-			if err != nil {
-				return err
-			}
-			if moveTo != "" {
-				action.MovePath = &moveTo
-			}
-			p.patch.Actions[path] = action
-			continue
-		}
-
-		path = p.readStr("*** Delete File: ", false)
-		if path != "" {
-			if _, exists := p.patch.Actions[path]; exists {
-				return fileError("Delete", "Duplicate Path", path)
-			}
-			if _, exists := p.currentFiles[path]; !exists {
-				return fileError("Delete", "Missing File", path)
-			}
-			p.patch.Actions[path] = PatchAction{Type: ActionDelete, Chunks: []Chunk{}}
-			continue
-		}
-
-		path = p.readStr("*** Add File: ", false)
-		if path != "" {
-			if _, exists := p.patch.Actions[path]; exists {
-				return fileError("Add", "Duplicate Path", path)
-			}
-			if _, exists := p.currentFiles[path]; exists {
-				return fileError("Add", "File already exists", path)
-			}
-			action, err := p.parseAddFile()
-			if err != nil {
-				return err
-			}
-			p.patch.Actions[path] = action
-			continue
-		}
-
-		return NewDiffError(fmt.Sprintf("Unknown Line: %s", p.lines[p.index]))
+	if err := p.parseActions(endPatchPrefixes); err != nil {
+		return err
 	}
 
 	if !p.startsWith("*** End Patch") {
@@ -220,45 +171,7 @@ func (p *Parser) parseUpdateFile(text string) (PatchAction, error) {
 		if defStr == "" && sectionStr == "" && index != 0 {
 			return action, NewDiffError(fmt.Sprintf("Invalid Line:\n%s", p.lines[p.index]))
 		}
-		if strings.TrimSpace(defStr) != "" {
-			found := false
-			for i := range fileLines[:index] {
-				if fileLines[i] == defStr {
-					found = true
-					break
-				}
-			}
-
-			if !found {
-				for i := index; i < len(fileLines); i++ {
-					if fileLines[i] == defStr {
-						index = i + 1
-						found = true
-						break
-					}
-				}
-			}
-
-			if !found {
-				for i := range fileLines[:index] {
-					if strings.TrimSpace(fileLines[i]) == strings.TrimSpace(defStr) {
-						found = true
-						break
-					}
-				}
-			}
-
-			if !found {
-				for i := index; i < len(fileLines); i++ {
-					if strings.TrimSpace(fileLines[i]) == strings.TrimSpace(defStr) {
-						index = i + 1
-						p.fuzz++
-						found = true
-						break
-					}
-				}
-			}
-		}
+		parseUpdateFileStringsTrimSpaceDefStr(p, fileLines, &index, defStr)
 
 		nextChunkContext, chunks, endPatchIndex, eof := peekNextSection(p.lines, p.index)
 		newIndex, fuzz := findContext(fileLines, nextChunkContext, index, eof)
@@ -338,24 +251,8 @@ func tryFindMatch(lines []string, context []string, start int,
 	compareFunc func(string, string) bool,
 ) (int, int) {
 	for i := start; i < len(lines); i++ {
-		if i+len(context) <= len(lines) {
-			match := true
-			for j := range context {
-				if !compareFunc(lines[i+j], context[j]) {
-					match = false
-					break
-				}
-			}
-			if match {
-				// Return fuzz level: 0 for exact, 1 for trimRight, 100 for trimSpace
-				var fuzz int
-				if compareFunc("a ", "a") && !compareFunc("a", "b") {
-					fuzz = 1
-				} else if compareFunc("a  ", "a") {
-					fuzz = 100
-				}
-				return i, fuzz
-			}
+		if result0, result1, handled := tryFindMatchIContextLines(lines, context, compareFunc, i); handled {
+			return result0, result1
 		}
 	}
 	return -1, 0
@@ -393,54 +290,7 @@ func peekNextSection(lines []string, initialIndex int) ([]string, []Chunk, int, 
 			strings.HasPrefix(s, "***")
 	}
 
-	for index < len(lines) {
-		s := lines[index]
-		if endSectionConditions(s) {
-			break
-		}
-		index++
-		lastMode := mode
-		line := s
-
-		if len(line) > 0 {
-			switch line[0] {
-			case '+':
-				mode = "add"
-			case '-':
-				mode = "delete"
-			case ' ':
-				mode = "keep"
-			default:
-				mode = "keep"
-				line = " " + line
-			}
-		} else {
-			mode = "keep"
-			line = " "
-		}
-
-		line = line[1:]
-		if mode == "keep" && lastMode != mode {
-			if len(insLines) > 0 || len(delLines) > 0 {
-				chunks = append(chunks, Chunk{
-					OrigIndex: len(old) - len(delLines),
-					DelLines:  delLines,
-					InsLines:  insLines,
-				})
-			}
-			delLines = make([]string, 0, 8)
-			insLines = make([]string, 0, 8)
-		}
-		switch mode {
-		case "delete":
-			delLines = append(delLines, line)
-			old = append(old, line)
-		case "add":
-			insLines = append(insLines, line)
-		default:
-			old = append(old, line)
-		}
-	}
+	peekNextSectionIndexLines(lines, &index, &old, &delLines, &insLines, &chunks, &mode, endSectionConditions)
 
 	if len(insLines) > 0 || len(delLines) > 0 {
 		chunks = append(chunks, Chunk{
@@ -632,20 +482,8 @@ func ApplyCommit(commit Commit, writeFn func(string, string) error, removeFn fun
 				return err
 			}
 		case ActionUpdate:
-			if change.NewContent == nil {
-				return NewDiffError(fmt.Sprintf("Update action for %s has nil new_content", p))
-			}
-			if change.MovePath != nil {
-				if err := writeFn(*change.MovePath, *change.NewContent); err != nil {
-					return err
-				}
-				if err := removeFn(p); err != nil {
-					return err
-				}
-			} else {
-				if err := writeFn(p, *change.NewContent); err != nil {
-					return err
-				}
+			if result0, handled := applyCommitDefault(writeFn, removeFn, p, &change); handled {
+				return result0
 			}
 		}
 	}
@@ -737,4 +575,215 @@ func ValidatePatch(patchText string, files map[string]string) (bool, string, err
 	}
 
 	return true, "Patch is valid", nil
+}
+
+func applyCommitDefault(writeFn func(string, string) error, removeFn func(string) error, p string, change *FileChange) (extractedResult0 error, handled bool) {
+	if change.NewContent == nil {
+		return NewDiffError(fmt.Sprintf("Update action for %s has nil new_content", p)), true
+	}
+	if change.MovePath != nil {
+		if err := writeFn(*change.MovePath, *change.NewContent); err != nil {
+			return err, true
+		}
+		if err := removeFn(p); err != nil {
+			return err, true
+		}
+	} else {
+		if err := writeFn(p, *change.NewContent); err != nil {
+			return err, true
+		}
+	}
+	return extractedResult0, false
+}
+
+func parseUpdateFileStringsTrimSpaceDefStr(p *Parser, fileLines []string, index *int, defStr string) {
+	if strings.TrimSpace(defStr) != "" {
+		found := false
+		for i := range fileLines[:(*index)] {
+			if fileLines[i] == defStr {
+				found = true
+				break
+			}
+		}
+
+		parseUpdateFileStringsTrimSpaceDefStrFound(fileLines, index, defStr, &found)
+
+		parseUpdateFileStringsTrimSpaceDefStrFoundCase(fileLines, index, defStr, &found)
+
+		if !found {
+			for i := (*index); i < len(fileLines); i++ {
+				if strings.TrimSpace(fileLines[i]) == strings.TrimSpace(defStr) {
+					(*index) = i + 1
+					p.fuzz++
+					found = true
+					break
+				}
+			}
+		}
+	}
+}
+
+func (p *Parser) parseActions(endPrefixes []string) error {
+	for !p.isDone(endPrefixes) {
+		if err := p.parseAction(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (p *Parser) parseAction() error {
+	if path := p.readStr("*** Update File: ", false); path != "" {
+		return p.parseUpdateAction(path)
+	}
+	if path := p.readStr("*** Delete File: ", false); path != "" {
+		return p.parseDeleteAction(path)
+	}
+	if path := p.readStr("*** Add File: ", false); path != "" {
+		return p.parseAddAction(path)
+	}
+	return NewDiffError(fmt.Sprintf("Unknown Line: %s", p.lines[p.index]))
+}
+func (p *Parser) parseUpdateAction(path string) error {
+	if _, exists := p.patch.Actions[path]; exists {
+		return fileError("Update", "Duplicate Path", path)
+	}
+	moveTo := p.readStr("*** Move to: ", false)
+	text, exists := p.currentFiles[path]
+	if !exists {
+		return fileError("Update", "Missing File", path)
+	}
+	action, err := p.parseUpdateFile(text)
+	if err != nil {
+		return err
+	}
+	if moveTo != "" {
+		action.MovePath = &moveTo
+	}
+	p.patch.Actions[path] = action
+	return nil
+}
+func (p *Parser) parseDeleteAction(path string) error {
+	if _, exists := p.patch.Actions[path]; exists {
+		return fileError("Delete", "Duplicate Path", path)
+	}
+	if _, exists := p.currentFiles[path]; !exists {
+		return fileError("Delete", "Missing File", path)
+	}
+	p.patch.Actions[path] = PatchAction{Type: ActionDelete, Chunks: []Chunk{}}
+	return nil
+}
+func (p *Parser) parseAddAction(path string) error {
+	if _, exists := p.patch.Actions[path]; exists {
+		return fileError("Add", "Duplicate Path", path)
+	}
+	if _, exists := p.currentFiles[path]; exists {
+		return fileError("Add", "File already exists", path)
+	}
+	action, err := p.parseAddFile()
+	if err != nil {
+		return err
+	}
+	p.patch.Actions[path] = action
+	return nil
+}
+
+func parseUpdateFileStringsTrimSpaceDefStrFound(fileLines []string, index *int, defStr string, found *bool) {
+	if !(*found) {
+		for i := (*index); i < len(fileLines); i++ {
+			if fileLines[i] == defStr {
+				(*index) = i + 1
+				(*found) = true
+				break
+			}
+		}
+	}
+}
+
+func parseUpdateFileStringsTrimSpaceDefStrFoundCase(fileLines []string, index *int, defStr string, found *bool) {
+	if !(*found) {
+		for i := range fileLines[:(*index)] {
+			if strings.TrimSpace(fileLines[i]) == strings.TrimSpace(defStr) {
+				(*found) = true
+				break
+			}
+		}
+	}
+}
+
+func peekNextSectionIndexLines(lines []string, index *int, old *[]string, delLines *[]string, insLines *[]string, chunks *[]Chunk, mode *string, endSectionConditions func(s string) bool) {
+	for (*index) < len(lines) {
+		s := lines[(*index)]
+		if endSectionConditions(s) {
+			break
+		}
+		(*index)++
+		lastMode := (*mode)
+		line := s
+
+		if len(line) > 0 {
+			switch line[0] {
+			case '+':
+				(*mode) = "add"
+			case '-':
+				(*mode) = "delete"
+			case ' ':
+				(*mode) = "keep"
+			default:
+				(*mode) = "keep"
+				line = " " + line
+			}
+		} else {
+			(*mode) = "keep"
+			line = " "
+		}
+
+		line = line[1:]
+		peekNextSectionIndexLinesKeep(old, delLines, insLines, chunks, mode, lastMode)
+		switch *mode {
+		case "delete":
+			(*delLines) = append((*delLines), line)
+			(*old) = append((*old), line)
+		case "add":
+			(*insLines) = append((*insLines), line)
+		default:
+			(*old) = append((*old), line)
+		}
+	}
+}
+
+func tryFindMatchIContextLines(lines []string, context []string, compareFunc func(string, string) bool, i int) (extractedResult0 int, extractedResult1 int, handled bool) {
+	if i+len(context) <= len(lines) {
+		match := true
+		for j := range context {
+			if !compareFunc(lines[i+j], context[j]) {
+				match = false
+				break
+			}
+		}
+		if match {
+			// Return fuzz level: 0 for exact, 1 for trimRight, 100 for trimSpace
+			var fuzz int
+			if compareFunc("a ", "a") && !compareFunc("a", "b") {
+				fuzz = 1
+			} else if compareFunc("a  ", "a") {
+				fuzz = 100
+			}
+			return i, fuzz, true
+		}
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func peekNextSectionIndexLinesKeep(old *[]string, delLines *[]string, insLines *[]string, chunks *[]Chunk, mode *string, lastMode string) {
+	if (*mode) == "keep" && lastMode != (*mode) {
+		if len((*insLines)) > 0 || len((*delLines)) > 0 {
+			(*chunks) = append((*chunks), Chunk{
+				OrigIndex: len((*old)) - len((*delLines)),
+				DelLines:  (*delLines),
+				InsLines:  (*insLines),
+			})
+		}
+		(*delLines) = make([]string, 0, 8)
+		(*insLines) = make([]string, 0, 8)
+	}
 }

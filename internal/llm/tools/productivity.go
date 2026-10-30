@@ -102,29 +102,9 @@ func (w *worktreeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, er
 		return NewTextErrorResponse("worktree listing exceeds output limit"), nil
 	}
 	if input.Action == "list" {
-		entries := []map[string]any{}
-		for _, field := range strings.Split(listing, "\x00") {
-			if strings.HasPrefix(field, "worktree ") {
-				if len(entries) == 256 {
-					return jsonToolResult(map[string]any{"worktrees": entries, "truncated": true}), nil
-				}
-				entries = append(entries, map[string]any{"path": strings.TrimPrefix(field, "worktree ")})
-			} else if len(entries) > 0 {
-				key, value, found := strings.Cut(field, " ")
-				if key == "HEAD" || key == "branch" {
-					entries[len(entries)-1][key] = value
-				} else if key == "detached" || key == "locked" || key == "prunable" {
-					if found {
-						entries[len(entries)-1][key] = value
-					} else {
-						entries[len(entries)-1][key] = true
-					}
-				}
-			}
-		}
-		return jsonToolResult(map[string]any{"worktrees": entries, "truncated": false}), nil
+		return worktreeListing(listing), nil
 	}
-	if input.Action != "create" && input.Action != "remove" || !worktreeName.MatchString(input.Name) {
+	if !validWorktreeMutation(input.Action, input.Name) {
 		return NewTextErrorResponse("choose create/remove and a 1–64 character worktree name (letters, digits, underscores, hyphens)"), nil
 	}
 	root, err := canonicalPath(config.WorkingDirectory())
@@ -141,38 +121,23 @@ func (w *worktreeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, er
 	}
 	args := []string{"add", "--detach", "--", path, "HEAD"}
 	if input.Action == "create" {
-		// Checkout filters can execute arbitrary configured programs. Managed
-		// worktrees deliberately refuse those repositories instead of silently
-		// executing a filter that is absent from the approved argv.
-		if err := checkWorktreeFilters(ctx); err != nil {
-			return NewTextErrorResponse(err.Error()), nil
-		}
-		if _, err := os.Lstat(path); !os.IsNotExist(err) {
-			return NewTextErrorResponse("worktree destination already exists or cannot be inspected"), nil
+		if response, err := preflightNewManagedWorktree(ctx, path); err != nil || response.IsError {
+			return response, err
 		}
 	} else {
-		registered := false
-		first := ""
-		for _, field := range strings.Split(listing, "\x00") {
-			if strings.HasPrefix(field, "worktree ") {
-				entry := strings.TrimPrefix(field, "worktree ")
-				if first == "" {
-					first = entry
-				}
-				if entry == path {
-					registered = true
-				}
-			}
-		}
-		if !registered || path == root || path == first {
+		if !removableManagedWorktree(root, path, listing) {
 			return NewTextErrorResponse("only registered managed worktrees other than main/current may be removed"), nil
 		}
 		// Git remove itself performs the final dirty/locked/submodule preflight;
 		// no --force is available, including after approval or concurrent edits.
 		args = []string{"remove", "--", path}
 	}
+	return w.applyManagedWorktree(ctx, root, path, input.Action, args)
+}
+
+func (w *worktreeTool) applyManagedWorktree(ctx context.Context, root, path, action string, args []string) (ToolResponse, error) {
 	session, _ := GetContextValues(ctx)
-	if session == "" || w.permissions == nil || !w.permissions.Request(ctx, permission.CreatePermissionRequest{SessionID: session, ToolName: "manage_worktrees", Path: path, Action: "execute", Description: "Git worktree " + input.Action + " (detached; no force/reset)", Params: map[string]any{"git_worktree_args": args}}) {
+	if session == "" || w.permissions == nil || !w.permissions.Request(ctx, permission.CreatePermissionRequest{SessionID: session, ToolName: "manage_worktrees", Path: path, Action: "execute", Description: "Git worktree " + action + " (detached; no force/reset)", Params: map[string]any{"git_worktree_args": args}}) {
 		return ToolResponse{}, permission.ErrorPermissionDenied
 	}
 	if err := ctx.Err(); err != nil {
@@ -181,11 +146,15 @@ func (w *worktreeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, er
 	if current, err := canonicalPath(path); err != nil || current != path {
 		return NewTextErrorResponse("worktree path changed while awaiting approval"), nil
 	}
-	if input.Action == "create" {
+	if action == "create" {
 		if err := checkWorktreeFilters(ctx); err != nil {
 			return NewTextErrorResponse(err.Error()), nil
 		}
 	}
+	return executeManagedWorktree(ctx, root, path, action, args)
+}
+
+func executeManagedWorktree(ctx context.Context, root, path, action string, args []string) (ToolResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	command, err := shell.WorktreeCommand(ctx, root, args)
@@ -201,10 +170,10 @@ func (w *worktreeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, er
 	if ctx.Err() != nil {
 		return ToolResponse{}, ctx.Err()
 	}
-	response := jsonToolResult(map[string]any{"action": input.Action, "path": path, "output": text, "stderr": errorText, "truncated": cut || errorCut, "success": err == nil})
+	response := jsonToolResult(map[string]any{"action": action, "path": path, "output": text, "stderr": errorText, "truncated": cut || errorCut, "success": err == nil})
 	response.IsError = err != nil
 	if err != nil && text == "" && errorText == "" {
-		response.Content = fmt.Sprintf("worktree %s failed under the execution policy", input.Action)
+		response.Content = fmt.Sprintf("worktree %s failed under the execution policy", action)
 	}
 	return response, nil
 }
@@ -217,7 +186,7 @@ func checkWorktreeFilters(ctx context.Context) error {
 	if truncated {
 		return fmt.Errorf("repository configuration exceeds safe inspection limit")
 	}
-	for _, key := range strings.Split(filters, "\n") {
+	for key := range strings.SplitSeq(filters, "\n") {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(key)), "filter.") {
 			return fmt.Errorf("repository checkout filters require manual worktree creation; no filter was executed")
 		}
@@ -253,4 +222,68 @@ func ListWorktrees(ctx context.Context) ([]Worktree, error) {
 		return nil, fmt.Errorf("invalid or truncated worktree listing")
 	}
 	return value.Worktrees, nil
+}
+
+func worktreeListing(listing string) ToolResponse {
+	entries := []map[string]any{}
+	for field := range strings.SplitSeq(listing, "\x00") {
+		if strings.HasPrefix(field, "worktree ") {
+			if len(entries) == 256 {
+				return jsonToolResult(map[string]any{"worktrees": entries, "truncated": true})
+			}
+			entries = append(entries, map[string]any{"path": strings.TrimPrefix(field, "worktree ")})
+			continue
+		}
+		if len(entries) > 0 {
+			addWorktreeField(entries[len(entries)-1], field)
+		}
+	}
+	return jsonToolResult(map[string]any{"worktrees": entries, "truncated": false})
+}
+func addWorktreeField(entry map[string]any, field string) {
+	key, value, found := strings.Cut(field, " ")
+	switch key {
+	case "HEAD", "branch":
+		entry[key] = value
+	case "detached", "locked", "prunable":
+		if found {
+			entry[key] = value
+		} else {
+			entry[key] = true
+		}
+	}
+}
+func removableManagedWorktree(root, path, listing string) bool {
+	registered := false
+	first := ""
+	for field := range strings.SplitSeq(listing, "\x00") {
+		if !strings.HasPrefix(field, "worktree ") {
+			continue
+		}
+		entry := strings.TrimPrefix(field, "worktree ")
+		if first == "" {
+			first = entry
+		}
+		if entry == path {
+			registered = true
+		}
+	}
+	return registered && path != root && path != first
+}
+
+func validWorktreeMutation(action, name string) bool {
+	return (action == "create" || action == "remove") && worktreeName.MatchString(name)
+}
+
+func preflightNewManagedWorktree(ctx context.Context, path string) (ToolResponse, error) {
+	// Checkout filters can execute arbitrary configured programs. Managed
+	// worktrees deliberately refuse those repositories instead of silently
+	// executing a filter that is absent from the approved argv.
+	if err := checkWorktreeFilters(ctx); err != nil {
+		return NewTextErrorResponse(err.Error()), nil
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		return NewTextErrorResponse("worktree destination already exists or cannot be inspected"), nil
+	}
+	return ToolResponse{}, nil
 }

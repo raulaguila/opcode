@@ -33,8 +33,8 @@ func TestPermissionClickMatchesRenderedRootAtEverySize(t *testing.T) {
 			frame := ansi.Strip(a.View())
 			found := false
 			for y, line := range strings.Split(frame, "\n") {
-				if pos := strings.Index(line, "Allow (a)"); pos >= 0 {
-					_, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(line[:pos]), Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+				if before, _, ok := strings.Cut(line, "Allow (a)"); ok {
+					_, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(before), Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 					require.NotNil(t, cmd, "visible approval target must be clickable:\n%s", frame)
 					response := cmd().(dialog.PermissionResponseMsg)
 					require.Equal(t, dialog.PermissionAllow, response.Action)
@@ -53,8 +53,8 @@ func TestQuitMouseDoesNotReplaceThemeDialog(t *testing.T) {
 	themes := dialog.NewThemeDialogCmp()
 	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: &inputPage{}}, status: status.(core.StatusCmp), width: 80, height: 23, quit: quit, themeDialog: themes, showQuit: true}
 	for y, line := range strings.Split(ansi.Strip(a.View()), "\n") {
-		if i := strings.Index(line, "Continue"); i >= 0 {
-			u, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(line[:i]), Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+		if before, _, ok := strings.Cut(line, "Continue"); ok {
+			u, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(before), Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 			after := u.(appModel)
 			require.Same(t, themes, after.themeDialog)
 			require.Same(t, quit, after.quit)

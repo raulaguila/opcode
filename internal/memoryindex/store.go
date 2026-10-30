@@ -115,16 +115,9 @@ func Search(ctx context.Context, directory, project, kind, session, query string
 	if len(query) < 2 || len(query) > 200 || offset < 0 || offset > 10000 || limit < 1 || limit > 20 {
 		return nil, false, fmt.Errorf("invalid memory search bounds")
 	}
-	fields := strings.FieldsFunc(query, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
-	if len(fields) > 12 {
-		fields = fields[:12]
-	}
-	terms := []string{}
-	for _, s := range fields {
-		terms = append(terms, `"`+s+`"`)
-	}
-	if len(terms) == 0 {
-		return nil, false, fmt.Errorf("query requires words")
+	terms, err := memorySearchTerms(query)
+	if err != nil {
+		return nil, false, err
 	}
 	db, err := open(ctx, directory, project)
 	if err != nil {
@@ -164,4 +157,19 @@ func Search(ctx context.Context, directory, project, kind, session, query string
 		items = items[:limit]
 	}
 	return items, more, nil
+}
+
+func memorySearchTerms(query string) ([]string, error) {
+	fields := strings.FieldsFunc(query, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	if len(fields) > 12 {
+		fields = fields[:12]
+	}
+	terms := []string{}
+	for _, s := range fields {
+		terms = append(terms, `"`+s+`"`)
+	}
+	if len(terms) == 0 {
+		return nil, fmt.Errorf("query requires words")
+	}
+	return terms, nil
 }

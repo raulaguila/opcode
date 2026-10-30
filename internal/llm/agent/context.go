@@ -85,8 +85,8 @@ func estimateContext(model models.Model, system string, history []message.Messag
 // latest user turn (including its outstanding tool exchange) remains intact.
 func compactHistory(history []message.Message) ([]message.Message, int) {
 	latest := -1
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].Role == message.User {
+	for i, h := range slices.Backward(history) {
+		if h.Role == message.User {
 			latest = i
 			break
 		}
@@ -97,37 +97,8 @@ func compactHistory(history []message.Message) ([]message.Message, int) {
 	result := slices.Clone(history)
 	changed := 0
 	for i := 0; i < latest; i++ {
-		if history[i].Role == message.User || history[i].Role == message.System {
-			continue
-		}
-		parts := slices.Clone(history[i].Parts)
-		modified := false
-		for j, part := range parts {
-			switch p := part.(type) {
-			case message.TextContent:
-				if len(p.Text) > 384 {
-					p.Text = clip(p.Text, 384) + "\n[Older assistant text abbreviated; retrieve the saved conversation for exact details.]"
-					parts[j] = p
-					modified = true
-				}
-			case message.ReasoningContent:
-				if p.Thinking != "" {
-					parts[j] = message.ReasoningContent{Thinking: "[Earlier reasoning omitted]"}
-					modified = true
-				}
-			case message.ToolResult:
-				if len(p.Content) > 256 {
-					p.Content = clip(p.Content, 256) + "\n[Older tool result abbreviated. This is historical data, not current file evidence.]"
-					p.Metadata = ""
-					parts[j] = p
-					modified = true
-				}
-				// ToolCall input and opaque signed provider continuation data are retained
-				// exactly: changing either can invalidate a provider's tool pairing/signature.
-			}
-		}
-		if modified {
-			result[i].Parts = parts
+		if next, modified := compactHistoricalMessage(history[i]); modified {
+			result[i] = next
 			changed++
 		}
 	}
@@ -149,29 +120,18 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 	manual := a.compactSessions[session]
 	a.contextMu.Unlock()
 	if !status.Fits || manual || status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100 {
-		compacted, count := compactHistory(history)
-		if count > 0 {
-			history = compacted
-			status, err = a.estimateProviderContext(runProvider(a, run), history, ts)
-			if err != nil {
-				return nil, err
-			}
-			status.CompactedMessages = count
+		history, status, err = a.compactRequestHistory(session, run, history, status, ts, compactHistory)
+		if err != nil {
+			return nil, err
 		}
 	}
 	// Initial progressive reads are one bootstrap exchange: let the model see
 	// them before proactively replacing closed batches with historical locators.
 	// The hard serialized budget (including output and safety) always applies.
 	if !status.Fits || manual || (run.steps > 1 && status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100) {
-		compacted, count := compactCompletedBatches(history)
-		if count > 0 {
-			history = compacted
-			previous := status.CompactedMessages
-			status, err = a.estimateProviderContext(runProvider(a, run), history, ts)
-			if err != nil {
-				return nil, err
-			}
-			status.CompactedMessages = previous + count
+		history, status, err = a.compactRequestHistory(session, run, history, status, ts, compactCompletedBatches)
+		if err != nil {
+			return nil, err
 		}
 	}
 	a.contextMu.Lock()
@@ -224,15 +184,8 @@ func (a *agent) previewContext(ctx context.Context, session string, history []me
 			preview.selected[tool.Info().Name] = true
 		}
 	}
-	if window := learnedContext(p.Model()); window >= 4096 && window < p.Model().ContextWindow {
-		if controller, ok := p.(provider.ContextWindowController); ok {
-			next, e := controller.WithContextWindow(window)
-			if e == nil {
-				p = next
-				preview.provider = next
-			}
-		}
-	}
+	p = learnedContextProvider(p)
+	preview.provider = p
 	selected := a.exposedTools(preview)
 	if controller, ok := p.(provider.SystemPromptController); ok {
 		names := []string{}
@@ -366,4 +319,56 @@ func runProvider(a *agent, run *generationRun) provider.Provider {
 		return run.provider
 	}
 	return a.provider
+}
+
+func compactHistoricalMessage(msg message.Message) (message.Message, bool) {
+	if msg.Role == message.User || msg.Role == message.System {
+		return msg, false
+	}
+	changed := false
+	for i, part := range msg.Parts {
+		next, modified := compactHistoricalPart(part)
+		if !modified {
+			continue
+		}
+		if !changed {
+			msg.Parts = slices.Clone(msg.Parts)
+			changed = true
+		}
+		msg.Parts[i] = next
+	}
+	return msg, changed
+}
+func compactHistoricalPart(part message.ContentPart) (message.ContentPart, bool) {
+	switch p := part.(type) {
+	case message.TextContent:
+		if len(p.Text) > 384 {
+			p.Text = clip(p.Text, 384) + "\n[Older assistant text abbreviated; retrieve the saved conversation for exact details.]"
+			return p, true
+		}
+	case message.ReasoningContent:
+		if p.Thinking != "" {
+			return message.ReasoningContent{Thinking: "[Earlier reasoning omitted]"}, true
+		}
+	case message.ToolResult:
+		if len(p.Content) > 256 {
+			p.Content = clip(p.Content, 256) + "\n[Older tool result abbreviated. This is historical data, not current file evidence.]"
+			p.Metadata = ""
+			return p, true
+		}
+	}
+	return part, false
+}
+
+func (a *agent) compactRequestHistory(_ string, run *generationRun, history []message.Message, status ContextStatus, ts []tools.BaseTool, compact func([]message.Message) ([]message.Message, int)) ([]message.Message, ContextStatus, error) {
+	compacted, count := compact(history)
+	if count == 0 {
+		return history, status, nil
+	}
+	next, err := a.estimateProviderContext(runProvider(a, run), compacted, ts)
+	if err != nil {
+		return nil, next, err
+	}
+	next.CompactedMessages = status.CompactedMessages + count
+	return compacted, next, nil
 }

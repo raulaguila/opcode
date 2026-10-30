@@ -101,12 +101,12 @@ func (m *integrationDialogCmp) oauthView() string {
 }
 
 func joinLines(lines []string) string {
-	out := ""
+	var out strings.Builder
 	for i, s := range lines {
 		if i > 0 {
-			out += "\n"
+			out.WriteString("\n")
 		}
-		out += s
+		out.WriteString(s)
 	}
-	return out
+	return out.String()
 }

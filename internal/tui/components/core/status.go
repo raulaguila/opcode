@@ -66,14 +66,7 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	}
 	left += " ▾"
 	right = config.Text("Escolher modelo", "Choose model")
-	if cfg := config.Get(); cfg != nil {
-		if model, ok := models.SupportedModels[cfg.Agents[config.AgentCoder].Model]; ok {
-			right = model.APIModel
-			if right == "" {
-				right = model.Name
-			}
-		}
-	}
+	labelsGet(&right)
 	right += " ▾"
 	center = config.Text("/ comandos · Alt+Enter nova linha", "/ commands · Alt+Enter new line")
 	if m.enhancedKeyboard {
@@ -93,15 +86,7 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	if diagnostics := m.projectDiagnostics(); diagnostics != "" && !state.Busy {
 		center = diagnostics + " · " + center
 	}
-	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
-		center = strings.Join(strings.Fields(m.info.Msg), " ")
-		if m.info.Type == util.InfoTypeWarn {
-			center = config.Text("Aviso: ", "Warning: ") + center
-		}
-		if m.info.Type == util.InfoTypeError {
-			center = config.Text("Erro: ", "Error: ") + center
-		}
-	}
+	labelsTypeUtilInfoTypeError(&m, &state, &center)
 	return
 }
 
@@ -140,24 +125,8 @@ func (m statusCmp) metrics(state util.FooterState) string {
 		}
 	}
 	text := used + "/" + compactTokens(state.ContextWindow) + " ctx"
-	if m.width >= 110 {
-		if state.Busy && state.AwaitingModel {
-			return text + " · " + config.Text("Aguardando modelo…", "Awaiting model…")
-		}
-		if state.Busy && state.SpeedLive && state.TokensPerSecond <= 0 {
-			return text + " · " + config.Text("Gerando…", "Generating…")
-		}
-		rate := "—"
-		if (!state.Busy || state.SpeedLive) && state.TokensPerSecond > 0 && !math.IsNaN(state.TokensPerSecond) && !math.IsInf(state.TokensPerSecond, 0) {
-			rate = fmt.Sprintf("%.1f", state.TokensPerSecond)
-			if state.TokensPerSecond > 9999 {
-				rate = fmt.Sprintf("%.3g", state.TokensPerSecond)
-			}
-			if state.SpeedEstimated || state.SpeedLive {
-				rate = "~" + rate
-			}
-		}
-		text += " · " + rate + " tok/s"
+	if result0, handled := metricsWidth(&m, &state, &text); handled {
+		return result0
 	}
 	return text
 }
@@ -256,4 +225,54 @@ func (m statusCmp) projectDiagnostics() string {
 }
 func NewStatusCmp(lspClients map[string]*lsp.Client) StatusCmp {
 	return &statusCmp{messageTTL: 5 * time.Second, lspClients: lspClients}
+}
+
+func labelsTypeUtilInfoTypeError(m *statusCmp, state *util.FooterState, center *string) {
+	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
+		(*center) = strings.Join(strings.Fields(m.info.Msg), " ")
+		if m.info.Type == util.InfoTypeWarn {
+			(*center) = config.Text("Aviso: ", "Warning: ") + (*center)
+		}
+		if m.info.Type == util.InfoTypeError {
+			(*center) = config.Text("Erro: ", "Error: ") + (*center)
+		}
+	}
+}
+
+func metricsWidth(m *statusCmp, state *util.FooterState, text *string) (extractedResult0 string, handled bool) {
+	if m.width >= 110 {
+		if state.Busy && state.AwaitingModel {
+			return (*text) + " · " + config.Text("Aguardando modelo…", "Awaiting model…"), true
+		}
+		if state.Busy && state.SpeedLive && state.TokensPerSecond <= 0 {
+			return (*text) + " · " + config.Text("Gerando…", "Generating…"), true
+		}
+		rate := "—"
+		metricsWidthIsInfStateTokensPerSecond(state, &rate)
+		(*text) += " · " + rate + " tok/s"
+	}
+	return extractedResult0, false
+}
+
+func metricsWidthIsInfStateTokensPerSecond(state *util.FooterState, rate *string) {
+	if (!state.Busy || state.SpeedLive) && state.TokensPerSecond > 0 && !math.IsNaN(state.TokensPerSecond) && !math.IsInf(state.TokensPerSecond, 0) {
+		(*rate) = fmt.Sprintf("%.1f", state.TokensPerSecond)
+		if state.TokensPerSecond > 9999 {
+			(*rate) = fmt.Sprintf("%.3g", state.TokensPerSecond)
+		}
+		if state.SpeedEstimated || state.SpeedLive {
+			(*rate) = "~" + (*rate)
+		}
+	}
+}
+
+func labelsGet(right *string) {
+	if cfg := config.Get(); cfg != nil {
+		if model, ok := models.SupportedModels[cfg.Agents[config.AgentCoder].Model]; ok {
+			(*right) = model.APIModel
+			if (*right) == "" {
+				(*right) = model.Name
+			}
+		}
+	}
 }

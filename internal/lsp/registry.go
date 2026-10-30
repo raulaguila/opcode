@@ -3,6 +3,7 @@ package lsp
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 )
 
@@ -12,9 +13,7 @@ func SnapshotClients(clients map[string]*Client) map[string]*Client {
 	clientsMu.RLock()
 	defer clientsMu.RUnlock()
 	result := make(map[string]*Client, len(clients))
-	for key, client := range clients {
-		result[key] = client
-	}
+	maps.Copy(result, clients)
 	return result
 }
 func SetClient(clients map[string]*Client, key string, client *Client) {

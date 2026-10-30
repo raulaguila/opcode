@@ -183,7 +183,7 @@ func TestWorkspaceMouseOnlyChoosesVisibleActions(t *testing.T) {
 	p.showWorkspace("parent", "Parent", "")
 	p.showWorkspace("task", "Task", "body")
 	p.workspaceHistory = []workspacePanel{{title: "Parent"}}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{kind: "unused", label: "Action"})
 	}
 	first, rows, _ := p.workspaceActionGeometry()

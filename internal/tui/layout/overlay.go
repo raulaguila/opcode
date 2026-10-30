@@ -44,36 +44,16 @@ func PlaceOverlay(
 	fgHeight := len(fgLines)
 
 	if shadow {
-		t := theme.CurrentTheme()
-		baseStyle := styles.BaseStyle()
-
-		var shadowbg string = ""
-		shadowchar := lipgloss.NewStyle().
-			Background(t.BackgroundDarker()).
-			Foreground(t.Background()).
-			Render("░")
-		bgchar := baseStyle.Render(" ")
-		for i := 0; i <= fgHeight; i++ {
-			if i == 0 {
-				shadowbg += bgchar + strings.Repeat(bgchar, fgWidth) + "\n"
-			} else {
-				shadowbg += bgchar + strings.Repeat(shadowchar, fgWidth)
-				if i < fgHeight {
-					shadowbg += "\n"
-				}
-			}
-		}
-
-		fg = PlaceOverlay(0, 0, fg, shadowbg, false, opts...)
+		fg = PlaceOverlay(0, 0, fg, overlayShadow(fgWidth, fgHeight), false, opts...)
 		fgLines, fgWidth = getLines(fg)
 		fgHeight = len(fgLines)
 	}
 
 	if fgWidth >= bgWidth && fgHeight >= bgHeight {
-		// FIXME: return fg or bg?
+		// A foreground covering the background owns the complete canvas.
 		return fg
 	}
-	// TODO: allow placement outside of the bg box?
+	// Placement is bounded to the available background canvas.
 	x = util.Clamp(x, 0, bgWidth-fgWidth)
 	y = util.Clamp(y, 0, bgHeight-fgHeight)
 
@@ -92,31 +72,55 @@ func PlaceOverlay(
 			continue
 		}
 
-		pos := 0
-		if x > 0 {
-			left := truncate.String(bgLine, uint(x))
-			pos = ansi.PrintableRuneWidth(left)
-			b.WriteString(left)
-			if pos < x {
-				b.WriteString(ws.render(x - pos))
-				pos = x
-			}
-		}
-
-		fgLine := fgLines[i-y]
-		b.WriteString(fgLine)
-		pos += ansi.PrintableRuneWidth(fgLine)
-
-		right := cutLeft(bgLine, pos)
-		bgWidth := ansi.PrintableRuneWidth(bgLine)
-		rightWidth := ansi.PrintableRuneWidth(right)
-		if rightWidth <= bgWidth-pos {
-			b.WriteString(ws.render(bgWidth - rightWidth - pos))
-		}
-
-		b.WriteString(right)
+		b.WriteString(overlayLine(bgLine, fgLines[i-y], x, ws))
 	}
 
+	return b.String()
+}
+
+// Build the two shadow rows once, then append in linear output space.
+func overlayShadow(width, height int) string {
+	t := theme.CurrentTheme()
+	shadow := lipgloss.NewStyle().Background(t.BackgroundDarker()).Foreground(t.Background()).Render("░")
+	blank := styles.BaseStyle().Render(" ")
+	top := blank + strings.Repeat(blank, width)
+	row := blank + strings.Repeat(shadow, width)
+	var b strings.Builder
+	b.Grow(len(top) + height*(len(row)+1))
+	b.WriteString(top)
+	for range height {
+		b.WriteByte('\n')
+		b.WriteString(row)
+	}
+	return b.String()
+}
+
+func overlayLine(bgLine, fgLine string, x int, ws *whitespace) string {
+	var b strings.Builder
+	b.Grow(len(bgLine) + len(fgLine))
+
+	pos := 0
+	if x > 0 {
+		left := truncate.String(bgLine, uint(x))
+		pos = ansi.PrintableRuneWidth(left)
+		b.WriteString(left)
+		if pos < x {
+			b.WriteString(ws.render(x - pos))
+			pos = x
+		}
+	}
+
+	b.WriteString(fgLine)
+	pos += ansi.PrintableRuneWidth(fgLine)
+
+	right := cutLeft(bgLine, pos)
+	bgWidth := ansi.PrintableRuneWidth(bgLine)
+	rightWidth := ansi.PrintableRuneWidth(right)
+	if rightWidth <= bgWidth-pos {
+		b.WriteString(ws.render(bgWidth - rightWidth - pos))
+	}
+
+	b.WriteString(right)
 	return b.String()
 }
 
@@ -124,13 +128,6 @@ func PlaceOverlay(
 // This function is heavily based on muesli's ansi and truncate packages.
 func cutLeft(s string, cutWidth int) string {
 	return chAnsi.Cut(s, cutWidth, lipgloss.Width(s))
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 type whitespace struct {

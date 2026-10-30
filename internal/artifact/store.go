@@ -94,44 +94,13 @@ func (s *Store) Put(ctx context.Context, session, label, content string) (Info, 
 		return Info{}, err
 	}
 	defer root.Close()
-	files, total, sessionBytes, sessionFiles := 0, int64(0), int64(0), 0
-	visited := 0
-	err = fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		visited++
-		if visited > 2048 {
-			return fmt.Errorf("artifact storage entry limit exceeded")
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("artifact storage contains a symbolic link")
-		}
-		if d.IsDir() {
-			return nil
-		}
-		stat, err := d.Info()
-		if err != nil {
-			return err
-		}
-		files++
-		total += stat.Size()
-		if strings.HasPrefix(path, key+"-") {
-			sessionBytes += stat.Size()
-			sessionFiles++
-		}
-		if files > 1024 || total > 64<<20 {
-			return fmt.Errorf("artifact storage quota exceeded")
-		}
-		return nil
-	})
+	usage := artifactUsage{ctx: ctx, key: key}
+	err = fs.WalkDir(root.FS(), ".", usage.visit)
+
 	if err != nil {
 		return Info{}, err
 	}
-	if files >= 1024 || total+int64(len(raw)) > 64<<20 || sessionFiles >= 32 || sessionBytes+int64(len(raw)) > 8<<20 {
+	if usage.files >= 1024 || usage.total+int64(len(raw)) > 64<<20 || usage.sessionFiles >= 32 || usage.sessionBytes+int64(len(raw)) > 8<<20 {
 		return Info{}, fmt.Errorf("artifact storage quota exceeded")
 	}
 	f, err := root.OpenFile(key+"-"+info.ID+".json", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -241,4 +210,44 @@ func (s *Store) Search(ctx context.Context, session, id, query string, offset, l
 		offset = at + len(query)
 	}
 	return result, nil
+}
+
+type artifactUsage struct {
+	ctx                          context.Context
+	key                          string
+	files, visited, sessionFiles int
+	total, sessionBytes          int64
+}
+
+func (u *artifactUsage) visit(path string, d fs.DirEntry, walkErr error) error {
+	if walkErr != nil {
+		return walkErr
+	}
+	if err := u.ctx.Err(); err != nil {
+		return err
+	}
+	u.visited++
+	if u.visited > 2048 {
+		return fmt.Errorf("artifact storage entry limit exceeded")
+	}
+	if d.Type()&os.ModeSymlink != 0 {
+		return fmt.Errorf("artifact storage contains a symbolic link")
+	}
+	if d.IsDir() {
+		return nil
+	}
+	stat, err := d.Info()
+	if err != nil {
+		return err
+	}
+	u.files++
+	u.total += stat.Size()
+	if strings.HasPrefix(path, u.key+"-") {
+		u.sessionBytes += stat.Size()
+		u.sessionFiles++
+	}
+	if u.files > 1024 || u.total > 64<<20 {
+		return fmt.Errorf("artifact storage quota exceeded")
+	}
+	return nil
 }

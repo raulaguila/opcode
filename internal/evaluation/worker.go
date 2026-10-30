@@ -30,44 +30,10 @@ import (
 // Worker runs in a fresh process: config and prompt caches cannot cross fixture
 // boundaries. It constructs the real agent and real provider, never a fake.
 func Worker(ctx context.Context, jobPath string, out io.Writer) error {
-	raw, err := readBounded(jobPath, 2<<20)
+	job, cfg, err := prepareWorker(jobPath)
 	if err != nil {
 		return err
 	}
-	var job Job
-	if json.Unmarshal(raw, &job) != nil {
-		return fmt.Errorf("invalid evaluation job")
-	}
-	base := filepath.Dir(jobPath)
-	if !strings.HasPrefix(filepath.Base(base), "opcode-eval-") || job.Workspace != filepath.Join(base, "workspace") || job.Config != filepath.Join(base, "config.json") {
-		return fmt.Errorf("worker only accepts a disposable evaluation workspace")
-	}
-	if err := (Suite{Version: 1, Cases: []Case{job.Case}}).Validate(); err != nil {
-		return err
-	}
-	if job.Case.Mode == "execute" && !job.AllowExecution {
-		return fmt.Errorf("execution was not explicitly enabled")
-	}
-	if config.Get() != nil {
-		return fmt.Errorf("evaluation worker requires a fresh process")
-	}
-	if err := os.Chdir(job.Workspace); err != nil {
-		return err
-	}
-	viper.SetConfigFile(job.Config)
-	cfg, err := config.Load(job.Workspace, false)
-	if err != nil {
-		return fmt.Errorf("evaluation provider configuration failed")
-	}
-	if err := cfg.ValidateStartup(); err != nil {
-		return fmt.Errorf("evaluation provider startup validation failed")
-	}
-	cfg.Extensions = config.ExtensionsConfig{}
-	cfg.MCPServers = map[string]config.MCPServer{}
-	cfg.LSP = map[string]config.LSPConfig{}
-	cfg.Security = config.SecurityConfig{Sandbox: "bubblewrap"}
-	cfg.Runtime.Mode = job.Case.Mode
-	cfg.Runtime.MaxSeconds = timeout(job.Case)
 	conn, err := db.Connect()
 	if err != nil {
 		return fmt.Errorf("evaluation storage initialization failed")
@@ -106,23 +72,7 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var response strings.Builder
-	var runError error
-	for _, prompt := range job.Case.Prompts {
-		done, err := service.Run(ctx, saved.ID, prompt)
-		if err != nil {
-			runError = err
-			break
-		}
-		event := <-done
-		response.Reset()
-		response.WriteString(event.Message.Content().Text)
-		response.WriteByte('\n')
-		if event.Error != nil {
-			runError = event.Error
-			break
-		}
-	}
+	response, runError := runWorkerPrompts(ctx, service, saved.ID, job.Case.Prompts)
 	task, taskErr := tasks.Get(context.Background(), saved.ID)
 	history, historyErr := messages.List(context.Background(), saved.ID)
 	if taskErr != nil || historyErr != nil {
@@ -130,103 +80,21 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 	}
 
 	calls, count := observedToolCalls(history)
-	retrieved := []string{}
-	strategies := []string{}
-	for _, msg := range history {
-		for _, r := range msg.ToolResults() {
-			if !r.IsError {
-				var page struct {
-					Results  []struct{ Path string }
-					Strategy string
-				}
-				if json.Unmarshal([]byte(r.Content), &page) == nil {
-					if page.Strategy != "" && len(strategies) < 8 && !contains(strategies, page.Strategy) {
-						strategies = append(strategies, page.Strategy)
-					}
-					for _, hit := range page.Results {
-						if len(retrieved) < 200 {
-							retrieved = append(retrieved, hit.Path)
-						}
-					}
-				}
-			}
-		}
-	}
-	result := Evaluate(job.Case, job.Workspace, Observation{Response: response.String(), Error: runError, Tools: calls, Task: task, RetrievedPaths: retrieved})
+	retrieved, strategies := workerRetrieval(history)
+	result := Evaluate(job.Case, job.Workspace, Observation{Response: response, Error: runError, Tools: calls, Task: task, RetrievedPaths: retrieved})
 	result.RetrievalStrategies = strategies
-	callsByID := map[string]string{}
-	for _, msg := range history {
-		for _, call := range msg.ToolCalls() {
-			callsByID[call.ID] = call.Name
-		}
-	}
-	for _, msg := range history {
-		for _, r := range msg.ToolResults() {
-			if r.IsError {
-				if result.ToolFailures == nil {
-					result.ToolFailures = map[string]int{}
-				}
-				name := tools.RedactCredentials(callsByID[r.ToolCallID])
-				if len(name) > 80 {
-					name = "oversized_tool_name"
-				}
-				result.ToolFailures[name+":"+evaluationFailureKind(r.Content)]++
-			}
-		}
-	}
+	result.ToolFailures = workerToolFailures(history)
 	if runError != nil {
 		result.AgentFailureKind = evaluationFailureKind(runError.Error())
 	}
-	result.Application = "opcode"
-	result.ApplicationVersion = version.Version
-	result.APIModel = service.Model().APIModel
-	result.Protocol = service.Model().API
-	if result.Protocol == "ollama" {
-		zero := 0.0
-		result.Temperature = &zero
-	}
-	result.OutputReserve = cfg.Agents[config.AgentCoder].MaxTokens
-	result.PromptVersion = prompt.Version
-	result.ContextWindow = service.Model().ContextWindow
-	if control, ok := service.(agent.ContextControl); ok {
-		if status, e := control.ContextStatus(ctx, saved.ID); e == nil {
-			result.ContextWindow = status.ContextWindow
-			result.ContextMethod = status.Method
-			result.ContextComponents = status.Components
-			result.OutputReserve = status.ReservedOutputTokens
-		}
-	}
-	result.PromptProfile = prompt.ProfileForWindow(result.ContextWindow)
-	result.MetricsOrigin = "native runtime usage and observed tool receipts; title generation excluded"
-	if job.Conditions.ContextWindow > 0 && result.ContextWindow != job.Conditions.ContextWindow {
-		result.MetricsOrigin += "; effective context differs from requested comparison"
-	}
-	if usage, ok := service.(agent.UsageControl); ok {
-		if measured, e := usage.Usage(ctx, saved.ID); e == nil {
-			result.PhaseMetrics = &measured.PhaseMetrics
-			if measured.InputTokens+measured.OutputTokens > 0 {
-				result.InputTokens = &measured.InputTokens
-				result.OutputTokens = &measured.OutputTokens
-			}
-		}
-	}
+	projectWorkerUsage(ctx, service, saved.ID, cfg.Agents[config.AgentCoder].MaxTokens, job.Conditions.ContextWindow, &result)
 	result.Model = string(service.Model().ID)
 	result.ToolCalls = count
 	result.TaskStatus = task.Status
 	result.RequiresChanges = task.RequiresChanges
 	result.ChangesVerified = task.StartDigest != "" && task.Digest != "" && task.StartDigest != task.Digest
 	result.NoChangeJustification = strings.TrimSpace(task.NoChangeReason) != ""
-	for name := range calls {
-		if len(result.ToolNames) < 64 {
-			result.ToolNames = append(result.ToolNames, tools.RedactCredentials(strings.Map(func(r rune) rune {
-				if r < ' ' || r == 127 {
-					return -1
-				}
-				return r
-			}, name)))
-		}
-	}
-	sort.Strings(result.ToolNames)
+	result.ToolNames = workerToolNames(calls)
 	return json.NewEncoder(out).Encode(result)
 }
 
@@ -298,26 +166,7 @@ func Evaluate(c Case, root string, observation Observation) CaseResult {
 				passed = passed || receipt.Name == criterion.Value && receipt.Passed && receipt.Revision == observation.Task.Revision && receipt.Digest == observation.Task.Digest
 			}
 		case "file_contains", "file_not_contains":
-			if safePath(criterion.Path) {
-				r, err := os.OpenRoot(root)
-				if err == nil {
-					info, err := r.Lstat(criterion.Path)
-					if err == nil && info.Mode().IsRegular() {
-						file, err := r.Open(criterion.Path)
-						if err == nil {
-							raw, readErr := io.ReadAll(io.LimitReader(file, 256<<10+1))
-							file.Close()
-							if readErr == nil && len(raw) <= 256<<10 {
-								passed = strings.Contains(string(raw), criterion.Value)
-								if criterion.Kind == "file_not_contains" {
-									passed = !passed
-								}
-							}
-						}
-					}
-					r.Close()
-				}
-			}
+			passed = evaluateFileCriterion(root, criterion)
 		}
 		value := passed
 		result.Criteria = append(result.Criteria, CriterionResult{Kind: criterion.Kind, Path: criterion.Path, Passed: &value})
@@ -373,4 +222,218 @@ func evaluationFailureKind(text string) string {
 	default:
 		return "other"
 	}
+}
+
+func evaluateFileCriterion(root string, criterion Criterion) bool {
+	if !safePath(criterion.Path) {
+		return false
+	}
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return false
+	}
+	defer r.Close()
+	info, err := r.Lstat(criterion.Path)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	file, err := r.Open(criterion.Path)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	raw, err := io.ReadAll(io.LimitReader(file, 256<<10+1))
+	if err != nil || len(raw) > 256<<10 {
+		return false
+	}
+	passed := strings.Contains(string(raw), criterion.Value)
+	if criterion.Kind == "file_not_contains" {
+		passed = !passed
+	}
+	return passed
+}
+
+func runWorkerPrompts(ctx context.Context, service agent.Service, sessionID string, prompts []string) (string, error) {
+	var response strings.Builder
+	var runError error
+	for _, prompt := range prompts {
+		done, err := service.Run(ctx, sessionID, prompt)
+		if err != nil {
+			runError = err
+			break
+		}
+		event := <-done
+		response.Reset()
+		response.WriteString(event.Message.Content().Text)
+		response.WriteByte('\n')
+		if event.Error != nil {
+			runError = event.Error
+			break
+		}
+	}
+	return response.String(), runError
+}
+
+type workerRetrievalProjection struct{ paths, strategies []string }
+
+func workerRetrieval(history []message.Message) ([]string, []string) {
+	p := workerRetrievalProjection{paths: []string{}, strategies: []string{}}
+	for _, msg := range history {
+		for _, result := range msg.ToolResults() {
+			p.add(result)
+		}
+	}
+	return p.paths, p.strategies
+}
+func (p *workerRetrievalProjection) add(result message.ToolResult) {
+	if result.IsError {
+		return
+	}
+	var page struct {
+		Results  []struct{ Path string }
+		Strategy string
+	}
+	if json.Unmarshal([]byte(result.Content), &page) != nil {
+		return
+	}
+	if page.Strategy != "" && len(p.strategies) < 8 && !contains(p.strategies, page.Strategy) {
+		p.strategies = append(p.strategies, page.Strategy)
+	}
+	for _, hit := range page.Results {
+		if len(p.paths) < 200 {
+			p.paths = append(p.paths, hit.Path)
+		}
+	}
+}
+
+func workerToolFailures(history []message.Message) map[string]int {
+	var failures map[string]int
+	callsByID := map[string]string{}
+	for _, msg := range history {
+		for _, call := range msg.ToolCalls() {
+			callsByID[call.ID] = call.Name
+		}
+	}
+	for _, msg := range history {
+		for _, r := range msg.ToolResults() {
+			if r.IsError {
+				if failures == nil {
+					failures = map[string]int{}
+				}
+				name := boundedToolName(callsByID[r.ToolCallID])
+				failures[name+":"+evaluationFailureKind(r.Content)]++
+			}
+		}
+	}
+	return failures
+}
+
+func boundedToolName(name string) string {
+	name = tools.RedactCredentials(name)
+	if len(name) > 80 {
+		name = "oversized_tool_name"
+	}
+	return name
+}
+
+func workerToolNames(calls map[string]bool) []string {
+	var names []string
+	for name := range calls {
+		if len(names) < 64 {
+			names = append(names, tools.RedactCredentials(strings.Map(func(r rune) rune {
+				if r < ' ' || r == 127 {
+					return -1
+				}
+				return r
+			}, name)))
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func projectWorkerUsage(ctx context.Context, service agent.Service, sessionID string, configuredReserve, requestedContext int64, result *CaseResult) {
+	result.Application = "opcode"
+	result.ApplicationVersion = version.Version
+	result.APIModel = service.Model().APIModel
+	result.Protocol = service.Model().API
+	if result.Protocol == "ollama" {
+		zero := 0.0
+		result.Temperature = &zero
+	}
+	result.OutputReserve = configuredReserve
+	result.PromptVersion = prompt.Version
+	result.ContextWindow = service.Model().ContextWindow
+	if control, ok := service.(agent.ContextControl); ok {
+		if status, e := control.ContextStatus(ctx, sessionID); e == nil {
+			result.ContextWindow = status.ContextWindow
+			result.ContextMethod = status.Method
+			result.ContextComponents = status.Components
+			result.OutputReserve = status.ReservedOutputTokens
+		}
+	}
+	result.PromptProfile = prompt.ProfileForWindow(result.ContextWindow)
+	result.MetricsOrigin = "native runtime usage and observed tool receipts; title generation excluded"
+	if requestedContext > 0 && result.ContextWindow != requestedContext {
+		result.MetricsOrigin += "; effective context differs from requested comparison"
+	}
+	if usage, ok := service.(agent.UsageControl); ok {
+		if measured, e := usage.Usage(ctx, sessionID); e == nil {
+			result.PhaseMetrics = &measured.PhaseMetrics
+			if measured.InputTokens+measured.OutputTokens > 0 {
+				result.InputTokens = &measured.InputTokens
+				result.OutputTokens = &measured.OutputTokens
+			}
+		}
+	}
+}
+
+func readWorkerJob(jobPath string) (job Job, err error) {
+	raw, err := readBounded(jobPath, 2<<20)
+	if err != nil {
+		return job, err
+	}
+	if json.Unmarshal(raw, &job) != nil {
+		return job, fmt.Errorf("invalid evaluation job")
+	}
+	base := filepath.Dir(jobPath)
+	if !strings.HasPrefix(filepath.Base(base), "opcode-eval-") || job.Workspace != filepath.Join(base, "workspace") || job.Config != filepath.Join(base, "config.json") {
+		return job, fmt.Errorf("worker only accepts a disposable evaluation workspace")
+	}
+	if err := (Suite{Version: 1, Cases: []Case{job.Case}}).Validate(); err != nil {
+		return job, err
+	}
+	if job.Case.Mode == "execute" && !job.AllowExecution {
+		return job, fmt.Errorf("execution was not explicitly enabled")
+	}
+
+	return job, nil
+}
+
+func prepareWorker(jobPath string) (Job, *config.Config, error) {
+	job, err := readWorkerJob(jobPath)
+	if err != nil {
+		return job, nil, err
+	}
+	if config.Get() != nil {
+		return job, nil, fmt.Errorf("evaluation worker requires a fresh process")
+	}
+	if err := os.Chdir(job.Workspace); err != nil {
+		return job, nil, err
+	}
+	viper.SetConfigFile(job.Config)
+	cfg, err := config.Load(job.Workspace, false)
+	if err != nil {
+		return job, nil, fmt.Errorf("evaluation provider configuration failed")
+	}
+	if err := cfg.ValidateStartup(); err != nil {
+		return job, nil, fmt.Errorf("evaluation provider startup validation failed")
+	}
+	cfg.Extensions = config.ExtensionsConfig{}
+	cfg.MCPServers = map[string]config.MCPServer{}
+	cfg.LSP = map[string]config.LSPConfig{}
+	cfg.Security = config.SecurityConfig{Sandbox: "bubblewrap"}
+	cfg.Runtime.Mode = job.Case.Mode
+	cfg.Runtime.MaxSeconds = timeout(job.Case)
+	return job, cfg, nil
 }

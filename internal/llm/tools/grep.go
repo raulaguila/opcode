@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/raulaguila/opcode/internal/config"
@@ -28,7 +27,6 @@ type GrepParams struct {
 
 type grepMatch struct {
 	path     string
-	modTime  time.Time
 	lineNum  int
 	lineText string
 }
@@ -148,33 +146,7 @@ func (g *grepTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		return ToolResponse{}, fmt.Errorf("error searching files: %w", err)
 	}
 
-	var output string
-	if len(matches) == 0 {
-		output = "No files found"
-	} else {
-		output = fmt.Sprintf("Found %d matches\n", len(matches))
-
-		currentFile := ""
-		for _, match := range matches {
-			if currentFile != match.path {
-				if currentFile != "" {
-					output += "\n"
-				}
-				currentFile = match.path
-				output += fmt.Sprintf("%s:\n", match.path)
-			}
-			if match.lineNum > 0 {
-				output += fmt.Sprintf("  Line %d: %s\n", match.lineNum, match.lineText)
-			} else {
-				output += fmt.Sprintf("  %s\n", match.path)
-			}
-		}
-
-		if truncated {
-			output += "\n(Results are truncated. Consider using a more specific path or pattern.)"
-		}
-	}
-
+	output := formatGrepMatches(matches, truncated)
 	return WithResponseMetadata(
 		NewTextResponse(output),
 		GrepResponseMetadata{
@@ -213,58 +185,7 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 	}
 	scanner := bufio.NewScanner(pipe)
 	scanner.Buffer(make([]byte, 4096), 4<<20)
-	var matches []grepMatch
-	truncated := false
-	decodeText := func(value struct {
-		Text  string `json:"text"`
-		Bytes string `json:"bytes"`
-	}) string {
-		if value.Bytes != "" {
-			raw, _ := base64.StdEncoding.DecodeString(value.Bytes)
-			return string(raw)
-		}
-		return value.Text
-	}
-	var parseErr error
-	for scanner.Scan() {
-		var event struct {
-			Type string
-			Data struct {
-				Path struct {
-					Text  string `json:"text"`
-					Bytes string `json:"bytes"`
-				}
-				Lines struct {
-					Text  string `json:"text"`
-					Bytes string `json:"bytes"`
-				}
-				LineNumber int `json:"line_number"`
-			}
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
-			parseErr = err
-			break
-		}
-		if event.Type != "match" {
-			continue
-		}
-		path := decodeText(event.Data.Path)
-		if ExclusionReason(discoveryPolicyRoot(rootPath), path) != "" {
-			continue
-		}
-		if _, err := authorizeFile(ctx, path, "read"); err != nil {
-			continue
-		}
-		if len(matches) == limit {
-			truncated = true
-			break
-		}
-		text := strings.TrimRight(decodeText(event.Data.Lines), "\r\n")
-		if len(text) > MaxLineLength {
-			text = text[:MaxLineLength] + "..."
-		}
-		matches = append(matches, grepMatch{path: path, lineNum: event.Data.LineNumber, lineText: text})
-	}
+	matches, truncated, parseErr := scanRipgrepMatches(ctx, rootPath, scanner, limit)
 	scanErr := scanner.Err()
 	if truncated || parseErr != nil || scanErr != nil {
 		cancel()
@@ -279,10 +200,8 @@ func searchFiles(ctx context.Context, pattern, rootPath, include string, limit i
 	if err := parent.Err(); err != nil {
 		return nil, false, err
 	}
-	if waitErr != nil && !truncated {
-		if exit, ok := waitErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 || bufferHasOutput(stderr) {
-			return nil, false, fmt.Errorf("ripgrep search failed")
-		}
+	if err := ripgrepWaitError(waitErr, truncated, stderr, "ripgrep search failed"); err != nil {
+		return nil, false, err
 	}
 	return matches, truncated, nil
 }
@@ -305,30 +224,9 @@ func fallbackSearch(ctx context.Context, pattern, root, include string, limit in
 		if err != nil {
 			continue
 		}
-		scanner := bufio.NewScanner(f)
-		scanner.Buffer(make([]byte, 4096), 4<<20)
-		line := 0
-		for scanner.Scan() {
-			line++
-			text := scanner.Text()
-			if strings.ContainsRune(text, 0) {
-				break
-			}
-			if regex.MatchString(text) {
-				if len(matches) == limit {
-					truncated = true
-					break
-				}
-				if len(text) > MaxLineLength {
-					text = text[:MaxLineLength] + "..."
-				}
-				matches = append(matches, grepMatch{path: path, lineNum: line, lineText: text})
-			}
-		}
-		scanErr := scanner.Err()
-		f.Close()
-		if scanErr != nil {
-			return nil, false, scanErr
+		matches, truncated, err = scanFallbackFile(f, path, regex, matches, limit)
+		if err != nil {
+			return nil, false, err
 		}
 		if truncated {
 			break
@@ -341,49 +239,9 @@ func findFiles(ctx context.Context, root, pattern string, limit int) ([]string, 
 	if _, err := exec.LookPath("rg"); err == nil {
 		return ripgrepFiles(ctx, root, pattern, limit)
 	}
-	var files []string
-	truncated := false
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if path != root && ExclusionReason(discoveryPolicyRoot(root), path) != "" {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return nil
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if pattern != "" {
-			relative, _ := filepath.Rel(root, path)
-			match, err := doublestar.Match(pattern, filepath.ToSlash(relative))
-			if err != nil {
-				return err
-			}
-			if !match {
-				match, _ = doublestar.Match(pattern, d.Name())
-			}
-			if !match {
-				return nil
-			}
-		}
-		if len(files) == limit {
-			truncated = true
-			return filepath.SkipAll
-		}
-		if ExclusionReason(discoveryPolicyRoot(root), path) == "" {
-			files = append(files, path)
-		}
-		return nil
-	})
+	collector := discoveryFileCollector{ctx: ctx, root: root, pattern: pattern, limit: limit}
+	err := filepath.WalkDir(root, collector.visit)
+	files, truncated := collector.files, collector.truncated
 	return files, truncated, err
 }
 
@@ -414,17 +272,7 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 		return nil, false, err
 	}
 	scanner := bufio.NewScanner(pipe)
-	scanner.Split(func(data []byte, eof bool) (int, []byte, error) {
-		for i, c := range data {
-			if c == 0 {
-				return i + 1, data[:i], nil
-			}
-		}
-		if eof && len(data) > 0 {
-			return len(data), data, nil
-		}
-		return 0, nil, nil
-	})
+	scanner.Split(splitNullPaths)
 	scanner.Buffer(make([]byte, 4096), 64<<10)
 	var paths []string
 	truncated := false
@@ -451,12 +299,212 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 	if scanErr != nil {
 		return nil, false, scanErr
 	}
-	if waitErr != nil && !truncated {
-		if exit, ok := waitErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 || bufferHasOutput(stderr) {
-			return nil, false, fmt.Errorf("ripgrep file listing failed")
-		}
+	if err := ripgrepWaitError(waitErr, truncated, stderr, "ripgrep file listing failed"); err != nil {
+		return nil, false, err
 	}
 	return paths, truncated, nil
 }
 
 func bufferHasOutput(b *shell.Buffer) bool { s, _ := b.Snapshot(); return len(s) > 0 }
+
+func formatGrepMatches(matches []grepMatch, truncated bool) string {
+	if len(matches) == 0 {
+		return "No files found"
+	}
+	var output strings.Builder
+	fmt.Fprintf(&output, "Found %d matches\n", len(matches))
+	currentFile := ""
+	for _, match := range matches {
+		if currentFile != match.path {
+			if currentFile != "" {
+				output.WriteByte('\n')
+			}
+			currentFile = match.path
+			fmt.Fprintf(&output, "%s:\n", match.path)
+		}
+		if match.lineNum > 0 {
+			fmt.Fprintf(&output, "  Line %d: %s\n", match.lineNum, match.lineText)
+		} else {
+			fmt.Fprintf(&output, "  %s\n", match.path)
+		}
+	}
+	if truncated {
+		output.WriteString("\n(Results are truncated. Consider using a more specific path or pattern.)")
+	}
+	return output.String()
+}
+
+type ripgrepText struct {
+	Text  string `json:"text"`
+	Bytes string `json:"bytes"`
+}
+
+func (v ripgrepText) decode() string {
+	if v.Bytes != "" {
+		raw, _ := base64.StdEncoding.DecodeString(v.Bytes)
+		return string(raw)
+	}
+	return v.Text
+}
+
+type ripgrepMatchEvent struct {
+	Type string
+	Data struct {
+		Path, Lines ripgrepText
+		LineNumber  int `json:"line_number"`
+	}
+}
+
+func scanRipgrepMatches(ctx context.Context, rootPath string, scanner *bufio.Scanner, limit int) ([]grepMatch, bool, error) {
+	var matches []grepMatch
+	truncated := false
+
+	var parseErr error
+	for scanner.Scan() {
+		var event ripgrepMatchEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			parseErr = err
+			break
+		}
+		if event.Type != "match" {
+			continue
+		}
+		path := event.Data.Path.decode()
+		if ExclusionReason(discoveryPolicyRoot(rootPath), path) != "" {
+			continue
+		}
+		if _, err := authorizeFile(ctx, path, "read"); err != nil {
+			continue
+		}
+		if len(matches) == limit {
+			truncated = true
+			break
+		}
+		text := strings.TrimRight(event.Data.Lines.decode(), "\r\n")
+		if len(text) > MaxLineLength {
+			text = text[:MaxLineLength] + "..."
+		}
+		matches = append(matches, grepMatch{path: path, lineNum: event.Data.LineNumber, lineText: text})
+	}
+	return matches, truncated, parseErr
+}
+
+func ripgrepWaitError(waitErr error, truncated bool, stderr *shell.Buffer, label string) error {
+	if waitErr != nil && !truncated {
+		if exit, ok := waitErr.(*exec.ExitError); !ok || exit.ExitCode() != 1 || bufferHasOutput(stderr) {
+			return fmt.Errorf("%s", label)
+		}
+	}
+	return nil
+}
+
+func splitNullPaths(data []byte, eof bool) (int, []byte, error) {
+
+	for i, c := range data {
+		if c == 0 {
+			return i + 1, data[:i], nil
+		}
+	}
+	if eof && len(data) > 0 {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+
+}
+
+func scanFallbackFile(f *os.File, path string, regex *regexp.Regexp, matches []grepMatch, limit int) ([]grepMatch, bool, error) {
+	truncated := false
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 4096), 4<<20)
+	line := 0
+	for scanner.Scan() {
+		line++
+		text := scanner.Text()
+		if strings.ContainsRune(text, 0) {
+			break
+		}
+		if regex.MatchString(text) {
+			if len(matches) == limit {
+				truncated = true
+				break
+			}
+			if len(text) > MaxLineLength {
+				text = text[:MaxLineLength] + "..."
+			}
+			matches = append(matches, grepMatch{path: path, lineNum: line, lineText: text})
+		}
+	}
+	scanErr := scanner.Err()
+	f.Close()
+	if scanErr != nil {
+		return nil, false, scanErr
+	}
+
+	return matches, truncated, nil
+}
+
+type discoveryFileCollector struct {
+	ctx           context.Context
+	root, pattern string
+	limit         int
+	files         []string
+	truncated     bool
+}
+
+func (c *discoveryFileCollector) visit(path string, d fs.DirEntry, err error) error {
+
+	if err != nil {
+		return err
+	}
+	if c.ctx.Err() != nil {
+		return c.ctx.Err()
+	}
+	if path != c.root && ExclusionReason(discoveryPolicyRoot(c.root), path) != "" {
+		if d.IsDir() {
+			return filepath.SkipDir
+		}
+		return nil
+	}
+	if d.Type()&os.ModeSymlink != 0 {
+		return nil
+	}
+	if d.IsDir() {
+		return nil
+	}
+	matched, err := discoveryPatternMatches(c.root, path, d.Name(), c.pattern)
+	if err != nil {
+		return err
+	}
+	if !matched {
+		return nil
+	}
+	if len(c.files) == c.limit {
+		c.truncated = true
+		return filepath.SkipAll
+	}
+	if ExclusionReason(discoveryPolicyRoot(c.root), path) == "" {
+		c.files = append(c.files, path)
+	}
+	return nil
+
+}
+
+func discoveryPatternMatches(root, path, name, pattern string) (bool, error) {
+	if pattern == "" {
+		return true, nil
+	}
+
+	relative, _ := filepath.Rel(root, path)
+	match, err := doublestar.Match(pattern, filepath.ToSlash(relative))
+	if err != nil {
+		return false, err
+	}
+	if !match {
+		match, _ = doublestar.Match(pattern, name)
+	}
+	if !match {
+		return false, nil
+	}
+
+	return true, nil
+}

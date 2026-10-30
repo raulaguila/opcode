@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -112,12 +113,9 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 	if err := cmd.Run(); err != nil {
 		return CaseResult{ID: job.Case.ID, Status: "failed", Error: "external adapter failed or timed out; output omitted"}, nil
 	}
-	var observed AdapterObservation
-	if output.overflow || json.Unmarshal(output.data, &observed) != nil || len(observed.Tools) > 2000 || len(observed.LocalTools) > 2000 || len(observed.RetrievedPaths) > 200 || len(observed.Response) > 64000 {
-		return CaseResult{}, fmt.Errorf("invalid or oversized adapter observation")
-	}
-	if observed.Conditions != job.Conditions {
-		return CaseResult{}, fmt.Errorf("adapter conditions differ: model, explicit context, mode and fixture hash must match")
+	observed, err := decodeAdapterObservation(output, job)
+	if err != nil {
+		return CaseResult{}, err
 	}
 	if observed.Unavailable != "" {
 		result := unavailableResult(job.Case, "adapter capability unavailable; see adapter documentation")
@@ -129,14 +127,8 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 		result.Protocol = job.Conditions.Protocol
 		return result, nil
 	}
-	if len(observed.UnsupportedCriteria) > 8 || len(observed.MetricsUnavailable) > 12 {
-		return CaseResult{}, fmt.Errorf("adapter unavailable fields exceed limits")
-	}
-	if observed.InputTokens != nil && *observed.InputTokens < 0 || observed.OutputTokens != nil && *observed.OutputTokens < 0 || observed.ToolCalls != nil && *observed.ToolCalls < 0 {
-		return CaseResult{}, fmt.Errorf("adapter metrics must be nonnegative or null")
-	}
-	if observed.EffectiveContextWindow != nil && (*observed.EffectiveContextWindow < 4096 || *observed.EffectiveContextWindow > 2000000) || observed.EffectiveOutputReserve != nil && (*observed.EffectiveOutputReserve < 1 || *observed.EffectiveOutputReserve > 2000000) {
-		return CaseResult{}, fmt.Errorf("invalid effective adapter context")
+	if err := validateAdapterMetrics(observed); err != nil {
+		return CaseResult{}, err
 	}
 	calls := map[string]bool{}
 	for _, name := range observed.Tools {
@@ -151,7 +143,54 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 		return CaseResult{}, fmt.Errorf("invalid adapter temperature")
 	}
 	result.Temperature = observed.Temperature
-	for i, criterion := range job.Case.Criteria {
+	projectAdapterCriteria(&result, job.Case, observed, runError)
+	result.Application = a.Name
+	projectAdapterTools(&result, a.Name, observed)
+	if adapterVersionPattern.MatchString(observed.Version) {
+		result.ApplicationVersion = tools.RedactCredentials(observed.Version)
+	}
+	projectAdapterConditions(&result, observed)
+	return result, nil
+}
+
+func contains(values []string, target string) bool {
+	return slices.Contains(values, target)
+}
+
+func unavailableResult(c Case, reason string) CaseResult {
+	r := CaseResult{ID: c.ID, Status: "unavailable", Error: reason}
+	for _, criterion := range c.Criteria {
+		r.Criteria = append(r.Criteria, CriterionResult{Kind: criterion.Kind, Path: criterion.Path})
+	}
+	return r
+}
+
+func decodeAdapterObservation(output boundedBuffer, job Job) (AdapterObservation, error) {
+	var observed AdapterObservation
+	if output.overflow || json.Unmarshal(output.data, &observed) != nil || len(observed.Tools) > 2000 || len(observed.LocalTools) > 2000 || len(observed.RetrievedPaths) > 200 || len(observed.Response) > 64000 {
+		return observed, fmt.Errorf("invalid or oversized adapter observation")
+	}
+	if observed.Conditions != job.Conditions {
+		return observed, fmt.Errorf("adapter conditions differ: model, explicit context, mode and fixture hash must match")
+	}
+	return observed, nil
+}
+
+func validateAdapterMetrics(observed AdapterObservation) error {
+	if len(observed.UnsupportedCriteria) > 8 || len(observed.MetricsUnavailable) > 12 {
+		return fmt.Errorf("adapter unavailable fields exceed limits")
+	}
+	if observed.InputTokens != nil && *observed.InputTokens < 0 || observed.OutputTokens != nil && *observed.OutputTokens < 0 || observed.ToolCalls != nil && *observed.ToolCalls < 0 {
+		return fmt.Errorf("adapter metrics must be nonnegative or null")
+	}
+	if observed.EffectiveContextWindow != nil && (*observed.EffectiveContextWindow < 4096 || *observed.EffectiveContextWindow > 2000000) || observed.EffectiveOutputReserve != nil && (*observed.EffectiveOutputReserve < 1 || *observed.EffectiveOutputReserve > 2000000) {
+		return fmt.Errorf("invalid effective adapter context")
+	}
+	return nil
+}
+
+func projectAdapterCriteria(result *CaseResult, c Case, observed AdapterObservation, runError error) {
+	for i, criterion := range c.Criteria {
 		if contains(observed.UnsupportedCriteria, criterion.Kind) {
 			result.Criteria[i].Passed = nil
 		}
@@ -166,34 +205,29 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 		}
 	}
 	if runError != nil {
-		expected := false
-		for _, criterion := range job.Case.Criteria {
-			if criterion.Kind == "expect_error" {
-				expected = true
-			}
-		}
+		expected := adapterExpectsError(c.Criteria)
 		if !expected {
 			result.Status = "failed"
 		}
 	}
-	result.Application = a.Name
+}
+
+func projectAdapterTools(result *CaseResult, app string, observed AdapterObservation) {
 	for _, name := range observed.Tools {
 		if len(name) <= 80 && !contains(result.NativeToolNames, name) && len(result.NativeToolNames) < 64 {
 			result.NativeToolNames = append(result.NativeToolNames, tools.RedactCredentials(name))
 		}
-		canonical := canonicalTool(a.Name, name)
+		canonical := canonicalTool(app, name)
 		if len(canonical) <= 80 && !contains(result.ToolNames, canonical) && len(result.ToolNames) < 64 {
 			result.ToolNames = append(result.ToolNames, tools.RedactCredentials(canonical))
 		}
 	}
-	for _, name := range observed.LocalTools {
-		if len(name) <= 80 && !contains(result.LocalToolNames, name) && len(result.LocalToolNames) < 64 {
-			result.LocalToolNames = append(result.LocalToolNames, tools.RedactCredentials(name))
-		}
-	}
-	if regexp.MustCompile(`^(?:v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.-]{1,40})?|[a-f0-9]{7,40})$`).MatchString(observed.Version) {
-		result.ApplicationVersion = tools.RedactCredentials(observed.Version)
-	}
+	projectAdapterLocalTools(result, observed.LocalTools)
+}
+
+var adapterVersionPattern = regexp.MustCompile(`^(?:v?[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.-]{1,40})?|[a-f0-9]{7,40})$`)
+
+func projectAdapterConditions(result *CaseResult, observed AdapterObservation) {
 	result.Model = observed.Conditions.Model
 	result.APIModel = observed.Conditions.APIModel
 	result.Protocol = observed.Conditions.Protocol
@@ -223,22 +257,22 @@ func adapterCommand(ctx context.Context, a *Adapter, workspace string, job Job, 
 	if contains(result.MetricsUnavailable, "retrieval") {
 		result.RetrievalRecall, result.RetrievalMRR = nil, nil
 	}
-	return result, nil
 }
 
-func contains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
+func adapterExpectsError(criteria []Criterion) bool {
+	expected := false
+	for _, criterion := range criteria {
+		if criterion.Kind == "expect_error" {
+			expected = true
 		}
 	}
-	return false
+	return expected
 }
 
-func unavailableResult(c Case, reason string) CaseResult {
-	r := CaseResult{ID: c.ID, Status: "unavailable", Error: reason}
-	for _, criterion := range c.Criteria {
-		r.Criteria = append(r.Criteria, CriterionResult{Kind: criterion.Kind, Path: criterion.Path})
+func projectAdapterLocalTools(result *CaseResult, names []string) {
+	for _, name := range names {
+		if len(name) <= 80 && !contains(result.LocalToolNames, name) && len(result.LocalToolNames) < 64 {
+			result.LocalToolNames = append(result.LocalToolNames, tools.RedactCredentials(name))
+		}
 	}
-	return r
 }

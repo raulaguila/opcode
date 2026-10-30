@@ -85,40 +85,15 @@ func (p *chatPage) gitWorkspaceResult(msg GitWorkspaceMsg) tea.Cmd {
 	return nil
 }
 func (p *chatPage) gitChoose(item workspaceAction) tea.Cmd {
-	if item.kind == "worktree-create" || item.kind == "worktree-create-confirm" {
-		if p.mode() != workflow.Execute {
-			return util.ReportWarn(config.Text("Criar worktree exige modo Executar. Use /mode execute e confira /contract.", "Creating a worktree requires Execute mode. Use /mode execute and inspect /contract."))
-		}
-		if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
-			return util.ReportWarn(config.Text("Aguarde o agente antes de criar uma worktree.", "Wait for the agent before creating a worktree."))
-		}
+	if result0, handled := gitChooseWorktreeCreate(p, &item); handled {
+		return result0
 	}
 
 	switch item.kind {
 	case "git-checks":
 		return p.openChanges()
 	case "git-diff", "git-diff-staged":
-		staged := item.kind == "git-diff-staged"
-		p.showWorkspace("turn", config.Text("Diferenças Git", "Git diff"), "")
-		return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
-			raw, _ := json.Marshal(map[string]any{"staged": staged, "limit": 100})
-			reply, err := tools.NewGitTools()[1].Run(ctx, tools.ToolCall{Input: string(raw)})
-			if err != nil {
-				return "", false, err
-			}
-			var result struct {
-				Diff      string
-				Truncated bool
-			}
-			if json.Unmarshal([]byte(reply.Content), &result) != nil {
-				return "", false, fmt.Errorf("invalid diff result")
-			}
-			text := result.Diff
-			if result.Truncated {
-				text += "\n[truncated]"
-			}
-			return text, false, nil
-		})
+		return gitChooseGitDiffStaged(p, &item)
 	case "worktree-create":
 		// A generated name avoids path interpolation. The exact protected Git argv
 		// still passes the existing permission dialog and sandbox.
@@ -127,29 +102,7 @@ func (p *chatPage) gitChoose(item workspaceAction) tea.Cmd {
 		p.workspace.actions = []workspaceAction{{kind: "worktree-create-confirm", text: name, label: config.Text("Criar e revisar", "Create and review")}}
 		return nil
 	case "worktree-create-confirm":
-		var selected tea.Cmd
-		if p.session.ID == "" {
-			s, err := p.app.Sessions.Create(context.Background(), config.Text("Worktree", "Worktree"))
-			if err != nil {
-				return util.ReportError(err)
-			}
-			p.session = s
-			selected = util.CmdHandler(chat.SessionSelectedMsg(s))
-		}
-		p.showWorkspace("worktree-create-result", config.Text("Criar worktree", "Create worktree"), "")
-		service, id := p.app.Permissions, p.session.ID
-		return tea.Batch(selected, p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
-			ctx = context.WithValue(ctx, tools.SessionIDContextKey, id)
-			raw, _ := json.Marshal(map[string]string{"action": "create", "name": item.text})
-			response, err := tools.NewWorktreeTool(service).Run(ctx, tools.ToolCall{Input: string(raw)})
-			if err != nil {
-				return "", false, err
-			}
-			if response.IsError {
-				return "", false, fmt.Errorf("%s", response.Content)
-			}
-			return response.Content + "\n/worktrees", false, nil
-		}))
+		return gitChooseChatPageWorktreeCreateConfirm(p, &item)
 	case "worktree-open":
 		p.showWorkspace("worktree-open-confirm", config.Text("Abrir projeto isolado", "Open isolated project"), panelText(item.path)+"\n\n"+config.Text("Enter abre outra instância do Opcode neste terminal. Ao sair dela, você volta à conversa atual. Nenhum processo ou autorização será transferido.", "Enter opens another Opcode instance in this terminal. Exiting returns to this conversation. Processes and approvals are not transferred."))
 		p.workspace.actions = []workspaceAction{{kind: "worktree-open-confirm", path: item.path, label: config.Text("Abrir", "Open")}}
@@ -200,4 +153,68 @@ func (p *chatPage) canOpenWorktree(path string) error {
 		}
 	}
 	return fmt.Errorf("worktree is no longer registered")
+}
+
+func gitChooseChatPageWorktreeCreateConfirm(p *chatPage, item *workspaceAction) (extractedResult0 tea.Cmd) {
+	var selected tea.Cmd
+	if p.session.ID == "" {
+		s, err := p.app.Sessions.Create(context.Background(), config.Text("Worktree", "Worktree"))
+		if err != nil {
+			return util.ReportError(err)
+		}
+		p.session = s
+		selected = util.CmdHandler(chat.SessionSelectedMsg(s))
+	}
+	p.showWorkspace("worktree-create-result", config.Text("Criar worktree", "Create worktree"), "")
+	service, id := p.app.Permissions, p.session.ID
+	return tea.Batch(selected, p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
+		ctx = context.WithValue(ctx, tools.SessionIDContextKey, id)
+		raw, _ := json.Marshal(map[string]string{"action": "create", "name": item.text})
+		response, err := tools.NewWorktreeTool(service).Run(ctx, tools.ToolCall{Input: string(raw)})
+		if err != nil {
+			return "", false, err
+		}
+		if response.IsError {
+			return "", false, fmt.Errorf("%s", response.Content)
+		}
+		return response.Content + "\n/worktrees", false, nil
+	}))
+
+}
+
+func gitChooseWorktreeCreate(p *chatPage, item *workspaceAction) (extractedResult0 tea.Cmd, handled bool) {
+	if item.kind == "worktree-create" || item.kind == "worktree-create-confirm" {
+		if p.mode() != workflow.Execute {
+			return util.ReportWarn(config.Text("Criar worktree exige modo Executar. Use /mode execute e confira /contract.", "Creating a worktree requires Execute mode. Use /mode execute and inspect /contract.")), true
+		}
+		if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
+			return util.ReportWarn(config.Text("Aguarde o agente antes de criar uma worktree.", "Wait for the agent before creating a worktree.")), true
+		}
+	}
+	return extractedResult0, false
+}
+
+func gitChooseGitDiffStaged(p *chatPage, item *workspaceAction) (extractedResult0 tea.Cmd) {
+	staged := item.kind == "git-diff-staged"
+	p.showWorkspace("turn", config.Text("Diferenças Git", "Git diff"), "")
+	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
+		raw, _ := json.Marshal(map[string]any{"staged": staged, "limit": 100})
+		reply, err := tools.NewGitTools()[1].Run(ctx, tools.ToolCall{Input: string(raw)})
+		if err != nil {
+			return "", false, err
+		}
+		var result struct {
+			Diff      string
+			Truncated bool
+		}
+		if json.Unmarshal([]byte(reply.Content), &result) != nil {
+			return "", false, fmt.Errorf("invalid diff result")
+		}
+		text := result.Diff
+		if result.Truncated {
+			text += "\n[truncated]"
+		}
+		return text, false, nil
+	})
+
 }

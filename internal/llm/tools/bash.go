@@ -124,15 +124,15 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		ToolName:    BashToolName,
 		Action:      "execute",
 		Description: fmt.Sprintf("Execute command: %s", params.Command),
-		Params: BashPermissionsParams{
-			Command: params.Command,
-			Timeout: params.Timeout,
-			PTY:     params.PTY,
-		},
+		Params:      BashPermissionsParams(params),
 	})
 	if !p {
 		return ToolResponse{}, permission.ErrorPermissionDenied
 	}
+	return b.executeApprovedCommand(ctx, sessionID, params)
+}
+
+func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string, params BashParams) (ToolResponse, error) {
 	startTime := time.Now()
 	record, err := b.manager.startProcess(ctx, sessionID, ProcessParams{Command: params.Command, Timeout: params.Timeout, PTY: params.PTY}, false)
 	if err != nil {
@@ -152,28 +152,7 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	stdout = truncateOutput(stdout)
 	stderr = truncateOutput(stderr)
 
-	errorMessage := stderr
-	if interrupted {
-		if errorMessage != "" {
-			errorMessage += "\n"
-		}
-		errorMessage += "Command was aborted before completion"
-	} else if exitCode != 0 {
-		if errorMessage != "" {
-			errorMessage += "\n"
-		}
-		errorMessage += fmt.Sprintf("Exit code %d", exitCode)
-	}
-
-	hasBothOutputs := stdout != "" && stderr != ""
-
-	if hasBothOutputs {
-		stdout += "\n"
-	}
-
-	if errorMessage != "" {
-		stdout += "\n" + errorMessage
-	}
+	stdout = commandOutputText(stdout, stderr, exitCode, interrupted)
 
 	metadata := BashResponseMetadata{
 		ProcessID: record.id,
@@ -219,5 +198,32 @@ func countLines(s string) int {
 	if s == "" {
 		return 0
 	}
-	return len(strings.Split(s, "\n"))
+	return strings.Count(s, "\n") + 1
+}
+
+func commandOutputText(stdout, stderr string, exitCode int, interrupted bool) string {
+	errorMessage := stderr
+	if interrupted {
+		if errorMessage != "" {
+			errorMessage += "\n"
+		}
+		errorMessage += "Command was aborted before completion"
+	} else if exitCode != 0 {
+		if errorMessage != "" {
+			errorMessage += "\n"
+		}
+		errorMessage += fmt.Sprintf("Exit code %d", exitCode)
+	}
+
+	hasBothOutputs := stdout != "" && stderr != ""
+
+	if hasBothOutputs {
+		stdout += "\n"
+	}
+
+	if errorMessage != "" {
+		stdout += "\n" + errorMessage
+	}
+
+	return stdout
 }

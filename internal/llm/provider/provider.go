@@ -100,118 +100,21 @@ type baseProvider struct {
 }
 
 func NewProvider(providerName models.ModelProvider, opts ...ProviderClientOption) (Provider, error) {
-	clientOptions := providerClientOptions{}
-	for _, o := range opts {
-		o(&clientOptions)
+	options := providerClientOptions{}
+	for _, apply := range opts {
+		apply(&options)
 	}
-	if clientOptions.tlsInsecure {
-		u, err := url.Parse(clientOptions.baseURL)
-		if err != nil || u.Scheme != "https" || u.Host == "" || (providerName != models.ProviderLocal && providerName != models.ProviderOpenAI) || (clientOptions.model.API != "" && clientOptions.model.API != "chat_completions" && clientOptions.model.API != "responses") {
-			return nil, fmt.Errorf("insecure TLS requires an explicit HTTPS OpenAI-compatible connection")
-		}
+	if err := validateInsecureTLS(providerName, options); err != nil {
+		return nil, err
 	}
-	if clientOptions.baseURL != "" {
-		clientOptions.openaiOptions = append(clientOptions.openaiOptions, WithOpenAIBaseURL(clientOptions.baseURL))
+	if options.baseURL != "" {
+		options.openaiOptions = append(options.openaiOptions, WithOpenAIBaseURL(options.baseURL))
 	}
-	switch providerName {
-	case models.ProviderCopilot:
-		client, err := newCopilotClient(clientOptions)
-		if err != nil {
-			return nil, err
-		}
-		return &baseProvider{options: clientOptions, client: client}, nil
-	case models.ProviderAnthropic:
-		return &baseProvider{
-			options: clientOptions,
-			client:  newAnthropicClient(clientOptions),
-		}, nil
-	case models.ProviderOpenAI:
-		return &baseProvider{
-			options: clientOptions,
-			client:  newOpenAIClient(clientOptions),
-		}, nil
-	case models.ProviderGemini:
-		client, err := newGeminiClient(clientOptions)
-		if err != nil {
-			return nil, err
-		}
-		return &baseProvider{options: clientOptions, client: client}, nil
-	case models.ProviderBedrock:
-		client, err := newBedrockClient(clientOptions)
-		if err != nil {
-			return nil, err
-		}
-		return &baseProvider{options: clientOptions, client: client}, nil
-	case models.ProviderGROQ:
-		clientOptions.openaiOptions = append([]OpenAIOption{
-			WithOpenAIBaseURL("https://api.groq.com/openai/v1"),
-		}, clientOptions.openaiOptions...)
-		return &baseProvider{
-			options: clientOptions,
-			client:  newOpenAIClient(clientOptions),
-		}, nil
-	case models.ProviderAzure:
-		client, err := newAzureClient(clientOptions)
-		if err != nil {
-			return nil, err
-		}
-		return &baseProvider{options: clientOptions, client: client}, nil
-	case models.ProviderVertexAI:
-		client, err := newVertexAIClient(clientOptions)
-		if err != nil {
-			return nil, err
-		}
-		return &baseProvider{options: clientOptions, client: client}, nil
-	case models.ProviderOpenRouter:
-		clientOptions.openaiOptions = append([]OpenAIOption{
-			WithOpenAIBaseURL("https://openrouter.ai/api/v1"),
-			WithOpenAIExtraHeaders(map[string]string{
-				"HTTP-Referer": "https://github.com/raulaguila/opcode",
-				"X-Title":      "Opcode",
-			}),
-		}, clientOptions.openaiOptions...)
-		return &baseProvider{
-			options: clientOptions,
-			client:  newOpenAIClient(clientOptions),
-		}, nil
-	case models.ProviderXAI:
-		clientOptions.openaiOptions = append([]OpenAIOption{
-			WithOpenAIBaseURL("https://api.x.ai/v1"),
-		}, clientOptions.openaiOptions...)
-		return &baseProvider{
-			options: clientOptions,
-			client:  newOpenAIClient(clientOptions),
-		}, nil
-	case models.ProviderLocal:
-		localOptions := openaiOptions{}
-		for _, apply := range clientOptions.openaiOptions {
-			apply(&localOptions)
-		}
-		endpoint := ""
-		if clientOptions.model.ProviderProfile == "" {
-			endpoint = os.Getenv("LOCAL_ENDPOINT")
-		}
-		if endpoint == "" {
-			endpoint = localOptions.baseURL
-		}
-		endpoint, err := models.NormalizeLocalEndpoint(endpoint)
-		if err != nil {
-			return nil, err
-		}
-		if clientOptions.model.API == "ollama" {
-			return &baseProvider{options: clientOptions, client: newOllamaClient(clientOptions, endpoint)}, nil
-		}
-		clientOptions.openaiOptions = append(clientOptions.openaiOptions,
-			WithOpenAIBaseURL(endpoint),
-		)
-		return &baseProvider{
-			options: clientOptions,
-			client:  newOpenAIClient(clientOptions),
-		}, nil
-	case models.ProviderMock:
-		return nil, fmt.Errorf("mock provider is not implemented")
+	client, options, err := createProviderClient(providerName, options)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("provider not supported: %s", providerName)
+	return &baseProvider{options: options, client: client}, nil
 }
 
 func (p *baseProvider) cleanMessages(messages []message.Message) (cleaned []message.Message) {
@@ -295,4 +198,74 @@ func WithCopilotOptions(copilotOptions ...CopilotOption) ProviderClientOption {
 	return func(options *providerClientOptions) {
 		options.copilotOptions = copilotOptions
 	}
+}
+
+func validateInsecureTLS(name models.ModelProvider, options providerClientOptions) error {
+	if !options.tlsInsecure {
+		return nil
+	}
+	u, err := url.Parse(options.baseURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" || (name != models.ProviderLocal && name != models.ProviderOpenAI) || (options.model.API != "" && options.model.API != "chat_completions" && options.model.API != "responses") {
+		return fmt.Errorf("insecure TLS requires an explicit HTTPS OpenAI-compatible connection")
+	}
+	return nil
+}
+func createProviderClient(name models.ModelProvider, options providerClientOptions) (providerClient, providerClientOptions, error) {
+	switch name {
+	case models.ProviderCopilot:
+		client, err := newCopilotClient(options)
+		return client, options, err
+	case models.ProviderAnthropic:
+		return newAnthropicClient(options), options, nil
+	case models.ProviderOpenAI:
+		return newOpenAIClient(options), options, nil
+	case models.ProviderGemini:
+		client, err := newGeminiClient(options)
+		return client, options, err
+	case models.ProviderBedrock:
+		client, err := newBedrockClient(options)
+		return client, options, err
+	case models.ProviderAzure:
+		client, err := newAzureClient(options)
+		return client, options, err
+	case models.ProviderVertexAI:
+		client, err := newVertexAIClient(options)
+		return client, options, err
+	case models.ProviderGROQ:
+		options.openaiOptions = append([]OpenAIOption{WithOpenAIBaseURL("https://api.groq.com/openai/v1")}, options.openaiOptions...)
+		return newOpenAIClient(options), options, nil
+	case models.ProviderOpenRouter:
+		options.openaiOptions = append([]OpenAIOption{WithOpenAIBaseURL("https://openrouter.ai/api/v1"), WithOpenAIExtraHeaders(map[string]string{"HTTP-Referer": "https://github.com/raulaguila/opcode", "X-Title": "Opcode"})}, options.openaiOptions...)
+		return newOpenAIClient(options), options, nil
+	case models.ProviderXAI:
+		options.openaiOptions = append([]OpenAIOption{WithOpenAIBaseURL("https://api.x.ai/v1")}, options.openaiOptions...)
+		return newOpenAIClient(options), options, nil
+	case models.ProviderLocal:
+		return createLocalClient(options)
+	case models.ProviderMock:
+		return nil, options, fmt.Errorf("mock provider is not implemented")
+	}
+	return nil, options, fmt.Errorf("provider not supported: %s", name)
+}
+func createLocalClient(options providerClientOptions) (providerClient, providerClientOptions, error) {
+	local := openaiOptions{}
+	for _, apply := range options.openaiOptions {
+		apply(&local)
+	}
+	endpoint := ""
+	if options.model.ProviderProfile == "" {
+		endpoint = os.Getenv("LOCAL_ENDPOINT")
+	}
+	if endpoint == "" {
+		endpoint = local.baseURL
+	}
+	endpoint, err := models.NormalizeLocalEndpoint(endpoint)
+	if err != nil {
+		return nil, options, err
+	}
+	if options.model.API == "ollama" {
+		return newOllamaClient(options, endpoint), options, nil
+	}
+	options.openaiOptions = append(options.openaiOptions, WithOpenAIBaseURL(endpoint))
+	return newOpenAIClient(options), options, nil
 }

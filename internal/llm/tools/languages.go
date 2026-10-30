@@ -119,89 +119,120 @@ func localOutlineLanguage(ctx context.Context, language, path string, raw []byte
 	if root == nil || root.HasError() {
 		return nil, fmt.Errorf("%s source contains syntax errors; use text search or LSP", language)
 	}
-	result := []codeSymbol{}
-	visited := 0
-	embeddedCount := 0
-	var visit func(*ts.Node, string, int) error
-	var findName func(*ts.Node, int) string
-	findName = func(n *ts.Node, depth int) string {
-		if n == nil || depth > 8 {
-			return ""
+	walker := outlineWalker{ctx: ctx, language: language, lang: lang, raw: raw, result: []codeSymbol{}}
+	if err := walker.visit(root, "", 0); err != nil {
+		return nil, err
+	}
+	return walker.result, nil
+}
+
+// outlineWalker owns one bounded traversal; parser and tree lifetime stay with
+// localOutlineLanguage. It never outlives the source snapshot.
+type outlineWalker struct {
+	ctx                    context.Context
+	language               string
+	lang                   *ts.Language
+	raw                    []byte
+	result                 []codeSymbol
+	visited, embeddedCount int
+}
+
+func (w *outlineWalker) visit(n *ts.Node, parent string, depth int) error {
+	w.visited++
+	if w.visited > 60000 || depth > 128 || len(w.result) > 5000 {
+		return fmt.Errorf("structural outline limit reached")
+	}
+	if err := w.ctx.Err(); err != nil {
+		return err
+	}
+	prefix := w.addDeclaration(n, parent)
+	if err := w.addEmbeddedScript(n); err != nil {
+		return err
+	}
+	for i := 0; i < n.NamedChildCount(); i++ {
+		if err := w.visit(n.NamedChild(i), prefix, depth+1); err != nil {
+			return err
 		}
-		if name := n.ChildByFieldName("name", lang); name != nil {
-			return name.Text(raw)
+	}
+	return nil
+}
+
+func (w *outlineWalker) addDeclaration(n *ts.Node, parent string) string {
+	kind := declarationKindForNode(w.language, n, w.lang, w.raw)
+	if kind == "" {
+		return parent
+	}
+	name := localDeclarationName(w.language, n, w.lang, w.raw)
+	if name == "" {
+		name = w.findName(n, 0)
+	}
+	if name == "" || len(name) > 240 {
+		return parent
+	}
+	qualified := name
+	if parent != "" {
+		qualified = parent + "." + name
+	}
+	last := declarationEnd(w.language, n, w.lang)
+	end := int(last.EndPoint().Row) + 1
+	if last.EndPoint().Column == 0 && end > int(n.StartPoint().Row)+1 {
+		end--
+	}
+	w.result = append(w.result, codeSymbol{qualified, kind, int(n.StartPoint().Row) + 1, end})
+	if kind == "variable" || kind == "const" || kind == "attribute" {
+		return parent
+	}
+	return qualified
+}
+
+func (w *outlineWalker) addEmbeddedScript(n *ts.Node) error {
+	if w.language != "vue" && w.language != "svelte" && w.language != "html" {
+		return nil
+	}
+	if n.Type(w.lang) != "script_element" {
+		return nil
+	}
+	w.embeddedCount++
+	if w.embeddedCount > 8 {
+		return fmt.Errorf("embedded script outline limit reached; use text search or LSP")
+	}
+	embedded, err := embeddedScriptOutline(w.ctx, n, w.lang, w.raw)
+	if err != nil {
+		return err
+	}
+	w.result = append(w.result, embedded...)
+	return nil
+}
+
+func (w *outlineWalker) findName(n *ts.Node, depth int) string {
+	if n == nil || depth > 8 {
+		return ""
+	}
+	if name := n.ChildByFieldName("name", w.lang); name != nil {
+		return name.Text(w.raw)
+	}
+	switch n.Type(w.lang) {
+	case "identifier", "type_identifier", "field_identifier", "namespace_identifier", "simple_identifier", "name", "constant":
+		return n.Text(w.raw)
+	}
+	for _, field := range []string{"declarator", "type"} {
+		if name := w.findName(n.ChildByFieldName(field, w.lang), depth+1); name != "" {
+			return name
 		}
-		switch n.Type(lang) {
-		case "identifier", "type_identifier", "field_identifier", "namespace_identifier", "simple_identifier", "name", "constant":
-			return n.Text(raw)
-		}
-		for _, field := range []string{"declarator", "type"} {
-			if name := findName(n.ChildByFieldName(field, lang), depth+1); name != "" {
+	}
+	return w.findWrappedName(n, depth)
+}
+
+// Arrow functions and C declarators expose identifiers below a wrapper.
+func (w *outlineWalker) findWrappedName(n *ts.Node, depth int) string {
+	for i := 0; i < n.NamedChildCount(); i++ {
+		child := n.NamedChild(i)
+		switch child.Type(w.lang) {
+		case "variable_declarator", "function_declarator", "pointer_declarator", "identifier", "type_identifier", "simple_identifier", "name", "constant":
+			if name := w.findName(child, depth+1); name != "" {
 				return name
 			}
 		}
-		// Arrow functions and C declarators expose their identifier below a wrapper.
-		for i := 0; i < n.NamedChildCount(); i++ {
-			child := n.NamedChild(i)
-			switch child.Type(lang) {
-			case "variable_declarator", "function_declarator", "pointer_declarator", "identifier", "type_identifier", "simple_identifier", "name", "constant":
-				if name := findName(child, depth+1); name != "" {
-					return name
-				}
-			}
-		}
-		return ""
 	}
-	visit = func(n *ts.Node, parent string, depth int) error {
-		visited++
-		if visited > 60000 || depth > 128 || len(result) > 5000 {
-			return fmt.Errorf("structural outline limit reached")
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		prefix := parent
-		if kind := declarationKindForNode(language, n, lang, raw); kind != "" {
-			name := localDeclarationName(language, n, lang, raw)
-			if name == "" {
-				name = findName(n, 0)
-			}
-			if name != "" && len(name) <= 240 {
-				qualified := name
-				if parent != "" {
-					qualified = parent + "." + name
-				}
-				last := declarationEnd(language, n, lang)
-				end := int(last.EndPoint().Row) + 1
-				if last.EndPoint().Column == 0 && end > int(n.StartPoint().Row)+1 {
-					end--
-				}
-				result = append(result, codeSymbol{qualified, kind, int(n.StartPoint().Row) + 1, end})
-				if kind != "variable" && kind != "const" && kind != "attribute" {
-					prefix = qualified
-				}
-			}
-		}
-		if (language == "vue" || language == "svelte" || language == "html") && n.Type(lang) == "script_element" {
-			embeddedCount++
-			if embeddedCount > 8 {
-				return fmt.Errorf("embedded script outline limit reached; use text search or LSP")
-			}
-			embedded, err := embeddedScriptOutline(ctx, n, lang, raw)
-			if err != nil {
-				return err
-			}
-			result = append(result, embedded...)
-		}
-		for i := 0; i < n.NamedChildCount(); i++ {
-			if err := visit(n.NamedChild(i), prefix, depth+1); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if err := visit(root, "", 0); err != nil {
-		return nil, err
-	}
-	return result, nil
+	return ""
 }

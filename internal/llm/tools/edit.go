@@ -312,26 +312,8 @@ func (e *editTool) deleteContent(ctx context.Context, filePath, oldString string
 		return ToolResponse{}, fmt.Errorf("failed to write file: %w", err)
 	}
 
-	// Check if file exists in history
-	file, err := e.files.GetByPathAndSession(ctx, filePath, sessionID)
-	if err != nil {
-		file, err = e.files.Create(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			// Log error but don't fail the operation
-			return ToolResponse{}, fmt.Errorf("error creating file history: %w", err)
-		}
-	}
-	if file.Content != oldContent {
-		// User Manually changed the content store an intermediate version
-		_, err = e.files.CreateVersion(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			logging.Debug("Error creating file history version", "error", err)
-		}
-	}
-	// Store the new version
-	_, err = e.files.CreateVersion(ctx, sessionID, filePath, newContent)
-	if err != nil {
-		logging.Debug("Error creating file history version", "error", err)
+	if err := saveEditedFileHistory(ctx, e.files, sessionID, filePath, oldContent, newContent); err != nil {
+		return ToolResponse{}, err
 	}
 
 	recordFileWrite(filePath)
@@ -428,26 +410,8 @@ func (e *editTool) replaceContent(ctx context.Context, filePath, oldString, newS
 		return ToolResponse{}, fmt.Errorf("failed to write file: %w", err)
 	}
 
-	// Check if file exists in history
-	file, err := e.files.GetByPathAndSession(ctx, filePath, sessionID)
-	if err != nil {
-		file, err = e.files.Create(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			// Log error but don't fail the operation
-			return ToolResponse{}, fmt.Errorf("error creating file history: %w", err)
-		}
-	}
-	if file.Content != oldContent {
-		// User Manually changed the content store an intermediate version
-		_, err = e.files.CreateVersion(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			logging.Debug("Error creating file history version", "error", err)
-		}
-	}
-	// Store the new version
-	_, err = e.files.CreateVersion(ctx, sessionID, filePath, newContent)
-	if err != nil {
-		logging.Debug("Error creating file history version", "error", err)
+	if err := saveEditedFileHistory(ctx, e.files, sessionID, filePath, oldContent, newContent); err != nil {
+		return ToolResponse{}, err
 	}
 
 	recordFileWrite(filePath)
@@ -460,4 +424,30 @@ func (e *editTool) replaceContent(ctx context.Context, filePath, oldString, newS
 			Additions: additions,
 			Removals:  removals,
 		}), nil
+}
+
+func saveEditedFileHistory(ctx context.Context, files history.Service, sessionID, filePath, oldContent, newContent string) error {
+	// Check if file exists in history
+	file, err := files.GetByPathAndSession(ctx, filePath, sessionID)
+	if err != nil {
+		file, err = files.Create(ctx, sessionID, filePath, oldContent)
+		if err != nil {
+			// Log error but don't fail the operation
+			return fmt.Errorf("error creating file history: %w", err)
+		}
+	}
+	if file.Content != oldContent {
+		// User Manually changed the content store an intermediate version
+		_, err = files.CreateVersion(ctx, sessionID, filePath, oldContent)
+		if err != nil {
+			logging.Debug("Error creating file history version", "error", err)
+		}
+	}
+	// Store the new version
+	_, err = files.CreateVersion(ctx, sessionID, filePath, newContent)
+	if err != nil {
+		logging.Debug("Error creating file history version", "error", err)
+	}
+
+	return nil
 }

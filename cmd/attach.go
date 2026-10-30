@@ -67,209 +67,189 @@ func printSnapshotJSON(out io.Writer, snapshot server.Snapshot) error {
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(snapshot)
 }
-func attachLoop(ctx context.Context, cancel context.CancelFunc, client *server.Client, id string, input io.Reader, out io.Writer) error {
-	defer cancel()
-	lines := make(chan string, 1)
+
+type attachSession struct {
+	ctx                   context.Context
+	client                *server.Client
+	path                  string
+	out                   io.Writer
+	results               chan attachResult
+	prompts               chan map[string]string
+	slots                 chan struct{}
+	jobs                  sync.WaitGroup
+	seen                  map[string]string
+	permissionIDs         map[string]bool
+	lastError, questionID string
+}
+
+type attachInput struct {
+	line string
+	err  error
+}
+
+func attachInputLines(ctx context.Context, input io.Reader) <-chan attachInput {
+	lines := make(chan attachInput, 1)
 	go func() {
 		defer close(lines)
 		scanner := bufio.NewScanner(input)
 		scanner.Buffer(make([]byte, 4096), 32000)
 		for scanner.Scan() {
 			select {
-			case lines <- scanner.Text():
+			case lines <- attachInput{line: scanner.Text()}:
 			case <-ctx.Done():
 				return
 			}
 		}
+		if err := scanner.Err(); err != nil {
+			select {
+			case lines <- attachInput{err: err}:
+			case <-ctx.Done():
+			}
+		}
 	}()
-	path := "/v1/sessions/" + id
+	return lines
+}
+func attachLoop(ctx context.Context, cancel context.CancelFunc, client *server.Client, id string, input io.Reader, out io.Writer) error {
+	defer cancel()
+	lines := attachInputLines(ctx, input)
+	a := &attachSession{ctx: ctx, client: client, path: "/v1/sessions/" + id, out: out, results: make(chan attachResult, 8), prompts: make(chan map[string]string, 8), slots: make(chan struct{}, 8), seen: map[string]string{}, permissionIDs: map[string]bool{}}
 	ticker := time.NewTicker(300 * time.Millisecond)
 	defer ticker.Stop()
-	results := make(chan attachResult, 8)
-	prompts := make(chan map[string]string, 8)
-	slots := make(chan struct{}, 8)
-	var jobs sync.WaitGroup
-	defer func() { cancel(); jobs.Wait() }()
-	jobs.Add(1)
-	go func() {
-		defer jobs.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case body := <-prompts:
-				err := client.Do(ctx, "POST", path+"/prompt", body, nil)
-				select {
-				case results <- attachResult{"Instrução aceita.", err}:
-				case <-ctx.Done():
-					return
-				}
-			}
-		}
-	}()
-	send := func(label, endpoint string, body any) {
-		select {
-		case slots <- struct{}{}:
-		default:
-			fmt.Fprintln(out, "Aguarde as operações pendentes.")
-			return
-		}
-		jobs.Add(1)
-		go func() {
-			defer jobs.Done()
-			defer func() { <-slots }()
-			err := client.Do(ctx, "POST", path+endpoint, body, nil)
-			select {
-			case results <- attachResult{label, err}:
-			case <-ctx.Done():
-			}
-		}()
-	}
-	seen := map[string]string{}
-	permissionIDs := map[string]bool{}
-	lastError := ""
-	questionID := ""
+	defer func() { cancel(); a.jobs.Wait() }()
+	a.jobs.Add(1)
+	go a.sendPrompts()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case result := <-results:
+		case result := <-a.results:
 			if result.err != nil {
 				fmt.Fprintln(out, "Erro: "+safeTerminal(result.err.Error()))
 			} else {
 				fmt.Fprintln(out, result.label)
 			}
-		case line, open := <-lines:
-			if !open {
-				return nil
-			}
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			command, rest, _ := strings.Cut(line, " ")
-			rest = strings.TrimSpace(rest)
-			switch command {
-			case "/quit", "/exit":
-				return nil
-			case "/help":
-				fmt.Fprintln(out, "Texto: enviar instrução · /approve ID · /allow-session ID (mesmos argumentos) · /deny ID · /answer ID texto · /mode ask|plan|execute · /terminal comando · /input PROCESSO texto · /key PROCESSO enter|ctrl-c|tab · /stop PROCESSO · /cancel · /quit")
-			case "/approve", "/allow-session", "/deny":
-				decision := "once"
-				if command == "/deny" {
-					decision = "deny"
-				}
-				if command == "/allow-session" {
-					decision = "session"
-				}
-				send("Permissão respondida.", "/permissions/"+rest, map[string]string{"decision": decision})
-			case "/answer":
-				qid, text, _ := strings.Cut(rest, " ")
-				send("Resposta enviada.", "/answer", map[string]string{"id": qid, "text": text})
-			case "/mode":
-				send("Modo atualizado.", "/mode", map[string]string{"mode": rest})
-			case "/cancel":
-				send("Cancelamento solicitado.", "/cancel", map[string]any{})
-			case "/terminal":
-				send("Terminal iniciado.", "/processes", tools.ProcessParams{Command: rest, PTY: true, Timeout: 300000, Cols: 100, Rows: 24})
-			case "/input", "/key":
-				pid, data, _ := strings.Cut(rest, " ")
-				if command == "/input" {
-					data += "\n"
-				} else {
-					switch data {
-					case "enter":
-						data = "\r"
-					case "ctrl-c":
-						data = "\x03"
-					case "tab":
-						data = "\t"
-					default:
-						fmt.Fprintln(out, "Tecla desconhecida.")
-						continue
-					}
-				}
-				send("Entrada enviada.", "/processes/"+pid+"/input", map[string]string{"data": data})
-			case "/stop":
-				send("Processo encerrado.", "/processes/"+rest+"/stop", map[string]any{})
-			default:
-				select {
-				case prompts <- map[string]string{"content": line, "request_id": uuid.NewString()}:
-				default:
-					fmt.Fprintln(out, "Fila de envio cheia; aguarde a confirmação das instruções pendentes.")
-				}
+		case input, open := <-lines:
+			if done, err := a.receiveInput(input, open); done {
+				return err
 			}
 		case <-ticker.C:
-			var snapshot server.Snapshot
-			pollCtx, stopPoll := context.WithTimeout(ctx, 2*time.Second)
-			err := client.Do(pollCtx, "GET", path, nil, &snapshot)
-			stopPoll()
-			if err != nil {
-				if err.Error() != lastError {
-					fmt.Fprintln(out, safeTerminal(err.Error()))
-					lastError = err.Error()
-				}
-				continue
-			}
-			lastError = ""
-			for _, m := range snapshot.Messages {
-				if m.Role != "assistant" {
-					continue
-				}
-				if m.Text != "" && seen[m.ID] != m.Text {
-					previous := seen[m.ID]
-					if strings.HasPrefix(m.Text, previous) {
-						fmt.Fprint(out, safeTerminal(strings.TrimPrefix(m.Text, previous)))
-					} else {
-						fmt.Fprint(out, "\n"+safeTerminal(m.Text))
-					}
-					if m.Finished {
-						fmt.Fprintln(out)
-					}
-					seen[m.ID] = m.Text
-				}
-			}
-			for _, p := range snapshot.Permissions {
-				if !permissionIDs[p.ID] {
-					fmt.Fprintf(out, "\nPermissão %s: %s · %s · %v\n/approve %s ou /deny %s\n", p.ID, safeTerminal(p.ToolName), safeTerminal(p.Description), safeTerminal(fmt.Sprint(p.Params)), p.ID, p.ID)
-					permissionIDs[p.ID] = true
-				}
-			}
-			if snapshot.Question != nil && snapshot.Question.ID != questionID {
-				q := snapshot.Question
-				questionID = q.ID
-				fmt.Fprintf(out, "\nPergunta %s: %s · %s\n/answer %s resposta\n", q.ID, safeTerminal(q.Question), safeTerminal(strings.Join(q.Choices, " | ")), q.ID)
-			}
-			for _, p := range snapshot.Processes {
-				key := "process:" + p.ID
-				if !p.Running && seen[key+":finished"] == "true" {
-					continue
-				}
-				var screen tools.ProcessSnapshot
-				pollCtx, stopPoll := context.WithTimeout(ctx, time.Second)
-				err := client.Do(pollCtx, "GET", path+"/processes/"+p.ID, nil, &screen)
-				stopPoll()
-				if err != nil {
-					continue
-				}
-				text := screen.Stdout + screen.Stderr
-				if screen.PTY {
-					text = screen.Screen
-				}
-				if seen[key] != text {
-					fmt.Fprintf(out, "\nTerminal %s:\n%s\n", p.ID, safeTerminal(text))
-					seen[key] = text
-				}
-				if !p.Running {
-					seen[key+":finished"] = "true"
-				}
-			}
-			if len(seen) > 512 {
-				seen = map[string]string{}
+			a.poll()
+		}
+	}
+}
+func (a *attachSession) receiveInput(input attachInput, open bool) (bool, error) {
+	if !open {
+		return true, nil
+	}
+	if input.err != nil {
+		if a.ctx.Err() != nil {
+			return true, nil
+		}
+		return true, fmt.Errorf("read attach input: %s", safeTerminal(tools.RedactCredentials(input.err.Error())))
+	}
+	return a.command(input.line), nil
+}
+
+func (a *attachSession) sendPrompts() {
+	defer a.jobs.Done()
+	for {
+		select {
+		case <-a.ctx.Done():
+			return
+		case body := <-a.prompts:
+			err := a.client.Do(a.ctx, "POST", a.path+"/prompt", body, nil)
+			select {
+			case a.results <- attachResult{"Instrução aceita.", err}:
+			case <-a.ctx.Done():
+				return
 			}
 		}
 	}
 }
+func (a *attachSession) send(label, endpoint string, body any) {
+	select {
+	case a.slots <- struct{}{}:
+	default:
+		fmt.Fprintln(a.out, "Aguarde as operações pendentes.")
+		return
+	}
+	a.jobs.Add(1)
+	go func() {
+		defer a.jobs.Done()
+		defer func() { <-a.slots }()
+		err := a.client.Do(a.ctx, "POST", a.path+endpoint, body, nil)
+		select {
+		case a.results <- attachResult{label, err}:
+		case <-a.ctx.Done():
+		}
+	}()
+}
+func (a *attachSession) command(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	command, rest, _ := strings.Cut(line, " ")
+	rest = strings.TrimSpace(rest)
+	switch command {
+	case "/quit", "/exit":
+		return true
+	case "/help":
+		fmt.Fprintln(a.out, "Texto: enviar instrução · /approve ID · /allow-session ID (mesmos argumentos) · /deny ID · /answer ID texto · /mode ask|plan|execute · /terminal comando · /input PROCESSO texto · /key PROCESSO enter|ctrl-c|tab · /stop PROCESSO · /cancel · /quit")
+	case "/approve", "/allow-session", "/deny":
+		decision := "once"
+		if command == "/deny" {
+			decision = "deny"
+		}
+		if command == "/allow-session" {
+			decision = "session"
+		}
+		a.send("Permissão respondida.", "/permissions/"+rest, map[string]string{"decision": decision})
+	case "/answer":
+		qid, text, _ := strings.Cut(rest, " ")
+		a.send("Resposta enviada.", "/answer", map[string]string{"id": qid, "text": text})
+	case "/mode":
+		a.send("Modo atualizado.", "/mode", map[string]string{"mode": rest})
+	case "/cancel":
+		a.send("Cancelamento solicitado.", "/cancel", map[string]any{})
+	case "/terminal":
+		a.send("Terminal iniciado.", "/processes", tools.ProcessParams{Command: rest, PTY: true, Timeout: 300000, Cols: 100, Rows: 24})
+	case "/input", "/key":
+		a.writeInput(command, rest)
+	case "/stop":
+		a.send("Processo encerrado.", "/processes/"+rest+"/stop", map[string]any{})
+	default:
+		select {
+		case a.prompts <- map[string]string{"content": line, "request_id": uuid.NewString()}:
+		default:
+			fmt.Fprintln(a.out, "Fila de envio cheia; aguarde a confirmação das instruções pendentes.")
+		}
+	}
+	return false
+}
+func (a *attachSession) poll() {
+	var snapshot server.Snapshot
+	pollCtx, stopPoll := context.WithTimeout(a.ctx, 2*time.Second)
+	err := a.client.Do(pollCtx, "GET", a.path, nil, &snapshot)
+	stopPoll()
+	if err != nil {
+		if err.Error() != a.lastError {
+			fmt.Fprintln(a.out, safeTerminal(err.Error()))
+			a.lastError = err.Error()
+		}
+		return
+	}
+	a.lastError = ""
+	a.renderMessages(snapshot)
+	a.renderDecisions(snapshot)
+	for _, p := range snapshot.Processes {
+		a.renderProcess(p)
+	}
+	if len(a.seen) > 512 {
+		a.seen = map[string]string{}
+	}
+}
+
 func safeTerminal(text string) string {
 	return strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) && r != '\n' && r != '\t' {
@@ -277,4 +257,83 @@ func safeTerminal(text string) string {
 		}
 		return r
 	}, ansi.Strip(text))
+}
+
+func (a *attachSession) writeInput(command, rest string) {
+	pid, data, _ := strings.Cut(rest, " ")
+	if command == "/input" {
+		data += "\n"
+	} else {
+		switch data {
+		case "enter":
+			data = "\r"
+		case "ctrl-c":
+			data = "\x03"
+		case "tab":
+			data = "\t"
+		default:
+			fmt.Fprintln(a.out, "Tecla desconhecida.")
+			return
+		}
+	}
+	a.send("Entrada enviada.", "/processes/"+pid+"/input", map[string]string{"data": data})
+}
+
+func (a *attachSession) renderMessages(snapshot server.Snapshot) {
+	for _, m := range snapshot.Messages {
+		if m.Role != "assistant" {
+			continue
+		}
+		if m.Text != "" && a.seen[m.ID] != m.Text {
+			previous := a.seen[m.ID]
+			if after, ok := strings.CutPrefix(m.Text, previous); ok {
+				fmt.Fprint(a.out, safeTerminal(after))
+			} else {
+				fmt.Fprint(a.out, "\n"+safeTerminal(m.Text))
+			}
+			if m.Finished {
+				fmt.Fprintln(a.out)
+			}
+			a.seen[m.ID] = m.Text
+		}
+	}
+}
+
+func (a *attachSession) renderDecisions(snapshot server.Snapshot) {
+	for _, p := range snapshot.Permissions {
+		if !a.permissionIDs[p.ID] {
+			fmt.Fprintf(a.out, "\nPermissão %s: %s · %s · %v\n/approve %s ou /deny %s\n", p.ID, safeTerminal(p.ToolName), safeTerminal(p.Description), safeTerminal(fmt.Sprint(p.Params)), p.ID, p.ID)
+			a.permissionIDs[p.ID] = true
+		}
+	}
+	if snapshot.Question != nil && snapshot.Question.ID != a.questionID {
+		q := snapshot.Question
+		a.questionID = q.ID
+		fmt.Fprintf(a.out, "\nPergunta %s: %s · %s\n/answer %s resposta\n", q.ID, safeTerminal(q.Question), safeTerminal(strings.Join(q.Choices, " | ")), q.ID)
+	}
+}
+
+func (a *attachSession) renderProcess(p tools.ProcessInfo) {
+	key := "process:" + p.ID
+	if !p.Running && a.seen[key+":finished"] == "true" {
+		return
+	}
+	var screen tools.ProcessSnapshot
+	pollCtx, stopPoll := context.WithTimeout(a.ctx, time.Second)
+	err := a.client.Do(pollCtx, "GET", a.path+"/processes/"+p.ID, nil, &screen)
+	stopPoll()
+	if err != nil {
+		return
+	}
+	text := screen.Stdout + screen.Stderr
+	if screen.PTY {
+		text = screen.Screen
+	}
+	if a.seen[key] != text {
+		fmt.Fprintf(a.out, "\nTerminal %s:\n%s\n", p.ID, safeTerminal(text))
+		a.seen[key] = text
+	}
+	if !p.Running {
+		a.seen[key+":finished"] = "true"
+	}
 }

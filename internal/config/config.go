@@ -150,9 +150,8 @@ type Config struct {
 
 // Application constants
 const (
-	defaultDataDirectory = ".opcode"
-	defaultLogLevel      = "info"
-	appName              = "opcode"
+	defaultLogLevel = "info"
+	appName         = "opcode"
 
 	MaxTokensFallbackDefault = 4096
 )
@@ -207,13 +206,8 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 	// Standalone offline diagnostics and explicitly supplied configurations are
 	// read-only. Normal startup creates the canonical file from legacy global
 	// settings or a safe editable provider template, plus a separate reference.
-	if discoverLocal && viper.ConfigFileUsed() == "" {
-		if err := ensureReferenceTemplate(); err != nil {
-			return nil, err
-		}
-		if err := ensureGlobalTemplate(); err != nil {
-			return nil, err
-		}
+	if err := ensureStartupConfigTemplates(discoverLocal); err != nil {
+		return nil, err
 	}
 
 	cfg = &Config{
@@ -227,93 +221,32 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 	setDefaults(debug)
 
 	// Read global config
-	if path := viper.ConfigFileUsed(); path != "" {
-		if err := ValidateDocument(path); err != nil {
-			cfg = nil
-			return nil, fmt.Errorf("read config: %w", err)
-		}
+	if err := validateCurrentConfigFile(); err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
 	}
 	if err := readConfig(viper.ReadInConfig()); err != nil {
 		return cfg, err
 	}
-	if path := viper.ConfigFileUsed(); path != "" {
-		if err := ValidateDocument(path); err != nil {
-			cfg = nil
-			return nil, err
-		}
+	if err := validateCurrentConfigFile(); err != nil {
+		return nil, err
 	}
 
 	// Repository configuration cannot weaken the user's execution policy.
-	var trusted struct {
-		Security   SecurityConfig
-		Extensions ExtensionsConfig
-		Index      IndexConfig
-	}
-	if err := viper.Unmarshal(&trusted); err != nil {
+	trusted, err := loadTrustedProjectConfiguration(workingDir)
+	if err != nil {
 		return nil, err
 	}
-	// Load and merge local config
-	if err := mergeLocalConfig(workingDir); err != nil {
-		cfg = nil
-		return nil, err
-	}
-	if path := ProjectConfigPath(workingDir); path != viper.ConfigFileUsed() {
-		if err := ValidateDocument(path); err != nil {
-			cfg = nil
-			return nil, err
-		}
-	}
-
 	setProviderDefaults()
 
 	// Apply configuration to the struct
 	if err := viper.Unmarshal(cfg); err != nil {
 		return cfg, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	// AllSettings expands dots as paths, but model IDs (e.g. local.llama3.1:8b)
-	// are literal map keys. Decode the original models map before validation.
-	modelJSON, err := json.Marshal(viper.GetStringMap("models"))
-	var definitions map[models.ModelID]models.Model
-	if err != nil || json.Unmarshal(modelJSON, &definitions) != nil {
-		cfg = nil
-		return nil, fmt.Errorf("invalid model definitions")
-	}
-	cfg.Models = definitions
-	if cfg.Data.Directory != "" && !filepath.IsAbs(cfg.Data.Directory) {
-		cfg.Data.Directory = filepath.Join(workingDir, cfg.Data.Directory)
-	}
-	if cfg.TUI.Theme == legacyAppName {
-		cfg.TUI.Theme = appName
-	}
-	if err := configureProviders(); err != nil {
-		cfg = nil
+	if err := decodeLoadedConfiguration(workingDir); err != nil {
 		return nil, err
 	}
-	cfg.Security = trusted.Security
-	cfg.Extensions = trusted.Extensions
-	cfg.Index.Embeddings = trusted.Index.Embeddings
-	if err := cfg.Extensions.Validate(); err != nil {
-		cfg = nil
+	if err := applyTrustedConfigOptions(trusted); err != nil {
 		return nil, err
-	}
-	if err := cfg.TUI.Validate(); err != nil {
-		cfg = nil
-		return nil, err
-	}
-	if err := cfg.Index.Validate(); err != nil {
-		return nil, err
-	}
-	if err := cfg.Runtime.Validate(); err != nil {
-		cfg = nil
-		return nil, err
-	}
-	cfg.Runtime = cfg.Runtime.Defaults()
-	if cfg.Security.Sandbox == "" {
-		cfg.Security.Sandbox = "bubblewrap"
-	}
-	if cfg.Security.Sandbox != "bubblewrap" && cfg.Security.Sandbox != "none" {
-		cfg = nil
-		return nil, fmt.Errorf("security.sandbox must be bubblewrap or none")
 	}
 	if err := registerModels(cfg.Models); err != nil {
 		cfg = nil
@@ -328,48 +261,9 @@ func loadConfiguration(workingDir string, debug, discoverLocal bool) (*Config, e
 		refreshAutomaticContexts()
 	}
 	applyDefaultValues()
-	defaultLevel := slog.LevelInfo
-	if cfg.Debug {
-		defaultLevel = slog.LevelDebug
+	if err := configureLoadedLogging(discoverLocal); err != nil {
+		return cfg, err
 	}
-	if discoverLocal && Environment("OPCODE_DEV_DEBUG") == "true" {
-		loggingFile := fmt.Sprintf("%s/%s", cfg.Data.Directory, "debug.log")
-		messagesPath := fmt.Sprintf("%s/%s", cfg.Data.Directory, "messages")
-
-		// if file does not exist create it
-		if _, err := os.Stat(loggingFile); os.IsNotExist(err) {
-			if err := os.MkdirAll(cfg.Data.Directory, 0o755); err != nil {
-				return cfg, fmt.Errorf("failed to create directory: %w", err)
-			}
-			if _, err := os.Create(loggingFile); err != nil {
-				return cfg, fmt.Errorf("failed to create log file: %w", err)
-			}
-		}
-
-		if _, err := os.Stat(messagesPath); os.IsNotExist(err) {
-			if err := os.MkdirAll(messagesPath, 0o756); err != nil {
-				return cfg, fmt.Errorf("failed to create directory: %w", err)
-			}
-		}
-		logging.MessageDir = messagesPath
-
-		sloggingFileWriter, err := os.OpenFile(loggingFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
-		if err != nil {
-			return cfg, fmt.Errorf("failed to open log file: %w", err)
-		}
-		// Configure logger
-		logger := slog.New(slog.NewTextHandler(sloggingFileWriter, &slog.HandlerOptions{
-			Level: defaultLevel,
-		}))
-		slog.SetDefault(logger)
-	} else {
-		// Configure logger
-		logger := slog.New(slog.NewTextHandler(logging.NewWriter(), &slog.HandlerOptions{
-			Level: defaultLevel,
-		}))
-		slog.SetDefault(logger)
-	}
-
 	// Validate configuration
 	if err := Validate(); err != nil {
 		return cfg, fmt.Errorf("config validation failed: %w", err)
@@ -436,39 +330,7 @@ func setProviderDefaults() {
 		}
 		return viper.GetString("providers." + id + ".apiKey")
 	}
-	// Set all API keys we can find in the environment
-	// Note: Viper does not default if the json apiKey is ""
-	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.anthropic.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.openai.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.gemini.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.groq.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.openrouter.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("XAI_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.xai.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("LOCAL_API_KEY"); apiKey != "" {
-		viper.SetDefault("providers.local.apiKey", apiKey)
-	}
-	if apiKey := os.Getenv("AZURE_OPENAI_ENDPOINT"); apiKey != "" {
-		// api-key may be empty when using Entra ID credentials – that's okay
-		viper.SetDefault("providers.azure.apiKey", os.Getenv("AZURE_OPENAI_API_KEY"))
-	}
-	if apiKey, err := LoadGitHubToken(); err == nil && apiKey != "" {
-		viper.SetDefault("providers.copilot.apiKey", apiKey)
-		if viper.GetString("providers.copilot.apiKey") == "" {
-			viper.Set("providers.copilot.apiKey", apiKey)
-		}
-	}
+	seedProviderDefaultCredentials()
 	// An explicitly selected local endpoint must not pick a remote provider's
 	// defaults just because credentials for that provider happen to exist.
 	if !viper.GetBool("providers.local.disabled") && (os.Getenv("LOCAL_ENDPOINT") != "" || viper.GetString("providers.local.baseURL") != "") {
@@ -670,9 +532,8 @@ func applyDefaultValues() {
 // It validates model IDs and providers, ensuring they are supported.
 func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 	// Check if model exists
-	// TODO:	If a copilot model is specified, but model is not found,
-	// 		 	it might be new model. The https://api.githubcopilot.com/models
-	// 		 	endpoint should be queried to validate if the model is supported.
+	// Discovery publishes supported catalog models before validation; unknown
+	// definitions retain the existing provider fallback behavior.
 	model, modelExists := models.SupportedModels[agent.Model]
 	if !modelExists {
 		logging.Warn("unsupported model configured, reverting to default",
@@ -680,26 +541,15 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			"configured_model", agent.Model)
 
 		// Set default model based on available providers
-		if setDefaultModelForAgent(name) {
-			logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
-		} else {
-			return fmt.Errorf("no valid provider available for agent %s", name)
-		}
-		return nil
+		return fallbackValidatedAgent(cfg, name)
 	}
 
 	// Check if provider for the model is configured
 	provider := model.Provider
-	providerCfg, providerExists := cfg.Providers[provider]
-	if model.ProviderProfile != "" {
-		var err error
-		providerCfg, err = providerForModelMetadata(model)
-		if err != nil {
-			return fmt.Errorf("agent %s: %w", name, err)
-		}
-		providerExists = true
+	providerCfg, providerExists, err := agentModelProvider(cfg, name, model)
+	if err != nil {
+		return err
 	}
-
 	if !providerExists {
 		// Provider not configured, check if we have environment variables
 		apiKey := getProviderAPIKey(provider)
@@ -710,10 +560,8 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 				"provider", provider)
 
 			// Set default model based on available providers
-			if setDefaultModelForAgent(name) {
-				logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
-			} else {
-				return fmt.Errorf("no valid provider available for agent %s", name)
+			if err := fallbackValidatedAgent(cfg, name); err != nil {
+				return err
 			}
 		} else {
 			// Add provider with API key from environment
@@ -730,98 +578,13 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			"provider", provider)
 
 		// Set default model based on available providers
-		if setDefaultModelForAgent(name) {
-			logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
-		} else {
-			return fmt.Errorf("no valid provider available for agent %s", name)
+		if err := fallbackValidatedAgent(cfg, name); err != nil {
+			return err
 		}
 	}
 
-	// Validate max tokens
-	if agent.MaxTokens <= 0 {
-		logging.Warn("invalid max tokens, setting to default",
-			"agent", name,
-			"model", agent.Model,
-			"max_tokens", agent.MaxTokens)
-
-		// Update the agent with default max tokens
-		updatedAgent := cfg.Agents[name]
-		if model.DefaultMaxTokens > 0 {
-			updatedAgent.MaxTokens = model.DefaultMaxTokens
-		} else {
-			updatedAgent.MaxTokens = MaxTokensFallbackDefault
-		}
-		cfg.Agents[name] = updatedAgent
-	} else if model.ContextWindow > 0 && agent.MaxTokens > model.ContextWindow/2 {
-		// Ensure max tokens doesn't exceed half the context window (reasonable limit)
-		logging.Warn("max tokens exceeds half the context window, adjusting",
-			"agent", name,
-			"model", agent.Model,
-			"max_tokens", agent.MaxTokens,
-			"context_window", model.ContextWindow)
-
-		// Update the agent with adjusted max tokens
-		updatedAgent := cfg.Agents[name]
-		updatedAgent.MaxTokens = model.ContextWindow / 2
-		cfg.Agents[name] = updatedAgent
-	}
-
-	// Explicit capability metadata takes precedence over legacy defaults.
-	if choices := model.ReasoningChoices(); len(choices) > 0 {
-		if agent.ReasoningEffort != "" {
-			valid := false
-			for _, choice := range choices {
-				if agent.ReasoningEffort == choice {
-					valid = true
-				}
-			}
-			if !valid {
-				return fmt.Errorf("agent %s reasoning effort is not advertised by its model", name)
-			}
-		}
-		return nil
-	}
-	// Validate reasoning effort for models that support reasoning
-	if model.CanReason && provider == models.ProviderOpenAI {
-		if agent.ReasoningEffort == "" {
-			// Set default reasoning effort for models that support it
-			logging.Info("setting default reasoning effort for model that supports reasoning",
-				"agent", name,
-				"model", agent.Model)
-
-			// Update the agent with default reasoning effort
-			updatedAgent := cfg.Agents[name]
-			updatedAgent.ReasoningEffort = "medium"
-			cfg.Agents[name] = updatedAgent
-		} else {
-			// Check if reasoning effort is valid (low, medium, high)
-			effort := strings.ToLower(agent.ReasoningEffort)
-			if effort != "none" && effort != "minimal" && effort != "low" && effort != "medium" && effort != "high" && effort != "xhigh" {
-				logging.Warn("invalid reasoning effort, setting to medium",
-					"agent", name,
-					"model", agent.Model,
-					"reasoning_effort", agent.ReasoningEffort)
-
-				// Update the agent with valid reasoning effort
-				updatedAgent := cfg.Agents[name]
-				updatedAgent.ReasoningEffort = "medium"
-				cfg.Agents[name] = updatedAgent
-			}
-		}
-	} else if !model.CanReason && agent.ReasoningEffort != "" {
-		// Model doesn't support reasoning but reasoning effort is set
-		logging.Warn("model doesn't support reasoning but reasoning effort is set, ignoring",
-			"agent", name,
-			"model", agent.Model,
-			"reasoning_effort", agent.ReasoningEffort)
-
-		// Update the agent to remove reasoning effort
-		updatedAgent := cfg.Agents[name]
-		updatedAgent.ReasoningEffort = ""
-		cfg.Agents[name] = updatedAgent
-	}
-
-	return nil
+	validateAgentTokenBudget(cfg, name, agent, model)
+	return validateAgentReasoning(cfg, name, agent, model, provider)
 }
 
 // Validate checks if the configuration is valid and applies defaults where needed.
@@ -830,16 +593,7 @@ func Validate() error {
 		return fmt.Errorf("config not loaded")
 	}
 
-	// A single coder configuration is sufficient. Keep explicit auxiliary
-	// agents and inherit the coder's model for any roles left unspecified.
-	if coder, ok := cfg.Agents[AgentCoder]; ok && coder.Model != "" {
-		for _, name := range []AgentName{AgentTitle, AgentSummarizer, AgentTask} {
-			if _, exists := cfg.Agents[name]; !exists {
-				cfg.Agents[name] = coder
-			}
-		}
-	}
-
+	inheritUnspecifiedAgents()
 	// Validate agent models
 	for name, agent := range cfg.Agents {
 		if err := validateAgent(cfg, name, agent); err != nil {
@@ -899,149 +653,37 @@ func getProviderAPIKey(provider models.ModelProvider) string {
 // setDefaultModelForAgent sets a default model for an agent based on available providers
 func setDefaultModelForAgent(agent AgentName) bool {
 	if hasCopilotCredentials() {
-		maxTokens := int64(5000)
-		if agent == AgentTitle {
-			maxTokens = 80
-		}
-
-		cfg.Agents[agent] = Agent{
-			Model:     models.CopilotGPT4o,
-			MaxTokens: maxTokens,
-		}
+		cfg.Agents[agent] = fallbackAgentDefinition(agent, models.CopilotGPT4o, models.CopilotGPT4o, "")
 		return true
 	}
-	// Check providers in order of preference
-	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
-		maxTokens := int64(5000)
-		if agent == AgentTitle {
-			maxTokens = 80
-		}
-		cfg.Agents[agent] = Agent{
-			Model:     models.Claude37Sonnet,
-			MaxTokens: maxTokens,
-		}
+	if os.Getenv("ANTHROPIC_API_KEY") != "" {
+		cfg.Agents[agent] = fallbackAgentDefinition(agent, models.Claude37Sonnet, models.Claude37Sonnet, "")
 		return true
 	}
-
-	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
-		var model models.ModelID
-		maxTokens := int64(5000)
-		reasoningEffort := ""
-
-		switch agent {
-		case AgentTitle:
-			model = models.GPT41Mini
-			maxTokens = 80
-		case AgentTask:
-			model = models.GPT41Mini
-		default:
-			model = models.GPT41
-		}
-
-		// Check if model supports reasoning
-		if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
-			reasoningEffort = "medium"
-		}
-
-		cfg.Agents[agent] = Agent{
-			Model:           model,
-			MaxTokens:       maxTokens,
-			ReasoningEffort: reasoningEffort,
-		}
+	if os.Getenv("OPENAI_API_KEY") != "" {
+		cfg.Agents[agent] = defaultOpenAIAgent(agent)
 		return true
 	}
-
-	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
-		var model models.ModelID
-		maxTokens := int64(5000)
-		reasoningEffort := ""
-
-		switch agent {
-		case AgentTitle:
-			model = models.OpenRouterClaude35Haiku
-			maxTokens = 80
-		case AgentTask:
-			model = models.OpenRouterClaude37Sonnet
-		default:
-			model = models.OpenRouterClaude37Sonnet
-		}
-
-		// Check if model supports reasoning
-		if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
-			reasoningEffort = "medium"
-		}
-
-		cfg.Agents[agent] = Agent{
-			Model:           model,
-			MaxTokens:       maxTokens,
-			ReasoningEffort: reasoningEffort,
-		}
+	if os.Getenv("OPENROUTER_API_KEY") != "" {
+		cfg.Agents[agent] = defaultOpenRouterAgent(agent)
 		return true
 	}
-
-	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
-		var model models.ModelID
-		maxTokens := int64(5000)
-
-		if agent == AgentTitle {
-			model = models.Gemini25Flash
-			maxTokens = 80
-		} else {
-			model = models.Gemini25
-		}
-
-		cfg.Agents[agent] = Agent{
-			Model:     model,
-			MaxTokens: maxTokens,
-		}
+	if os.Getenv("GEMINI_API_KEY") != "" {
+		cfg.Agents[agent] = fallbackAgentDefinition(agent, models.Gemini25, models.Gemini25Flash, "")
 		return true
 	}
-
-	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
-		maxTokens := int64(5000)
-		if agent == AgentTitle {
-			maxTokens = 80
-		}
-
-		cfg.Agents[agent] = Agent{
-			Model:     models.QWENQwq,
-			MaxTokens: maxTokens,
-		}
+	if os.Getenv("GROQ_API_KEY") != "" {
+		cfg.Agents[agent] = fallbackAgentDefinition(agent, models.QWENQwq, models.QWENQwq, "")
 		return true
 	}
-
 	if hasAWSCredentials() {
-		maxTokens := int64(5000)
-		if agent == AgentTitle {
-			maxTokens = 80
-		}
-
-		cfg.Agents[agent] = Agent{
-			Model:           models.BedrockClaude37Sonnet,
-			MaxTokens:       maxTokens,
-			ReasoningEffort: "medium", // Claude models support reasoning
-		}
+		cfg.Agents[agent] = fallbackAgentDefinition(agent, models.BedrockClaude37Sonnet, models.BedrockClaude37Sonnet, "medium")
 		return true
 	}
-
 	if hasVertexAICredentials() {
-		var model models.ModelID
-		maxTokens := int64(5000)
-
-		if agent == AgentTitle {
-			model = models.VertexAIGemini25Flash
-			maxTokens = 80
-		} else {
-			model = models.VertexAIGemini25
-		}
-
-		cfg.Agents[agent] = Agent{
-			Model:     model,
-			MaxTokens: maxTokens,
-		}
+		cfg.Agents[agent] = fallbackAgentDefinition(agent, models.VertexAIGemini25, models.VertexAIGemini25Flash, "")
 		return true
 	}
-
 	return false
 }
 
@@ -1130,20 +772,7 @@ func LoadGitHubToken() (string, error) {
 		return token, nil
 	}
 
-	// Get config directory
-	var configDir string
-	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
-		configDir = xdgConfig
-	} else if runtime.GOOS == "windows" {
-		if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
-			configDir = localAppData
-		} else {
-			configDir = filepath.Join(os.Getenv("HOME"), "AppData", "Local")
-		}
-	} else {
-		configDir = filepath.Join(os.Getenv("HOME"), ".config")
-	}
-
+	configDir := copilotConfigDirectory()
 	// Try both hosts.json and apps.json files
 	filePaths := []string{
 		filepath.Join(configDir, "github-copilot", "hosts.json"),
@@ -1156,7 +785,7 @@ func LoadGitHubToken() (string, error) {
 			continue
 		}
 
-		var config map[string]map[string]interface{}
+		var config map[string]map[string]any
 		if err := json.Unmarshal(data, &config); err != nil {
 			continue
 		}
@@ -1171,4 +800,416 @@ func LoadGitHubToken() (string, error) {
 	}
 
 	return "", fmt.Errorf("GitHub token not found in standard locations")
+}
+
+func copilotConfigDirectory() string {
+	// Get config directory
+	var configDir string
+	if xdgConfig := os.Getenv("XDG_CONFIG_HOME"); xdgConfig != "" {
+		configDir = xdgConfig
+	} else if runtime.GOOS == "windows" {
+		if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+			configDir = localAppData
+		} else {
+			configDir = filepath.Join(os.Getenv("HOME"), "AppData", "Local")
+		}
+	} else {
+		configDir = filepath.Join(os.Getenv("HOME"), ".config")
+	}
+
+	return configDir
+}
+
+func inheritUnspecifiedAgents() {
+	// A single coder configuration is sufficient. Keep explicit auxiliary
+	// agents and inherit the coder's model for any roles left unspecified.
+	if coder, ok := cfg.Agents[AgentCoder]; ok && coder.Model != "" {
+		for _, name := range []AgentName{AgentTitle, AgentSummarizer, AgentTask} {
+			if _, exists := cfg.Agents[name]; !exists {
+				cfg.Agents[name] = coder
+			}
+		}
+	}
+
+}
+
+func seedProviderDefaultCredentials() {
+	// Set all API keys we can find in the environment
+	// Note: Viper does not default if the json apiKey is ""
+	if apiKey := os.Getenv("ANTHROPIC_API_KEY"); apiKey != "" {
+		viper.SetDefault("providers.anthropic.apiKey", apiKey)
+	}
+	if apiKey := os.Getenv("OPENAI_API_KEY"); apiKey != "" {
+		viper.SetDefault("providers.openai.apiKey", apiKey)
+	}
+	if apiKey := os.Getenv("GEMINI_API_KEY"); apiKey != "" {
+		viper.SetDefault("providers.gemini.apiKey", apiKey)
+	}
+	if apiKey := os.Getenv("GROQ_API_KEY"); apiKey != "" {
+		viper.SetDefault("providers.groq.apiKey", apiKey)
+	}
+	if apiKey := os.Getenv("OPENROUTER_API_KEY"); apiKey != "" {
+		viper.SetDefault("providers.openrouter.apiKey", apiKey)
+	}
+	if apiKey := os.Getenv("XAI_API_KEY"); apiKey != "" {
+		viper.SetDefault("providers.xai.apiKey", apiKey)
+	}
+	if apiKey := os.Getenv("LOCAL_API_KEY"); apiKey != "" {
+		viper.SetDefault("providers.local.apiKey", apiKey)
+	}
+	if apiKey := os.Getenv("AZURE_OPENAI_ENDPOINT"); apiKey != "" {
+		// api-key may be empty when using Entra ID credentials – that's okay
+		viper.SetDefault("providers.azure.apiKey", os.Getenv("AZURE_OPENAI_API_KEY"))
+	}
+	if apiKey, err := LoadGitHubToken(); err == nil && apiKey != "" {
+		viper.SetDefault("providers.copilot.apiKey", apiKey)
+		if viper.GetString("providers.copilot.apiKey") == "" {
+			viper.Set("providers.copilot.apiKey", apiKey)
+		}
+	}
+}
+
+func defaultOpenAIAgent(agent AgentName) Agent {
+
+	var model models.ModelID
+	maxTokens := int64(5000)
+	reasoningEffort := ""
+
+	switch agent {
+	case AgentTitle:
+		model = models.GPT41Mini
+		maxTokens = 80
+	case AgentTask:
+		model = models.GPT41Mini
+	default:
+		model = models.GPT41
+	}
+
+	// Check if model supports reasoning
+	if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
+		reasoningEffort = "medium"
+	}
+
+	return Agent{
+		Model:           model,
+		MaxTokens:       maxTokens,
+		ReasoningEffort: reasoningEffort,
+	}
+
+}
+
+func defaultOpenRouterAgent(agent AgentName) Agent {
+
+	var model models.ModelID
+	maxTokens := int64(5000)
+	reasoningEffort := ""
+
+	switch agent {
+	case AgentTitle:
+		model = models.OpenRouterClaude35Haiku
+		maxTokens = 80
+	case AgentTask:
+		model = models.OpenRouterClaude37Sonnet
+	default:
+		model = models.OpenRouterClaude37Sonnet
+	}
+
+	// Check if model supports reasoning
+	if modelInfo, ok := models.SupportedModels[model]; ok && modelInfo.CanReason {
+		reasoningEffort = "medium"
+	}
+
+	return Agent{
+		Model:           model,
+		MaxTokens:       maxTokens,
+		ReasoningEffort: reasoningEffort,
+	}
+
+}
+
+func validateAgentTokenBudget(cfg *Config, name AgentName, agent Agent, model models.Model) {
+	// Validate max tokens
+	if agent.MaxTokens <= 0 {
+		logging.Warn("invalid max tokens, setting to default",
+			"agent", name,
+			"model", agent.Model,
+			"max_tokens", agent.MaxTokens)
+
+		// Update the agent with default max tokens
+		updatedAgent := cfg.Agents[name]
+		if model.DefaultMaxTokens > 0 {
+			updatedAgent.MaxTokens = model.DefaultMaxTokens
+		} else {
+			updatedAgent.MaxTokens = MaxTokensFallbackDefault
+		}
+		cfg.Agents[name] = updatedAgent
+	} else if model.ContextWindow > 0 && agent.MaxTokens > model.ContextWindow/2 {
+		// Ensure max tokens doesn't exceed half the context window (reasonable limit)
+		logging.Warn("max tokens exceeds half the context window, adjusting",
+			"agent", name,
+			"model", agent.Model,
+			"max_tokens", agent.MaxTokens,
+			"context_window", model.ContextWindow)
+
+		// Update the agent with adjusted max tokens
+		updatedAgent := cfg.Agents[name]
+		updatedAgent.MaxTokens = model.ContextWindow / 2
+		cfg.Agents[name] = updatedAgent
+	}
+
+}
+
+func validateAgentReasoning(cfg *Config, name AgentName, agent Agent, model models.Model, provider models.ModelProvider) error {
+	// Explicit capability metadata takes precedence over legacy defaults.
+	if choices := model.ReasoningChoices(); len(choices) > 0 {
+		return validateAdvertisedReasoning(name, agent.ReasoningEffort, choices)
+	}
+	// Validate reasoning effort for models that support reasoning
+	if model.CanReason && provider == models.ProviderOpenAI {
+		if agent.ReasoningEffort == "" {
+			// Set default reasoning effort for models that support it
+			logging.Info("setting default reasoning effort for model that supports reasoning",
+				"agent", name,
+				"model", agent.Model)
+
+			// Update the agent with default reasoning effort
+			updatedAgent := cfg.Agents[name]
+			updatedAgent.ReasoningEffort = "medium"
+			cfg.Agents[name] = updatedAgent
+		} else {
+			// Check if reasoning effort is valid (low, medium, high)
+			effort := strings.ToLower(agent.ReasoningEffort)
+			if effort != "none" && effort != "minimal" && effort != "low" && effort != "medium" && effort != "high" && effort != "xhigh" {
+				logging.Warn("invalid reasoning effort, setting to medium",
+					"agent", name,
+					"model", agent.Model,
+					"reasoning_effort", agent.ReasoningEffort)
+
+				// Update the agent with valid reasoning effort
+				updatedAgent := cfg.Agents[name]
+				updatedAgent.ReasoningEffort = "medium"
+				cfg.Agents[name] = updatedAgent
+			}
+		}
+	} else if !model.CanReason && agent.ReasoningEffort != "" {
+		// Model doesn't support reasoning but reasoning effort is set
+		logging.Warn("model doesn't support reasoning but reasoning effort is set, ignoring",
+			"agent", name,
+			"model", agent.Model,
+			"reasoning_effort", agent.ReasoningEffort)
+
+		// Update the agent to remove reasoning effort
+		updatedAgent := cfg.Agents[name]
+		updatedAgent.ReasoningEffort = ""
+		cfg.Agents[name] = updatedAgent
+	}
+
+	return nil
+}
+
+func fallbackAgentDefinition(name AgentName, model, title models.ModelID, effort string) Agent {
+	maxTokens := int64(5000)
+	if name == AgentTitle {
+		model = title
+		maxTokens = 80
+	}
+	return Agent{Model: model, MaxTokens: maxTokens, ReasoningEffort: effort}
+}
+
+func fallbackValidatedAgent(cfg *Config, name AgentName) error {
+	if !setDefaultModelForAgent(name) {
+		return fmt.Errorf("no valid provider available for agent %s", name)
+	}
+	logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
+	return nil
+}
+
+func validateAdvertisedReasoning(name AgentName, effort string, choices []string) error {
+
+	if effort != "" {
+		valid := false
+		for _, choice := range choices {
+			if effort == choice {
+				valid = true
+			}
+		}
+		if !valid {
+			return fmt.Errorf("agent %s reasoning effort is not advertised by its model", name)
+		}
+	}
+	return nil
+
+}
+
+func agentModelProvider(cfg *Config, name AgentName, model models.Model) (Provider, bool, error) {
+	provider := model.Provider
+	providerCfg, providerExists := cfg.Providers[provider]
+	if model.ProviderProfile != "" {
+		var err error
+		providerCfg, err = providerForModelMetadata(model)
+		if err != nil {
+			return Provider{}, false, fmt.Errorf("agent %s: %w", name, err)
+		}
+		providerExists = true
+	}
+
+	return providerCfg, providerExists, nil
+}
+
+type trustedConfigSettings struct {
+	Security   SecurityConfig
+	Extensions ExtensionsConfig
+	Index      IndexConfig
+}
+
+func loadTrustedProjectConfiguration(workingDir string) (trustedConfigSettings, error) {
+	var trusted trustedConfigSettings
+	if err := viper.Unmarshal(&trusted); err != nil {
+		return trusted, err
+	}
+	// Load and merge local config
+	if err := mergeLocalConfig(workingDir); err != nil {
+		cfg = nil
+		return trusted, err
+	}
+	if path := ProjectConfigPath(workingDir); path != viper.ConfigFileUsed() {
+		if err := ValidateDocument(path); err != nil {
+			cfg = nil
+			return trusted, err
+		}
+	}
+
+	return trusted, nil
+}
+
+func decodeLoadedConfiguration(workingDir string) error {
+	// AllSettings expands dots as paths, but model IDs (e.g. local.llama3.1:8b)
+	// are literal map keys. Decode the original models map before validation.
+	modelJSON, err := json.Marshal(viper.GetStringMap("models"))
+	var definitions map[models.ModelID]models.Model
+	if err != nil || json.Unmarshal(modelJSON, &definitions) != nil {
+		cfg = nil
+		return fmt.Errorf("invalid model definitions")
+	}
+	cfg.Models = definitions
+	if cfg.Data.Directory != "" && !filepath.IsAbs(cfg.Data.Directory) {
+		cfg.Data.Directory = filepath.Join(workingDir, cfg.Data.Directory)
+	}
+	if cfg.TUI.Theme == legacyAppName {
+		cfg.TUI.Theme = appName
+	}
+	if err := configureProviders(); err != nil {
+		cfg = nil
+		return err
+	}
+	return nil
+}
+
+func applyTrustedConfigOptions(trusted trustedConfigSettings) error {
+	cfg.Security = trusted.Security
+	cfg.Extensions = trusted.Extensions
+	cfg.Index.Embeddings = trusted.Index.Embeddings
+	if err := cfg.Extensions.Validate(); err != nil {
+		cfg = nil
+		return err
+	}
+	if err := cfg.TUI.Validate(); err != nil {
+		cfg = nil
+		return err
+	}
+	if err := cfg.Index.Validate(); err != nil {
+		return err
+	}
+	if err := cfg.Runtime.Validate(); err != nil {
+		cfg = nil
+		return err
+	}
+	cfg.Runtime = cfg.Runtime.Defaults()
+	if cfg.Security.Sandbox == "" {
+		cfg.Security.Sandbox = "bubblewrap"
+	}
+	if cfg.Security.Sandbox != "bubblewrap" && cfg.Security.Sandbox != "none" {
+		cfg = nil
+		return fmt.Errorf("security.sandbox must be bubblewrap or none")
+	}
+	return nil
+}
+
+func configureLoadedLogging(discoverLocal bool) error {
+	defaultLevel := slog.LevelInfo
+	if cfg.Debug {
+		defaultLevel = slog.LevelDebug
+	}
+	if discoverLocal && Environment("OPCODE_DEV_DEBUG") == "true" {
+		loggingFile := fmt.Sprintf("%s/%s", cfg.Data.Directory, "debug.log")
+		messagesPath := fmt.Sprintf("%s/%s", cfg.Data.Directory, "messages")
+
+		if err := ensureDebugLogFiles(loggingFile, messagesPath); err != nil {
+			return err
+		}
+		logging.MessageDir = messagesPath
+
+		sloggingFileWriter, err := os.OpenFile(loggingFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+		if err != nil {
+			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		// Configure logger
+		logger := slog.New(slog.NewTextHandler(sloggingFileWriter, &slog.HandlerOptions{
+			Level: defaultLevel,
+		}))
+		slog.SetDefault(logger)
+	} else {
+		// Configure logger
+		logger := slog.New(slog.NewTextHandler(logging.NewWriter(), &slog.HandlerOptions{
+			Level: defaultLevel,
+		}))
+		slog.SetDefault(logger)
+	}
+
+	return nil
+}
+
+func ensureStartupConfigTemplates(discoverLocal bool) error {
+	if discoverLocal && viper.ConfigFileUsed() == "" {
+		if err := ensureReferenceTemplate(); err != nil {
+			return err
+		}
+		if err := ensureGlobalTemplate(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ensureDebugLogFiles(loggingFile, messagesPath string) error {
+	// if file does not exist create it
+	if _, err := os.Stat(loggingFile); os.IsNotExist(err) {
+		if err := os.MkdirAll(cfg.Data.Directory, 0o755); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
+		}
+		file, err := os.Create(loggingFile)
+		if err != nil {
+			return fmt.Errorf("failed to create log file: %w", err)
+		}
+		_ = file.Close()
+	}
+
+	if _, err := os.Stat(messagesPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(messagesPath, 0o756); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateCurrentConfigFile() error {
+	path := viper.ConfigFileUsed()
+	if path == "" {
+		return nil
+	}
+	if err := ValidateDocument(path); err != nil {
+		cfg = nil
+		return err
+	}
+	return nil
 }

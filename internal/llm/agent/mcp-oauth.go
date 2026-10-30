@@ -224,14 +224,8 @@ func oauthClientConfig(server config.MCPServer, redirect string) (transport.OAut
 // The callback listener exists for at most five minutes and validates state and
 // issuer before exchanging the authorization code with its PKCE verifier.
 func LoginMCPOAuth(parent context.Context, server config.MCPServer, notify func(string) error) error {
-	if notify == nil {
-		return fmt.Errorf("OAuth login requires a user-visible authorization URL")
-	}
-	if err := server.ValidateOAuth(); err != nil {
+	if err := validateOAuthLogin(server, notify); err != nil {
 		return err
-	}
-	if server.OAuth == nil {
-		return fmt.Errorf("enable oauth in this MCP server configuration first")
 	}
 	ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
 	defer cancel()
@@ -263,9 +257,8 @@ func LoginMCPOAuth(parent context.Context, server config.MCPServer, notify func(
 	if err != nil {
 		return fmt.Errorf("MCP OAuth authorization discovery failed")
 	}
-	authorizationURL, parseErr := url.Parse(link)
-	if parseErr != nil || len(link) > 16384 || authorizationURL.User != nil || authorizationURL.Hostname() == "" || (authorizationURL.Scheme != "https" && !(authorizationURL.Scheme == "http" && net.ParseIP(authorizationURL.Hostname()).IsLoopback())) {
-		return fmt.Errorf("invalid MCP OAuth authorization URL")
+	if err := validateOAuthAuthorizationURL(link); err != nil {
+		return err
 	}
 	if err := store.saveClient(ctx, handler); err != nil {
 		return err
@@ -276,39 +269,12 @@ func LoginMCPOAuth(parent context.Context, server config.MCPServer, notify func(
 	callback := make(chan url.Values, 1)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /oauth/callback", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'")
-		query := r.URL.Query()
-		if len(r.URL.RawQuery) > 8192 || r.Host != listener.Addr().String() || subtle.ConstantTimeCompare([]byte(query.Get("state")), []byte(state)) != 1 || len(query["state"]) != 1 || len(query["code"]) > 1 || len(query["iss"]) > 1 {
-			http.Error(w, "Invalid OAuth callback", 400)
-			return
-		}
-		select {
-		case callback <- query:
-			fmt.Fprintln(w, "Autorização recebida. Volte ao Opcode.")
-		default:
-			http.Error(w, "Callback already received", 409)
-		}
+		oauthLoopbackCallback(w, r, listener.Addr().String(), state, callback)
 	})
 	web := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, MaxHeaderBytes: 16 << 10}
 	defer web.Close()
 	go web.Serve(listener)
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case query := <-callback:
-		if query.Get("error") != "" {
-			return fmt.Errorf("MCP OAuth authorization was denied")
-		}
-		if strings.TrimSpace(query.Get("code")) == "" {
-			return fmt.Errorf("MCP OAuth callback has no authorization code")
-		}
-		if err := handler.ProcessAuthorizationCallback(ctx, query, verifier); err != nil {
-			return fmt.Errorf("MCP OAuth code exchange failed; no tool permission was granted")
-		}
-		return nil
-	}
+	return awaitOAuthAuthorization(ctx, handler, verifier, callback)
 }
 
 func MCPOAuthStatus(ctx context.Context, server config.MCPServer) (bool, error) {
@@ -351,4 +317,63 @@ func LogoutMCPOAuth(ctx context.Context, server config.MCPServer) error {
 		config.RegisterRuntimeCredentials(store.binding)
 	}
 	return err
+}
+
+func oauthLoopbackCallback(w http.ResponseWriter, r *http.Request, host, state string, callback chan<- url.Values) {
+
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'")
+	query := r.URL.Query()
+	if len(r.URL.RawQuery) > 8192 || r.Host != host || subtle.ConstantTimeCompare([]byte(query.Get("state")), []byte(state)) != 1 || len(query["state"]) != 1 || len(query["code"]) > 1 || len(query["iss"]) > 1 {
+		http.Error(w, "Invalid OAuth callback", 400)
+		return
+	}
+	select {
+	case callback <- query:
+		fmt.Fprintln(w, "Autorização recebida. Volte ao Opcode.")
+	default:
+		http.Error(w, "Callback already received", http.StatusConflict)
+	}
+}
+
+func validateOAuthAuthorizationURL(link string) error {
+	authorizationURL, parseErr := url.Parse(link)
+	if parseErr != nil || len(link) > 16384 || authorizationURL.User != nil || authorizationURL.Hostname() == "" || (authorizationURL.Scheme != "https" && !(authorizationURL.Scheme == "http" && net.ParseIP(authorizationURL.Hostname()).IsLoopback())) {
+		return fmt.Errorf("invalid MCP OAuth authorization URL")
+	}
+
+	return nil
+}
+
+func validateOAuthLogin(server config.MCPServer, notify func(string) error) error {
+	if notify == nil {
+		return fmt.Errorf("OAuth login requires a user-visible authorization URL")
+	}
+	if err := server.ValidateOAuth(); err != nil {
+		return err
+	}
+	if server.OAuth == nil {
+		return fmt.Errorf("enable oauth in this MCP server configuration first")
+	}
+
+	return nil
+}
+
+func awaitOAuthAuthorization(ctx context.Context, handler *transport.OAuthHandler, verifier string, callback <-chan url.Values) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case query := <-callback:
+		if query.Get("error") != "" {
+			return fmt.Errorf("MCP OAuth authorization was denied")
+		}
+		if strings.TrimSpace(query.Get("code")) == "" {
+			return fmt.Errorf("MCP OAuth callback has no authorization code")
+		}
+		if err := handler.ProcessAuthorizationCallback(ctx, query, verifier); err != nil {
+			return fmt.Errorf("MCP OAuth code exchange failed; no tool permission was granted")
+		}
+		return nil
+	}
 }

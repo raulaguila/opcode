@@ -27,7 +27,7 @@ func TestConcurrentWritesRemainFramed(t *testing.T) {
 	reader, writer := io.Pipe()
 	client := &Client{stdin: writer}
 	var group sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		group.Add(1)
 		go func() {
 			defer group.Done()
@@ -35,7 +35,7 @@ func TestConcurrentWritesRemainFramed(t *testing.T) {
 		}()
 	}
 	input := bufio.NewReader(reader)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		message, err := ReadMessage(input)
 		require.NoError(t, err)
 		require.Equal(t, "test", message.Method)

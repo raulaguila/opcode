@@ -50,93 +50,22 @@ func structuralProjectMap(ctx context.Context, path string, offset, limit int) (
 	limit = min(limit, 60)
 	start := min(max(0, offset), len(files))
 	end := start
-	type item struct {
-		Path         string       `json:"path"`
-		Bytes        int64        `json:"bytes"`
-		Language     string       `json:"language"`
-		Role         string       `json:"role"`
-		Package      string       `json:"package,omitempty"`
-		Declarations []codeSymbol `json:"declarations,omitempty"`
-		Dependencies []string     `json:"dependencies,omitempty"`
-	}
-	items := []item{}
+	items := []projectMapItem{}
 	size := 0
 	parseReads := 0
-	for end < len(files) && end-start < limit {
+	for end < min(len(files), start+limit) {
 		name := files[end]
 		full := filepath.Join(root, filepath.FromSlash(name))
 		info, e := os.Lstat(full)
 		if e != nil {
 			return ToolResponse{}, e
 		}
-		entry := item{Path: name, Bytes: info.Size(), Language: sourceLanguage(name), Role: projectFileRole(name)}
+		entry := projectMapItem{Path: name, Bytes: info.Size(), Language: sourceLanguage(name), Role: projectFileRole(name)}
 		if info.Size() <= 64<<10 && parseReads < 12 {
-			raw, e := readFile(ctx, full)
-			if e != nil {
-				return ToolResponse{}, e
+			if err := entry.enrich(ctx, full); err != nil {
+				return ToolResponse{}, err
 			}
 			parseReads++
-			if symbols, e := localOutline(ctx, name, raw); e == nil {
-				entry.Declarations = symbols[:min(8, len(symbols))]
-			}
-			if entry.Language == "go" {
-				if file, e := parser.ParseFile(token.NewFileSet(), name, raw, parser.ImportsOnly); e == nil {
-					entry.Package = file.Name.Name
-					for _, imp := range file.Imports[:min(12, len(file.Imports))] {
-						v, _ := strconv.Unquote(imp.Path.Value)
-						entry.Dependencies = append(entry.Dependencies, v)
-					}
-				}
-			}
-			if filepath.Base(name) == "package.json" {
-				var manifest struct {
-					Name            string
-					Dependencies    map[string]json.RawMessage
-					DevDependencies map[string]json.RawMessage
-				}
-				if json.Unmarshal(raw, &manifest) == nil {
-					entry.Package = clipString(manifest.Name, 120)
-					names := []string{}
-					for dep := range manifest.Dependencies {
-						names = append(names, dep)
-					}
-					sort.Strings(names)
-					for _, dep := range names {
-						entry.Dependencies = append(entry.Dependencies, clipString(dep, 120))
-						if len(entry.Dependencies) == 12 {
-							break
-						}
-					}
-				}
-			}
-			if filepath.Base(name) == "pyproject.toml" || filepath.Base(name) == "Cargo.toml" {
-				var manifest struct {
-					Project struct {
-						Name         string
-						Dependencies []string
-					}
-					Package      struct{ Name string }
-					Dependencies map[string]any
-				}
-				if toml.Unmarshal(raw, &manifest) == nil {
-					entry.Package = manifest.Project.Name
-					if entry.Package == "" {
-						entry.Package = manifest.Package.Name
-					}
-					entry.Package = clipString(entry.Package, 120)
-					for _, dep := range manifest.Project.Dependencies[:min(12, len(manifest.Project.Dependencies))] {
-						entry.Dependencies = append(entry.Dependencies, clipString(dep, 120))
-					}
-					names := []string{}
-					for dep := range manifest.Dependencies {
-						names = append(names, dep)
-					}
-					sort.Strings(names)
-					for _, dep := range names[:min(12, len(names))] {
-						entry.Dependencies = append(entry.Dependencies, clipString(dep, 120))
-					}
-				}
-			}
 		}
 		raw, _ := json.Marshal(entry)
 		if size+len(raw) > 7500 {
@@ -153,4 +82,96 @@ func clipString(s string, n int) string {
 		return s
 	}
 	return strings.ToValidUTF8(s[:n], "")
+}
+
+type projectMapItem struct {
+	Path         string       `json:"path"`
+	Bytes        int64        `json:"bytes"`
+	Language     string       `json:"language"`
+	Role         string       `json:"role"`
+	Package      string       `json:"package,omitempty"`
+	Declarations []codeSymbol `json:"declarations,omitempty"`
+	Dependencies []string     `json:"dependencies,omitempty"`
+}
+
+func (entry *projectMapItem) enrich(ctx context.Context, full string) error {
+	raw, err := readFile(ctx, full)
+	if err != nil {
+		return err
+	}
+	if symbols, err := localOutline(ctx, entry.Path, raw); err == nil {
+		entry.Declarations = symbols[:min(8, len(symbols))]
+	}
+	if entry.Language == "go" {
+		entry.addGoImports(raw)
+	}
+	switch filepath.Base(entry.Path) {
+	case "package.json":
+		entry.addNodeManifest(raw)
+	case "pyproject.toml", "Cargo.toml":
+		entry.addTomlManifest(raw)
+	}
+	return nil
+}
+func (entry *projectMapItem) addGoImports(raw []byte) {
+	file, err := parser.ParseFile(token.NewFileSet(), entry.Path, raw, parser.ImportsOnly)
+	if err != nil {
+		return
+	}
+	entry.Package = file.Name.Name
+	for _, imp := range file.Imports[:min(12, len(file.Imports))] {
+		v, _ := strconv.Unquote(imp.Path.Value)
+		entry.Dependencies = append(entry.Dependencies, v)
+	}
+}
+func (entry *projectMapItem) addNodeManifest(raw []byte) {
+	var manifest struct {
+		Name            string
+		Dependencies    map[string]json.RawMessage
+		DevDependencies map[string]json.RawMessage
+	}
+	if json.Unmarshal(raw, &manifest) != nil {
+		return
+	}
+	entry.Package = clipString(manifest.Name, 120)
+	names := []string{}
+	for dep := range manifest.Dependencies {
+		names = append(names, dep)
+	}
+	sort.Strings(names)
+	for _, dep := range names {
+		entry.Dependencies = append(entry.Dependencies, clipString(dep, 120))
+		if len(entry.Dependencies) == 12 {
+			break
+		}
+	}
+}
+func (entry *projectMapItem) addTomlManifest(raw []byte) {
+	var manifest struct {
+		Project struct {
+			Name         string
+			Dependencies []string
+		}
+		Package      struct{ Name string }
+		Dependencies map[string]any
+	}
+	if toml.Unmarshal(raw, &manifest) != nil {
+		return
+	}
+	entry.Package = manifest.Project.Name
+	if entry.Package == "" {
+		entry.Package = manifest.Package.Name
+	}
+	entry.Package = clipString(entry.Package, 120)
+	for _, dep := range manifest.Project.Dependencies[:min(12, len(manifest.Project.Dependencies))] {
+		entry.Dependencies = append(entry.Dependencies, clipString(dep, 120))
+	}
+	names := []string{}
+	for dep := range manifest.Dependencies {
+		names = append(names, dep)
+	}
+	sort.Strings(names)
+	for _, dep := range names[:min(12, len(names))] {
+		entry.Dependencies = append(entry.Dependencies, clipString(dep, 120))
+	}
 }

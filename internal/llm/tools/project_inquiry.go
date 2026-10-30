@@ -65,6 +65,10 @@ func ProjectInquiry(question string) bool {
 		return true
 	}
 	words := strings.FieldsFunc(strings.ReplaceAll(s, "don't", "dont"), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
+	return projectQuestionWords(words)
+}
+
+func projectQuestionWords(words []string) bool {
 	for i, word := range words {
 		if i > 0 {
 			switch words[i-1] {

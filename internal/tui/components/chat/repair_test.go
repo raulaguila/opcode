@@ -48,7 +48,7 @@ func TestEditorOwnsEditingKeysAndIgnoresConversationKeys(t *testing.T) {
 func TestProseUsesReadingMeasureAndCodeRetainsWidth(t *testing.T) {
 	prose := strings.Repeat("readable words ", 40)
 	view := ansi.Strip(renderMessage(prose, false, false, 160))
-	for _, line := range strings.Split(view, "\n") {
+	for line := range strings.SplitSeq(view, "\n") {
 		require.LessOrEqual(t, ansi.StringWidth(strings.TrimRight(line, " ")), 76)
 	}
 	code := "```\n" + strings.Repeat("x", 100) + "\n```"

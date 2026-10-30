@@ -178,17 +178,8 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.reasoningUpdate(msg); handled {
 		return m, cmd
 	}
-	if m.selecting {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			if key.Type == tea.KeyEsc {
-				m.Close()
-				return m, util.CmdHandler(CloseModelDialogMsg{})
-			}
-			return m, nil
-		}
-		if _, ok := msg.(tea.MouseMsg); ok {
-			return m, nil
-		}
+	if result0, result1, handled := updateSelecting(m, msg); handled {
+		return result0, result1
 	}
 	if result, ok := msg.(modelMetadataLoadedMsg); ok {
 		return m, m.acceptMetadata(result)
@@ -198,106 +189,20 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	switch msg := msg.(type) {
 	case ModelCatalogLoadedMsg:
-		if msg.request != m.request {
-			return m, nil
-		}
-		m.loading = false
-		m.cancel = nil
-		if msg.err == nil {
-			m.models = msg.models
-			m.note = fmt.Sprintf(config.Text("Catálogo do provedor · %d modelos", "Provider catalog · %d models"), len(m.models))
-			m.filter()
-			for i, model := range m.filtered {
-				if model.ID == m.refreshSelection {
-					m.selectedIdx = i
-					m.keepVisible()
-					break
-				}
-			}
-		} else if errors.Is(msg.err, models.ErrCatalogUnsupported) {
-			m.models = getModelsForProvider(m.provider)
-			m.filter()
-			m.note = config.Text("Catálogo configurado · consulta indisponível", "Configured catalog · live listing unavailable")
-		} else {
-			m.catalogFailed = true
-			m.models = nil
-			m.filter()
-			m.note = config.Text("Falha ao consultar provedor · Ctrl+R tenta novamente · Ctrl+P conexões", "Provider query failed · Ctrl+R retries · Ctrl+P connections")
+		if result0, result1, handled := updateModelDialogCmpDefault(m, &msg); handled {
+			return result0, result1
 		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.keepVisible()
 	case tea.KeyMsg:
-		switch {
-		case msg.String() == "ctrl+d":
-			m.details = !m.details
-			m.keepVisible()
-			return m, m.scheduleMetadata()
-		case key.Matches(msg, modelKeys.Up):
-			m.move(-1)
-		case key.Matches(msg, modelKeys.Down):
-			m.move(1)
-		case msg.Type == tea.KeyPgUp:
-			m.selectedIdx = max(0, m.selectedIdx-m.visibleRows())
-			m.keepVisible()
-		case msg.Type == tea.KeyPgDown:
-			m.selectedIdx = max(0, min(len(m.filtered)-1, m.selectedIdx+m.visibleRows()))
-			m.keepVisible()
-		case key.Matches(msg, modelKeys.Left):
-			return m, m.switchProvider(-1)
-		case key.Matches(msg, modelKeys.Right):
-			return m, m.switchProvider(1)
-		case msg.String() == "ctrl+p":
-			m.Close()
-			return m, util.CmdHandler(OpenProviderDialogMsg{Provider: m.provider, ReturnToModels: true})
-		case msg.String() == "ctrl+f":
-			if len(m.filtered) > 0 {
-				if err := config.ToggleFavoriteModel(m.filtered[m.selectedIdx].ID); err != nil {
-					return m, util.ReportError(err)
-				}
-				m.filter()
-			}
-			return m, nil
-		case msg.String() == "ctrl+a":
-			roles := []config.AgentName{config.AgentCoder, config.AgentTask, config.AgentTitle, config.AgentSummarizer}
-			m.target = roles[(slices.Index(roles, m.target)+1)%len(roles)]
-			m.selectedIdx = -1
-			m.filter()
-			return m, nil
-		case key.Matches(msg, modelKeys.Refresh):
-			return m, m.load()
-		case key.Matches(msg, modelKeys.Enter):
-			return m, m.choose()
-		case key.Matches(msg, modelKeys.Escape):
-			m.Close()
-			return m, util.CmdHandler(CloseModelDialogMsg{})
-		default:
-			if cmd := m.updateSearch(msg); cmd != nil {
-				return m, cmd
-			}
-
+		if result0, result1, handled := updateModelDialogCmpKeyMsg(m, &msg); handled {
+			return result0, result1
 		}
 	case tea.MouseMsg:
 		// The app translates mouse coordinates into this centered dialog.
-		if msg.Button == tea.MouseButtonWheelUp {
-			m.move(-1)
-		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			m.move(1)
-		}
-		geometry := m.geometry()
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= geometry.contentX && msg.X < geometry.contentX+geometry.width {
-			if msg.Y == geometry.titleY && len(m.availableProviders) > 1 {
-				if msg.X < geometry.contentX+geometry.width/2 {
-					return m, m.switchProvider(-1)
-				}
-				return m, m.switchProvider(1)
-			}
-			index := msg.Y - geometry.listY + m.scrollOffset
-			if msg.Y >= geometry.listY && msg.Y < geometry.listY+geometry.rows && index >= 0 && index < len(m.filtered) {
-				m.selectedIdx = index
-				return m, m.choose()
-			}
+		if result0, result1, handled := updateModelDialogCmpMouseMsg(m, &msg); handled {
+			return result0, result1
 		}
 	default:
 		// textinput also receives its asynchronous clipboard result messages.
@@ -388,39 +293,20 @@ func (m *modelDialogCmp) filter() {
 		m.search.CursorEnd()
 	}
 	previous := models.ModelID("")
-	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
-		previous = m.filtered[m.selectedIdx].ID
-	}
+	filterSelectedIdxSelectedIdxFiltered(m, &previous)
 	m.filtered = nil
-	for _, model := range m.models {
-		if _, ok := modelMatchScore(m.query, model.Name+" "+model.APIModel); ok {
-			m.filtered = append(m.filtered, model)
-		}
-	}
+	filterModels(m)
 	prefs := config.Get().Preferences
 	slices.SortStableFunc(m.filtered, func(a, b models.Model) int {
-		if m.query != "" {
-			sa, _ := modelMatchScore(m.query, a.Name+" "+a.APIModel)
-			sb, _ := modelMatchScore(m.query, b.Name+" "+b.APIModel)
-			if sa != sb {
-				return sa - sb
-			}
+		if result0, handled := filterQueryCase(m, &a, &b); handled {
+			return result0
 		}
-		if m.query == "" {
-			aa, bb := a.ID == m.activeModelID(), b.ID == m.activeModelID()
-			if aa != bb {
-				if aa {
-					return -1
-				}
-				return 1
-			}
+		if result0, handled := filterQuery(m, &a, &b); handled {
+			return result0
 		}
 		fa, fb := slices.Contains(prefs.FavoriteModels, a.ID), slices.Contains(prefs.FavoriteModels, b.ID)
-		if fa != fb {
-			if fa {
-				return -1
-			}
-			return 1
+		if result0, handled := filterFaFb(fa, fb); handled {
+			return result0
 		}
 		ra, rb := slices.Index(prefs.RecentModels, a.ID), slices.Index(prefs.RecentModels, b.ID)
 		if ra < 0 {
@@ -440,15 +326,8 @@ func (m *modelDialogCmp) filter() {
 		target = config.AgentCoder
 	}
 	selected := config.Get().Agents[target].Model
-	if previous != "" && slices.ContainsFunc(m.filtered, func(model models.Model) bool { return model.ID == previous }) {
-		selected = previous
-	}
-	for i, model := range m.filtered {
-		if model.ID == selected {
-			m.selectedIdx = i
-			break
-		}
-	}
+	filterModelModelsModel(m, &previous, &selected)
+	filterFiltered(m, selected)
 	m.keepVisible()
 }
 func (m *modelDialogCmp) move(delta int) {
@@ -539,3 +418,189 @@ func NewModelDialogCmp() ModelDialog {
 }
 
 func (m *modelDialogCmp) SetSetup(enabled bool) { m.setup = enabled }
+
+func updateModelDialogCmpMouseMsg(m *modelDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if msg.Button == tea.MouseButtonWheelUp {
+		m.move(-1)
+	}
+	if msg.Button == tea.MouseButtonWheelDown {
+		m.move(1)
+	}
+	geometry := m.geometry()
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= geometry.contentX && msg.X < geometry.contentX+geometry.width {
+		if msg.Y == geometry.titleY && len(m.availableProviders) > 1 {
+			if msg.X < geometry.contentX+geometry.width/2 {
+				return m, m.switchProvider(-1), true
+			}
+			return m, m.switchProvider(1), true
+		}
+		index := msg.Y - geometry.listY + m.scrollOffset
+		if msg.Y >= geometry.listY && msg.Y < geometry.listY+geometry.rows && index >= 0 && index < len(m.filtered) {
+			m.selectedIdx = index
+			return m, m.choose(), true
+		}
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateModelDialogCmpDefault(m *modelDialogCmp, msg *ModelCatalogLoadedMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if msg.request != m.request {
+		return m, nil, true
+	}
+	m.loading = false
+	m.cancel = nil
+	if msg.err == nil {
+		m.models = msg.models
+		m.note = fmt.Sprintf(config.Text("Catálogo do provedor · %d modelos", "Provider catalog · %d models"), len(m.models))
+		m.filter()
+		for i, model := range m.filtered {
+			if model.ID == m.refreshSelection {
+				m.selectedIdx = i
+				m.keepVisible()
+				break
+			}
+		}
+	} else if errors.Is(msg.err, models.ErrCatalogUnsupported) {
+		m.models = getModelsForProvider(m.provider)
+		m.filter()
+		m.note = config.Text("Catálogo configurado · consulta indisponível", "Configured catalog · live listing unavailable")
+	} else {
+		m.catalogFailed = true
+		m.models = nil
+		m.filter()
+		m.note = config.Text("Falha ao consultar provedor · Ctrl+R tenta novamente · Ctrl+P conexões", "Provider query failed · Ctrl+R retries · Ctrl+P connections")
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateModelDialogCmpKeyMsg(m *modelDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	switch {
+	case msg.String() == "ctrl+d":
+		m.details = !m.details
+		m.keepVisible()
+		return m, m.scheduleMetadata(), true
+	case key.Matches((*msg), modelKeys.Up):
+		m.move(-1)
+	case key.Matches((*msg), modelKeys.Down):
+		m.move(1)
+	case msg.Type == tea.KeyPgUp:
+		m.selectedIdx = max(0, m.selectedIdx-m.visibleRows())
+		m.keepVisible()
+	case msg.Type == tea.KeyPgDown:
+		m.selectedIdx = max(0, min(len(m.filtered)-1, m.selectedIdx+m.visibleRows()))
+		m.keepVisible()
+	case key.Matches((*msg), modelKeys.Left):
+		return m, m.switchProvider(-1), true
+	case key.Matches((*msg), modelKeys.Right):
+		return m, m.switchProvider(1), true
+	case msg.String() == "ctrl+p":
+		m.Close()
+		return m, util.CmdHandler(OpenProviderDialogMsg{Provider: m.provider, ReturnToModels: true}), true
+	case msg.String() == "ctrl+f":
+		if len(m.filtered) > 0 {
+			if err := config.ToggleFavoriteModel(m.filtered[m.selectedIdx].ID); err != nil {
+				return m, util.ReportError(err), true
+			}
+			m.filter()
+		}
+		return m, nil, true
+	case msg.String() == "ctrl+a":
+		roles := []config.AgentName{config.AgentCoder, config.AgentTask, config.AgentTitle, config.AgentSummarizer}
+		m.target = roles[(slices.Index(roles, m.target)+1)%len(roles)]
+		m.selectedIdx = -1
+		m.filter()
+		return m, nil, true
+	case key.Matches((*msg), modelKeys.Refresh):
+		return m, m.load(), true
+	case key.Matches((*msg), modelKeys.Enter):
+		return m, m.choose(), true
+	case key.Matches((*msg), modelKeys.Escape):
+		m.Close()
+		return m, util.CmdHandler(CloseModelDialogMsg{}), true
+	default:
+		if cmd := m.updateSearch((*msg)); cmd != nil {
+			return m, cmd, true
+		}
+
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func filterQuery(m *modelDialogCmp, a *models.Model, b *models.Model) (extractedResult0 int, handled bool) {
+	if m.query == "" {
+		aa, bb := a.ID == m.activeModelID(), b.ID == m.activeModelID()
+		if aa != bb {
+			if aa {
+				return -1, true
+			}
+			return 1, true
+		}
+	}
+	return extractedResult0, false
+}
+
+func filterSelectedIdxSelectedIdxFiltered(m *modelDialogCmp, previous *models.ModelID) {
+	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
+		(*previous) = m.filtered[m.selectedIdx].ID
+	}
+}
+
+func filterModels(m *modelDialogCmp) {
+	for _, model := range m.models {
+		if _, ok := modelMatchScore(m.query, model.Name+" "+model.APIModel); ok {
+			m.filtered = append(m.filtered, model)
+		}
+	}
+}
+
+func filterQueryCase(m *modelDialogCmp, a *models.Model, b *models.Model) (extractedResult0 int, handled bool) {
+	if m.query != "" {
+		sa, _ := modelMatchScore(m.query, a.Name+" "+a.APIModel)
+		sb, _ := modelMatchScore(m.query, b.Name+" "+b.APIModel)
+		if sa != sb {
+			return sa - sb, true
+		}
+	}
+	return extractedResult0, false
+}
+
+func filterFaFb(fa bool, fb bool) (extractedResult0 int, handled bool) {
+	if fa != fb {
+		if fa {
+			return -1, true
+		}
+		return 1, true
+	}
+	return extractedResult0, false
+}
+
+func updateSelecting(m *modelDialogCmp, msg tea.Msg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if m.selecting {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			if key.Type == tea.KeyEsc {
+				m.Close()
+				return m, util.CmdHandler(CloseModelDialogMsg{}), true
+			}
+			return m, nil, true
+		}
+		if _, ok := msg.(tea.MouseMsg); ok {
+			return m, nil, true
+		}
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func filterModelModelsModel(m *modelDialogCmp, previous *models.ModelID, selected *models.ModelID) {
+	if (*previous) != "" && slices.ContainsFunc(m.filtered, func(model models.Model) bool { return model.ID == (*previous) }) {
+		(*selected) = (*previous)
+	}
+}
+
+func filterFiltered(m *modelDialogCmp, selected models.ModelID) {
+	for i, model := range m.filtered {
+		if model.ID == selected {
+			m.selectedIdx = i
+			break
+		}
+	}
+}

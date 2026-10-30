@@ -11,7 +11,6 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
 	"github.com/raulaguila/opcode/internal/history"
-	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/permission"
 )
@@ -97,45 +96,21 @@ func (w *writeTool) Info() ToolInfo {
 }
 
 func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
-	var params WriteParams
-	if err := json.Unmarshal([]byte(call.Input), &params); err != nil {
-		return NewTextErrorResponse(fmt.Sprintf("error parsing parameters: %s", err)), nil
+	params, invalid := parseWriteParams(call.Input)
+	if invalid != nil {
+		return *invalid, nil
 	}
 
-	if params.FilePath == "" {
-		return NewTextErrorResponse("file_path is required"), nil
-	}
-
-	if params.Content == "" {
-		return NewTextErrorResponse("content is required"), nil
-	}
-
-	filePath := params.FilePath
-	if !filepath.IsAbs(filePath) {
-		filePath = filepath.Join(config.WorkingDirectory(), filePath)
-	}
+	filePath := writeTargetPath(params.FilePath)
 
 	fileInfo, err := statFile(ctx, filePath)
 	if err == nil {
-		if fileInfo.IsDir() {
-			return NewTextErrorResponse(fmt.Sprintf("Path is a directory, not a file: %s", filePath)), nil
-		}
-
-		modTime := fileInfo.ModTime()
-		lastRead := getLastReadTime(filePath)
-		if modTime.After(lastRead) {
-			return NewTextErrorResponse(fmt.Sprintf("File %s has been modified since it was last read.\nLast modification: %s\nLast read: %s\n\nPlease read the file again before modifying it.",
-				filePath, modTime.Format(time.RFC3339), lastRead.Format(time.RFC3339))), nil
-		}
-
-		oldContent, readErr := readFile(ctx, filePath)
-		if readErr == nil && string(oldContent) == params.Content {
-			return NewTextErrorResponse(fmt.Sprintf("File %s already contains the exact content. No changes made.", filePath)), nil
+		if response := checkExistingWrite(ctx, filePath, params.Content, fileInfo); response != nil {
+			return *response, nil
 		}
 	} else if !os.IsNotExist(err) {
 		return ToolResponse{}, fmt.Errorf("error checking file: %w", err)
 	}
-
 	oldContent := ""
 	if fileInfo != nil && !fileInfo.IsDir() {
 		oldBytes, readErr := readFile(ctx, filePath)
@@ -181,26 +156,8 @@ func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 		return ToolResponse{}, err
 	}
 
-	// Check if file exists in history
-	file, err := w.files.GetByPathAndSession(ctx, filePath, sessionID)
-	if err != nil {
-		file, err = w.files.Create(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			// Log error but don't fail the operation
-			return ToolResponse{}, fmt.Errorf("error creating file history: %w", err)
-		}
-	}
-	if file.Content != oldContent {
-		// User Manually changed the content store an intermediate version
-		_, err = w.files.CreateVersion(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			logging.Debug("Error creating file history version", "error", err)
-		}
-	}
-	// Store the new version
-	_, err = w.files.CreateVersion(ctx, sessionID, filePath, params.Content)
-	if err != nil {
-		logging.Debug("Error creating file history version", "error", err)
+	if err := saveEditedFileHistory(ctx, w.files, sessionID, filePath, oldContent, params.Content); err != nil {
+		return ToolResponse{}, err
 	}
 
 	recordFileWrite(filePath)
@@ -217,4 +174,54 @@ func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 			Removals:  removals,
 		},
 	), nil
+}
+
+func checkExistingWrite(ctx context.Context, filePath, newContent string, fileInfo os.FileInfo) *ToolResponse {
+	if fileInfo.IsDir() {
+		response := NewTextErrorResponse(fmt.Sprintf("Path is a directory, not a file: %s", filePath))
+		return &response
+	}
+
+	modTime := fileInfo.ModTime()
+	lastRead := getLastReadTime(filePath)
+	if modTime.After(lastRead) {
+		response := NewTextErrorResponse(fmt.Sprintf("File %s has been modified since it was last read.\nLast modification: %s\nLast read: %s\n\nPlease read the file again before modifying it.",
+			filePath, modTime.Format(time.RFC3339), lastRead.Format(time.RFC3339)))
+		return &response
+	}
+
+	oldContent, readErr := readFile(ctx, filePath)
+	if readErr == nil && string(oldContent) == newContent {
+		response := NewTextErrorResponse(fmt.Sprintf("File %s already contains the exact content. No changes made.", filePath))
+		return &response
+	}
+	return nil
+}
+
+func parseWriteParams(raw string) (WriteParams, *ToolResponse) {
+	var params WriteParams
+	if err := json.Unmarshal([]byte(raw), &params); err != nil {
+		response := NewTextErrorResponse(fmt.Sprintf("error parsing parameters: %s", err))
+		return params, &response
+	}
+
+	if params.FilePath == "" {
+		response := NewTextErrorResponse("file_path is required")
+		return params, &response
+	}
+
+	if params.Content == "" {
+		response := NewTextErrorResponse("content is required")
+		return params, &response
+	}
+
+	return params, nil
+}
+func writeTargetPath(path string) string {
+	filePath := path
+	if !filepath.IsAbs(filePath) {
+		filePath = filepath.Join(config.WorkingDirectory(), filePath)
+	}
+
+	return filePath
 }

@@ -50,15 +50,15 @@ func InspectOllama(ctx context.Context, endpoint, key string) ([]OllamaRuntime, 
 	client := http.Client{Transport: httpclient.Transport(ctx, http.DefaultTransport), CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Ollama status unavailable")
+		return nil, fmt.Errorf("provider Ollama status unavailable")
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Ollama status unavailable (HTTP %d)", response.StatusCode)
+		return nil, fmt.Errorf("provider Ollama status unavailable (HTTP %d)", response.StatusCode)
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, 1<<20+1))
 	if err != nil || len(raw) > 1<<20 {
-		return nil, fmt.Errorf("Ollama status exceeds 1 MiB")
+		return nil, fmt.Errorf("provider Ollama status exceeds 1 MiB")
 	}
 	var body struct {
 		Models []OllamaRuntime `json:"models"`

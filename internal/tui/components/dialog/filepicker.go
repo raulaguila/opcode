@@ -78,11 +78,9 @@ var filePickerKeyMap = FilePrickerKeyMap{
 }
 
 type filepickerCmp struct {
-	basePath       string
 	width          int
 	height         int
 	cursor         int
-	err            error
 	cursorChain    stack
 	viewport       viewport.Model
 	dirs           []os.DirEntry
@@ -144,98 +142,8 @@ func (f *filepickerCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return f, nil
 	case tea.KeyMsg:
-		if f.cwd.Focused() {
-			f.cwd, cmd = f.cwd.Update(msg)
-		}
-		switch {
-		case key.Matches(msg, filePickerKeyMap.InsertCWD):
-			f.cwd.Focus()
-			return f, cmd
-		case key.Matches(msg, filePickerKeyMap.Esc):
-			if f.cwd.Focused() {
-				f.cwd.Blur()
-			}
-		case key.Matches(msg, filePickerKeyMap.Down):
-			if !f.cwd.Focused() || msg.String() == downArrow {
-				if f.cursor < len(f.dirs)-1 {
-					f.cursor++
-					f.getCurrentFileBelowCursor()
-				}
-			}
-		case key.Matches(msg, filePickerKeyMap.Up):
-			if !f.cwd.Focused() || msg.String() == upArrow {
-				if f.cursor > 0 {
-					f.cursor--
-					f.getCurrentFileBelowCursor()
-				}
-			}
-		case key.Matches(msg, filePickerKeyMap.Enter):
-			var path string
-			var isPathDir bool
-			if f.cwd.Focused() {
-				path = f.cwd.Value()
-				fileInfo, err := os.Stat(path)
-				if err != nil {
-					logging.ErrorPersist("Invalid path")
-					return f, cmd
-				}
-				isPathDir = fileInfo.IsDir()
-			} else {
-				if f.cursor < 0 || f.cursor >= len(f.dirs) {
-					return f, nil
-				}
-				path = filepath.Join(f.cwdDetails.directory, "/", f.dirs[f.cursor].Name())
-				isPathDir = f.dirs[f.cursor].IsDir()
-			}
-			if isPathDir {
-				newWorkingDir := DirNode{parent: f.cwdDetails, directory: path}
-				f.cwdDetails.child = &newWorkingDir
-				f.cwdDetails = f.cwdDetails.child
-				f.cursorChain = f.cursorChain.Push(f.cursor)
-				f.dirs = readDir(f.cwdDetails.directory, false)
-				f.cursor = 0
-				f.cwd.SetValue(f.cwdDetails.directory)
-				f.getCurrentFileBelowCursor()
-			} else {
-				f.selectedFile = path
-				return f.addAttachmentToMessage()
-			}
-		case key.Matches(msg, filePickerKeyMap.Esc):
-			if !f.cwd.Focused() {
-				f.cursorChain = make(stack, 0)
-				f.cursor = 0
-			} else {
-				f.cwd.Blur()
-			}
-		case key.Matches(msg, filePickerKeyMap.Forward):
-			if !f.cwd.Focused() {
-				if f.cursor >= 0 && f.cursor < len(f.dirs) && f.dirs[f.cursor].IsDir() {
-					path := filepath.Join(f.cwdDetails.directory, "/", f.dirs[f.cursor].Name())
-					newWorkingDir := DirNode{parent: f.cwdDetails, directory: path}
-					f.cwdDetails.child = &newWorkingDir
-					f.cwdDetails = f.cwdDetails.child
-					f.cursorChain = f.cursorChain.Push(f.cursor)
-					f.dirs = readDir(f.cwdDetails.directory, false)
-					f.cursor = 0
-					f.cwd.SetValue(f.cwdDetails.directory)
-					f.getCurrentFileBelowCursor()
-				}
-			}
-		case key.Matches(msg, filePickerKeyMap.Backward):
-			if !f.cwd.Focused() {
-				if len(f.cursorChain) != 0 && f.cwdDetails.parent != nil {
-					f.cursorChain, f.cursor = f.cursorChain.Pop()
-					f.cwdDetails = f.cwdDetails.parent
-					f.cwdDetails.child = nil
-					f.dirs = readDir(f.cwdDetails.directory, false)
-					f.cwd.SetValue(f.cwdDetails.directory)
-					f.getCurrentFileBelowCursor()
-				}
-			}
-		case key.Matches(msg, filePickerKeyMap.OpenFilePicker):
-			f.dirs = readDir(f.cwdDetails.directory, false)
-			f.cursor = 0
-			f.getCurrentFileBelowCursor()
+		if result0, result1, handled := updateFilepickerCmpKeyMsg(f, &cmd, &msg); handled {
+			return result0, result1
 		}
 	}
 	return f, cmd
@@ -406,14 +314,7 @@ func readDir(path string, showHidden bool) []os.DirEntry {
 		}
 
 		var sanitizedDirEntries []os.DirEntry
-		for _, dirEntry := range dirEntries {
-			isHidden, _ := IsHidden(dirEntry.Name())
-			if !isHidden {
-				if dirEntry.IsDir() || isExtSupported(dirEntry.Name()) {
-					sanitizedDirEntries = append(sanitizedDirEntries, dirEntry)
-				}
-			}
-		}
+		readDirDirEntries(dirEntries, &sanitizedDirEntries)
 
 		return sanitizedDirEntries
 
@@ -441,4 +342,132 @@ func (f *filepickerCmp) listWidth() int {
 		return max(1, f.width/2-6)
 	}
 	return max(1, f.width-6)
+}
+
+func updateFilepickerCmpKeyMsg(f *filepickerCmp, cmd *tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if f.cwd.Focused() {
+		f.cwd, (*cmd) = f.cwd.Update((*msg))
+	}
+	switch {
+	case key.Matches((*msg), filePickerKeyMap.InsertCWD):
+		f.cwd.Focus()
+		return f, (*cmd), true
+	case key.Matches((*msg), filePickerKeyMap.Esc):
+		if f.cwd.Focused() {
+			f.cwd.Blur()
+		}
+	case key.Matches((*msg), filePickerKeyMap.Down):
+		updateFilepickerCmpKeyMsgDown(f, msg)
+	case key.Matches((*msg), filePickerKeyMap.Up):
+		updateFilepickerCmpKeyMsgMatchesFilePickerKeyMapUp(f, msg)
+	case key.Matches((*msg), filePickerKeyMap.Enter):
+		if result0, result1, result2, handled := updateFilepickerCmpKeyMsgEnter(f, cmd); handled {
+			return result0, result1, result2
+		}
+	case key.Matches((*msg), filePickerKeyMap.Esc):
+		if !f.cwd.Focused() {
+			f.cursorChain = make(stack, 0)
+			f.cursor = 0
+		} else {
+			f.cwd.Blur()
+		}
+	case key.Matches((*msg), filePickerKeyMap.Forward):
+		updateFilepickerCmpKeyMsgForward(f)
+	case key.Matches((*msg), filePickerKeyMap.Backward):
+		if !f.cwd.Focused() {
+			if len(f.cursorChain) != 0 && f.cwdDetails.parent != nil {
+				f.cursorChain, f.cursor = f.cursorChain.Pop()
+				f.cwdDetails = f.cwdDetails.parent
+				f.cwdDetails.child = nil
+				f.dirs = readDir(f.cwdDetails.directory, false)
+				f.cwd.SetValue(f.cwdDetails.directory)
+				f.getCurrentFileBelowCursor()
+			}
+		}
+	case key.Matches((*msg), filePickerKeyMap.OpenFilePicker):
+		f.dirs = readDir(f.cwdDetails.directory, false)
+		f.cursor = 0
+		f.getCurrentFileBelowCursor()
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateFilepickerCmpKeyMsgEnter(f *filepickerCmp, cmd *tea.Cmd) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	var path string
+	var isPathDir bool
+	if f.cwd.Focused() {
+		path = f.cwd.Value()
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			logging.ErrorPersist("Invalid path")
+			return f, (*cmd), true, true
+		}
+		isPathDir = fileInfo.IsDir()
+	} else {
+		if f.cursor < 0 || f.cursor >= len(f.dirs) {
+			return f, nil, true, true
+		}
+		path = filepath.Join(f.cwdDetails.directory, "/", f.dirs[f.cursor].Name())
+		isPathDir = f.dirs[f.cursor].IsDir()
+	}
+	if isPathDir {
+		newWorkingDir := DirNode{parent: f.cwdDetails, directory: path}
+		f.cwdDetails.child = &newWorkingDir
+		f.cwdDetails = f.cwdDetails.child
+		f.cursorChain = f.cursorChain.Push(f.cursor)
+		f.dirs = readDir(f.cwdDetails.directory, false)
+		f.cursor = 0
+		f.cwd.SetValue(f.cwdDetails.directory)
+		f.getCurrentFileBelowCursor()
+	} else {
+		f.selectedFile = path
+		returned1Value0, returned1Value1 := f.addAttachmentToMessage()
+		return returned1Value0, returned1Value1, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateFilepickerCmpKeyMsgForward(f *filepickerCmp) {
+	if !f.cwd.Focused() {
+		if f.cursor >= 0 && f.cursor < len(f.dirs) && f.dirs[f.cursor].IsDir() {
+			path := filepath.Join(f.cwdDetails.directory, "/", f.dirs[f.cursor].Name())
+			newWorkingDir := DirNode{parent: f.cwdDetails, directory: path}
+			f.cwdDetails.child = &newWorkingDir
+			f.cwdDetails = f.cwdDetails.child
+			f.cursorChain = f.cursorChain.Push(f.cursor)
+			f.dirs = readDir(f.cwdDetails.directory, false)
+			f.cursor = 0
+			f.cwd.SetValue(f.cwdDetails.directory)
+			f.getCurrentFileBelowCursor()
+		}
+	}
+}
+
+func updateFilepickerCmpKeyMsgDown(f *filepickerCmp, msg *tea.KeyMsg) {
+	if !f.cwd.Focused() || msg.String() == downArrow {
+		if f.cursor < len(f.dirs)-1 {
+			f.cursor++
+			f.getCurrentFileBelowCursor()
+		}
+	}
+}
+
+func updateFilepickerCmpKeyMsgMatchesFilePickerKeyMapUp(f *filepickerCmp, msg *tea.KeyMsg) {
+	if !f.cwd.Focused() || msg.String() == upArrow {
+		if f.cursor > 0 {
+			f.cursor--
+			f.getCurrentFileBelowCursor()
+		}
+	}
+}
+
+func readDirDirEntries(dirEntries []os.DirEntry, sanitizedDirEntries *[]os.DirEntry) {
+	for _, dirEntry := range dirEntries {
+		isHidden, _ := IsHidden(dirEntry.Name())
+		if !isHidden {
+			if dirEntry.IsDir() || isExtSupported(dirEntry.Name()) {
+				(*sanitizedDirEntries) = append((*sanitizedDirEntries), dirEntry)
+			}
+		}
+	}
 }

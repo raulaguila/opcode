@@ -58,17 +58,7 @@ func (p *configurableCoder) bind(next agent.Service) error {
 		_ = c.Close()
 	}
 	p.delegate = next
-	p.auxiliaryConnections = map[config.AgentName]boundConnection{}
-	if cfg := config.Get(); cfg != nil {
-		for _, role := range []config.AgentName{config.AgentTitle, config.AgentSummarizer} {
-			model, ok := models.SupportedModels[cfg.Agents[role].Model]
-			if ok {
-				if connection, err := config.ProviderForModel(model); err == nil {
-					p.auxiliaryConnections[role] = boundConnection{model: model, provider: connection}
-				}
-			}
-		}
-	}
+	p.captureAuxiliaryConnections()
 	p.connection = config.Provider{}
 	p.hasConnection = false
 	if connection, err := config.ProviderForModel(next.Model()); err == nil {
@@ -79,20 +69,7 @@ func (p *configurableCoder) bind(next agent.Service) error {
 	p.cancel = cancel
 	events := next.Subscribe(ctx)
 	p.relay.Add(1)
-	go func() {
-		defer p.relay.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event, ok := <-events:
-				if !ok {
-					return
-				}
-				p.Publish(event.Type, event.Payload)
-			}
-		}
-	}()
+	go p.relayEvents(ctx, events)
 	return nil
 }
 func (p *configurableCoder) Model() models.Model {
@@ -164,15 +141,7 @@ func (p *configurableCoder) SelectModel(name config.AgentName, model models.Mode
 		defer p.mu.Unlock()
 		selected, err := delegate.SelectModel(name, model)
 		if err == nil {
-			if name == config.AgentCoder {
-				p.connection, _ = config.ProviderForModel(delegate.Model())
-				p.hasConnection = true
-			}
-			if name == config.AgentTitle || name == config.AgentSummarizer {
-				if connection, e := config.ProviderForModel(selected); e == nil {
-					p.auxiliaryConnections[name] = boundConnection{model: selected, provider: connection}
-				}
-			}
+			p.captureSelectedConnection(name, delegate, selected)
 		}
 		return selected, err
 	}
@@ -328,4 +297,45 @@ func (p *configurableCoder) RuntimeDiagnostic(ctx context.Context, id string) (m
 		return c.RuntimeDiagnostic(ctx, id)
 	}
 	return nil, errSetupRequired
+}
+
+func (p *configurableCoder) captureAuxiliaryConnections() {
+	p.auxiliaryConnections = map[config.AgentName]boundConnection{}
+	if cfg := config.Get(); cfg != nil {
+		for _, role := range []config.AgentName{config.AgentTitle, config.AgentSummarizer} {
+			model, ok := models.SupportedModels[cfg.Agents[role].Model]
+			if ok {
+				if connection, err := config.ProviderForModel(model); err == nil {
+					p.auxiliaryConnections[role] = boundConnection{model: model, provider: connection}
+				}
+			}
+		}
+	}
+}
+
+func (p *configurableCoder) relayEvents(ctx context.Context, events <-chan pubsub.Event[agent.AgentEvent]) {
+	defer p.relay.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			p.Publish(event.Type, event.Payload)
+		}
+	}
+}
+
+func (p *configurableCoder) captureSelectedConnection(name config.AgentName, delegate agent.Service, selected models.Model) {
+	if name == config.AgentCoder {
+		p.connection, _ = config.ProviderForModel(delegate.Model())
+		p.hasConnection = true
+	}
+	if name == config.AgentTitle || name == config.AgentSummarizer {
+		if connection, e := config.ProviderForModel(selected); e == nil {
+			p.auxiliaryConnections[name] = boundConnection{model: selected, provider: connection}
+		}
+	}
 }

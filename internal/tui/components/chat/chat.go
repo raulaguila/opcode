@@ -12,7 +12,6 @@ import (
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
-	"github.com/raulaguila/opcode/internal/version"
 )
 
 type SendMsg struct {
@@ -99,46 +98,4 @@ func lspsConfigured(width int) string {
 				),
 			),
 		)
-}
-
-func logo(width int) string {
-	logo := fmt.Sprintf("%s %s", styles.OpcodeIcon, "Opcode")
-	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
-
-	versionText := baseStyle.
-		Foreground(t.TextMuted()).
-		Render(version.Version)
-
-	return baseStyle.
-		Bold(true).
-		Width(width).
-		Render(
-			lipgloss.JoinHorizontal(
-				lipgloss.Left,
-				logo,
-				" ",
-				versionText,
-			),
-		)
-}
-
-func repo(width int) string {
-	repo := "https://github.com/raulaguila/opcode"
-	t := theme.CurrentTheme()
-
-	return styles.BaseStyle().
-		Foreground(t.TextMuted()).
-		Width(width).
-		Render(repo)
-}
-
-func cwd(width int) string {
-	cwd := fmt.Sprintf("cwd: %s", config.WorkingDirectory())
-	t := theme.CurrentTheme()
-
-	return styles.BaseStyle().
-		Foreground(t.TextMuted()).
-		Width(width).
-		Render(cwd)
 }

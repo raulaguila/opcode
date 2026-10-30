@@ -83,38 +83,8 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		// retain the complete raw stream for the negotiation/cleanup assertions.
 		controls := []string{ansi.RequestKittyKeyboard, ansi.PushKittyKeyboard(1), ansi.PopKittyKeyboard(1)}
 		var pending []byte
-		for {
-			n, err := terminal.Read(buffer)
-			if n > 0 {
-				mu.Lock()
-				rawOutput.Write(buffer[:n])
-				var display []byte
-				for _, b := range buffer[:n] {
-					pending = append(pending, b)
-					for len(pending) > 0 {
-						prefix := false
-						for _, control := range controls {
-							if strings.HasPrefix(control, string(pending)) {
-								prefix = true
-								if control == string(pending) {
-									pending = nil
-								}
-								break
-							}
-						}
-						if prefix {
-							break
-						}
-						display = append(display, pending[0])
-						pending = pending[1:]
-					}
-				}
-				screen.Write(display)
-				mu.Unlock()
-			}
-			if err != nil {
-				return
-			}
+		if handled := testBinaryFirstRunState(terminal, screen, &mu, &rawOutput, buffer, controls, &pending); handled {
+			return
 		}
 	}()
 	snapshot := func() string { mu.Lock(); defer mu.Unlock(); return screen.String() }
@@ -124,20 +94,8 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		defer deadline.Stop()
 		ticker := time.NewTicker(20 * time.Millisecond)
 		defer ticker.Stop()
-		for {
-			frame := snapshot()
-			for _, marker := range markers {
-				if strings.Contains(frame, marker) {
-					return
-				}
-			}
-			select {
-			case <-ticker.C:
-			case <-deadline.C:
-				t.Fatalf("binary did not show expected UI %v; screen:\n%s", markers, frame)
-			case <-ctx.Done():
-				t.Fatal("binary acceptance timed out")
-			}
+		if handled := testBinaryFirstRunStateCase(t, ctx, snapshot, markers, deadline, ticker); handled {
+			return
 		}
 	}
 	send := func(text string) { t.Helper(); _, err := io.WriteString(terminal, text); require.NoError(t, err) }
@@ -200,14 +158,7 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		require.NoError(t, os.WriteFile(path, []byte(snapshot()), 0600))
 	}
 	promptRow, footerRow := -1, -1
-	for row, line := range frame {
-		if strings.TrimSpace(line) == ">" {
-			promptRow = row
-		}
-		if strings.Contains(line, "/ commands") {
-			footerRow = row
-		}
-	}
+	testBinaryFirstRunFrame(frame, &promptRow, &footerRow)
 	require.NotEqual(t, -1, promptRow, "chat composer must be visible")
 	require.GreaterOrEqual(t, footerRow-promptRow, 3, "empty composer must retain three writing rows")
 	require.NotContains(t, snapshot(), "/mode ask|plan|execute")
@@ -232,17 +183,7 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	wait("fourth line")
 	lines := strings.Split(snapshot(), "\n")
 	previous := -1
-	for _, text := range []string{"first line", "second line", "third line", "fourth line"} {
-		row := -1
-		for index, line := range lines {
-			if strings.Contains(line, text) {
-				row = index
-				break
-			}
-		}
-		require.Greater(t, row, previous, "newline shortcut must keep %q on its own row:\n%s", text, strings.Join(lines, "\n"))
-		previous = row
-	}
+	testBinaryFirstRunStateCaseCase(t, lines, &previous)
 	send("\x1b[99;5u")
 	wait("Are you sure you want to quit?")
 	send("y")
@@ -271,4 +212,97 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		require.Equal(t, original, backup)
 	}
 	t.Log("Setup, Ollama metadata, Git diff, multiline shortcuts and keyboard restoration passed in a real 80x24 PTY without inference")
+}
+
+func testBinaryFirstRunState(terminal *os.File, screen vt10x.Terminal, mu *sync.Mutex, rawOutput *bytes.Buffer, buffer []byte, controls []string, pending *[]byte) (handled bool) {
+	for {
+		n, err := terminal.Read(buffer)
+		testBinaryFirstRunStateN(screen, mu, rawOutput, buffer, controls, pending, n)
+		if err != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func testBinaryFirstRunStateN(screen vt10x.Terminal, mu *sync.Mutex, rawOutput *bytes.Buffer, buffer []byte, controls []string, pending *[]byte, n int) {
+	if n > 0 {
+		mu.Lock()
+		rawOutput.Write(buffer[:n])
+		var display []byte
+		testBinaryFirstRunStateNBufferN(buffer, controls, pending, n, &display)
+		screen.Write(display)
+		mu.Unlock()
+	}
+}
+
+func testBinaryFirstRunStateCase(t *testing.T, ctx context.Context, snapshot func() string, markers []string, deadline *time.Timer, ticker *time.Ticker) (handled bool) {
+	for {
+		frame := snapshot()
+		for _, marker := range markers {
+			if strings.Contains(frame, marker) {
+				return true
+			}
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			t.Fatalf("binary did not show expected UI %v; screen:\n%s", markers, frame)
+		case <-ctx.Done():
+			t.Fatal("binary acceptance timed out")
+		}
+	}
+	return false
+}
+
+func testBinaryFirstRunFrame(frame []string, promptRow *int, footerRow *int) {
+	for row, line := range frame {
+		if strings.TrimSpace(line) == ">" {
+			(*promptRow) = row
+		}
+		if strings.Contains(line, "/ commands") {
+			(*footerRow) = row
+		}
+	}
+}
+
+func testBinaryFirstRunStateNBufferN(buffer []byte, controls []string, pending *[]byte, n int, display *[]byte) {
+	for _, b := range buffer[:n] {
+		(*pending) = append((*pending), b)
+		testBinaryFirstRunStateNBufferNPending(controls, pending, display)
+	}
+}
+
+func testBinaryFirstRunStateCaseCase(t *testing.T, lines []string, previous *int) {
+	for _, text := range []string{"first line", "second line", "third line", "fourth line"} {
+		row := -1
+		for index, line := range lines {
+			if strings.Contains(line, text) {
+				row = index
+				break
+			}
+		}
+		require.Greater(t, row, (*previous), "newline shortcut must keep %q on its own row:\n%s", text, strings.Join(lines, "\n"))
+		(*previous) = row
+	}
+}
+
+func testBinaryFirstRunStateNBufferNPending(controls []string, pending *[]byte, display *[]byte) {
+	for len((*pending)) > 0 {
+		prefix := false
+		for _, control := range controls {
+			if strings.HasPrefix(control, string((*pending))) {
+				prefix = true
+				if control == string((*pending)) {
+					(*pending) = nil
+				}
+				break
+			}
+		}
+		if prefix {
+			break
+		}
+		(*display) = append((*display), (*pending)[0])
+		(*pending) = (*pending)[1:]
+	}
 }

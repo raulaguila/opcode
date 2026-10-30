@@ -31,8 +31,7 @@ func ValidateDocument(path string) error {
 	raw, _ := json.Marshal(doc)
 	var c Config
 	if err := json.Unmarshal(raw, &c); err != nil {
-		var typed *json.UnmarshalTypeError
-		if errors.As(err, &typed) {
+		if typed, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
 			return fmt.Errorf("configuration %s: field %s must be %s (values omitted)", path, typed.Field, typed.Type)
 		}
 		return fmt.Errorf("configuration %s: invalid field type (values omitted)", path)
@@ -57,33 +56,7 @@ func ValidateDocument(path string) error {
 	if c.Security.Sandbox != "" && c.Security.Sandbox != "none" && c.Security.Sandbox != "bubblewrap" {
 		return fmt.Errorf("configuration %s: security.sandbox must be bubblewrap or none", path)
 	}
-	for _, p := range c.Providers {
-		if err := validateVaultDocument(p); err != nil {
-			return fmt.Errorf("configuration %s: %w", path, err)
-		}
-	}
-	for id, p := range c.ProviderProfiles {
-		if err := validateVaultDocument(p.Provider); err != nil {
-			return fmt.Errorf("configuration %s: %w", path, err)
-		}
-		prefix := "providerProfiles." + id
-		if validateProfileID(id) != nil {
-			return fmt.Errorf("configuration %s: providerProfiles contains an invalid profile ID", path)
-		}
-		if !knownBackend(p.Backend) {
-			return fmt.Errorf("configuration %s: %s.backend is unsupported", path, prefix)
-		}
-		if p.API != "" && p.API != "ollama" && p.API != "responses" && p.API != "chat_completions" {
-			return fmt.Errorf("configuration %s: %s.api is unsupported", path, prefix)
-		}
-		if p.ContextWindow < 0 || p.DefaultMaxTokens < 0 {
-			return fmt.Errorf("configuration %s: %s token limits must be nonnegative", path, prefix)
-		}
-		if p.APIKeyEnv != "" && !validEnvironmentName(p.APIKeyEnv) {
-			return fmt.Errorf("configuration %s: %s.apiKeyEnv must name an environment variable", path, prefix)
-		}
-	}
-	return nil
+	return validateDocumentProviders(path, c)
 }
 
 // MigrateDocument is explicit and in-place: legacy locations keep working. It
@@ -107,23 +80,9 @@ func MigrateDocument(path string) (string, bool, error) {
 	}
 	defer root.Close()
 	name := filepath.Base(path)
-	info, err := root.Lstat(name)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", false, fmt.Errorf("configuration must exist as a regular file")
-	}
-	source, err := root.Open(name)
+	raw, err := readMigrationSource(root, name)
 	if err != nil {
 		return "", false, err
-	}
-	opened, err := source.Stat()
-	if err != nil || !os.SameFile(info, opened) {
-		source.Close()
-		return "", false, fmt.Errorf("configuration changed during migration")
-	}
-	raw, err := io.ReadAll(io.LimitReader(source, maxSettingsDocument+1))
-	source.Close()
-	if err != nil || len(raw) > maxSettingsDocument {
-		return "", false, fmt.Errorf("cannot read bounded configuration")
 	}
 	var original map[string]any
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
@@ -136,25 +95,8 @@ func MigrateDocument(path string) (string, bool, error) {
 	if string(a0) != string(b0) {
 		return "", false, fmt.Errorf("configuration changed before backup")
 	}
-	backupDirectory := filepath.Join(filepath.Dir(path), ".opcode", "config-backups")
-	if filepath.Base(filepath.Dir(path)) == ".opcode" {
-		backupDirectory = filepath.Join(filepath.Dir(path), "config-backups")
-	}
-	backupRoot, err := localstate.OpenPrivateRoot(backupDirectory, true)
+	backup, err := writeMigrationBackup(path, name, raw)
 	if err != nil {
-		return "", false, err
-	}
-	defer backupRoot.Close()
-	backupName := name + ".backup-" + rand.Text()
-	f, err := backupRoot.OpenFile(backupName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return "", false, err
-	}
-	_, werr := f.Write(raw)
-	serr := f.Sync()
-	cerr := f.Close()
-	if err := errors.Join(werr, serr, cerr); err != nil {
-		backupRoot.Remove(backupName)
 		return "", false, err
 	}
 	current, err := readSettingsDocument(path)
@@ -170,7 +112,7 @@ func MigrateDocument(path string) (string, bool, error) {
 	if err := localstate.Write(path, doc, maxSettingsDocument); err != nil {
 		return "", false, err
 	}
-	return filepath.Join(backupDirectory, backupName), true, nil
+	return backup, true, nil
 }
 
 // RedactedDocument uses a strict allowlist so extension/unknown fields cannot
@@ -195,4 +137,90 @@ func RedactedDocument() map[string]any {
 		}
 	}
 	return result
+}
+
+func validateDocumentProviders(path string, c Config) error {
+	for _, p := range c.Providers {
+		if err := validateVaultDocument(p); err != nil {
+			return fmt.Errorf("configuration %s: %w", path, err)
+		}
+	}
+	for id, p := range c.ProviderProfiles {
+		if err := validateDocumentProfile(path, id, p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDocumentProfile(path, id string, p ProviderProfile) error {
+
+	if err := validateVaultDocument(p.Provider); err != nil {
+		return fmt.Errorf("configuration %s: %w", path, err)
+	}
+	prefix := "providerProfiles." + id
+	if validateProfileID(id) != nil {
+		return fmt.Errorf("configuration %s: providerProfiles contains an invalid profile ID", path)
+	}
+	if !knownBackend(p.Backend) {
+		return fmt.Errorf("configuration %s: %s.backend is unsupported", path, prefix)
+	}
+	if p.API != "" && p.API != "ollama" && p.API != "responses" && p.API != "chat_completions" {
+		return fmt.Errorf("configuration %s: %s.api is unsupported", path, prefix)
+	}
+	if p.ContextWindow < 0 || p.DefaultMaxTokens < 0 {
+		return fmt.Errorf("configuration %s: %s token limits must be nonnegative", path, prefix)
+	}
+	if p.APIKeyEnv != "" && !validEnvironmentName(p.APIKeyEnv) {
+		return fmt.Errorf("configuration %s: %s.apiKeyEnv must name an environment variable", path, prefix)
+	}
+
+	return nil
+}
+
+func writeMigrationBackup(path, name string, raw []byte) (string, error) {
+	backupDirectory := filepath.Join(filepath.Dir(path), ".opcode", "config-backups")
+	if filepath.Base(filepath.Dir(path)) == ".opcode" {
+		backupDirectory = filepath.Join(filepath.Dir(path), "config-backups")
+	}
+	backupRoot, err := localstate.OpenPrivateRoot(backupDirectory, true)
+	if err != nil {
+		return "", err
+	}
+	defer backupRoot.Close()
+	backupName := name + ".backup-" + rand.Text()
+	f, err := backupRoot.OpenFile(backupName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return "", err
+	}
+	_, werr := f.Write(raw)
+	serr := f.Sync()
+	cerr := f.Close()
+	if err := errors.Join(werr, serr, cerr); err != nil {
+		backupRoot.Remove(backupName)
+		return "", err
+	}
+	return filepath.Join(backupDirectory, backupName), nil
+}
+
+func readMigrationSource(root *os.Root, name string) ([]byte, error) {
+	info, err := root.Lstat(name)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("configuration must exist as a regular file")
+	}
+	source, err := root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := source.Stat()
+	if err != nil || !os.SameFile(info, opened) {
+		source.Close()
+		return nil, fmt.Errorf("configuration changed during migration")
+	}
+	raw, err := io.ReadAll(io.LimitReader(source, maxSettingsDocument+1))
+	source.Close()
+	if err != nil || len(raw) > maxSettingsDocument {
+		return nil, fmt.Errorf("cannot read bounded configuration")
+	}
+	return raw, nil
 }

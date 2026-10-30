@@ -53,19 +53,8 @@ func (m *providerDialogCmp) deleteUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		confirm = clickedLabel(m.deleteView(), config.Text("[Excluir]", "[Delete]"), msg)
 	}
-	if confirm {
-		if m.allowSave != nil {
-			if err := m.allowSave(); err != nil {
-				m.note = err.Error()
-				return nil, true
-			}
-		}
-		if err := config.DeleteProvider(m.deleting.id, m.deleting.legacy); err != nil {
-			m.note = err.Error()
-			return nil, true
-		}
-		m.Open()
-		return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: true, Deleted: true}), true
+	if result0, result1, handled := deleteUpdateConfirm(m, confirm); handled {
+		return result0, result1
 	}
 	return nil, true
 }
@@ -103,4 +92,22 @@ func (m *providerDialogCmp) deleteView() string {
 	lines = append(lines, m.noteLines(m.note)...)
 	lines = append(lines, line(config.Text("←/→ escolhe · Enter · Esc", "←/→ choose · Enter · Esc")))
 	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderNormal()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+}
+
+func deleteUpdateConfirm(m *providerDialogCmp, confirm bool) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
+	if confirm {
+		if m.allowSave != nil {
+			if err := m.allowSave(); err != nil {
+				m.note = err.Error()
+				return nil, true, true
+			}
+		}
+		if err := config.DeleteProvider(m.deleting.id, m.deleting.legacy); err != nil {
+			m.note = err.Error()
+			return nil, true, true
+		}
+		m.Open()
+		return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: true, Deleted: true}), true, true
+	}
+	return extractedResult0, extractedResult1, false
 }

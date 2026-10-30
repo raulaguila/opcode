@@ -18,52 +18,7 @@ func newEvaluateCommand() *cobra.Command {
 	var repeat int
 	var caseIDs []string
 	command := &cobra.Command{Use: "evaluate", Short: "Validate reproducible fixtures, or explicitly run a real provider in disposable workspaces", Args: cobra.NoArgs, RunE: func(command *cobra.Command, _ []string) error {
-		command.SilenceUsage = true
-		suite, raw, err := evaluation.Load(casesPath)
-		if err != nil {
-			return err
-		}
-		executable, err := os.Executable()
-		if err != nil {
-			return err
-		}
-		if outputPath != "" {
-			output, _ := filepath.Abs(outputPath)
-			for _, input := range []string{casesPath, providerPath} {
-				if input != "" {
-					source, _ := filepath.Abs(input)
-					if output == source {
-						return fmt.Errorf("report cannot overwrite an input configuration")
-					}
-				}
-			}
-		}
-		var adapter *evaluation.Adapter
-		if adapterPath != "" {
-			adapter, err = evaluation.LoadAdapter(adapterPath)
-			if err != nil {
-				return err
-			}
-		}
-		report, err := evaluation.Run(command.Context(), suite, raw, evaluation.Options{Experiment: experiment, Adapter: adapter, ContextWindow: contextWindow, Repeats: repeat, CaseIDs: caseIDs, Live: live, AllowExecution: allowExecution, ProviderConfig: providerPath, Executable: executable})
-		if err != nil {
-			return err
-		}
-		encoded, err := json.MarshalIndent(report, "", "  ")
-		if err != nil {
-			return err
-		}
-		if outputPath != "" {
-			if err := localstate.WriteBytes(outputPath, append(encoded, '\n')); err != nil {
-				return err
-			}
-		} else {
-			fmt.Fprintln(command.OutOrStdout(), string(encoded))
-		}
-		if evaluation.Failed(report) {
-			return fmt.Errorf("one or more live evaluation criteria failed or are unavailable; inspect the report")
-		}
-		return nil
+		return runEvaluation(command, casesPath, outputPath, providerPath, adapterPath, experiment, contextWindow, live, allowExecution, repeat, caseIDs)
 	}}
 	command.Flags().StringVar(&adapterPath, "adapter", "", "Explicit trusted JSON adapter executable (opcode/codaro/crush); requires --live and --context-window")
 	command.Flags().StringVar(&experiment, "experiment", "", "Report label for an observed prompt/config variant; does not override prompts")
@@ -130,33 +85,7 @@ func newExperimentCommand() *cobra.Command {
 	var output string
 	var live, execution bool
 	command := &cobra.Command{Use: "experiment MANIFEST", Short: "Plan or explicitly execute one shared experiment across applications", Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
-		command.SilenceUsage = true
-		experiment, err := evaluation.LoadExperiment(args[0])
-		if err != nil {
-			return err
-		}
-		binary, err := os.Executable()
-		if err != nil {
-			return err
-		}
-		report, err := experiment.Run(command.Context(), binary, output, live, execution)
-		if err != nil {
-			return err
-		}
-		raw, err := json.MarshalIndent(report, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(command.OutOrStdout(), string(raw))
-		if live && (report.Comparison == nil || !report.Comparison.Rankable) {
-			return fmt.Errorf("experiment cannot be ranked: missing, unavailable or mismatched observations; inspect saved reports")
-		}
-		for _, app := range report.Applications {
-			if live && app.Status != "completed" {
-				return fmt.Errorf("one or more application criteria failed; reports preserved")
-			}
-		}
-		return nil
+		return runExperiment(command, args, output, live, execution)
 	}}
 	command.Flags().BoolVar(&live, "live", false, "Explicitly execute real providers; otherwise only validate and print a plan")
 	command.Flags().BoolVar(&execution, "allow-execution", false, "Allow execution fixtures under their existing sandbox/approval restrictions")
@@ -167,52 +96,154 @@ func newExperimentCommand() *cobra.Command {
 func newRetrievalCommand() *cobra.Command {
 	var cases, output, embedding string
 	command := &cobra.Command{Use: "retrieval", Short: "Measure real search ranking in isolated fixtures, without chat inference", Args: cobra.NoArgs, RunE: func(command *cobra.Command, _ []string) error {
-		command.SilenceUsage = true
-		for _, input := range []string{cases, embedding} {
-			if input != "" && output != "" {
-				a, _ := filepath.Abs(input)
-				b, _ := filepath.Abs(output)
-				if a == b {
-					return fmt.Errorf("ranking report cannot overwrite its input")
-				}
-			}
-		}
-		suite, raw, err := evaluation.LoadRetrieval(cases)
-		if err != nil {
-			return err
-		}
-		embeddings, err := evaluation.LoadEmbeddingConfig(embedding)
-		if err != nil {
-			return err
-		}
-		executable, err := os.Executable()
-		if err != nil {
-			return err
-		}
-		report, err := evaluation.RunRetrieval(command.Context(), suite, raw, executable, embeddings)
-		if err != nil {
-			return err
-		}
-		encoded, err := json.MarshalIndent(report, "", "  ")
-		if err != nil {
-			return err
-		}
-		if output != "" {
-			if err := localstate.WriteBytes(output, append(encoded, '\n')); err != nil {
-				return err
-			}
-		} else {
-			fmt.Fprintln(command.OutOrStdout(), string(encoded))
-		}
-		for _, result := range report.Results {
-			if result.Status == "failed" {
-				return fmt.Errorf("ranking tool failed; inspect the report")
-			}
-		}
-		return nil
+		return runRetrieval(command, cases, output, embedding)
 	}}
 	command.Flags().StringVar(&cases, "cases", "", "Ranking fixture JSON (default: bundled symbol/scope/synonym cases)")
 	command.Flags().StringVar(&output, "output", "", "Write private JSON ranking report")
 	command.Flags().StringVar(&embedding, "embedding-config", "", "Explicit {endpoint,model} JSON; permits bounded local embedding HTTP calls, never model downloads")
 	return command
+}
+
+func runEvaluation(command *cobra.Command, casesPath, outputPath, providerPath, adapterPath, experiment string, contextWindow int64, live, allowExecution bool, repeat int, caseIDs []string) error {
+
+	command.SilenceUsage = true
+	suite, raw, err := evaluation.Load(casesPath)
+	if err != nil {
+		return err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if err := evaluationOutputSafe(outputPath, []string{casesPath, providerPath}); err != nil {
+		return err
+	}
+	var adapter *evaluation.Adapter
+	if adapterPath != "" {
+		adapter, err = evaluation.LoadAdapter(adapterPath)
+		if err != nil {
+			return err
+		}
+	}
+	report, err := evaluation.Run(command.Context(), suite, raw, evaluation.Options{Experiment: experiment, Adapter: adapter, ContextWindow: contextWindow, Repeats: repeat, CaseIDs: caseIDs, Live: live, AllowExecution: allowExecution, ProviderConfig: providerPath, Executable: executable})
+	if err != nil {
+		return err
+	}
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	if outputPath != "" {
+		if err := localstate.WriteBytes(outputPath, append(encoded, '\n')); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintln(command.OutOrStdout(), string(encoded))
+	}
+	if evaluation.Failed(report) {
+		return fmt.Errorf("one or more live evaluation criteria failed or are unavailable; inspect the report")
+	}
+	return nil
+}
+
+func runExperiment(command *cobra.Command, args []string, output string, live, execution bool) error {
+
+	command.SilenceUsage = true
+	experiment, err := evaluation.LoadExperiment(args[0])
+	if err != nil {
+		return err
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	report, err := experiment.Run(command.Context(), binary, output, live, execution)
+	if err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(command.OutOrStdout(), string(raw))
+	if live && (report.Comparison == nil || !report.Comparison.Rankable) {
+		return fmt.Errorf("experiment cannot be ranked: missing, unavailable or mismatched observations; inspect saved reports")
+	}
+	for _, app := range report.Applications {
+		if live && app.Status != "completed" {
+			return fmt.Errorf("one or more application criteria failed; reports preserved")
+		}
+	}
+	return nil
+}
+
+func runRetrieval(command *cobra.Command, cases, output, embedding string) error {
+
+	command.SilenceUsage = true
+	if err := retrievalOutputSafe(output, cases, embedding); err != nil {
+		return err
+	}
+	suite, raw, err := evaluation.LoadRetrieval(cases)
+	if err != nil {
+		return err
+	}
+	embeddings, err := evaluation.LoadEmbeddingConfig(embedding)
+	if err != nil {
+		return err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	report, err := evaluation.RunRetrieval(command.Context(), suite, raw, executable, embeddings)
+	if err != nil {
+		return err
+	}
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return err
+	}
+	if output != "" {
+		if err := localstate.WriteBytes(output, append(encoded, '\n')); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintln(command.OutOrStdout(), string(encoded))
+	}
+	for _, result := range report.Results {
+		if result.Status == "failed" {
+			return fmt.Errorf("ranking tool failed; inspect the report")
+		}
+	}
+	return nil
+}
+
+func evaluationOutputSafe(outputPath string, inputs []string) error {
+	if outputPath == "" {
+		return nil
+	}
+	output, _ := filepath.Abs(outputPath)
+	for _, input := range inputs {
+		if input == "" {
+			continue
+		}
+		source, _ := filepath.Abs(input)
+		if output == source {
+			return fmt.Errorf("report cannot overwrite an input configuration")
+		}
+	}
+	return nil
+}
+
+func retrievalOutputSafe(output, cases, embedding string) error {
+	for _, input := range []string{cases, embedding} {
+		if input != "" && output != "" {
+			a, _ := filepath.Abs(input)
+			b, _ := filepath.Abs(output)
+			if a == b {
+				return fmt.Errorf("ranking report cannot overwrite its input")
+			}
+		}
+	}
+	return nil
 }

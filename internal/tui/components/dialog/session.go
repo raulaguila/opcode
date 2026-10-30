@@ -63,90 +63,12 @@ func (s *sessionDialogCmp) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		s.width, s.height = msg.Width, msg.Height
 		s.move(0)
 	case tea.MouseMsg:
-		if s.editing {
-			return s, nil
-		}
-		if msg.Button == tea.MouseButtonWheelUp {
-			s.move(-1)
-		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			s.move(1)
-		}
-		row := msg.Y - 4
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
-			s.selectedIdx = s.offset + row
-			return s, s.requestPreview()
+		if result0, result1, handled := updateCaseTeaMouseMsg(s, &msg); handled {
+			return result0, result1
 		}
 	case tea.KeyMsg:
-		if s.editing {
-			switch msg.Type {
-			case tea.KeyEsc:
-				s.editing = false
-			case tea.KeyEnter:
-				title := strings.TrimSpace(s.rename)
-				if title != "" && len(s.filtered) > 0 {
-					s.editing = false
-					return s, util.CmdHandler(SessionActionMsg{Action: "rename", Session: s.filtered[s.selectedIdx], Title: title})
-				}
-			case tea.KeyCtrlU:
-				s.rename = ""
-			case tea.KeyBackspace:
-				_, n := utf8.DecodeLastRuneInString(s.rename)
-				if n > 0 {
-					s.rename = s.rename[:len(s.rename)-n]
-				}
-			case tea.KeyRunes:
-				for _, r := range msg.Runes {
-					if !unicode.IsControl(r) && len(s.rename) < 180 {
-						s.rename += string(r)
-					}
-				}
-			}
-			return s, nil
-		}
-		switch msg.String() {
-		case "esc":
-			return s, util.CmdHandler(CloseSessionDialogMsg{})
-		case "up":
-			s.move(-1)
-		case "down":
-			s.move(1)
-		case "enter":
-			if len(s.filtered) > 0 {
-				return s, util.CmdHandler(SessionSelectedMsg{s.filtered[s.selectedIdx]})
-			}
-		case "ctrl+r":
-			if len(s.filtered) > 0 {
-				s.rename = s.filtered[s.selectedIdx].Title
-				s.editing = true
-			}
-		case "ctrl+a":
-			if len(s.filtered) > 0 {
-				return s, util.CmdHandler(SessionActionMsg{Action: "archive", Session: s.filtered[s.selectedIdx]})
-			}
-		case "ctrl+e":
-			if len(s.filtered) > 0 {
-				return s, util.CmdHandler(SessionActionMsg{Action: "export", Session: s.filtered[s.selectedIdx]})
-			}
-		case "ctrl+h":
-			s.showArchived = !s.showArchived
-			s.filter()
-		default:
-			if msg.Type == tea.KeyBackspace {
-				_, n := utf8.DecodeLastRuneInString(s.query)
-				if n > 0 {
-					s.query = s.query[:len(s.query)-n]
-					s.filter()
-				}
-			}
-			if msg.Type == tea.KeyRunes {
-				for _, r := range msg.Runes {
-					if !unicode.IsControl(r) && len(s.query) < 128 {
-						s.query += string(r)
-					}
-				}
-				s.filter()
-			}
+		if result0, result1, handled := updateSessionDialogCmpKeyMsg(s, &msg); handled {
+			return result0, result1
 		}
 	}
 	return s, nil
@@ -207,31 +129,7 @@ func (s *sessionDialogCmp) View() string {
 	if len(s.filtered) == 0 {
 		rows = append(rows, line(config.Text("Nenhuma conversa encontrada", "No conversations found")))
 	}
-	for i := s.offset; i < min(len(s.filtered), s.offset+s.rows()); i++ {
-		item := s.filtered[i]
-		label := ansi.Strip(item.Title)
-		if i == s.selectedIdx {
-			label = "› " + label
-		} else {
-			label = "  " + label
-		}
-		if item.ID == s.selectedSessionID {
-			label = "● " + label
-		}
-		if s.archived[item.ID] {
-			label += config.Text(" · arquivada", " · archived")
-		}
-		if width >= 48 {
-			age := sessionRecency(item.UpdatedAt, time.Now())
-			label = ansi.Truncate(label, max(1, width-ansi.StringWidth(age)-2), "…")
-			label += strings.Repeat(" ", max(2, width-ansi.StringWidth(label)-ansi.StringWidth(age))) + age
-		}
-		row := base
-		if i == s.selectedIdx {
-			row = row.Background(t.Primary()).Foreground(t.Background())
-		}
-		rows = append(rows, row.Render(ansi.Truncate(label, width, "…")))
-	}
+	viewSOffset(s, width, t, &base, &rows)
 	if len(s.filtered) > 0 && !s.editing && (s.height == 0 || s.height >= 18) {
 		preview := config.Text("Carregando prévia…", "Loading preview…")
 		if s.previewID == s.filtered[s.selectedIdx].ID {
@@ -302,4 +200,139 @@ func (s *sessionDialogCmp) requestPreviewIfIdle(cmd tea.Cmd) tea.Cmd {
 		return nil
 	}
 	return s.requestPreview()
+}
+
+func updateSessionDialogCmpKeyMsg(s *sessionDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if result0, result1, result2, handled := updateSessionDialogCmpKeyMsgSEditing(s, msg); handled {
+		return result0, result1, result2
+	}
+	switch msg.String() {
+	case "esc":
+		return s, util.CmdHandler(CloseSessionDialogMsg{}), true
+	case "up":
+		s.move(-1)
+	case "down":
+		s.move(1)
+	case "enter":
+		if len(s.filtered) > 0 {
+			return s, util.CmdHandler(SessionSelectedMsg{s.filtered[s.selectedIdx]}), true
+		}
+	case "ctrl+r":
+		if len(s.filtered) > 0 {
+			s.rename = s.filtered[s.selectedIdx].Title
+			s.editing = true
+		}
+	case "ctrl+a":
+		if len(s.filtered) > 0 {
+			return s, util.CmdHandler(SessionActionMsg{Action: "archive", Session: s.filtered[s.selectedIdx]}), true
+		}
+	case "ctrl+e":
+		if len(s.filtered) > 0 {
+			return s, util.CmdHandler(SessionActionMsg{Action: "export", Session: s.filtered[s.selectedIdx]}), true
+		}
+	case "ctrl+h":
+		s.showArchived = !s.showArchived
+		s.filter()
+	default:
+		updateSessionDialogCmpKeyMsgDefault(s, msg)
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateSessionDialogCmpKeyMsgDefault(s *sessionDialogCmp, msg *tea.KeyMsg) {
+	if msg.Type == tea.KeyBackspace {
+		_, n := utf8.DecodeLastRuneInString(s.query)
+		if n > 0 {
+			s.query = s.query[:len(s.query)-n]
+			s.filter()
+		}
+	}
+	if msg.Type == tea.KeyRunes {
+		for _, r := range msg.Runes {
+			if !unicode.IsControl(r) && len(s.query) < 128 {
+				s.query += string(r)
+			}
+		}
+		s.filter()
+	}
+}
+
+func updateSessionDialogCmpKeyMsgSEditing(s *sessionDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if s.editing {
+		switch msg.Type {
+		case tea.KeyEsc:
+			s.editing = false
+		case tea.KeyEnter:
+			title := strings.TrimSpace(s.rename)
+			if title != "" && len(s.filtered) > 0 {
+				s.editing = false
+				return s, util.CmdHandler(SessionActionMsg{Action: "rename", Session: s.filtered[s.selectedIdx], Title: title}), true, true
+			}
+		case tea.KeyCtrlU:
+			s.rename = ""
+		case tea.KeyBackspace:
+			_, n := utf8.DecodeLastRuneInString(s.rename)
+			if n > 0 {
+				s.rename = s.rename[:len(s.rename)-n]
+			}
+		case tea.KeyRunes:
+			updateSessionDialogCmpKeyMsgSEditingCaseTeaKeyRunes(s, msg)
+		}
+		return s, nil, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func viewSOffset(s *sessionDialogCmp, width int, t theme.Theme, base *lipgloss.Style, rows *[]string) {
+	for i := s.offset; i < min(len(s.filtered), s.offset+s.rows()); i++ {
+		item := s.filtered[i]
+		label := ansi.Strip(item.Title)
+		if i == s.selectedIdx {
+			label = "› " + label
+		} else {
+			label = "  " + label
+		}
+		if item.ID == s.selectedSessionID {
+			label = "● " + label
+		}
+		if s.archived[item.ID] {
+			label += config.Text(" · arquivada", " · archived")
+		}
+		if width >= 48 {
+			age := sessionRecency(item.UpdatedAt, time.Now())
+			label = ansi.Truncate(label, max(1, width-ansi.StringWidth(age)-2), "…")
+			label += strings.Repeat(" ", max(2, width-ansi.StringWidth(label)-ansi.StringWidth(age))) + age
+		}
+		row := (*base)
+		if i == s.selectedIdx {
+			row = row.Background(t.Primary()).Foreground(t.Background())
+		}
+		(*rows) = append((*rows), row.Render(ansi.Truncate(label, width, "…")))
+	}
+}
+
+func updateSessionDialogCmpKeyMsgSEditingCaseTeaKeyRunes(s *sessionDialogCmp, msg *tea.KeyMsg) {
+	for _, r := range msg.Runes {
+		if !unicode.IsControl(r) && len(s.rename) < 180 {
+			s.rename += string(r)
+		}
+	}
+}
+
+func updateCaseTeaMouseMsg(s *sessionDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if s.editing {
+		return s, nil, true
+	}
+	if msg.Button == tea.MouseButtonWheelUp {
+		s.move(-1)
+	}
+	if msg.Button == tea.MouseButtonWheelDown {
+		s.move(1)
+	}
+	row := msg.Y - 4
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
+		s.selectedIdx = s.offset + row
+		return s, s.requestPreview(), true
+	}
+	return extractedResult0, extractedResult1, false
 }

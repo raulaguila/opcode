@@ -34,48 +34,7 @@ func (p *chatPage) batchQuestionView(height int) string {
 	q := p.workflow.question
 	index := p.workflow.questionIndex
 	rows := []string{}
-	if index >= len(q.Questions) {
-		rows = append(rows, config.Text(" Revisar respostas", " Review answers"))
-		for i, item := range q.Questions {
-			answer := p.workflow.batchAnswers[i]
-			value := answer.Text
-			if len(answer.Choices) > 0 {
-				value = strings.Join(answer.Choices, ", ")
-			}
-			rows = append(rows, fmt.Sprintf(" %d. %s: %s", i+1, item.Question, value))
-		}
-		rows = append(rows, config.Text(" Enter envia · Shift+Tab volta · F2 detalhes · Esc cancela", " Enter send · Shift+Tab back · F2 details · Esc cancel"))
-	} else {
-		item := q.Questions[index]
-		rows = append(rows, fmt.Sprintf(config.Text(" Pergunta %d/%d · %s", " Question %d/%d · %s"), index+1, len(q.Questions), item.Question))
-		if item.Explanation != "" {
-			rows = append(rows, " "+item.Explanation)
-		}
-		for i, c := range item.Choices {
-			mark := "○"
-			if p.workflow.selectedChoices[i] {
-				mark = "●"
-			}
-			if item.Type == "multi_choice" {
-				mark = "[ ]"
-				if p.workflow.selectedChoices[i] {
-					mark = "[✓]"
-				}
-			}
-			cursor := " "
-			if p.workflow.choice == i {
-				cursor = "›"
-			}
-			rows = append(rows, fmt.Sprintf(" %s %s %s", cursor, mark, c))
-		}
-		p.workflow.answer.Width = max(1, w-4)
-		rows = append(rows, " "+p.workflow.answer.View())
-		hint := config.Text(" Enter/Tab próxima · Shift+Tab volta · F2 detalhes · Esc cancela", " Enter/Tab next · Shift+Tab back · F2 details · Esc cancel")
-		if len(item.Choices) > 0 {
-			hint = config.Text(" ↑↓ opção · Espaço marca · digitar responde · Enter próxima · F2", " ↑↓ option · Space select · type alternative · Enter next · F2")
-		}
-		rows = append(rows, hint)
-	}
+	batchQuestionViewIndexQQuestions(p, w, &q, index, &rows)
 	if p.workflow.details {
 		p.workflow.detailView.Width = w
 		p.workflow.detailView.Height = max(1, height-1)
@@ -88,25 +47,7 @@ func (p *chatPage) batchQuestionView(height int) string {
 			rows[i] = line(rows[i])
 		}
 	}
-	if len(rows) > height {
-		// Keep the question and response visible in a short terminal.
-		if height >= 3 {
-			if index < len(q.Questions) && len(q.Questions[index].Choices) > 0 && height >= 4 {
-				choiceStart := 1
-				if q.Questions[index].Explanation != "" {
-					choiceStart++
-				}
-				count := max(1, height-3)
-				start := choiceStart + max(0, min(p.workflow.choice-count+1, len(q.Questions[index].Choices)-count))
-				tail := rows[len(rows)-2:]
-				rows = append([]string{rows[0]}, append(rows[start:min(start+count, choiceStart+len(q.Questions[index].Choices))], tail...)...)
-			} else {
-				rows = append([]string{rows[0]}, rows[len(rows)-(height-1):]...)
-			}
-		} else {
-			rows = rows[len(rows)-height:]
-		}
-	}
+	batchQuestionViewRowsHeight(p, height, &q, index, &rows)
 	return styles.BaseStyle().Foreground(theme.CurrentTheme().Text()).Width(max(0, p.width)).Render(strings.Join(rows, "\n"))
 }
 
@@ -157,14 +98,8 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
 		p.workflow.details = !p.workflow.details
 		return p.resizeContent()
 	}
-	if p.workflow.details {
-		if key == "esc" || key == "enter" {
-			p.workflow.details = false
-			return p.resizeContent()
-		}
-		var cmd tea.Cmd
-		p.workflow.detailView, cmd = p.workflow.detailView.Update(msg)
-		return cmd
+	if result0, handled := batchQuestionKeyWorkflowDetails(p, &msg, key); handled {
+		return result0
 	}
 	if key == "esc" {
 		p.app.CoderAgent.Cancel(p.session.ID)
@@ -180,39 +115,16 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return p.resizeContent()
 	}
-	if index >= len(q.Questions) {
-		if key == "enter" || key == "ctrl+s" {
-			if err := p.app.Questions.AnswerBatch(p.session.ID, q.ID, p.workflow.batchAnswers); err != nil {
-				return util.ReportError(err)
-			}
-			p.workflow.question = interaction.Question{}
-			p.workflow.batchAnswers = nil
-			return p.resizeContent()
-		}
-		return nil
+	if result0, handled := batchQuestionKeyIndexQQuestions(p, key, &q, index); handled {
+		return result0
 	}
 	item := q.Questions[index]
 	switch key {
 	case "up", "down":
-		if len(item.Choices) > 0 {
-			delta := 1
-			if key == "up" {
-				delta = -1
-				if p.workflow.choice < 0 {
-					p.workflow.choice = 0
-				}
-			}
-			p.workflow.choice = (p.workflow.choice + delta + len(item.Choices)) % len(item.Choices)
-		}
-		return nil
+		return batchQuestionKeyChatPageUp(p, key, &item)
 	case " ":
-		if p.workflow.choice >= 0 && p.workflow.answer.Value() == "" {
-			if item.Type != "multi_choice" {
-				p.workflow.selectedChoices = map[int]bool{p.workflow.choice: true}
-			} else {
-				p.workflow.selectedChoices[p.workflow.choice] = !p.workflow.selectedChoices[p.workflow.choice]
-			}
-			return nil
+		if result0, handled := batchQuestionKeyChatPageDefault(p, &item); handled {
+			return result0
 		}
 	case "enter", "tab":
 		p.saveBatchAnswer()
@@ -227,4 +139,130 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
 	p.workflow.answer, cmd = p.workflow.answer.Update(msg)
 	return cmd
+}
+
+func batchQuestionKeyChatPageUp(p *chatPage, key string, item *interaction.QuestionItem) (extractedResult0 tea.Cmd) {
+	if len(item.Choices) > 0 {
+		delta := 1
+		if key == "up" {
+			delta = -1
+			if p.workflow.choice < 0 {
+				p.workflow.choice = 0
+			}
+		}
+		p.workflow.choice = (p.workflow.choice + delta + len(item.Choices)) % len(item.Choices)
+	}
+	return nil
+
+}
+
+func batchQuestionKeyChatPageDefault(p *chatPage, item *interaction.QuestionItem) (extractedResult0 tea.Cmd, handled bool) {
+	if p.workflow.choice >= 0 && p.workflow.answer.Value() == "" {
+		if item.Type != "multi_choice" {
+			p.workflow.selectedChoices = map[int]bool{p.workflow.choice: true}
+		} else {
+			p.workflow.selectedChoices[p.workflow.choice] = !p.workflow.selectedChoices[p.workflow.choice]
+		}
+		return nil, true
+	}
+	return extractedResult0, false
+}
+
+func batchQuestionViewIndexQQuestions(p *chatPage, w int, q *interaction.Question, index int, rows *[]string) {
+	if index >= len(q.Questions) {
+		(*rows) = append((*rows), config.Text(" Revisar respostas", " Review answers"))
+		for i, item := range q.Questions {
+			answer := p.workflow.batchAnswers[i]
+			value := answer.Text
+			if len(answer.Choices) > 0 {
+				value = strings.Join(answer.Choices, ", ")
+			}
+			(*rows) = append((*rows), fmt.Sprintf(" %d. %s: %s", i+1, item.Question, value))
+		}
+		(*rows) = append((*rows), config.Text(" Enter envia · Shift+Tab volta · F2 detalhes · Esc cancela", " Enter send · Shift+Tab back · F2 details · Esc cancel"))
+	} else {
+		item := q.Questions[index]
+		(*rows) = append((*rows), fmt.Sprintf(config.Text(" Pergunta %d/%d · %s", " Question %d/%d · %s"), index+1, len(q.Questions), item.Question))
+		if item.Explanation != "" {
+			(*rows) = append((*rows), " "+item.Explanation)
+		}
+		batchQuestionViewIndexQQuestionsChoices(p, rows, &item)
+		p.workflow.answer.Width = max(1, w-4)
+		(*rows) = append((*rows), " "+p.workflow.answer.View())
+		hint := config.Text(" Enter/Tab próxima · Shift+Tab volta · F2 detalhes · Esc cancela", " Enter/Tab next · Shift+Tab back · F2 details · Esc cancel")
+		if len(item.Choices) > 0 {
+			hint = config.Text(" ↑↓ opção · Espaço marca · digitar responde · Enter próxima · F2", " ↑↓ option · Space select · type alternative · Enter next · F2")
+		}
+		(*rows) = append((*rows), hint)
+	}
+}
+
+func batchQuestionViewIndexQQuestionsChoices(p *chatPage, rows *[]string, item *interaction.QuestionItem) {
+	for i, c := range item.Choices {
+		mark := "○"
+		if p.workflow.selectedChoices[i] {
+			mark = "●"
+		}
+		if item.Type == "multi_choice" {
+			mark = "[ ]"
+			if p.workflow.selectedChoices[i] {
+				mark = "[✓]"
+			}
+		}
+		cursor := " "
+		if p.workflow.choice == i {
+			cursor = "›"
+		}
+		(*rows) = append((*rows), fmt.Sprintf(" %s %s %s", cursor, mark, c))
+	}
+}
+
+func batchQuestionKeyIndexQQuestions(p *chatPage, key string, q *interaction.Question, index int) (extractedResult0 tea.Cmd, handled bool) {
+	if index >= len(q.Questions) {
+		if key == "enter" || key == "ctrl+s" {
+			if err := p.app.Questions.AnswerBatch(p.session.ID, q.ID, p.workflow.batchAnswers); err != nil {
+				return util.ReportError(err), true
+			}
+			p.workflow.question = interaction.Question{}
+			p.workflow.batchAnswers = nil
+			return p.resizeContent(), true
+		}
+		return nil, true
+	}
+	return extractedResult0, false
+}
+
+func batchQuestionViewRowsHeight(p *chatPage, height int, q *interaction.Question, index int, rows *[]string) {
+	if len((*rows)) > height {
+		// Keep the question and response visible in a short terminal.
+		if height >= 3 {
+			if index < len(q.Questions) && len(q.Questions[index].Choices) > 0 && height >= 4 {
+				choiceStart := 1
+				if q.Questions[index].Explanation != "" {
+					choiceStart++
+				}
+				count := max(1, height-3)
+				start := choiceStart + max(0, min(p.workflow.choice-count+1, len(q.Questions[index].Choices)-count))
+				tail := (*rows)[len((*rows))-2:]
+				(*rows) = append([]string{(*rows)[0]}, append((*rows)[start:min(start+count, choiceStart+len(q.Questions[index].Choices))], tail...)...)
+			} else {
+				(*rows) = append([]string{(*rows)[0]}, (*rows)[len((*rows))-(height-1):]...)
+			}
+		} else {
+			(*rows) = (*rows)[len((*rows))-height:]
+		}
+	}
+}
+
+func batchQuestionKeyWorkflowDetails(p *chatPage, msg *tea.KeyMsg, key string) (extractedResult0 tea.Cmd, handled bool) {
+	if p.workflow.details {
+		if key == "esc" || key == "enter" {
+			p.workflow.details = false
+			return p.resizeContent(), true
+		}
+		var cmd tea.Cmd
+		p.workflow.detailView, cmd = p.workflow.detailView.Update((*msg))
+		return cmd, true
+	}
+	return extractedResult0, false
 }

@@ -124,15 +124,8 @@ func TestUserApprovesTerminalEntersInputAndReturnsToChat(t *testing.T) {
 		t.Helper()
 		deadline := time.NewTimer(5 * time.Second)
 		defer deadline.Stop()
-		for {
-			select {
-			case frame := <-harness.frames:
-				if strings.Contains(frame, text) {
-					return
-				}
-			case <-deadline.C:
-				t.Fatalf("UI never showed %q", text)
-			}
+		if handled := testUserApprovesTerminalEntersInputAndReturnsToChatState(t, harness, text, deadline); handled {
+			return
 		}
 	}
 	waitFrame("Opcode")
@@ -158,5 +151,18 @@ func TestUserApprovesTerminalEntersInputAndReturnsToChat(t *testing.T) {
 		require.NoError(t, err)
 	case <-time.After(3 * time.Second):
 		t.Fatal("UI did not shut down")
+	}
+}
+
+func testUserApprovesTerminalEntersInputAndReturnsToChatState(t *testing.T, harness *terminalUIHarness, text string, deadline *time.Timer) (handled bool) {
+	for {
+		select {
+		case frame := <-harness.frames:
+			if strings.Contains(frame, text) {
+				return true
+			}
+		case <-deadline.C:
+			t.Fatalf("UI never showed %q", text)
+		}
 	}
 }

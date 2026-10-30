@@ -64,22 +64,26 @@ func CredentialValuesSnapshot() []string {
 		add(Environment(profile.APIKeyEnv))
 	}
 	for _, server := range cfg.MCPServers {
-		if server.OAuth != nil {
-			add(Environment(server.OAuth.ClientSecretEnv))
-		}
-		for _, name := range server.HeadersEnv {
-			add(Environment(name))
-		}
-		for _, name := range server.EnvVars {
-			add(Environment(name))
-		}
-		for _, entry := range server.Env {
-			_, secret, _ := strings.Cut(entry, "=")
-			add(secret)
-		}
-		for _, secret := range server.Headers {
-			add(secret)
-		}
+		addServerCredentialValues(server, add)
 	}
 	return result
+}
+
+func addServerCredentialValues(server MCPServer, add func(string)) {
+	if server.OAuth != nil {
+		add(Environment(server.OAuth.ClientSecretEnv))
+	}
+	for _, name := range server.HeadersEnv {
+		add(Environment(name))
+	}
+	for _, name := range server.EnvVars {
+		add(Environment(name))
+	}
+	for _, entry := range server.Env {
+		_, secret, _ := strings.Cut(entry, "=")
+		add(secret)
+	}
+	for _, secret := range server.Headers {
+		add(secret)
+	}
 }

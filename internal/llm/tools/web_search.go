@@ -53,7 +53,7 @@ func (t *webSearchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, e
 		return NewTextErrorResponse("Invalid web search parameters"), nil
 	}
 	p.Query = strings.Join(strings.Fields(p.Query), " ")
-	if p.Query == "" || len(p.Query) > 512 || strings.ContainsFunc(p.Query, unicode.IsControl) || p.Limit < 0 || p.Limit > 10 {
+	if !validPublicSearchQuery(p.Query, p.Limit) {
 		return NewTextErrorResponse("Search needs a public query of 1–512 bytes and a result limit of 1–10"), nil
 	}
 	if p.Limit == 0 {
@@ -63,18 +63,10 @@ func (t *webSearchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, e
 	if session == "" || message == "" {
 		return ToolResponse{}, fmt.Errorf("web search requires a session and message")
 	}
-	target, err := url.Parse(t.endpoint)
+	req, err := webSearchRequest(ctx, t.endpoint, p.Query)
 	if err != nil {
-		return ToolResponse{}, fmt.Errorf("invalid search endpoint")
+		return ToolResponse{}, err
 	}
-	q := target.Query()
-	q.Set("q", p.Query)
-	target.RawQuery = q.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
-	if err != nil {
-		return ToolResponse{}, fmt.Errorf("invalid search request")
-	}
-	req.Header.Set("User-Agent", "opcode/1.0 (+https://github.com/raulaguila/opcode)")
 	response, err := networkDo(ctx, t.permissions, WebSearchToolName, req, 20*time.Second)
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("web search request: %w", err)
@@ -122,33 +114,69 @@ func parseWebSearch(raw string, limit int) ([]webSearchResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	results := []webSearchResult{}
-	seen := map[string]bool{}
-	doc.Find(".result").EachWithBreak(func(_ int, result *goquery.Selection) bool {
-		if len(results) >= limit {
-			return false
-		}
-		link := result.Find("a.result__a").First()
-		href, _ := link.Attr("href")
-		u, err := url.Parse(href)
-		if err != nil {
-			return true
-		}
-		if u.Hostname() == "duckduckgo.com" || u.Hostname() == "www.duckduckgo.com" || u.Hostname() == "html.duckduckgo.com" || u.Hostname() == "" {
-			if redirect := u.Query().Get("uddg"); redirect != "" {
-				u, err = url.Parse(redirect)
-			}
-		}
-		if err != nil || u == nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || len(u.String()) > 2048 {
-			return true
-		}
-		title := searchText(link.Text(), 160)
-		if title == "" || seen[u.String()] {
-			return true
-		}
-		seen[u.String()] = true
-		results = append(results, webSearchResult{title, u.String(), searchText(result.Find(".result__snippet").Text(), 480)})
+	results := webSearchResults{limit: limit, items: []webSearchResult{}, seen: map[string]bool{}}
+	doc.Find(".result").EachWithBreak(results.collect)
+	return results.items, nil
+}
+
+type webSearchResults struct {
+	limit int
+	items []webSearchResult
+	seen  map[string]bool
+}
+
+func (r *webSearchResults) collect(_ int, result *goquery.Selection) bool {
+	if len(r.items) >= r.limit {
+		return false
+	}
+	link := result.Find("a.result__a").First()
+	href, _ := link.Attr("href")
+	target := publicSearchURL(href)
+	if target == nil {
 		return true
-	})
-	return results, nil
+	}
+	address := target.String()
+	title := searchText(link.Text(), 160)
+	if title == "" || r.seen[address] {
+		return true
+	}
+	r.seen[address] = true
+	r.items = append(r.items, webSearchResult{title, address, searchText(result.Find(".result__snippet").Text(), 480)})
+	return true
+}
+func publicSearchURL(href string) *url.URL {
+	target, err := url.Parse(href)
+	if err != nil {
+		return nil
+	}
+	switch target.Hostname() {
+	case "duckduckgo.com", "www.duckduckgo.com", "html.duckduckgo.com", "":
+		if redirect := target.Query().Get("uddg"); redirect != "" {
+			target, err = url.Parse(redirect)
+		}
+	}
+	if err != nil || target == nil || (target.Scheme != "https" && target.Scheme != "http") || target.Hostname() == "" || target.User != nil || len(target.String()) > 2048 {
+		return nil
+	}
+	return target
+}
+
+func webSearchRequest(ctx context.Context, endpoint, query string) (*http.Request, error) {
+	target, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("invalid search endpoint")
+	}
+	q := target.Query()
+	q.Set("q", query)
+	target.RawQuery = q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("invalid search request")
+	}
+	req.Header.Set("User-Agent", "opcode/1.0 (+https://github.com/raulaguila/opcode)")
+	return req, nil
+}
+
+func validPublicSearchQuery(query string, limit int) bool {
+	return query != "" && len(query) <= 512 && !strings.ContainsFunc(query, unicode.IsControl) && limit >= 0 && limit <= 10
 }

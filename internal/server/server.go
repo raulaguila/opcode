@@ -301,13 +301,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	}
 	id := request.Resume
 	if id != "" {
-		var root string
-		if err := s.db.QueryRowContext(r.Context(), "SELECT root FROM agent_workflows WHERE session_id=?", id).Scan(&root); err != nil || root != config.WorkingDirectory() {
-			s.fail(w, 404, "session does not belong to this workspace")
-			return
-		}
-		if _, err := s.app.Sessions.Get(r.Context(), id); err != nil {
-			s.fail(w, 404, "session not found")
+		if !s.resumeSession(w, r, id) {
 			return
 		}
 	} else {
@@ -370,31 +364,7 @@ func (s *Server) snapshot(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, 500, "cannot read messages")
 			return
 		}
-		if raw == "" {
-			m.Truncated = true
-			m.Text = "[Mensagem extensa; consulte a sessão local]"
-		} else {
-			var parts []struct {
-				Type string          `json:"type"`
-				Data json.RawMessage `json:"data"`
-			}
-			if json.Unmarshal([]byte(raw), &parts) == nil {
-				for _, part := range parts {
-					var data struct {
-						Text string `json:"text"`
-						Name string `json:"name"`
-					}
-					if json.Unmarshal(part.Data, &data) == nil {
-						if part.Type == "text" {
-							m.Text += data.Text
-						}
-						if part.Type == "tool_call" {
-							m.Tools = append(m.Tools, data.Name)
-						}
-					}
-				}
-			}
-		}
+		projectSnapshotMessage(&m, raw)
 		result.Messages = append(result.Messages, m)
 	}
 	err = rows.Err()
@@ -450,21 +420,8 @@ func (s *Server) prompt(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	digest := sha256.Sum256([]byte(request.Content))
-	if request.RequestID != "" {
-		if previous, ok := s.submissions[id][request.RequestID]; ok {
-			s.mu.Unlock()
-			if previous.digest != digest {
-				s.fail(w, 409, "request_id already used for different content")
-				return
-			}
-			s.write(w, 202, map[string]any{"accepted": true, "queued": previous.queued, "replayed": true})
-			return
-		}
-		if len(s.submissions[id]) >= 128 {
-			s.mu.Unlock()
-			s.fail(w, 409, "idempotency limit reached; start another session")
-			return
-		}
+	if s.replaySubmission(w, id, request.RequestID, digest) {
+		return
 	}
 	if len(s.outcomes) >= 64 && s.outcomes[id] == "" {
 		s.mu.Unlock()
@@ -478,12 +435,7 @@ func (s *Server) prompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.outcomes[id] = "running"
-	if request.RequestID != "" {
-		if s.submissions[id] == nil {
-			s.submissions[id] = map[string]submission{}
-		}
-		s.submissions[id][request.RequestID] = submission{digest, queued}
-	}
+	s.recordSubmission(id, request.RequestID, digest, queued)
 	if !queued && events != nil {
 		s.runIDs[id]++
 		s.workers.Add(1)
@@ -494,29 +446,7 @@ func (s *Server) prompt(w http.ResponseWriter, r *http.Request) {
 		s.write(w, 202, map[string]any{"accepted": true, "queued": queued})
 		return
 	}
-	go func() {
-		defer s.workers.Done()
-		select {
-		case <-s.ctx.Done():
-			return
-		case event, open := <-events:
-			if !open {
-				return
-			}
-			outcome := event.Outcome
-			if outcome == "" {
-				outcome = "completed"
-			}
-			if event.Error != nil {
-				outcome = tools.RedactCredentials(event.Error.Error())
-			}
-			s.mu.Lock()
-			if s.runIDs[id] == runID {
-				s.outcomes[id] = outcome
-			}
-			s.mu.Unlock()
-		}
-	}()
+	go s.observeSubmission(id, runID, events)
 	s.write(w, 202, map[string]any{"accepted": true, "queued": queued})
 }
 func (s *Server) cancelSession(w http.ResponseWriter, r *http.Request) {
@@ -695,4 +625,101 @@ func (s *Server) processStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.write(w, 200, map[string]bool{"stopped": true})
+}
+
+func projectSnapshotMessage(m *Message, raw string) {
+	if raw == "" {
+		m.Truncated = true
+		m.Text = "[Mensagem extensa; consulte a sessão local]"
+		return
+	}
+	var parts []struct {
+		Type string          `json:"type"`
+		Data json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal([]byte(raw), &parts) != nil {
+		return
+	}
+	for _, part := range parts {
+		var data struct {
+			Text string `json:"text"`
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(part.Data, &data) != nil {
+			continue
+		}
+		switch part.Type {
+		case "text":
+			m.Text += data.Text
+		case "tool_call":
+			m.Tools = append(m.Tools, data.Name)
+		}
+	}
+}
+
+func (s *Server) replaySubmission(w http.ResponseWriter, id, requestID string, digest [32]byte) bool {
+	if requestID != "" {
+		if previous, ok := s.submissions[id][requestID]; ok {
+			s.mu.Unlock()
+			if previous.digest != digest {
+				s.fail(w, 409, "request_id already used for different content")
+				return true
+			}
+			s.write(w, 202, map[string]any{"accepted": true, "queued": previous.queued, "replayed": true})
+			return true
+		}
+		if len(s.submissions[id]) >= 128 {
+			s.mu.Unlock()
+			s.fail(w, 409, "idempotency limit reached; start another session")
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) observeSubmission(id string, runID uint64, events <-chan agent.AgentEvent) {
+	defer s.workers.Done()
+	select {
+	case <-s.ctx.Done():
+		return
+	case event, open := <-events:
+		if !open {
+			return
+		}
+		outcome := event.Outcome
+		if outcome == "" {
+			outcome = "completed"
+		}
+		if event.Error != nil {
+			outcome = tools.RedactCredentials(event.Error.Error())
+		}
+		s.mu.Lock()
+		if s.runIDs[id] == runID {
+			s.outcomes[id] = outcome
+		}
+		s.mu.Unlock()
+	}
+}
+
+func (s *Server) resumeSession(w http.ResponseWriter, r *http.Request, id string) bool {
+	var root string
+	if err := s.db.QueryRowContext(r.Context(), "SELECT root FROM agent_workflows WHERE session_id=?", id).Scan(&root); err != nil || root != config.WorkingDirectory() {
+		s.fail(w, 404, "session does not belong to this workspace")
+		return false
+	}
+	if _, err := s.app.Sessions.Get(r.Context(), id); err != nil {
+		s.fail(w, 404, "session not found")
+		return false
+	}
+	return true
+}
+
+// recordSubmission runs while the submission lock is held.
+func (s *Server) recordSubmission(id, requestID string, digest [32]byte, queued bool) {
+	if requestID != "" {
+		if s.submissions[id] == nil {
+			s.submissions[id] = map[string]submission{}
+		}
+		s.submissions[id][requestID] = submission{digest, queued}
+	}
 }

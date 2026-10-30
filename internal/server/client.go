@@ -61,6 +61,10 @@ func (c *Client) Do(ctx context.Context, method, path string, body, result any) 
 		return fmt.Errorf("servidor indisponível; reconecte ao mesmo endereço e sessão")
 	}
 	defer response.Body.Close()
+	return decodeServerResponse(response, result)
+}
+
+func decodeServerResponse(response *http.Response, result any) error {
 	raw, err := io.ReadAll(io.LimitReader(response.Body, (8<<20)+1))
 	if err != nil || len(raw) > 8<<20 {
 		return fmt.Errorf("invalid or oversized server response")

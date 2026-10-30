@@ -118,20 +118,8 @@ func (s *Store) Record(session, turnID string, changes []tools.FileChange) error
 		idx = len(d.Turns) - 1
 	}
 	turn := cloneTurn(d.Turns[idx])
-	for _, change := range changes {
-		if !filepath.IsAbs(change.Path) {
-			change.Path = filepath.Join(s.root, change.Path)
-		}
-		change.Path = filepath.Clean(change.Path)
-		at := slices.IndexFunc(turn.Changes, func(c tools.FileChange) bool { return c.Path == change.Path })
-		if at < 0 {
-			turn.Changes = append(turn.Changes, change)
-		} else {
-			if !same(turn.Changes[at].After, change.Before) {
-				return fmt.Errorf("review snapshot conflicts with an external edit; start a new turn")
-			}
-			turn.Changes[at].After = change.After
-		}
+	if err := mergeTurnChanges(&turn, s.root, changes); err != nil {
+		return err
 	}
 	if len(turn.Changes) > 128 || totalBytes([]Turn{turn}) > maxContent {
 		return fmt.Errorf("turn snapshots exceed review retention limit")
@@ -189,17 +177,7 @@ func (s *Store) Preview(session, turnID string, redo bool) (Preview, error) {
 			change.Before, change.After = c.After, c.Before
 		}
 		p.Changes = append(p.Changes, change)
-		before, after := "", ""
-		if change.Before != nil {
-			before = *change.Before
-		}
-		if change.After != nil {
-			after = *change.After
-		}
-		text, _, _ := diff.GenerateDiff(before, after, c.Path)
-		if text == "" {
-			text = fmt.Sprintf("%s: alteração da existência do arquivo\n", c.Path)
-		}
+		text := reviewChangeDiff(change, c.Path)
 		body.WriteString(text)
 		body.WriteByte('\n')
 	}
@@ -245,20 +223,7 @@ func (s *Store) Apply(ctx context.Context, session string, p Preview, permission
 	if onMutation != nil {
 		ctx = tools.WithMutationObserver(ctx, onMutation)
 	}
-	ctx = tools.WithChangeObserver(ctx, func([]tools.FileChange) error {
-		unlock := localstate.Lock(s.path)
-		defer unlock()
-		d, err := s.load()
-		if err != nil {
-			return err
-		}
-		at := slices.IndexFunc(d.Turns, func(t Turn) bool { return t.SessionID == session && t.ID == p.Turn.ID })
-		if at < 0 || fingerprint(d.Turns[at]) != p.Revision {
-			return fmt.Errorf("review changed during approval")
-		}
-		d.Turns[at].Undone = !p.Redo
-		return localstate.Write(s.path, d, maxState)
-	})
+	ctx = tools.WithChangeObserver(ctx, func([]tools.FileChange) error { return s.markApplied(session, p) })
 	_, err = tools.SecureTool(&applyTool{p.Changes}, permissions).Run(ctx, tools.ToolCall{Name: tools.PatchToolName, Input: `{}`})
 	return err
 }
@@ -268,4 +233,53 @@ type applyTool struct{ changes []tools.FileChange }
 func (*applyTool) Info() tools.ToolInfo { return tools.ToolInfo{Name: tools.PatchToolName} }
 func (t *applyTool) Run(ctx context.Context, _ tools.ToolCall) (tools.ToolResponse, error) {
 	return tools.NewTextResponse("review applied"), tools.ApplyFileChanges(ctx, t.changes)
+}
+
+func mergeTurnChanges(turn *Turn, root string, changes []tools.FileChange) error {
+	for _, change := range changes {
+		if !filepath.IsAbs(change.Path) {
+			change.Path = filepath.Join(root, change.Path)
+		}
+		change.Path = filepath.Clean(change.Path)
+		at := slices.IndexFunc(turn.Changes, func(c tools.FileChange) bool { return c.Path == change.Path })
+		if at < 0 {
+			turn.Changes = append(turn.Changes, change)
+		} else {
+			if !same(turn.Changes[at].After, change.Before) {
+				return fmt.Errorf("review snapshot conflicts with an external edit; start a new turn")
+			}
+			turn.Changes[at].After = change.After
+		}
+	}
+	return nil
+}
+
+func reviewChangeDiff(change tools.FileChange, path string) string {
+	before, after := "", ""
+	if change.Before != nil {
+		before = *change.Before
+	}
+	if change.After != nil {
+		after = *change.After
+	}
+	text, _, _ := diff.GenerateDiff(before, after, path)
+	if text == "" {
+		text = fmt.Sprintf("%s: alteração da existência do arquivo\n", path)
+	}
+	return text
+}
+
+func (s *Store) markApplied(session string, p Preview) error {
+	unlock := localstate.Lock(s.path)
+	defer unlock()
+	d, err := s.load()
+	if err != nil {
+		return err
+	}
+	at := slices.IndexFunc(d.Turns, func(t Turn) bool { return t.SessionID == session && t.ID == p.Turn.ID })
+	if at < 0 || fingerprint(d.Turns[at]) != p.Revision {
+		return fmt.Errorf("review changed during approval")
+	}
+	d.Turns[at].Undone = !p.Redo
+	return localstate.Write(s.path, d, maxState)
 }

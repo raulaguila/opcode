@@ -121,45 +121,10 @@ func (m *integrationDialogCmp) read() (config.Integration, error) {
 	if m.originalID != "" && c.Name != m.originalID {
 		return c, fmt.Errorf("name cannot be changed; add a new integration instead")
 	}
-	var err error
-	if c.Kind == "mcp" {
-		c.MCP.Type = config.MCPType(value(1))
-		c.MCP.Command = value(2)
-		c.MCP.URL = value(4)
-		if json.Unmarshal([]byte(value(3)), &c.MCP.Args) != nil {
-			return c, fmt.Errorf("arguments must be a JSON array of strings")
-		}
-		if json.Unmarshal([]byte(value(5)), &c.MCP.HeadersEnv) != nil {
-			return c, fmt.Errorf("headers must be a JSON object mapping header to environment name")
-		}
-		if json.Unmarshal([]byte(value(6)), &c.MCP.EnvVars) != nil {
-			return c, fmt.Errorf("environment must be a JSON object mapping target to source variable")
-		}
-		c.MCP.Disabled, err = strconv.ParseBool(value(7))
-		if err == nil {
-			enabled, e := strconv.ParseBool(value(8))
-			if e != nil {
-				return c, fmt.Errorf("OAuth enabled must be true or false")
-			}
-			c.MCP.OAuth = nil
-			if enabled {
-				port, e := strconv.Atoi(value(12))
-				if e != nil {
-					return c, fmt.Errorf("OAuth redirect port must be an integer")
-				}
-				c.MCP.OAuth = &config.MCPOAuthConfig{ClientID: value(9), ClientSecretEnv: value(10), Scopes: strings.Fields(value(11)), RedirectPort: port}
-			}
-		}
-	} else {
-		c.LSP.Command = value(1)
-		if json.Unmarshal([]byte(value(2)), &c.LSP.Args) != nil {
-			return c, fmt.Errorf("arguments must be a JSON array of strings")
-		}
-		c.LSP.Disabled, err = strconv.ParseBool(value(3))
+	if err := readIntegrationFields(&c, value); err != nil {
+		return c, err
 	}
-	if err != nil {
-		return c, fmt.Errorf("disabled must be true or false")
-	}
+
 	return c, config.ValidateIntegration(c)
 }
 func (m *integrationDialogCmp) testIntegration() tea.Cmd {
@@ -210,213 +175,29 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.noteUpdate(msg) {
 		return m, nil
 	}
-	if m.arguments != nil {
-		if size, ok := msg.(tea.WindowSizeMsg); ok {
-			m.width, m.height = size.Width, size.Height
-		}
-		done, save, cmd := m.arguments.update(msg)
-		if done {
-			if save {
-				m.fields[m.focus].SetValue(m.arguments.value())
-			}
-			m.arguments = nil
-			m.fields[m.focus].Focus()
-		}
-		return m, cmd
+	if result0, result1, handled := updateArguments(m, msg); handled {
+		return result0, result1
 	}
 
 	switch msg := msg.(type) {
 	case integrationOAuthMsg:
 		return m, m.updateOAuth(msg)
 	case integrationProbeMsg:
-		if msg.request != m.request {
-			return m, nil
-		}
-		m.testing = false
-		m.cancel = nil
-		if msg.err != nil {
-			m.note = config.Text("Falha no teste: ", "Test failed: ") + msg.err.Error()
-		} else {
-			m.result = msg.lines
-			if len(m.result) > 1024 {
-				m.result = m.result[:1024]
-			}
-			m.resultOffset = 0
-			m.screen = "result"
-			m.note = "↑↓ scroll results · Esc returns to the preserved form"
-		}
-		return m, nil
+		return updateCaseIntegrationProbeMsg(m, &msg)
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
-		if m.screen == "edit" && msg.String() == "enter" && (strings.HasPrefix(m.labels[m.focus], "Arguments") || strings.HasPrefix(m.labels[m.focus], "Headers from") || strings.HasPrefix(m.labels[m.focus], "Child environment")) {
-			var err error
-			if strings.HasPrefix(m.labels[m.focus], "Arguments") {
-				m.arguments, err = newArgumentList(m.fields[m.focus].Value())
-			} else {
-				m.arguments, err = newPairList(m.fields[m.focus].Value())
-			}
-			if err != nil {
-				m.note = err.Error()
-				return m, nil
-			}
-			m.Close()
-			m.fields[m.focus].Blur()
-			return m, textinput.Blink
-		}
-		if m.screen == "edit" && len(m.fields) > m.focus && choiceKey(&m.fields[m.focus], fieldOptions(m.labels[m.focus]), msg) {
-			if m.testing {
-				m.Close()
-				m.note = "Edited; test again for current settings."
-			}
-			return m, nil
-		}
-		if msg.String() == "esc" {
-			if m.screen == "oauth" {
-				m.Close()
-				return m, m.Open()
-			}
-			if m.testing {
-				m.Close()
-				m.note = "Test cancelled; edits are preserved."
-				return m, nil
-			}
-			if m.screen == "result" {
-				m.screen = "edit"
-				m.note = "Tab fields · Ctrl+T test · Ctrl+S save · Esc back"
-				return m, nil
-			}
-			if m.screen != "list" {
-				saved := *m
-				saved.cancel = nil
-				saved.testing = false
-				saved.resumeDraft = nil
-				cmd := m.Open()
-				m.resumeDraft = func() {
-					w, h, request := m.width, m.height, m.request+1
-					*m = saved
-					m.width, m.height, m.request = w, h, request
-				}
-				m.note = config.Text("R retoma a edição preservada", "R resumes preserved edits")
-				return m, cmd
-			}
-			m.Close()
-			return m, util.CmdHandler(CloseIntegrationDialogMsg{})
-		}
-		if m.screen == "result" {
-			switch msg.String() {
-			case "up":
-				m.resultOffset = max(0, m.resultOffset-1)
-			case "down":
-				m.resultOffset = min(max(0, len(m.result)-1), m.resultOffset+1)
-			}
-			return m, nil
-		}
-		if m.screen == "oauth" {
-			if msg.String() == "up" {
-				m.resultOffset = max(0, m.resultOffset-1)
-			}
-			if msg.String() == "down" {
-				m.resultOffset++
-			}
-			return m, nil
-		}
-		if m.screen == "list" {
-			switch msg.String() {
-			case "ctrl+a":
-				return m, m.oauthAction("login")
-			case "ctrl+d":
-				return m, m.oauthAction("logout")
-			case "ctrl+u":
-				return m, m.oauthAction("status")
-			case "up":
-				if len(m.entries) > 0 {
-					m.selected = (m.selected - 1 + len(m.entries)) % len(m.entries)
-				}
-			case "down":
-				if len(m.entries) > 0 {
-					m.selected = (m.selected + 1) % len(m.entries)
-				}
-			case "enter":
-				if len(m.entries) > 0 {
-					return m, m.edit(m.entries[m.selected])
-				}
-			case "r":
-				if m.resumeDraft != nil {
-					m.resumeDraft()
-					return m, textinput.Blink
-				}
-			case "n":
-				return m, m.edit(config.Integration{Kind: "mcp", MCP: config.MCPServer{Type: config.MCPStdio}})
-			case "l":
-				return m, m.edit(config.Integration{Kind: "lsp"})
-			}
-			return m, nil
-		}
-		switch msg.String() {
-		case "ctrl+s":
-			return m, m.saveIntegration()
-		case "ctrl+t":
-			return m, m.testIntegration()
-		case "tab", "down", "enter", "up", "shift+tab":
-			m.fields[m.focus].Blur()
-			delta := 1
-			if msg.String() == "up" || msg.String() == "shift+tab" {
-				delta = -1
-			}
-			indices := m.visibleFields()
-			index := slices.Index(indices, m.focus)
-			m.focus = indices[(index+delta+len(indices))%len(indices)]
-			return m, m.fields[m.focus].Focus()
+		if result0, result1, handled := updateIntegrationDialogCmpKeyMsg(&m, &msg); handled {
+			return result0, result1
 		}
 	case tea.MouseMsg:
-		if m.screen == "edit" && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < m.contentWidth()+3 {
-			indices := m.visibleFields()
-			count := min(m.formRows(), len(indices))
-			start := max(0, slices.Index(indices, m.focus)-count+1)
-			i := start + (msg.Y-3)/2
-			if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(indices) {
-				m.fields[m.focus].Blur()
-				m.focus = indices[i]
-				return m, m.fields[m.focus].Focus()
-			}
-		}
-		if m.screen == "list" && len(m.entries) > 0 {
-			if msg.Button == tea.MouseButtonWheelUp {
-				m.selected = max(0, m.selected-1)
-			}
-			if msg.Button == tea.MouseButtonWheelDown {
-				m.selected = min(len(m.entries)-1, m.selected+1)
-			}
-		}
-		if m.screen == "result" {
-			if msg.Button == tea.MouseButtonWheelUp {
-				m.resultOffset = max(0, m.resultOffset-1)
-			}
-			if msg.Button == tea.MouseButtonWheelDown {
-				m.resultOffset = min(max(0, len(m.result)-1), m.resultOffset+1)
-			}
-			return m, nil
-		}
-		if m.screen == "list" && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < m.contentWidth()+3 {
-			rows := m.listRows()
-			start := max(0, m.selected-rows+1)
-			i := msg.Y - 3 + start
-			if msg.Y >= 3 && msg.Y < 3+rows && i >= 0 && i < len(m.entries) {
-				m.selected = i
-				return m, m.edit(m.entries[i])
-			}
+		if result0, result1, handled := updateIntegrationDialogCmpMouseMsg(m, &msg); handled {
+			return result0, result1
 		}
 	}
-	if m.screen == "edit" && len(m.fields) > 0 {
-		var cmd tea.Cmd
-		m.fields[m.focus], cmd = m.fields[m.focus].Update(msg)
-		if _, ok := msg.(tea.KeyMsg); ok && m.testing {
-			m.Close()
-			m.note = "Edited; test again for current settings."
-		}
-		return m, cmd
+	if result0, result1, handled := updateEdit(m, msg); handled {
+		return result0, result1
 	}
 	return m, nil
 }
@@ -450,44 +231,7 @@ func (m *integrationDialogCmp) View() string {
 		title = "Connection test results"
 	}
 	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(interfaceCopy(title), width, "…"))}
-	if m.screen == "list" {
-		rows := m.listRows()
-		start := max(0, m.selected-rows+1)
-		if len(m.entries) == 0 {
-			lines = append(lines, line("No integrations. N adds MCP; L adds a language server."))
-		}
-		for i := start; i < min(len(m.entries), start+rows); i++ {
-			style := base
-			if i == m.selected {
-				style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
-			}
-			lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+config.IntegrationSummary(m.entries[i]), width, "…")))
-		}
-	} else if m.screen == "edit" {
-		indices := m.visibleFields()
-		count := min(m.formRows(), len(indices))
-		start := max(0, slices.Index(indices, m.focus)-count+1)
-		for _, i := range indices[start:min(len(indices), start+count)] {
-			label := fieldLabel(m.labels[i])
-			if strings.HasPrefix(m.labels[i], "Arguments") {
-				label = config.Text("Argumentos · Enter edita lista", "Arguments · Enter edits list")
-			}
-			if i == m.focus {
-				label = "› " + label
-			}
-			lines = append(lines, line(label))
-			m.fields[i].Width = max(8, width-2)
-			lines = append(lines, base.Render(ansi.Truncate(choiceView(m.fields[i], fieldOptions(m.labels[i])), width, "…")))
-		}
-	} else {
-		rows := max(1, m.height-7)
-		if m.height == 0 {
-			rows = 12
-		}
-		for i := m.resultOffset; i < min(len(m.result), m.resultOffset+rows); i++ {
-			lines = append(lines, line(m.result[i]))
-		}
-	}
+	viewListCase(m, t, width, &base, line, &lines)
 	note := m.note
 	if m.screen == "list" {
 		note = config.Text("N Adicionar MCP · L Adicionar LSP · Enter Editar · Esc", "N Add MCP · L Add LSP · Enter Edit · Esc")
@@ -523,4 +267,365 @@ func (m *integrationDialogCmp) visibleFields() []int {
 		}
 	}
 	return r
+}
+
+func updateIntegrationDialogCmpKeyMsg(m **integrationDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if result0, result1, result2, handled := updateIntegrationDialogCmpKeyMsgEdit(m, msg); handled {
+		return result0, result1, result2
+	}
+	if result0, result1, result2, handled := updateIntegrationDialogCmpKeyMsgEditCase(m, msg); handled {
+		return result0, result1, result2
+	}
+	if result0, result1, result2, handled := updateIntegrationDialogCmpKeyMsgEsc(&m, msg); handled {
+		return result0, result1, result2
+	}
+	if (*m).screen == "result" {
+		switch msg.String() {
+		case "up":
+			(*m).resultOffset = max(0, (*m).resultOffset-1)
+		case "down":
+			(*m).resultOffset = min(max(0, len((*m).result)-1), (*m).resultOffset+1)
+		}
+		return (*m), nil, true
+	}
+	if (*m).screen == "oauth" {
+		if msg.String() == "up" {
+			(*m).resultOffset = max(0, (*m).resultOffset-1)
+		}
+		if msg.String() == "down" {
+			(*m).resultOffset++
+		}
+		return (*m), nil, true
+	}
+	if result0, result1, result2, handled := updateIntegrationDialogCmpKeyMsgList(m, msg); handled {
+		return result0, result1, result2
+	}
+	switch msg.String() {
+	case "ctrl+s":
+		return (*m), (*m).saveIntegration(), true
+	case "ctrl+t":
+		return (*m), (*m).testIntegration(), true
+	case "tab", "down", "enter", "up", "shift+tab":
+		return updateIntegrationDialogCmpKeyMsgTab(m, msg)
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateIntegrationDialogCmpMouseMsg(m *integrationDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if result0, result1, result2, handled := updateIntegrationDialogCmpMouseMsgEdit(m, msg); handled {
+		return result0, result1, result2
+	}
+	if m.screen == "list" && len(m.entries) > 0 {
+		if msg.Button == tea.MouseButtonWheelUp {
+			m.selected = max(0, m.selected-1)
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			m.selected = min(len(m.entries)-1, m.selected+1)
+		}
+	}
+	if m.screen == "result" {
+		if msg.Button == tea.MouseButtonWheelUp {
+			m.resultOffset = max(0, m.resultOffset-1)
+		}
+		if msg.Button == tea.MouseButtonWheelDown {
+			m.resultOffset = min(max(0, len(m.result)-1), m.resultOffset+1)
+		}
+		return m, nil, true
+	}
+	if result0, result1, result2, handled := updateIntegrationDialogCmpMouseMsgList(m, msg); handled {
+		return result0, result1, result2
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateIntegrationDialogCmpKeyMsgTab(m **integrationDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
+	(*m).fields[(*m).focus].Blur()
+	delta := 1
+	if msg.String() == "up" || msg.String() == "shift+tab" {
+		delta = -1
+	}
+	indices := (*m).visibleFields()
+	index := slices.Index(indices, (*m).focus)
+	(*m).focus = indices[(index+delta+len(indices))%len(indices)]
+	return (*m), (*m).fields[(*m).focus].Focus(), true
+
+}
+
+func updateIntegrationDialogCmpKeyMsgEdit(m **integrationDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if (*m).screen == "edit" && msg.String() == "enter" && (strings.HasPrefix((*m).labels[(*m).focus], "Arguments") || strings.HasPrefix((*m).labels[(*m).focus], "Headers from") || strings.HasPrefix((*m).labels[(*m).focus], "Child environment")) {
+		var err error
+		if strings.HasPrefix((*m).labels[(*m).focus], "Arguments") {
+			(*m).arguments, err = newArgumentList((*m).fields[(*m).focus].Value())
+		} else {
+			(*m).arguments, err = newPairList((*m).fields[(*m).focus].Value())
+		}
+		if err != nil {
+			(*m).note = err.Error()
+			return (*m), nil, true, true
+		}
+		(*m).Close()
+		(*m).fields[(*m).focus].Blur()
+		return (*m), textinput.Blink, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateIntegrationDialogCmpKeyMsgList(m **integrationDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if (*m).screen == "list" {
+		switch msg.String() {
+		case "ctrl+a":
+			return (*m), (*m).oauthAction("login"), true, true
+		case "ctrl+d":
+			return (*m), (*m).oauthAction("logout"), true, true
+		case "ctrl+u":
+			return (*m), (*m).oauthAction("status"), true, true
+		case "up":
+			if len((*m).entries) > 0 {
+				(*m).selected = ((*m).selected - 1 + len((*m).entries)) % len((*m).entries)
+			}
+		case "down":
+			if len((*m).entries) > 0 {
+				(*m).selected = ((*m).selected + 1) % len((*m).entries)
+			}
+		case "enter":
+			if len((*m).entries) > 0 {
+				return (*m), (*m).edit((*m).entries[(*m).selected]), true, true
+			}
+		case "r":
+			if (*m).resumeDraft != nil {
+				(*m).resumeDraft()
+				return (*m), textinput.Blink, true, true
+			}
+		case "n":
+			return (*m), (*m).edit(config.Integration{Kind: "mcp", MCP: config.MCPServer{Type: config.MCPStdio}}), true, true
+		case "l":
+			return (*m), (*m).edit(config.Integration{Kind: "lsp"}), true, true
+		}
+		return (*m), nil, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func viewListCase(m *integrationDialogCmp, t theme.Theme, width int, base *lipgloss.Style, line func(s string) string, lines *[]string) {
+	if m.screen == "list" {
+		rows := m.listRows()
+		start := max(0, m.selected-rows+1)
+		if len(m.entries) == 0 {
+			(*lines) = append((*lines), line("No integrations. N adds MCP; L adds a language server."))
+		}
+		for i := start; i < min(len(m.entries), start+rows); i++ {
+			style := (*base)
+			if i == m.selected {
+				style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
+			}
+			(*lines) = append((*lines), style.Render(ansi.Truncate(selectionMark(i == m.selected)+config.IntegrationSummary(m.entries[i]), width, "…")))
+		}
+	} else if m.screen == "edit" {
+		indices := m.visibleFields()
+		count := min(m.formRows(), len(indices))
+		start := max(0, slices.Index(indices, m.focus)-count+1)
+		viewListCaseIndicesStartCount(m, width, base, line, lines, indices, count, start)
+	} else {
+		rows := max(1, m.height-7)
+		if m.height == 0 {
+			rows = 12
+		}
+		for i := m.resultOffset; i < min(len(m.result), m.resultOffset+rows); i++ {
+			(*lines) = append((*lines), line(m.result[i]))
+		}
+	}
+}
+
+func updateArguments(m *integrationDialogCmp, msg tea.Msg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if m.arguments != nil {
+		if size, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width, m.height = size.Width, size.Height
+		}
+		done, save, cmd := m.arguments.update(msg)
+		if done {
+			if save {
+				m.fields[m.focus].SetValue(m.arguments.value())
+			}
+			m.arguments = nil
+			m.fields[m.focus].Focus()
+		}
+		return m, cmd, true
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateIntegrationDialogCmpKeyMsgEsc(m ***integrationDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if msg.String() == "esc" {
+		if (*(*m)).screen == "oauth" {
+			(*(*m)).Close()
+			return (*(*m)), (*(*m)).Open(), true, true
+		}
+		if (*(*m)).testing {
+			(*(*m)).Close()
+			(*(*m)).note = "Test cancelled; edits are preserved."
+			return (*(*m)), nil, true, true
+		}
+		if (*(*m)).screen == "result" {
+			(*(*m)).screen = "edit"
+			(*(*m)).note = "Tab fields · Ctrl+T test · Ctrl+S save · Esc back"
+			return (*(*m)), nil, true, true
+		}
+		if (*(*m)).screen != "list" {
+			saved := *(*(*m))
+			saved.cancel = nil
+			saved.testing = false
+			saved.resumeDraft = nil
+			cmd := (*(*m)).Open()
+			(*(*m)).resumeDraft = func() {
+				w, h, request := (*(*m)).width, (*(*m)).height, (*(*m)).request+1
+				*(*(*m)) = saved
+				(*(*m)).width, (*(*m)).height, (*(*m)).request = w, h, request
+			}
+			(*(*m)).note = config.Text("R retoma a edição preservada", "R resumes preserved edits")
+			return (*(*m)), cmd, true, true
+		}
+		(*(*m)).Close()
+		return (*(*m)), util.CmdHandler(CloseIntegrationDialogMsg{}), true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func readIntegrationFields(c *config.Integration, value func(int) string) error {
+	if c.Kind == "mcp" {
+		return readMCPFields(c, value)
+	}
+	c.LSP.Command = value(1)
+	if json.Unmarshal([]byte(value(2)), &c.LSP.Args) != nil {
+		return fmt.Errorf("arguments must be a JSON array of strings")
+	}
+	var err error
+	c.LSP.Disabled, err = strconv.ParseBool(value(3))
+	if err != nil {
+		return fmt.Errorf("disabled must be true or false")
+	}
+	return nil
+}
+func readMCPFields(c *config.Integration, value func(int) string) error {
+	c.MCP.Type = config.MCPType(value(1))
+	c.MCP.Command = value(2)
+	c.MCP.URL = value(4)
+	if json.Unmarshal([]byte(value(3)), &c.MCP.Args) != nil {
+		return fmt.Errorf("arguments must be a JSON array of strings")
+	}
+	if json.Unmarshal([]byte(value(5)), &c.MCP.HeadersEnv) != nil {
+		return fmt.Errorf("headers must be a JSON object mapping header to environment name")
+	}
+	if json.Unmarshal([]byte(value(6)), &c.MCP.EnvVars) != nil {
+		return fmt.Errorf("environment must be a JSON object mapping target to source variable")
+	}
+	var err error
+	c.MCP.Disabled, err = strconv.ParseBool(value(7))
+	if err != nil {
+		return fmt.Errorf("disabled must be true or false")
+	}
+	return readMCPOAuthFields(c, value)
+}
+func readMCPOAuthFields(c *config.Integration, value func(int) string) error {
+	enabled, err := strconv.ParseBool(value(8))
+	if err != nil {
+		return fmt.Errorf("OAuth enabled must be true or false")
+	}
+	c.MCP.OAuth = nil
+	if !enabled {
+		return nil
+	}
+	port, err := strconv.Atoi(value(12))
+	if err != nil {
+		return fmt.Errorf("OAuth redirect port must be an integer")
+	}
+	c.MCP.OAuth = &config.MCPOAuthConfig{ClientID: value(9), ClientSecretEnv: value(10), Scopes: strings.Fields(value(11)), RedirectPort: port}
+	return nil
+}
+
+func viewListCaseIndicesStartCount(m *integrationDialogCmp, width int, base *lipgloss.Style, line func(s string) string, lines *[]string, indices []int, count int, start int) {
+	for _, i := range indices[start:min(len(indices), start+count)] {
+		label := fieldLabel(m.labels[i])
+		if strings.HasPrefix(m.labels[i], "Arguments") {
+			label = config.Text("Argumentos · Enter edita lista", "Arguments · Enter edits list")
+		}
+		if i == m.focus {
+			label = "› " + label
+		}
+		(*lines) = append((*lines), line(label))
+		m.fields[i].Width = max(8, width-2)
+		(*lines) = append((*lines), base.Render(ansi.Truncate(choiceView(m.fields[i], fieldOptions(m.labels[i])), width, "…")))
+	}
+}
+
+func updateIntegrationDialogCmpMouseMsgList(m *integrationDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if m.screen == "list" && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < m.contentWidth()+3 {
+		rows := m.listRows()
+		start := max(0, m.selected-rows+1)
+		i := msg.Y - 3 + start
+		if msg.Y >= 3 && msg.Y < 3+rows && i >= 0 && i < len(m.entries) {
+			m.selected = i
+			return m, m.edit(m.entries[i]), true, true
+		}
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateEdit(m *integrationDialogCmp, msg tea.Msg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+	if m.screen == "edit" && len(m.fields) > 0 {
+		var cmd tea.Cmd
+		m.fields[m.focus], cmd = m.fields[m.focus].Update(msg)
+		if _, ok := msg.(tea.KeyMsg); ok && m.testing {
+			m.Close()
+			m.note = "Edited; test again for current settings."
+		}
+		return m, cmd, true
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func updateIntegrationDialogCmpKeyMsgEditCase(m **integrationDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if (*m).screen == "edit" && len((*m).fields) > (*m).focus && choiceKey(&(*m).fields[(*m).focus], fieldOptions((*m).labels[(*m).focus]), (*msg)) {
+		if (*m).testing {
+			(*m).Close()
+			(*m).note = "Edited; test again for current settings."
+		}
+		return (*m), nil, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateIntegrationDialogCmpMouseMsgEdit(m *integrationDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if m.screen == "edit" && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < m.contentWidth()+3 {
+		indices := m.visibleFields()
+		count := min(m.formRows(), len(indices))
+		start := max(0, slices.Index(indices, m.focus)-count+1)
+		i := start + (msg.Y-3)/2
+		if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(indices) {
+			m.fields[m.focus].Blur()
+			m.focus = indices[i]
+			return m, m.fields[m.focus].Focus(), true, true
+		}
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
+}
+
+func updateCaseIntegrationProbeMsg(m *integrationDialogCmp, msg *integrationProbeMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+	if msg.request != m.request {
+		return m, nil
+	}
+	m.testing = false
+	m.cancel = nil
+	if msg.err != nil {
+		m.note = config.Text("Falha no teste: ", "Test failed: ") + msg.err.Error()
+	} else {
+		m.result = msg.lines
+		if len(m.result) > 1024 {
+			m.result = m.result[:1024]
+		}
+		m.resultOffset = 0
+		m.screen = "result"
+		m.note = "↑↓ scroll results · Esc returns to the preserved form"
+	}
+	return m, nil
+
 }

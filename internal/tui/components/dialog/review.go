@@ -37,31 +37,7 @@ func reviewDiff(raw string, width int, mode string) string {
 	}, raw)
 	split := mode == "split" || (mode == "auto" && width >= 120)
 	var out []string
-	for _, part := range diffFiles(raw) {
-		if split && width >= 60 {
-			view, err := diff.FormatDiff(part, diff.WithTotalWidth(width))
-			if err == nil && view != "" {
-				for _, line := range strings.Split(part, "\n") {
-					if strings.HasPrefix(line, "+++ ") {
-						out = append(out, ansi.Truncate(config.Text("Arquivo: ", "File: ")+strings.TrimPrefix(line, "+++ "), width, "…"))
-						break
-					}
-				}
-				out = append(out, view)
-				continue
-			}
-		}
-		for _, line := range strings.Split(part, "\n") {
-			style := styles.BaseStyle()
-			if strings.HasPrefix(line, "+") {
-				style = style.Foreground(theme.CurrentTheme().Success())
-			}
-			if strings.HasPrefix(line, "-") {
-				style = style.Foreground(theme.CurrentTheme().Error())
-			}
-			out = append(out, style.Render(ansi.Wrap(line, width, "")))
-		}
-	}
+	reviewDiffDiffFilesRaw(raw, width, split, &out)
 	return strings.Join(out, "\n")
 }
 func (p *permissionDialogCmp) diffContent(raw string) string {
@@ -77,11 +53,7 @@ func (p *permissionDialogCmp) nextFile(delta int) {
 	body := p.activeDiff
 	lines := strings.Split(ansi.Strip(body), "\n")
 	offsets := []int{0}
-	for i, line := range lines {
-		if i > 0 && (strings.HasPrefix(line, "--- a/") || strings.Contains(line, "File:") || strings.Contains(line, "Arquivo:")) {
-			offsets = append(offsets, i)
-		}
-	}
+	nextFileLines(lines, &offsets)
 	current := p.contentViewPort.YOffset
 	target := 0
 	if delta > 0 {
@@ -104,3 +76,47 @@ func (p *permissionDialogCmp) nextFile(delta int) {
 
 // RenderReviewDiff renders application-generated unified patches for review panes.
 func RenderReviewDiff(raw string, width int, mode string) string { return reviewDiff(raw, width, mode) }
+
+func reviewDiffDiffFilesRaw(raw string, width int, split bool, out *[]string) {
+	for _, part := range diffFiles(raw) {
+		if split && width >= 60 {
+			view, err := diff.FormatDiff(part, diff.WithTotalWidth(width))
+			if err == nil && view != "" {
+				reviewDiffDiffFilesRawSplitPartNCase(width, out, part)
+				(*out) = append((*out), view)
+				continue
+			}
+		}
+		reviewDiffDiffFilesRawSplitPartN(width, out, part)
+	}
+}
+
+func reviewDiffDiffFilesRawSplitPartN(width int, out *[]string, part string) {
+	for line := range strings.SplitSeq(part, "\n") {
+		style := styles.BaseStyle()
+		if strings.HasPrefix(line, "+") {
+			style = style.Foreground(theme.CurrentTheme().Success())
+		}
+		if strings.HasPrefix(line, "-") {
+			style = style.Foreground(theme.CurrentTheme().Error())
+		}
+		(*out) = append((*out), style.Render(ansi.Wrap(line, width, "")))
+	}
+}
+
+func nextFileLines(lines []string, offsets *[]int) {
+	for i, line := range lines {
+		if i > 0 && (strings.HasPrefix(line, "--- a/") || strings.Contains(line, "File:") || strings.Contains(line, "Arquivo:")) {
+			(*offsets) = append((*offsets), i)
+		}
+	}
+}
+
+func reviewDiffDiffFilesRawSplitPartNCase(width int, out *[]string, part string) {
+	for line := range strings.SplitSeq(part, "\n") {
+		if after, ok := strings.CutPrefix(line, "+++ "); ok {
+			(*out) = append((*out), ansi.Truncate(config.Text("Arquivo: ", "File: ")+after, width, "…"))
+			break
+		}
+	}
+}

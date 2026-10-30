@@ -143,78 +143,74 @@ func (c *Client) RegisterServerRequestHandler(method string, handler ServerReque
 
 func (c *Client) InitializeLSPClient(ctx context.Context, workspaceDir string) (*protocol.InitializeResult, error) {
 	initParams := &protocol.InitializeParams{
-		WorkspaceFoldersInitializeParams: protocol.WorkspaceFoldersInitializeParams{
-			WorkspaceFolders: []protocol.WorkspaceFolder{
-				{
-					URI:  protocol.URI("file://" + workspaceDir),
-					Name: workspaceDir,
-				},
+		WorkspaceFolders: []protocol.WorkspaceFolder{
+			{
+				URI:  protocol.URI("file://" + workspaceDir),
+				Name: workspaceDir,
 			},
 		},
 
-		XInitializeParams: protocol.XInitializeParams{
-			ProcessID: int32(os.Getpid()),
-			ClientInfo: &protocol.ClientInfo{
-				Name:    "mcp-language-server",
-				Version: "0.1.0",
-			},
-			RootPath: workspaceDir,
-			RootURI:  protocol.DocumentUri("file://" + workspaceDir),
-			Capabilities: protocol.ClientCapabilities{
-				Workspace: protocol.WorkspaceClientCapabilities{
-					Configuration: true,
-					DidChangeConfiguration: protocol.DidChangeConfigurationClientCapabilities{
-						DynamicRegistration: true,
-					},
-					DidChangeWatchedFiles: protocol.DidChangeWatchedFilesClientCapabilities{
-						DynamicRegistration:    true,
-						RelativePatternSupport: true,
-					},
+		ProcessID: int32(os.Getpid()),
+		ClientInfo: &protocol.ClientInfo{
+			Name:    "mcp-language-server",
+			Version: "0.1.0",
+		},
+		RootPath: workspaceDir,
+		RootURI:  protocol.DocumentUri("file://" + workspaceDir),
+		Capabilities: protocol.ClientCapabilities{
+			Workspace: protocol.WorkspaceClientCapabilities{
+				Configuration: true,
+				DidChangeConfiguration: protocol.DidChangeConfigurationClientCapabilities{
+					DynamicRegistration: true,
 				},
-				TextDocument: protocol.TextDocumentClientCapabilities{
-					Synchronization: &protocol.TextDocumentSyncClientCapabilities{
-						DynamicRegistration: true,
-						DidSave:             true,
-					},
-					Completion: protocol.CompletionClientCapabilities{
-						CompletionItem: protocol.ClientCompletionItemOptions{},
-					},
-					CodeLens: &protocol.CodeLensClientCapabilities{
-						DynamicRegistration: true,
-					},
-					DocumentSymbol: protocol.DocumentSymbolClientCapabilities{},
-					CodeAction: protocol.CodeActionClientCapabilities{
-						CodeActionLiteralSupport: protocol.ClientCodeActionLiteralOptions{
-							CodeActionKind: protocol.ClientCodeActionKindOptions{
-								ValueSet: []protocol.CodeActionKind{},
-							},
+				DidChangeWatchedFiles: protocol.DidChangeWatchedFilesClientCapabilities{
+					DynamicRegistration:    true,
+					RelativePatternSupport: true,
+				},
+			},
+			TextDocument: protocol.TextDocumentClientCapabilities{
+				Synchronization: &protocol.TextDocumentSyncClientCapabilities{
+					DynamicRegistration: true,
+					DidSave:             true,
+				},
+				Completion: protocol.CompletionClientCapabilities{
+					CompletionItem: protocol.ClientCompletionItemOptions{},
+				},
+				CodeLens: &protocol.CodeLensClientCapabilities{
+					DynamicRegistration: true,
+				},
+				DocumentSymbol: protocol.DocumentSymbolClientCapabilities{},
+				CodeAction: protocol.CodeActionClientCapabilities{
+					CodeActionLiteralSupport: protocol.ClientCodeActionLiteralOptions{
+						CodeActionKind: protocol.ClientCodeActionKindOptions{
+							ValueSet: []protocol.CodeActionKind{},
 						},
 					},
-					PublishDiagnostics: protocol.PublishDiagnosticsClientCapabilities{
-						VersionSupport: true,
-					},
-					SemanticTokens: protocol.SemanticTokensClientCapabilities{
-						Requests: protocol.ClientSemanticTokensRequestOptions{
-							Range: &protocol.Or_ClientSemanticTokensRequestOptions_range{},
-							Full:  &protocol.Or_ClientSemanticTokensRequestOptions_full{},
-						},
-						TokenTypes:     []string{},
-						TokenModifiers: []string{},
-						Formats:        []protocol.TokenFormat{},
-					},
 				},
-				Window: protocol.WindowClientCapabilities{},
+				PublishDiagnostics: protocol.PublishDiagnosticsClientCapabilities{
+					VersionSupport: true,
+				},
+				SemanticTokens: protocol.SemanticTokensClientCapabilities{
+					Requests: protocol.ClientSemanticTokensRequestOptions{
+						Range: &protocol.Or_ClientSemanticTokensRequestOptions_range{},
+						Full:  &protocol.Or_ClientSemanticTokensRequestOptions_full{},
+					},
+					TokenTypes:     []string{},
+					TokenModifiers: []string{},
+					Formats:        []protocol.TokenFormat{},
+				},
 			},
-			InitializationOptions: map[string]any{
-				"codelenses": map[string]bool{
-					"generate":           true,
-					"regenerate_cgo":     true,
-					"test":               true,
-					"tidy":               true,
-					"upgrade_dependency": true,
-					"vendor":             true,
-					"vulncheck":          false,
-				},
+			Window: protocol.WindowClientCapabilities{},
+		},
+		InitializationOptions: map[string]any{
+			"codelenses": map[string]bool{
+				"generate":           true,
+				"regenerate_cgo":     true,
+				"test":               true,
+				"tidy":               true,
+				"upgrade_dependency": true,
+				"vendor":             true,
+				"vulncheck":          false,
 			},
 		},
 	}
@@ -340,12 +336,7 @@ func (c *Client) WaitForServerReady(ctx context.Context) error {
 	serverType := c.detectServerType()
 
 	// For TypeScript-like servers, we need to open some key files first
-	if serverType == ServerTypeTypeScript {
-		if cnf.DebugLSP {
-			logging.Debug("TypeScript-like server detected, opening key configuration files")
-		}
-		c.openKeyConfigFiles(ctx)
-	}
+	waitForServerReadyServerTypeServerTypeTypeScript(c, ctx, cnf, serverType)
 
 	for {
 		select {
@@ -480,20 +471,8 @@ func (c *Client) pingTypeScriptServer(ctx context.Context) error {
 	defer c.openFilesMu.RUnlock()
 
 	// If we have any open files, try to get document symbols for one
-	for uri := range c.openFiles {
-		filePath := strings.TrimPrefix(uri, "file://")
-		if strings.HasSuffix(filePath, ".ts") || strings.HasSuffix(filePath, ".js") ||
-			strings.HasSuffix(filePath, ".tsx") || strings.HasSuffix(filePath, ".jsx") {
-			var symbols []protocol.DocumentSymbol
-			err := c.Call(ctx, "textDocument/documentSymbol", protocol.DocumentSymbolParams{
-				TextDocument: protocol.TextDocumentIdentifier{
-					URI: protocol.DocumentUri(uri),
-				},
-			}, &symbols)
-			if err == nil {
-				return nil
-			}
-		}
+	if result0, handled := pingTypeScriptServerOpenFiles(c, ctx); handled {
+		return result0
 	}
 
 	// If we have no open TypeScript files, try to find and open one
@@ -555,15 +534,7 @@ func (c *Client) openTypeScriptFiles(ctx context.Context, workDir string) {
 
 		// Check file extension
 		ext := filepath.Ext(path)
-		if ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx" {
-			// Try to open the file
-			if err := c.OpenFile(ctx, path); err == nil {
-				filesOpened++
-				if cnf.DebugLSP {
-					logging.Debug("Opened TypeScript file for initialization", "file", path)
-				}
-			}
-		}
+		openTypeScriptFilesTs(c, ctx, cnf, &filesOpened, path, ext)
 
 		return nil
 	})
@@ -833,4 +804,44 @@ func readDocument(path string) ([]byte, error) {
 	}
 	defer root.Close()
 	return root.ReadFile(relative)
+}
+
+func openTypeScriptFilesTs(c *Client, ctx context.Context, cnf *config.Config, filesOpened *int, path string, ext string) {
+	if ext == ".ts" || ext == ".tsx" || ext == ".js" || ext == ".jsx" {
+		// Try to open the file
+		if err := c.OpenFile(ctx, path); err == nil {
+			(*filesOpened)++
+			if cnf.DebugLSP {
+				logging.Debug("Opened TypeScript file for initialization", "file", path)
+			}
+		}
+	}
+}
+
+func pingTypeScriptServerOpenFiles(c *Client, ctx context.Context) (extractedResult0 error, handled bool) {
+	for uri := range c.openFiles {
+		filePath := strings.TrimPrefix(uri, "file://")
+		if strings.HasSuffix(filePath, ".ts") || strings.HasSuffix(filePath, ".js") ||
+			strings.HasSuffix(filePath, ".tsx") || strings.HasSuffix(filePath, ".jsx") {
+			var symbols []protocol.DocumentSymbol
+			err := c.Call(ctx, "textDocument/documentSymbol", protocol.DocumentSymbolParams{
+				TextDocument: protocol.TextDocumentIdentifier{
+					URI: protocol.DocumentUri(uri),
+				},
+			}, &symbols)
+			if err == nil {
+				return nil, true
+			}
+		}
+	}
+	return extractedResult0, false
+}
+
+func waitForServerReadyServerTypeServerTypeTypeScript(c *Client, ctx context.Context, cnf *config.Config, serverType ServerType) {
+	if serverType == ServerTypeTypeScript {
+		if cnf.DebugLSP {
+			logging.Debug("TypeScript-like server detected, opening key configuration files")
+		}
+		c.openKeyConfigFiles(ctx)
+	}
 }

@@ -100,30 +100,12 @@ func requiredToolCalls(content string, run *generationRun) {
 		run.requiredCalls = map[string]int{}
 	}
 	for _, match := range explicitToolUse.FindAllStringSubmatchIndex(content, 16) {
-		prefix := strings.ToLower(strings.TrimSpace(content[:match[0]]))
-		words := strings.Fields(prefix)
-		negated := false
-		if len(words) > 0 {
-			last := strings.Trim(words[len(words)-1], "`\"'(),: ")
-			switch last {
-			case "não", "nao", "nunca", "never", "not", "don't", "dont", "evite", "without":
-				negated = true
-			}
-		}
-		for _, suffix := range []string{"not to", "instead of", "rather than", "em vez de", "ao invés de", "ao inves de"} {
-			if strings.HasSuffix(prefix, suffix) {
-				negated = true
-			}
-		}
-		if negated {
+		if toolRequestNegated(content[:match[0]]) {
 			continue
 		}
 		name := strings.ToLower(content[match[2]:match[3]])
-		for _, tool := range run.available {
-			if tool.Info().Name == name && runAllowsTool(run, tool) {
-				run.requiredCalls[name]++
-				break
-			}
+		if requestedToolAvailable(run, name) {
+			run.requiredCalls[name]++
 		}
 	}
 }
@@ -135,9 +117,21 @@ func missingRequiredCalls(run *generationRun, history []message.Message) []strin
 			break
 		}
 	}
+	counts := successfulRequiredCalls(history, max(0, latest))
+	missing := []string{}
+	for name, count := range run.requiredCalls {
+		if counts[name] < count {
+			missing = append(missing, fmt.Sprintf("%s (%d/%d successful calls)", name, counts[name], count))
+		}
+	}
+	sort.Strings(missing)
+	return missing
+}
+
+func successfulRequiredCalls(history []message.Message, start int) map[string]int {
 	counts := map[string]int{}
 	calls := map[string]string{}
-	for i := max(0, latest); i < len(history); i++ {
+	for i := start; i < len(history); i++ {
 		for _, c := range history[i].ToolCalls() {
 			if c.Origin == "context-reused" {
 				continue
@@ -150,12 +144,23 @@ func missingRequiredCalls(run *generationRun, history []message.Message) []strin
 			}
 		}
 	}
-	missing := []string{}
-	for name, count := range run.requiredCalls {
-		if counts[name] < count {
-			missing = append(missing, fmt.Sprintf("%s (%d/%d successful calls)", name, counts[name], count))
+
+	return counts
+}
+
+func toolRequestNegated(prefix string) bool {
+	prefix = strings.ToLower(strings.TrimSpace(prefix))
+	words := strings.Fields(prefix)
+	if len(words) > 0 {
+		switch strings.Trim(words[len(words)-1], "`\"'(),: ") {
+		case "não", "nao", "nunca", "never", "not", "don't", "dont", "evite", "without":
+			return true
 		}
 	}
-	sort.Strings(missing)
-	return missing
+	for _, suffix := range []string{"not to", "instead of", "rather than", "em vez de", "ao invés de", "ao inves de"} {
+		if strings.HasSuffix(prefix, suffix) {
+			return true
+		}
+	}
+	return false
 }

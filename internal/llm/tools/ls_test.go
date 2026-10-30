@@ -412,24 +412,15 @@ func TestListDirectory(t *testing.T) {
 		assert.False(t, truncated)
 
 		// Check that visible files and directories are included
-		containsPath := func(paths []string, target string) bool {
-			targetPath := filepath.Join(tempDir, target)
-			for _, path := range paths {
-				if strings.HasPrefix(path, targetPath) {
-					return true
-				}
-			}
-			return false
-		}
 
-		assert.True(t, containsPath(files, "dir1"))
-		assert.True(t, containsPath(files, "file1.txt"))
-		assert.True(t, containsPath(files, "file2.txt"))
-		assert.True(t, containsPath(files, "dir1/file3.txt"))
+		assert.True(t, containsListedPath(tempDir, files, "dir1"))
+		assert.True(t, containsListedPath(tempDir, files, "file1.txt"))
+		assert.True(t, containsListedPath(tempDir, files, "file2.txt"))
+		assert.True(t, containsListedPath(tempDir, files, "dir1/file3.txt"))
 
 		// Check that hidden files and directories are not included
-		assert.False(t, containsPath(files, ".hidden_dir"))
-		assert.False(t, containsPath(files, ".hidden_file.txt"))
+		assert.False(t, containsListedPath(tempDir, files, ".hidden_dir"))
+		assert.False(t, containsListedPath(tempDir, files, ".hidden_file.txt"))
 	})
 
 	t.Run("respects limit and returns truncated flag", func(t *testing.T) {
@@ -459,4 +450,16 @@ func TestListDirectory(t *testing.T) {
 		}
 		assert.True(t, containsDir)
 	})
+}
+
+func containsListedPath(tempDir string, paths []string, target string) bool {
+
+	targetPath := filepath.Join(tempDir, target)
+	for _, path := range paths {
+		if strings.HasPrefix(path, targetPath) {
+			return true
+		}
+	}
+	return false
+
 }

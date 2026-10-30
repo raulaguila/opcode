@@ -18,7 +18,7 @@ import (
 func TestClosedBatchContinuityPreservesConstraintsAndNewestEvidence(t *testing.T) {
 	instruction := message.Message{ID: "request", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Use Portuguese; never delete README; do not repeat completed commands"}}}
 	history := []message.Message{instruction}
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		id := fmt.Sprint(i)
 		history = append(history, message.Message{ID: "assistant-" + id, Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: id, Name: "view", Input: `{"file_path":"source.go"}`}}}, message.Message{ID: "result-" + id, Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: id, Content: strings.Repeat("source evidence\n", 1000)}}})
 	}
@@ -74,7 +74,7 @@ func TestRequirementCountsUseOnlyCurrentRunSuccessfulReceipts(t *testing.T) {
 func TestUsageCalibrationIncludesCachedInputAndKeepsUncertainty(t *testing.T) {
 	a := &agent{contextStatuses: map[string]ContextStatus{}, tokenObservations: map[string]tokenObservation{}}
 	model := models.Model{Provider: models.ProviderLocal, APIModel: "llama3.1:8b"}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		a.contextStatuses["s"] = ContextStatus{EstimatedInputTokens: 1000, uncalibratedInput: 1000}
 		a.observeInputUsage("s", model, provider.TokenUsage{InputTokens: 300, CacheReadTokens: 200, CacheCreationTokens: 100})
 	}
@@ -98,13 +98,13 @@ func TestActiveTurnBudgetCompactionCanResumeWithoutLosingUserConstraints(t *test
 	p := &fixedBudgetProvider{}
 	a := &agent{provider: p, systemMessage: "Respect permissions and preserve README", maxOutputTokens: 2048}
 	history := []message.Message{{ID: "objective", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Never delete README. Inspect the existing results before acting again."}}}}
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		id := fmt.Sprint(i)
 		history = append(history, message.Message{Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: id, Name: "view", Input: `{"file_path":"source.go"}`}}}, message.Message{ID: "receipt-" + id, Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: id, Content: strings.Repeat("completed source evidence\n", 350)}}})
 	}
 	require.False(t, estimateContext(p.Model(), a.systemMessage, history, nil, 2048).Fits)
 	original, _ := json.Marshal(history)
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		run := &generationRun{provider: p, mode: workflow.Ask}
 		prepared, err := a.budgetRequest("s", history, run)
 		require.NoError(t, err)

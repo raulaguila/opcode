@@ -45,8 +45,7 @@ func safeLiveError(err error) string {
 	case errors.Is(err, context.Canceled):
 		return "request cancelled"
 	}
-	var httpErr *provider.HTTPError
-	if errors.As(err, &httpErr) {
+	if httpErr, ok := errors.AsType[*provider.HTTPError](err); ok {
 		return fmt.Sprintf("HTTP %d; check account access, model, endpoint and quota", httpErr.StatusCode)
 	}
 	var netErr net.Error
@@ -69,37 +68,19 @@ func checkText(t *testing.T, response *provider.ProviderResponse, marker string)
 }
 func checkStream(t *testing.T, ctx context.Context, client provider.Provider, history []message.Message, definitions []tools.BaseTool) *provider.ProviderResponse {
 	t.Helper()
-	// A child context closes the HTTP response if validation exits early.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	events := client.StreamResponse(ctx, history, definitions)
-	var complete *provider.ProviderResponse
-	var content strings.Builder
+	state := liveStreamState{}
 	for {
 		select {
 		case <-ctx.Done():
 			t.Fatal("stream did not finish before its deadline")
 		case event, ok := <-events:
 			if !ok {
-				if complete == nil {
-					t.Fatal("stream closed without a completion event")
-				}
-				if content.String() == "" || content.String() != complete.Content {
-					t.Fatal("stream content deltas do not match the completed response; bodies suppressed")
-				}
-				return complete
+				return state.finish(t)
 			}
-			switch event.Type {
-			case provider.EventContentDelta:
-				content.WriteString(event.Content)
-			case provider.EventError:
-				t.Fatal("stream failed:", safeLiveError(event.Error))
-			case provider.EventComplete:
-				if complete != nil || event.Response == nil {
-					t.Fatal("invalid stream completion event")
-				}
-				complete = event.Response
-			}
+			state.observe(t, event)
 		}
 	}
 }
@@ -151,38 +132,7 @@ func runLiveChecks(t *testing.T, ctx context.Context, client provider.Provider, 
 		return
 	}
 	report.Streaming = "passed"
-	passedTools := t.Run("tool_round_trip", func(t *testing.T) {
-		if !testTools {
-			t.Skip("tool test explicitly disabled in integration configuration")
-		}
-		definition := probeTool{}
-		definitions := []tools.BaseTool{definition}
-		history := prompt("Call " + probeName + " exactly once with token=opcode_integration. Do not answer before receiving the tool result. After receiving it, reply with exactly " + toolMarker + " and do not call any tool again.")
-		response, err := client.SendMessages(ctx, history, definitions)
-		if err != nil {
-			t.Fatal("tool request failed:", safeLiveError(err))
-		}
-		if response == nil || response.FinishReason != message.FinishReasonToolUse || len(response.ToolCalls) != 1 {
-			t.Fatal("model did not return exactly one probe call; check model tool support and maxTokens")
-		}
-		report.observe(response)
-		call := response.ToolCalls[0]
-		if call.Name != probeName || call.ID == "" || !call.Finished {
-			t.Fatal("probe call has an invalid name, identifier or completion state; values suppressed")
-		}
-		result, err := definition.Run(ctx, tools.ToolCall{ID: call.ID, Name: call.Name, Input: call.Input})
-		if err != nil {
-			t.Fatal("probe arguments did not match the test contract; values suppressed")
-		}
-		// Reproduce the agent's persisted history, including opaque reasoning state.
-		assistant := message.Message{Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: response.Content}, call}}
-		assistant.AddFinish(response.FinishReason)
-		assistant.SetProviderState(response.ProviderState)
-		history = append(history, assistant, message.Message{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Name: call.Name, Content: result.Content}}})
-		final := checkStream(t, ctx, client, history, definitions)
-		checkText(t, final, toolMarker)
-		report.observe(final)
-	})
+	passedTools := t.Run("tool_round_trip", func(t *testing.T) { runLiveToolRoundTrip(t, ctx, client, testTools, &report) })
 	if !testTools {
 		report.ToolRoundTrip = "skipped"
 	} else if passedTools {
@@ -191,4 +141,67 @@ func runLiveChecks(t *testing.T, ctx context.Context, client provider.Provider, 
 		report.ToolRoundTrip = "failed"
 	}
 	return
+}
+
+type liveStreamState struct {
+	complete *provider.ProviderResponse
+	content  strings.Builder
+}
+
+func (s *liveStreamState) finish(t *testing.T) *provider.ProviderResponse {
+	t.Helper()
+	if s.complete == nil {
+		t.Fatal("stream closed without a completion event")
+	}
+	if s.content.String() == "" || s.content.String() != s.complete.Content {
+		t.Fatal("stream content deltas do not match the completed response; bodies suppressed")
+	}
+	return s.complete
+}
+func (s *liveStreamState) observe(t *testing.T, event provider.ProviderEvent) {
+	t.Helper()
+	switch event.Type {
+	case provider.EventContentDelta:
+		s.content.WriteString(event.Content)
+	case provider.EventError:
+		t.Fatal("stream failed:", safeLiveError(event.Error))
+	case provider.EventComplete:
+		if s.complete != nil || event.Response == nil {
+			t.Fatal("invalid stream completion event")
+		}
+		s.complete = event.Response
+	}
+}
+
+func runLiveToolRoundTrip(t *testing.T, ctx context.Context, client provider.Provider, testTools bool, report *liveCheckReport) {
+	if !testTools {
+		t.Skip("tool test explicitly disabled in integration configuration")
+	}
+	definition := probeTool{}
+	definitions := []tools.BaseTool{definition}
+	history := prompt("Call " + probeName + " exactly once with token=opcode_integration. Do not answer before receiving the tool result. After receiving it, reply with exactly " + toolMarker + " and do not call any tool again.")
+	response, err := client.SendMessages(ctx, history, definitions)
+	if err != nil {
+		t.Fatal("tool request failed:", safeLiveError(err))
+	}
+	if response == nil || response.FinishReason != message.FinishReasonToolUse || len(response.ToolCalls) != 1 {
+		t.Fatal("model did not return exactly one probe call; check model tool support and maxTokens")
+	}
+	report.observe(response)
+	call := response.ToolCalls[0]
+	if call.Name != probeName || call.ID == "" || !call.Finished {
+		t.Fatal("probe call has an invalid name, identifier or completion state; values suppressed")
+	}
+	result, err := definition.Run(ctx, tools.ToolCall{ID: call.ID, Name: call.Name, Input: call.Input})
+	if err != nil {
+		t.Fatal("probe arguments did not match the test contract; values suppressed")
+	}
+	// Reproduce the agent's persisted history, including opaque reasoning state.
+	assistant := message.Message{Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: response.Content}, call}}
+	assistant.AddFinish(response.FinishReason)
+	assistant.SetProviderState(response.ProviderState)
+	history = append(history, assistant, message.Message{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Name: call.Name, Content: result.Content}}})
+	final := checkStream(t, ctx, client, history, definitions)
+	checkText(t, final, toolMarker)
+	report.observe(final)
 }

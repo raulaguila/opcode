@@ -145,45 +145,7 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 	diagnosticSession := ""
 	lastFrame := ""
 	waitFrame := func(marker string) {
-		t.Helper()
-		deadline := time.NewTimer(30 * time.Second)
-		defer deadline.Stop()
-		for {
-			select {
-			case frame := <-harness.frames:
-				lastFrame = frame
-				if strings.Contains(frame, marker) {
-					return
-				}
-			case <-deadline.C:
-				if diagnosticSession != "" {
-					for _, process := range application.Processes.List(diagnosticSession) {
-						snapshot, e := application.Processes.Snapshot(diagnosticSession, process.ID)
-						if e == nil {
-							t.Logf("Process diagnostic: pty=%t running=%t exit=%d timed_out=%t stdout=%q stderr=%q", snapshot.PTY, snapshot.Running, snapshot.ExitCode, snapshot.TimedOut, tools.RedactCredentials(snapshot.Stdout), tools.RedactCredentials(snapshot.Stderr))
-						}
-					}
-					if history, e := application.Messages.List(ctx, diagnosticSession); e == nil {
-						for _, msg := range history {
-							for _, result := range msg.ToolResults() {
-								text := tools.RedactCredentials(result.Content)
-								if len(text) > 400 {
-									text = text[:400]
-								}
-								t.Logf("Tool diagnostic: name=%s error=%t result=%q", result.Name, result.IsError, text)
-							}
-						}
-					}
-				}
-				if len(lastFrame) > 2000 {
-					lastFrame = lastFrame[len(lastFrame)-2000:]
-				}
-				t.Logf("Last UI frame: %q", tools.RedactCredentials(lastFrame))
-				t.Fatalf("UI did not show %q", marker)
-			case <-ctx.Done():
-				t.Fatal("live test deadline exceeded")
-			}
-		}
+		testLiveOllamaTerminalAndSteeringCallback(&t, &application, &ctx, &harness, &diagnosticSession, &lastFrame, marker)
 	}
 	sendText := func(text string) {
 		program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)})
@@ -196,24 +158,9 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 	require.NoError(t, err)
 	initial := `Call bash with these arguments: ` + string(arguments) + `. Wait for the actual tool result. The human will provide terminal input.`
 	sendText(initial)
-	var request permission.PermissionRequest
-	select {
-	case event := <-requests:
-		request = event.Payload
-	case event := <-completed:
-		if session, err := application.Sessions.Get(ctx, event.Payload.Message.SessionID); err == nil {
-			t.Logf("agent usage: input=%d output=%d", session.PromptTokens, session.CompletionTokens)
-		}
-		t.Fatalf("agent completed without requesting command approval (event=%s, error=%t)", event.Payload.Type, event.Payload.Error != nil)
-	case <-ctx.Done():
-		t.Fatal("model never requested command approval")
-	}
+	request := awaitLiveCommandApproval(t, application, ctx, requests, completed)
 	diagnosticSession = request.SessionID
-	params, ok := request.Params.(tools.BashPermissionsParams)
-	if !ok || request.ToolName != tools.BashToolName || params.Command != command || !params.PTY {
-		application.Permissions.Deny(request)
-		t.Fatalf("model requested an unexpected operation; denied (tool=%s, bash_params=%t, command=%q, pty=%t)", request.ToolName, ok, params.Command, params.PTY)
-	}
+	validateLiveCommandApproval(t, application, request, command)
 	require.Empty(t, application.Processes.List(request.SessionID), "nothing executes before UI approval")
 	waitFrame("Allow (a)")
 	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
@@ -266,14 +213,7 @@ finished:
 	require.NoError(t, err)
 	toolIndex, instructionIndex := -1, -1
 	for i, msg := range history {
-		if msg.Role == message.Tool {
-			for _, result := range msg.ToolResults() {
-				if strings.Contains(result.Content, "LIVE_INPUT:HUMAN_PTY_OK") {
-					require.False(t, result.IsError)
-					toolIndex = i
-				}
-			}
-		}
+		testLiveOllamaTerminalAndSteeringRoleMessageTool(t, &toolIndex, i, &msg)
 		if msg.Role == message.User && msg.Content().String() == instruction {
 			instructionIndex = i
 		}
@@ -310,4 +250,98 @@ func liveForward[T any](ctx context.Context, program *tea.Program, events <-chan
 			}
 		}
 	}()
+}
+
+func testLiveOllamaTerminalAndSteeringState(t *testing.T, application *app.App, ctx context.Context, harness *terminalUIHarness, diagnosticSession string, lastFrame *string, marker string, deadline *time.Timer) (handled bool) {
+	for {
+		select {
+		case frame := <-harness.frames:
+			(*lastFrame) = frame
+			if strings.Contains(frame, marker) {
+				return true
+			}
+		case <-deadline.C:
+			testLiveOllamaTerminalAndSteeringStateDiagnosticSession(t, application, ctx, diagnosticSession)
+			if len((*lastFrame)) > 2000 {
+				(*lastFrame) = (*lastFrame)[len((*lastFrame))-2000:]
+			}
+			t.Logf("Last UI frame: %q", tools.RedactCredentials((*lastFrame)))
+			t.Fatalf("UI did not show %q", marker)
+		case <-ctx.Done():
+			t.Fatal("live test deadline exceeded")
+		}
+	}
+	return false
+}
+
+func testLiveOllamaTerminalAndSteeringStateDiagnosticSession(t *testing.T, application *app.App, ctx context.Context, diagnosticSession string) {
+	if diagnosticSession != "" {
+		for _, process := range application.Processes.List(diagnosticSession) {
+			snapshot, e := application.Processes.Snapshot(diagnosticSession, process.ID)
+			if e == nil {
+				t.Logf("Process diagnostic: pty=%t running=%t exit=%d timed_out=%t stdout=%q stderr=%q", snapshot.PTY, snapshot.Running, snapshot.ExitCode, snapshot.TimedOut, tools.RedactCredentials(snapshot.Stdout), tools.RedactCredentials(snapshot.Stderr))
+			}
+		}
+		testLiveOllamaTerminalAndSteeringStateDiagnosticSessionListCtxDiagnosticSession(t, application, ctx, diagnosticSession)
+	}
+}
+
+func testLiveOllamaTerminalAndSteeringRoleMessageTool(t *testing.T, toolIndex *int, i int, msg *message.Message) {
+	if msg.Role == message.Tool {
+		for _, result := range msg.ToolResults() {
+			if strings.Contains(result.Content, "LIVE_INPUT:HUMAN_PTY_OK") {
+				require.False(t, result.IsError)
+				(*toolIndex) = i
+			}
+		}
+	}
+}
+
+func testLiveOllamaTerminalAndSteeringStateDiagnosticSessionListCtxDiagnosticSession(t *testing.T, application *app.App, ctx context.Context, diagnosticSession string) {
+	if history, e := application.Messages.List(ctx, diagnosticSession); e == nil {
+		for _, msg := range history {
+			for _, result := range msg.ToolResults() {
+				text := tools.RedactCredentials(result.Content)
+				if len(text) > 400 {
+					text = text[:400]
+				}
+				t.Logf("Tool diagnostic: name=%s error=%t result=%q", result.Name, result.IsError, text)
+			}
+		}
+	}
+}
+
+func testLiveOllamaTerminalAndSteeringCallback(t **testing.T, application **app.App, ctx *context.Context, harness **terminalUIHarness, diagnosticSession *string, lastFrame *string, marker string) {
+	(*t).Helper()
+	deadline := time.NewTimer(30 * time.Second)
+	defer deadline.Stop()
+	if handled := testLiveOllamaTerminalAndSteeringState((*t), (*application), (*ctx), (*harness), (*diagnosticSession), lastFrame, marker, deadline); handled {
+		return
+	}
+}
+
+func awaitLiveCommandApproval(t *testing.T, application *app.App, ctx context.Context, requests <-chan pubsub.Event[permission.PermissionRequest], completed <-chan pubsub.Event[agent.AgentEvent]) permission.PermissionRequest {
+	t.Helper()
+	var request permission.PermissionRequest
+	select {
+	case event := <-requests:
+		request = event.Payload
+	case event := <-completed:
+		if session, err := application.Sessions.Get(ctx, event.Payload.Message.SessionID); err == nil {
+			t.Logf("agent usage: input=%d output=%d", session.PromptTokens, session.CompletionTokens)
+		}
+		t.Fatalf("agent completed without requesting command approval (event=%s, error=%t)", event.Payload.Type, event.Payload.Error != nil)
+	case <-ctx.Done():
+		t.Fatal("model never requested command approval")
+	}
+	return request
+}
+
+func validateLiveCommandApproval(t *testing.T, application *app.App, request permission.PermissionRequest, command string) {
+	t.Helper()
+	params, ok := request.Params.(tools.BashPermissionsParams)
+	if !ok || request.ToolName != tools.BashToolName || params.Command != command || !params.PTY {
+		application.Permissions.Deny(request)
+		t.Fatalf("model requested an unexpected operation; denied (tool=%s, bash_params=%t, command=%q, pty=%t)", request.ToolName, ok, params.Command, params.PTY)
+	}
 }

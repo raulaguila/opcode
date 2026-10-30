@@ -9,14 +9,14 @@ import (
 func TestPublishWhileSubscribersCancelAndBrokerShutsDown(t *testing.T) {
 	b := NewBroker[int]()
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		ctx, cancel := context.WithCancel(context.Background())
 		_ = b.Subscribe(ctx)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			defer cancel()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				b.Publish(UpdatedEvent, j)
 			}
 		}()

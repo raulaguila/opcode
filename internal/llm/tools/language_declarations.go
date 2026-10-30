@@ -55,16 +55,7 @@ func localDeclarationName(language string, n *ts.Node, lang *ts.Language, raw []
 	}
 	switch language {
 	case "elixir":
-		if n.Type(lang) == "call" && n.NamedChildCount() > 1 {
-			args := n.NamedChild(1)
-			if args.NamedChildCount() > 0 {
-				name := args.NamedChild(0)
-				if name.Type(lang) == "call" && name.NamedChildCount() > 0 {
-					name = name.NamedChild(0)
-				}
-				return name.Text(raw)
-			}
-		}
+		return elixirDeclarationName(n, lang, raw)
 	case "clojure":
 		if n.NamedChildCount() > 1 {
 			return n.NamedChild(1).Text(raw)
@@ -80,58 +71,17 @@ func localDeclarationName(language string, n *ts.Node, lang *ts.Language, raw []
 	case "haskell", "ocaml", "perl", "powershell":
 		return n.NamedChild(0).Text(raw)
 	case "julia":
-		if n.Type(lang) == "function_definition" {
-			sig := n.NamedChild(0)
-			if sig.NamedChildCount() > 0 {
-				call := sig.NamedChild(0)
-				if call.NamedChildCount() > 0 {
-					return call.NamedChild(0).Text(raw)
-				}
-			}
-		}
+		return juliaDeclarationName(n, lang, raw)
 	case "fsharp":
-		if n.Type(lang) == "named_module" {
-			return n.NamedChild(0).Text(raw)
-		}
-		if n.Type(lang) == "function_or_value_defn" {
-			left := n.NamedChild(0)
-			if left.NamedChildCount() > 0 {
-				return left.NamedChild(0).Text(raw)
-			}
-		}
+		return fsharpDeclarationName(n, lang, raw)
 	case "fortran":
-		statement := n.NamedChild(0)
-		for i := 0; i < statement.NamedChildCount(); i++ {
-			child := statement.NamedChild(i)
-			if child.Type(lang) == "name" {
-				return child.Text(raw)
-			}
-		}
+		return fortranDeclarationName(n, lang, raw)
 	case "proto":
 		return n.NamedChild(0).Text(raw)
 	case "hcl":
-		if n.Type(lang) == "block" {
-			parts := []string{}
-			for i := 0; i < n.NamedChildCount(); i++ {
-				c := n.NamedChild(i)
-				if c.Type(lang) != "identifier" && c.Type(lang) != "string_lit" {
-					break
-				}
-				parts = append(parts, unquoteDeclaration(c.Text(raw)))
-			}
-			return strings.Join(parts, ".")
-		}
-		if n.Type(lang) == "attribute" {
-			return n.NamedChild(0).Text(raw)
-		}
+		return hclDeclarationName(n, lang, raw)
 	case "yaml":
-		if n.Type(lang) == "block_mapping_pair" || n.Type(lang) == "flow_pair" {
-			// Complex YAML keys remain text-searchable; do not invent a symbol name.
-			key := n.NamedChild(0)
-			if !strings.ContainsAny(key.Text(raw), "\n\r{}[]") {
-				return unquoteDeclaration(key.Text(raw))
-			}
-		}
+		return yamlDeclarationName(n, lang, raw)
 	case "toml", "json":
 		return unquoteDeclaration(n.NamedChild(0).Text(raw))
 	case "css":
@@ -139,11 +89,96 @@ func localDeclarationName(language string, n *ts.Node, lang *ts.Language, raw []
 			return n.NamedChild(0).Text(raw)
 		}
 	case "html":
-		if n.Type(lang) == "element" {
-			start := n.NamedChild(0)
-			if id := markupAttribute(start, lang, raw, "id"); id != "" {
-				return "#" + id
+		return htmlDeclarationName(n, lang, raw)
+	}
+	return ""
+}
+
+func elixirDeclarationName(n *ts.Node, lang *ts.Language, raw []byte) string {
+	if n.Type(lang) == "call" && n.NamedChildCount() > 1 {
+		args := n.NamedChild(1)
+		if args.NamedChildCount() > 0 {
+			name := args.NamedChild(0)
+			if name.Type(lang) == "call" && name.NamedChildCount() > 0 {
+				name = name.NamedChild(0)
 			}
+			return name.Text(raw)
+		}
+	}
+	return ""
+}
+
+func juliaDeclarationName(n *ts.Node, lang *ts.Language, raw []byte) string {
+	if n.Type(lang) == "function_definition" {
+		sig := n.NamedChild(0)
+		if sig.NamedChildCount() > 0 {
+			call := sig.NamedChild(0)
+			if call.NamedChildCount() > 0 {
+				return call.NamedChild(0).Text(raw)
+			}
+		}
+	}
+	return ""
+}
+
+func fsharpDeclarationName(n *ts.Node, lang *ts.Language, raw []byte) string {
+	if n.Type(lang) == "named_module" {
+		return n.NamedChild(0).Text(raw)
+	}
+	if n.Type(lang) == "function_or_value_defn" {
+		left := n.NamedChild(0)
+		if left.NamedChildCount() > 0 {
+			return left.NamedChild(0).Text(raw)
+		}
+	}
+	return ""
+}
+
+func fortranDeclarationName(n *ts.Node, lang *ts.Language, raw []byte) string {
+	statement := n.NamedChild(0)
+	for i := 0; i < statement.NamedChildCount(); i++ {
+		child := statement.NamedChild(i)
+		if child.Type(lang) == "name" {
+			return child.Text(raw)
+		}
+	}
+	return ""
+}
+
+func hclDeclarationName(n *ts.Node, lang *ts.Language, raw []byte) string {
+	if n.Type(lang) == "block" {
+		parts := []string{}
+		for i := 0; i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if c.Type(lang) != "identifier" && c.Type(lang) != "string_lit" {
+				break
+			}
+			parts = append(parts, unquoteDeclaration(c.Text(raw)))
+		}
+		return strings.Join(parts, ".")
+	}
+	if n.Type(lang) == "attribute" {
+		return n.NamedChild(0).Text(raw)
+	}
+	return ""
+}
+
+func yamlDeclarationName(n *ts.Node, lang *ts.Language, raw []byte) string {
+	if n.Type(lang) == "block_mapping_pair" || n.Type(lang) == "flow_pair" {
+		// Complex YAML keys remain text-searchable; do not invent a symbol name.
+		key := n.NamedChild(0)
+		if !strings.ContainsAny(key.Text(raw), "\n\r{}[]") {
+			return unquoteDeclaration(key.Text(raw))
+		}
+	}
+	return ""
+}
+
+func htmlDeclarationName(n *ts.Node, lang *ts.Language, raw []byte) string {
+	if n.Type(lang) == "element" {
+		start := n.NamedChild(0)
+		if id := markupAttribute(start, lang, raw, "id"); id != "" {
+			return "#" + id
 		}
 	}
 	return ""
@@ -159,16 +194,19 @@ func declarationEnd(language string, n *ts.Node, lang *ts.Language) *ts.Node {
 	if p := n.Parent(); p != nil && p.Type(lang) == "method_signature" {
 		container = p
 	}
-	if parent := container.Parent(); parent != nil {
-		for i := 0; i+1 < parent.NamedChildCount(); i++ {
-			child := parent.NamedChild(i)
-			if child.StartByte() == container.StartByte() && child.EndByte() == container.EndByte() {
-				if next := parent.NamedChild(i + 1); next.Type(lang) == "function_body" {
-					return next
-				}
-				break
-			}
+	parent := container.Parent()
+	if parent == nil {
+		return n
+	}
+	for i := 0; i+1 < parent.NamedChildCount(); i++ {
+		child := parent.NamedChild(i)
+		if child.StartByte() != container.StartByte() || child.EndByte() != container.EndByte() {
+			continue
 		}
+		if next := parent.NamedChild(i + 1); next.Type(lang) == "function_body" {
+			return next
+		}
+		break
 	}
 	return n
 }
@@ -187,22 +225,9 @@ func markupAttribute(start *ts.Node, lang *ts.Language, raw []byte, name string)
 }
 
 func embeddedScriptOutline(ctx context.Context, n *ts.Node, lang *ts.Language, raw []byte) ([]codeSymbol, error) {
-	language := "javascript"
-	for i := 0; i < n.NamedChildCount(); i++ {
-		child := n.NamedChild(i)
-		if child.Type(lang) != "start_tag" {
-			continue
-		}
-		switch strings.ToLower(markupAttribute(child, lang, raw, "lang")) {
-		case "ts", "typescript":
-			language = "typescript"
-		case "", "js", "javascript":
-		default:
-			return nil, nil // Unknown embedded languages retain the text fallback.
-		}
-		if typ := markupAttribute(child, lang, raw, "type"); typ != "" && typ != "module" && typ != "text/javascript" && typ != "application/javascript" {
-			return nil, nil
-		}
+	language := embeddedScriptLanguage(n, lang, raw)
+	if language == "" {
+		return nil, nil
 	}
 	for i := 0; i < n.NamedChildCount(); i++ {
 		child := n.NamedChild(i)
@@ -251,15 +276,40 @@ func declarationKindForNode(language string, n *ts.Node, lang *ts.Language, raw 
 		}
 		return ""
 	case "r":
-		if n.Type(lang) != "binary_operator" || n.NamedChildCount() < 2 {
-			return ""
-		}
-		lhs, rhs := n.NamedChild(0), n.NamedChild(1)
-		op := strings.TrimSpace(string(raw[lhs.EndByte():rhs.StartByte()]))
-		if lhs.Type(lang) == "identifier" && rhs.Type(lang) == "function_definition" && (op == "<-" || op == "=") {
-			return "function"
-		}
-		return ""
+		return rDeclarationKind(n, lang, raw)
 	}
 	return localDeclarationKind(language, n.Type(lang))
+}
+
+func embeddedScriptLanguage(n *ts.Node, lang *ts.Language, raw []byte) string {
+	language := "javascript"
+	for i := 0; i < n.NamedChildCount(); i++ {
+		child := n.NamedChild(i)
+		if child.Type(lang) != "start_tag" {
+			continue
+		}
+		switch strings.ToLower(markupAttribute(child, lang, raw, "lang")) {
+		case "ts", "typescript":
+			language = "typescript"
+		case "", "js", "javascript":
+		default:
+			return "" // Unknown embedded languages retain the text fallback.
+		}
+		if typ := markupAttribute(child, lang, raw, "type"); typ != "" && typ != "module" && typ != "text/javascript" && typ != "application/javascript" {
+			return ""
+		}
+	}
+	return language
+}
+
+func rDeclarationKind(n *ts.Node, lang *ts.Language, raw []byte) string {
+	if n.Type(lang) != "binary_operator" || n.NamedChildCount() < 2 {
+		return ""
+	}
+	lhs, rhs := n.NamedChild(0), n.NamedChild(1)
+	op := strings.TrimSpace(string(raw[lhs.EndByte():rhs.StartByte()]))
+	if lhs.Type(lang) == "identifier" && rhs.Type(lang) == "function_definition" && (op == "<-" || op == "=") {
+		return "function"
+	}
+	return ""
 }

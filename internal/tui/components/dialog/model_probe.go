@@ -58,31 +58,8 @@ func (m *modelDialogCmp) modelProbeUpdate(msg tea.Msg) (tea.Cmd, bool) {
 		m.note = status
 		return nil, true
 	}
-	if key, ok := msg.(tea.KeyMsg); ok {
-		if m.probeRunning {
-			if key.Type == tea.KeyEsc {
-				m.Close()
-				m.search.Focus()
-				m.note = config.Text("Teste cancelado; seleção preservada.", "Probe cancelled; selection preserved.")
-			}
-			return nil, true
-		}
-		if m.probeConfirm {
-			if key.Type == tea.KeyEsc {
-				m.probeConfirm = false
-				m.search.Focus()
-				return nil, true
-			}
-			if key.Type == tea.KeyEnter {
-				return m.startModelProbe(), true
-			}
-			return nil, true
-		}
-		if key.String() == "ctrl+t" && len(m.filtered) > 0 {
-			m.probeConfirm = true
-			m.search.Blur()
-			return nil, true
-		}
+	if result0, result1, handled := modelProbeUpdateTeaKeyMsg(m, msg); handled {
+		return result0, result1
 	}
 	if _, ok := msg.(tea.MouseMsg); ok && (m.probeConfirm || m.probeRunning) {
 		return nil, true
@@ -119,4 +96,41 @@ func (m *modelDialogCmp) probeView() string {
 	}
 	frame := base.Padding(m.geometry().padY, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().BorderNormal()).Render(joinLines(rendered))
 	return lipgloss.NewStyle().MaxWidth(width + 6).MaxHeight(m.geometry().height).Render(frame)
+}
+
+func modelProbeUpdateTeaKeyMsg(m *modelDialogCmp, msg tea.Msg) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
+	if key, ok := msg.(tea.KeyMsg); ok {
+		if m.probeRunning {
+			if key.Type == tea.KeyEsc {
+				m.Close()
+				m.search.Focus()
+				m.note = config.Text("Teste cancelado; seleção preservada.", "Probe cancelled; selection preserved.")
+			}
+			return nil, true, true
+		}
+		if result0, result1, result2, handled := modelProbeUpdateTeaKeyMsgProbeConfirm(m, &key); handled {
+			return result0, result1, result2
+		}
+		if key.String() == "ctrl+t" && len(m.filtered) > 0 {
+			m.probeConfirm = true
+			m.search.Blur()
+			return nil, true, true
+		}
+	}
+	return extractedResult0, extractedResult1, false
+}
+
+func modelProbeUpdateTeaKeyMsgProbeConfirm(m *modelDialogCmp, key *tea.KeyMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
+	if m.probeConfirm {
+		if key.Type == tea.KeyEsc {
+			m.probeConfirm = false
+			m.search.Focus()
+			return nil, true, true, true
+		}
+		if key.Type == tea.KeyEnter {
+			return m.startModelProbe(), true, true, true
+		}
+		return nil, true, true, true
+	}
+	return extractedResult0, extractedResult1, extractedResult2, false
 }

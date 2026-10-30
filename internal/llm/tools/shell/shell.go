@@ -139,80 +139,11 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 	if sandbox == "none" {
 		cmd = exec.CommandContext(ctx, path, args...)
 	} else {
-		if runtime.GOOS != "linux" {
-			return nil, fmt.Errorf("OS sandbox is unavailable; explicitly configure security.sandbox=none in user-global configuration to run without it")
-		}
-		binary, err := exec.LookPath("bwrap")
+		var err error
+		cmd, err = sandboxCommand(ctx, cwd, path, args, cfg, readGit, interactive, writeGit)
 		if err != nil {
-			return nil, fmt.Errorf("Bubblewrap is required by the execution policy")
+			return nil, err
 		}
-		wrapped := []string{"--die-with-parent", "--unshare-all"}
-		if !interactive {
-			wrapped = append(wrapped, "--new-session")
-		}
-		if cfg != nil && cfg.Security.AllowNetwork {
-			wrapped = append(wrapped, "--share-net")
-		}
-		for _, dir := range []string{"/usr", "/bin", "/lib", "/lib64"} {
-			if _, err := os.Stat(dir); err == nil {
-				wrapped = append(wrapped, "--ro-bind", dir, dir)
-			}
-		}
-		wrapped = append(wrapped, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", "/etc")
-		for _, entry := range []string{"/etc/ssl/certs", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf"} {
-			if _, err := os.Stat(entry); err == nil {
-				wrapped = append(wrapped, "--ro-bind", entry, entry)
-			}
-		}
-		if cfg != nil {
-			for _, entry := range cfg.Security.ReadOnlyPaths {
-				if !filepath.IsAbs(entry) {
-					return nil, fmt.Errorf("security.readOnlyPaths requires absolute paths")
-				}
-				wrapped = append(wrapped, "--ro-bind", entry, entry)
-			}
-		}
-		wrapped = append(wrapped, "--bind", cwd, cwd, "--chdir", cwd)
-		// Hide credential files inside the otherwise writable workspace, too.
-		inspected := 0
-		walkErr := filepath.WalkDir(cwd, func(name string, d os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			inspected++
-			if inspected > 100000 {
-				return fmt.Errorf("workspace exceeds sandbox inspection limit; choose a narrower working directory")
-			}
-			if name == cwd {
-				return nil
-			}
-			base := strings.ToLower(d.Name())
-			if base == ".git" && (readGit || writeGit) && filepath.Dir(name) == cwd {
-				bind := "--ro-bind"
-				if writeGit {
-					bind = "--bind"
-				}
-				wrapped = append(wrapped, bind, name, name)
-				if d.IsDir() {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			if SensitivePath(name) {
-				if d.IsDir() {
-					wrapped = append(wrapped, "--tmpfs", name)
-					return filepath.SkipDir
-				}
-				wrapped = append(wrapped, "--ro-bind", os.DevNull, name)
-			}
-			return nil
-		})
-		if walkErr != nil {
-			return nil, fmt.Errorf("cannot inspect sandbox credential masks: %w", walkErr)
-		}
-		wrapped = append(wrapped, "--", path)
-		wrapped = append(wrapped, args...)
-		cmd = exec.CommandContext(ctx, binary, wrapped...)
 	}
 	cmd.Dir = cwd
 	cmd.Env = Environment()
@@ -220,16 +151,13 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 	return cmd, nil
 }
 func SensitivePath(path string) bool {
-	if directory, err := config.AuthDirectory(); err == nil {
-		candidate, _ := filepath.Abs(path)
-		if relative, err := filepath.Rel(directory, candidate); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
-			return true
-		}
+	if authStorageContains(path) {
+		return true
 	}
 	if config.LegacySensitivePath(path) {
 		return true
 	}
-	for _, part := range strings.Split(filepath.ToSlash(path), "/") {
+	for part := range strings.SplitSeq(filepath.ToSlash(path), "/") {
 		lower := strings.ToLower(part)
 		if lower == ".git" || lower == ".ssh" || lower == ".aws" || lower == ".gnupg" || lower == ".azure" || lower == ".kube" || lower == ".config" || lower == ".opcode" {
 			return true
@@ -240,27 +168,7 @@ func SensitivePath(path string) bool {
 		return true
 	}
 	if cfg := config.Get(); cfg != nil {
-		if cfg.Data.Directory != "" {
-			directory := cfg.Data.Directory
-			if !filepath.IsAbs(directory) {
-				directory = filepath.Join(config.WorkingDirectory(), directory)
-			}
-			candidate := path
-			if !filepath.IsAbs(candidate) {
-				candidate = filepath.Join(config.WorkingDirectory(), candidate)
-			}
-			if relative, err := filepath.Rel(filepath.Clean(directory), filepath.Clean(candidate)); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
-				return true
-			}
-		}
-		for _, pattern := range cfg.Security.DenyPaths {
-			if matched, _ := filepath.Match(pattern, path); matched {
-				return true
-			}
-			if matched, _ := filepath.Match(pattern, base); matched {
-				return true
-			}
-		}
+		return privateDataContains(cfg, path) || deniedPathPattern(cfg.Security.DenyPaths, path, base)
 	}
 	return false
 }
@@ -297,3 +205,140 @@ func (s *PersistentShell) Exec(ctx context.Context, command string, timeoutMs in
 	return stdout, errText, code, ctx.Err() != nil, err
 }
 func (s *PersistentShell) Close() {}
+
+func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *config.Config, readGit, interactive, writeGit bool) (*exec.Cmd, error) {
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("OS sandbox is unavailable; explicitly configure security.sandbox=none in user-global configuration to run without it")
+	}
+	binary, err := exec.LookPath("bwrap")
+	if err != nil {
+		return nil, fmt.Errorf("bubblewrap is required by the execution policy")
+	}
+	wrapped := []string{"--die-with-parent", "--unshare-all"}
+	if !interactive {
+		wrapped = append(wrapped, "--new-session")
+	}
+	if cfg != nil && cfg.Security.AllowNetwork {
+		wrapped = append(wrapped, "--share-net")
+	}
+	for _, dir := range []string{"/usr", "/bin", "/lib", "/lib64"} {
+		if _, err := os.Stat(dir); err == nil {
+			wrapped = append(wrapped, "--ro-bind", dir, dir)
+		}
+	}
+	wrapped = append(wrapped, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", "/etc")
+	for _, entry := range []string{"/etc/ssl/certs", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf"} {
+		if _, err := os.Stat(entry); err == nil {
+			wrapped = append(wrapped, "--ro-bind", entry, entry)
+		}
+	}
+	wrapped, err = appendSandboxReadOnlyPaths(wrapped, cfg)
+	if err != nil {
+		return nil, err
+	}
+	wrapped = append(wrapped, "--bind", cwd, cwd, "--chdir", cwd)
+	// Hide credential files inside the otherwise writable workspace, too.
+	masks := sandboxCredentialMasks{cwd: cwd, readGit: readGit, writeGit: writeGit}
+	if err := filepath.WalkDir(cwd, masks.visit); err != nil {
+		return nil, fmt.Errorf("cannot inspect sandbox credential masks: %w", err)
+	}
+	wrapped = append(wrapped, masks.args...)
+	wrapped = append(wrapped, "--", path)
+	wrapped = append(wrapped, args...)
+	return exec.CommandContext(ctx, binary, wrapped...), nil
+
+}
+
+type sandboxCredentialMasks struct {
+	cwd               string
+	readGit, writeGit bool
+	inspected         int
+	args              []string
+}
+
+func (m *sandboxCredentialMasks) visit(name string, d os.DirEntry, err error) error {
+	if err != nil {
+		return err
+	}
+	m.inspected++
+	if m.inspected > 100000 {
+		return fmt.Errorf("workspace exceeds sandbox inspection limit; choose a narrower working directory")
+	}
+	if name == m.cwd {
+		return nil
+	}
+	if strings.EqualFold(d.Name(), ".git") && (m.readGit || m.writeGit) && filepath.Dir(name) == m.cwd {
+		return m.bindGit(name, d)
+	}
+	if !SensitivePath(name) {
+		return nil
+	}
+	if d.IsDir() {
+		m.args = append(m.args, "--tmpfs", name)
+		return filepath.SkipDir
+	}
+	m.args = append(m.args, "--ro-bind", os.DevNull, name)
+	return nil
+}
+func (m *sandboxCredentialMasks) bindGit(name string, d os.DirEntry) error {
+	bind := "--ro-bind"
+	if m.writeGit {
+		bind = "--bind"
+	}
+	m.args = append(m.args, bind, name, name)
+	if d.IsDir() {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+func authStorageContains(path string) bool {
+	if directory, err := config.AuthDirectory(); err == nil {
+		candidate, _ := filepath.Abs(path)
+		if relative, err := filepath.Rel(directory, candidate); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
+			return true
+		}
+	}
+	return false
+}
+
+func privateDataContains(cfg *config.Config, path string) bool {
+	if cfg.Data.Directory != "" {
+		directory := cfg.Data.Directory
+		if !filepath.IsAbs(directory) {
+			directory = filepath.Join(config.WorkingDirectory(), directory)
+		}
+		candidate := path
+		if !filepath.IsAbs(candidate) {
+			candidate = filepath.Join(config.WorkingDirectory(), candidate)
+		}
+		if relative, err := filepath.Rel(filepath.Clean(directory), filepath.Clean(candidate)); err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
+			return true
+		}
+	}
+	return false
+}
+
+func deniedPathPattern(patterns []string, path, base string) bool {
+	for _, pattern := range patterns {
+		if matched, _ := filepath.Match(pattern, path); matched {
+			return true
+		}
+		if matched, _ := filepath.Match(pattern, base); matched {
+			return true
+		}
+	}
+	return false
+}
+
+func appendSandboxReadOnlyPaths(wrapped []string, cfg *config.Config) ([]string, error) {
+	if cfg != nil {
+		for _, entry := range cfg.Security.ReadOnlyPaths {
+			if !filepath.IsAbs(entry) {
+				return nil, fmt.Errorf("security.readOnlyPaths requires absolute paths")
+			}
+			wrapped = append(wrapped, "--ro-bind", entry, entry)
+		}
+	}
+	return wrapped, nil
+}

@@ -60,17 +60,9 @@ func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	if err := json.Unmarshal([]byte(call.Input), &params); err != nil {
 		return NewTextErrorResponse(fmt.Sprintf("error parsing parameters: %s", err)), nil
 	}
-	if params.Offset < 0 || params.Offset > 20000 || params.Limit < 0 || params.Limit > 60 || len(params.Ignore) > 32 {
-		return NewTextErrorResponse("offset must be 0–20000, limit 1–60, and at most 32 ignore patterns"), nil
-	}
-	scope := retrievalScope{Path: params.Path, Glob: params.Glob, Language: params.Language, Extension: params.Extension}
-	if err := scope.validate(); err != nil {
+	scope, err := listingScope(params)
+	if err != nil {
 		return NewTextErrorResponse(err.Error()), nil
-	}
-	for _, pattern := range params.Ignore {
-		if len(pattern) > 500 {
-			return NewTextErrorResponse("ignore patterns must be at most 500 bytes"), nil
-		}
 	}
 	root, err := authorizeFile(ctx, params.Path, "read")
 	if err != nil {
@@ -94,18 +86,10 @@ func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	if limit == 0 {
 		limit = 60
 	}
-	start, size := min(params.Offset, len(files)), 0
-	end := start
-	for end < len(files) && end-start < limit {
-		raw, _ := json.Marshal(files[end])
-		if size+len(raw)+1 > 6000 {
-			if end == start {
-				return NewTextErrorResponse("one path exceeds the page byte limit; use a narrower directory scope"), nil
-			}
-			break
-		}
-		size += len(raw) + 1
-		end++
+	start := min(params.Offset, len(files))
+	end, err := listingPageEnd(files, start, limit)
+	if err != nil {
+		return NewTextErrorResponse(err.Error()), nil
 	}
 	var next *int
 	if end < len(files) {
@@ -120,38 +104,9 @@ func listDirectory(initialPath string, ignorePatterns []string, limit int, conte
 	if len(contexts) > 0 {
 		ctx = contexts[0]
 	}
-	var results []string
-	truncated := false
-
-	err := filepath.Walk(initialPath, func(path string, info os.FileInfo, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil {
-			return nil // Skip files we don't have permission to access
-		}
-
-		if shouldSkip(path, ignorePatterns) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if path != initialPath {
-			if info.IsDir() {
-				path = path + string(filepath.Separator)
-			}
-			results = append(results, path)
-		}
-
-		if len(results) >= limit {
-			truncated = true
-			return filepath.SkipAll
-		}
-
-		return nil
-	})
+	collector := directoryListing{ctx: ctx, initialPath: initialPath, ignorePatterns: ignorePatterns, limit: limit}
+	err := filepath.Walk(initialPath, collector.visit)
+	results, truncated := collector.results, collector.truncated
 	if err != nil {
 		return nil, truncated, err
 	}
@@ -195,18 +150,8 @@ func shouldSkip(path string, ignorePatterns []string) bool {
 	}
 
 	for _, ignored := range commonIgnored {
-		if strings.HasSuffix(ignored, "/") {
-			if strings.Contains(path, filepath.Join(ignored[:len(ignored)-1], "")) {
-				return true
-			}
-		} else if strings.HasPrefix(ignored, "*.") {
-			if strings.HasSuffix(base, ignored[1:]) {
-				return true
-			}
-		} else {
-			if base == ignored {
-				return true
-			}
+		if ignoredPathPattern(path, base, ignored) {
+			return true
 		}
 	}
 
@@ -221,66 +166,11 @@ func shouldSkip(path string, ignorePatterns []string) bool {
 }
 
 func createFileTree(sortedPaths []string) []*TreeNode {
-	root := []*TreeNode{}
-	pathMap := make(map[string]*TreeNode)
-
+	builder := fileTreeBuilder{roots: []*TreeNode{}, nodes: make(map[string]*TreeNode)}
 	for _, path := range sortedPaths {
-		parts := strings.Split(path, string(filepath.Separator))
-		currentPath := ""
-		var parentPath string
-
-		var cleanParts []string
-		for _, part := range parts {
-			if part != "" {
-				cleanParts = append(cleanParts, part)
-			}
-		}
-		parts = cleanParts
-
-		if len(parts) == 0 {
-			continue
-		}
-
-		for i, part := range parts {
-			if currentPath == "" {
-				currentPath = part
-			} else {
-				currentPath = filepath.Join(currentPath, part)
-			}
-
-			if _, exists := pathMap[currentPath]; exists {
-				parentPath = currentPath
-				continue
-			}
-
-			isLastPart := i == len(parts)-1
-			isDir := !isLastPart || strings.HasSuffix(path, string(filepath.Separator))
-			nodeType := "file"
-			if isDir {
-				nodeType = "directory"
-			}
-			newNode := &TreeNode{
-				Name:     part,
-				Path:     currentPath,
-				Type:     nodeType,
-				Children: []*TreeNode{},
-			}
-
-			pathMap[currentPath] = newNode
-
-			if i > 0 && parentPath != "" {
-				if parent, ok := pathMap[parentPath]; ok {
-					parent.Children = append(parent.Children, newNode)
-				}
-			} else {
-				root = append(root, newNode)
-			}
-
-			parentPath = currentPath
-		}
+		builder.add(path)
 	}
-
-	return root
+	return builder.roots
 }
 
 func printTree(tree []*TreeNode, rootPath string) string {
@@ -310,4 +200,152 @@ func printNode(builder *strings.Builder, node *TreeNode, level int) {
 			printNode(builder, child, level+1)
 		}
 	}
+}
+
+func listingPageEnd(files []string, start, limit int) (int, error) {
+	size := 0
+	end := start
+	for end < len(files) && end-start < limit {
+		raw, _ := json.Marshal(files[end])
+		if size+len(raw)+1 > 6000 {
+			if end == start {
+				return 0, fmt.Errorf("one path exceeds the page byte limit; use a narrower directory scope")
+			}
+			break
+		}
+		size += len(raw) + 1
+		end++
+	}
+	return end, nil
+}
+
+type directoryListing struct {
+	ctx            context.Context
+	initialPath    string
+	ignorePatterns []string
+	limit          int
+	results        []string
+	truncated      bool
+}
+
+func (c *directoryListing) visit(path string, info os.FileInfo, err error) error {
+
+	if c.ctx.Err() != nil {
+		return c.ctx.Err()
+	}
+	if err != nil {
+		return nil // Skip files we don't have permission to access
+	}
+
+	if shouldSkip(path, c.ignorePatterns) {
+		if info.IsDir() {
+			return filepath.SkipDir
+		}
+		return nil
+	}
+
+	if path != c.initialPath {
+		if info.IsDir() {
+			path = path + string(filepath.Separator)
+		}
+		c.results = append(c.results, path)
+	}
+
+	if len(c.results) >= c.limit {
+		c.truncated = true
+		return filepath.SkipAll
+	}
+
+	return nil
+
+}
+
+func ignoredPathPattern(path, base, pattern string) bool {
+	if strings.HasSuffix(pattern, "/") {
+		return strings.Contains(path, filepath.Join(pattern[:len(pattern)-1], ""))
+	}
+	if strings.HasPrefix(pattern, "*.") {
+		return strings.HasSuffix(base, pattern[1:])
+	}
+	return base == pattern
+}
+
+type fileTreeBuilder struct {
+	roots []*TreeNode
+	nodes map[string]*TreeNode
+}
+
+func (t *fileTreeBuilder) add(path string) {
+	parts := strings.Split(path, string(filepath.Separator))
+	currentPath := ""
+	var parentPath string
+
+	var cleanParts []string
+	for _, part := range parts {
+		if part != "" {
+			cleanParts = append(cleanParts, part)
+		}
+	}
+	parts = cleanParts
+
+	if len(parts) == 0 {
+		return
+	}
+
+	for i, part := range parts {
+		if currentPath == "" {
+			currentPath = part
+		} else {
+			currentPath = filepath.Join(currentPath, part)
+		}
+
+		if _, exists := t.nodes[currentPath]; exists {
+			parentPath = currentPath
+			continue
+		}
+
+		t.appendNode(part, currentPath, parentPath, i > 0, i < len(parts)-1 || strings.HasSuffix(path, string(filepath.Separator)))
+		parentPath = currentPath
+	}
+}
+
+func (t *fileTreeBuilder) appendNode(part, currentPath, parentPath string, hasParent, isDir bool) {
+
+	nodeType := "file"
+	if isDir {
+		nodeType = "directory"
+	}
+	newNode := &TreeNode{
+		Name:     part,
+		Path:     currentPath,
+		Type:     nodeType,
+		Children: []*TreeNode{},
+	}
+
+	t.nodes[currentPath] = newNode
+
+	if hasParent && parentPath != "" {
+		if parent, ok := t.nodes[parentPath]; ok {
+			parent.Children = append(parent.Children, newNode)
+		}
+	} else {
+		t.roots = append(t.roots, newNode)
+	}
+
+}
+
+func listingScope(params LSParams) (retrievalScope, error) {
+	if params.Offset < 0 || params.Offset > 20000 || params.Limit < 0 || params.Limit > 60 || len(params.Ignore) > 32 {
+		return retrievalScope{}, fmt.Errorf("offset must be 0–20000, limit 1–60, and at most 32 ignore patterns")
+	}
+	scope := retrievalScope{Path: params.Path, Glob: params.Glob, Language: params.Language, Extension: params.Extension}
+	if err := scope.validate(); err != nil {
+		return retrievalScope{}, err
+	}
+	for _, pattern := range params.Ignore {
+		if len(pattern) > 500 {
+			return retrievalScope{}, fmt.Errorf("ignore patterns must be at most 500 bytes")
+		}
+	}
+	return scope, nil
 }

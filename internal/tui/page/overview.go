@@ -1,6 +1,8 @@
 package page
 
 import (
+	message "github.com/raulaguila/opcode/internal/message"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -85,7 +87,15 @@ func (p *chatPage) contextReceipts(ctx context.Context, id string) string {
 	}
 	lines := []string{}
 	seen := map[string]bool{}
-	for i := len(messages) - 1; i >= 0 && len(lines) < 12; i-- {
+	contextReceiptsMessages(messages, &lines, seen)
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\n\n" + config.Text("Leituras recentes · até 12 intervalos (histórico; não garante inclusão na próxima chamada):", "Recent reads · up to 12 ranges (history; inclusion in the next request is not guaranteed):") + "\n" + strings.Join(lines, "\n")
+}
+
+func contextReceiptsMessages(messages []message.Message, lines *[]string, seen map[string]bool) {
+	for i := len(messages) - 1; i >= 0 && len((*lines)) < 12; i-- {
 		for _, result := range messages[i].ToolResults() {
 			if result.IsError {
 				continue
@@ -98,14 +108,10 @@ func (p *chatPage) contextReceipts(ctx context.Context, id string) string {
 			}
 			r := meta.SourceRead
 			label := fmt.Sprintf("%s:%d-%d", r.Path, r.StartLine, r.EndLine)
-			if !seen[label] && len(lines) < 12 {
+			if !seen[label] && len((*lines)) < 12 {
 				seen[label] = true
-				lines = append(lines, panelText(label))
+				(*lines) = append((*lines), panelText(label))
 			}
 		}
 	}
-	if len(lines) == 0 {
-		return ""
-	}
-	return "\n\n" + config.Text("Leituras recentes · até 12 intervalos (histórico; não garante inclusão na próxima chamada):", "Recent reads · up to 12 ranges (history; inclusion in the next request is not guaranteed):") + "\n" + strings.Join(lines, "\n")
 }

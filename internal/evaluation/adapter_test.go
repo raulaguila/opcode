@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -25,4 +26,22 @@ func TestAdapterContractAndRetrievalMetrics(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, raw, 0600))
 	_, err = LoadAdapter(path)
 	require.Error(t, err)
+}
+
+// Compare the former per-observation compilation with the shared immutable
+// matcher using identical input and expression; this does not change criteria.
+func BenchmarkAdapterVersionValidation(b *testing.B) {
+	const version = "v1.2.3-fixture"
+	b.Run("compile_per_observation", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			regexp.MustCompile(adapterVersionPattern.String()).MatchString(version)
+		}
+	})
+	b.Run("compiled_once", func(b *testing.B) {
+		b.ReportAllocs()
+		for range b.N {
+			adapterVersionPattern.MatchString(version)
+		}
+	})
 }

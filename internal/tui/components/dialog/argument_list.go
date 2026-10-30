@@ -57,18 +57,7 @@ func (a *argumentList) update(msg tea.Msg) (done, save bool, cmd tea.Cmd) {
 		case "esc":
 			return true, false, nil
 		case "ctrl+s":
-			if a.pairs {
-				seen := map[string]bool{}
-				for _, f := range a.fields {
-					k, v, ok := strings.Cut(f.Value(), "=")
-					if !ok || strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" || seen[k] {
-						a.note = config.Text("Use nome=VARIAVEL, sem nomes repetidos", "Use name=VARIABLE, without duplicate names")
-						return false, false, nil
-					}
-					seen[k] = true
-				}
-			}
-			return true, true, nil
+			return updateArgumentListCtrlS(a)
 		case "ctrl+n":
 			if len(a.fields) < 64 {
 				a.add("")
@@ -82,14 +71,7 @@ func (a *argumentList) update(msg tea.Msg) (done, save bool, cmd tea.Cmd) {
 			}
 			return
 		case "tab", "down", "shift+tab", "up":
-			if len(a.fields) > 0 {
-				delta := 1
-				if k.String() == "up" || k.String() == "shift+tab" {
-					delta = -1
-				}
-				a.selected = (a.selected + delta + len(a.fields)) % len(a.fields)
-				a.focus()
-			}
+			updateFields(a, &k)
 			return
 		}
 	}
@@ -188,3 +170,30 @@ func (e *ItemEditor) Items() []string {
 	return items
 }
 func (e *ItemEditor) View(w, h int) string { return e.list.view(w, h) }
+
+func updateArgumentListCtrlS(a *argumentList) (extractedResult0 bool, extractedResult1 bool, extractedResult2 tea.Cmd) {
+	if a.pairs {
+		seen := map[string]bool{}
+		for _, f := range a.fields {
+			k, v, ok := strings.Cut(f.Value(), "=")
+			if !ok || strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" || seen[k] {
+				a.note = config.Text("Use nome=VARIAVEL, sem nomes repetidos", "Use name=VARIABLE, without duplicate names")
+				return false, false, nil
+			}
+			seen[k] = true
+		}
+	}
+	return true, true, nil
+
+}
+
+func updateFields(a *argumentList, k *tea.KeyMsg) {
+	if len(a.fields) > 0 {
+		delta := 1
+		if k.String() == "up" || k.String() == "shift+tab" {
+			delta = -1
+		}
+		a.selected = (a.selected + delta + len(a.fields)) % len(a.fields)
+		a.focus()
+	}
+}

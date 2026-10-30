@@ -34,12 +34,8 @@ func applyTextEdits(uri protocol.DocumentUri, edits []protocol.TextEdit) error {
 	lines := strings.Split(string(content), lineEnding)
 
 	// Check for overlapping edits
-	for i, edit1 := range edits {
-		for j := i + 1; j < len(edits); j++ {
-			if rangesOverlap(edit1.Range, edits[j].Range) {
-				return fmt.Errorf("overlapping edits detected between edit %d and %d", i, j)
-			}
-		}
+	if result0, handled := applyTextEditsEdits(edits); handled {
+		return result0
 	}
 
 	// Sort edits in reverse order
@@ -53,12 +49,8 @@ func applyTextEdits(uri protocol.DocumentUri, edits []protocol.TextEdit) error {
 	})
 
 	// Apply each edit
-	for _, edit := range sortedEdits {
-		newLines, err := applyTextEdit(lines, edit)
-		if err != nil {
-			return fmt.Errorf("failed to apply edit: %w", err)
-		}
-		lines = newLines
+	if result0, handled := applyTextEditsSortedEdits(&lines, sortedEdits); handled {
+		return result0
 	}
 
 	// Join lines with proper line endings
@@ -117,25 +109,7 @@ func applyTextEdit(lines []string, edit protocol.TextEdit) ([]string, error) {
 	suffix := endLineContent[endChar:]
 
 	// Handle the edit
-	if edit.NewText == "" {
-		if prefix+suffix != "" {
-			result = append(result, prefix+suffix)
-		}
-	} else {
-		// Split new text into lines, being careful not to add extra newlines
-		// newLines := strings.Split(strings.TrimRight(edit.NewText, "\n"), "\n")
-		newLines := strings.Split(edit.NewText, "\n")
-
-		if len(newLines) == 1 {
-			// Single line change
-			result = append(result, prefix+newLines[0]+suffix)
-		} else {
-			// Multi-line change
-			result = append(result, prefix+newLines[0])
-			result = append(result, newLines[1:len(newLines)-1]...)
-			result = append(result, newLines[len(newLines)-1]+suffix)
-		}
-	}
+	applyTextEditEditNewText(&edit, &result, prefix, suffix)
 
 	// Add remaining lines
 	if endLine+1 < len(lines) {
@@ -147,48 +121,16 @@ func applyTextEdit(lines []string, edit protocol.TextEdit) ([]string, error) {
 
 // applyDocumentChange applies a DocumentChange (create/rename/delete operations)
 func applyDocumentChange(change protocol.DocumentChange) error {
-	if change.CreateFile != nil {
-		path := strings.TrimPrefix(string(change.CreateFile.URI), "file://")
-		if change.CreateFile.Options != nil {
-			if change.CreateFile.Options.Overwrite {
-				// Proceed with overwrite
-			} else if change.CreateFile.Options.IgnoreIfExists {
-				if _, err := os.Stat(path); err == nil {
-					return nil // File exists and we're ignoring it
-				}
-			}
-		}
-		if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
-			return fmt.Errorf("failed to create file: %w", err)
-		}
+	if result0, handled := applyDocumentChangeChangeCreateFile(&change); handled {
+		return result0
 	}
 
-	if change.DeleteFile != nil {
-		path := strings.TrimPrefix(string(change.DeleteFile.URI), "file://")
-		if change.DeleteFile.Options != nil && change.DeleteFile.Options.Recursive {
-			if err := os.RemoveAll(path); err != nil {
-				return fmt.Errorf("failed to delete directory recursively: %w", err)
-			}
-		} else {
-			if err := os.Remove(path); err != nil {
-				return fmt.Errorf("failed to delete file: %w", err)
-			}
-		}
+	if result0, handled := applyDocumentChangeChangeDeleteFile(&change); handled {
+		return result0
 	}
 
-	if change.RenameFile != nil {
-		oldPath := strings.TrimPrefix(string(change.RenameFile.OldURI), "file://")
-		newPath := strings.TrimPrefix(string(change.RenameFile.NewURI), "file://")
-		if change.RenameFile.Options != nil {
-			if !change.RenameFile.Options.Overwrite {
-				if _, err := os.Stat(newPath); err == nil {
-					return fmt.Errorf("target file already exists and overwrite is not allowed: %s", newPath)
-				}
-			}
-		}
-		if err := os.Rename(oldPath, newPath); err != nil {
-			return fmt.Errorf("failed to rename file: %w", err)
-		}
+	if result0, handled := applyDocumentChangeChangeRenameFile(&change); handled {
+		return result0
 	}
 
 	if change.TextDocumentEdit != nil {
@@ -236,4 +178,101 @@ func rangesOverlap(r1, r2 protocol.Range) bool {
 		return false
 	}
 	return true
+}
+
+func applyDocumentChangeChangeCreateFile(change *protocol.DocumentChange) (extractedResult0 error, handled bool) {
+	if change.CreateFile != nil {
+		path := strings.TrimPrefix(string(change.CreateFile.URI), "file://")
+		if change.CreateFile.Options != nil {
+			if change.CreateFile.Options.Overwrite {
+				// Proceed with overwrite
+			} else if change.CreateFile.Options.IgnoreIfExists {
+				if _, err := os.Stat(path); err == nil {
+					return nil, true // File exists and we're ignoring it
+				}
+			}
+		}
+		if err := os.WriteFile(path, []byte(""), 0o644); err != nil {
+			return fmt.Errorf("failed to create file: %w", err), true
+		}
+	}
+	return extractedResult0, false
+}
+
+func applyDocumentChangeChangeDeleteFile(change *protocol.DocumentChange) (extractedResult0 error, handled bool) {
+	if change.DeleteFile != nil {
+		path := strings.TrimPrefix(string(change.DeleteFile.URI), "file://")
+		if change.DeleteFile.Options != nil && change.DeleteFile.Options.Recursive {
+			if err := os.RemoveAll(path); err != nil {
+				return fmt.Errorf("failed to delete directory recursively: %w", err), true
+			}
+		} else {
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("failed to delete file: %w", err), true
+			}
+		}
+	}
+	return extractedResult0, false
+}
+
+func applyTextEditsEdits(edits []protocol.TextEdit) (extractedResult0 error, handled bool) {
+	for i, edit1 := range edits {
+		for j := i + 1; j < len(edits); j++ {
+			if rangesOverlap(edit1.Range, edits[j].Range) {
+				return fmt.Errorf("overlapping edits detected between edit %d and %d", i, j), true
+			}
+		}
+	}
+	return extractedResult0, false
+}
+
+func applyDocumentChangeChangeRenameFile(change *protocol.DocumentChange) (extractedResult0 error, handled bool) {
+	if change.RenameFile != nil {
+		oldPath := strings.TrimPrefix(string(change.RenameFile.OldURI), "file://")
+		newPath := strings.TrimPrefix(string(change.RenameFile.NewURI), "file://")
+		if change.RenameFile.Options != nil {
+			if !change.RenameFile.Options.Overwrite {
+				if _, err := os.Stat(newPath); err == nil {
+					return fmt.Errorf("target file already exists and overwrite is not allowed: %s", newPath), true
+				}
+			}
+		}
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return fmt.Errorf("failed to rename file: %w", err), true
+		}
+	}
+	return extractedResult0, false
+}
+
+func applyTextEditEditNewText(edit *protocol.TextEdit, result *[]string, prefix string, suffix string) {
+	if edit.NewText == "" {
+		if prefix+suffix != "" {
+			(*result) = append((*result), prefix+suffix)
+		}
+	} else {
+		// Split new text into lines, being careful not to add extra newlines
+		// newLines := strings.Split(strings.TrimRight(edit.NewText, "\n"), "\n")
+		newLines := strings.Split(edit.NewText, "\n")
+
+		if len(newLines) == 1 {
+			// Single line change
+			(*result) = append((*result), prefix+newLines[0]+suffix)
+		} else {
+			// Multi-line change
+			(*result) = append((*result), prefix+newLines[0])
+			(*result) = append((*result), newLines[1:len(newLines)-1]...)
+			(*result) = append((*result), newLines[len(newLines)-1]+suffix)
+		}
+	}
+}
+
+func applyTextEditsSortedEdits(lines *[]string, sortedEdits []protocol.TextEdit) (extractedResult0 error, handled bool) {
+	for _, edit := range sortedEdits {
+		newLines, err := applyTextEdit((*lines), edit)
+		if err != nil {
+			return fmt.Errorf("failed to apply edit: %w", err), true
+		}
+		(*lines) = newLines
+	}
+	return extractedResult0, false
 }

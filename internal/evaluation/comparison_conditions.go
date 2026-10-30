@@ -41,53 +41,14 @@ func validateComparisonCases(r Report) error {
 			return fmt.Errorf("%s", comparisonDiagnostic("duplicate case/trial %s", caseKey(c)))
 		}
 		seen[caseKey(c)] = true
-		if c.CriteriaSHA256 != "" {
-			raw, err := hex.DecodeString(c.CriteriaSHA256)
-			if err != nil || len(raw) != 32 {
-				return fmt.Errorf("invalid criterion digest")
-			}
-		}
-		if c.Temperature != nil && (math.IsNaN(*c.Temperature) || math.IsInf(*c.Temperature, 0) || *c.Temperature < 0 || *c.Temperature > 2) {
-			return fmt.Errorf("invalid sampling temperature")
-		}
-		if c.InputTokens != nil && *c.InputTokens < 0 || c.OutputTokens != nil && *c.OutputTokens < 0 || c.ToolCalls < 0 || c.ReportedToolCalls != nil && *c.ReportedToolCalls < 0 {
-			return fmt.Errorf("invalid negative case metrics")
-		}
-		for _, value := range []*float64{c.RetrievalRecall, c.RetrievalMRR} {
-			if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0 || *value > 1) {
-				return fmt.Errorf("invalid retrieval metrics")
-			}
-		}
-		if len(c.ConditionsUnavailable) > 2 {
-			return fmt.Errorf("invalid unobserved condition fields")
-		}
-		for _, field := range c.ConditionsUnavailable {
-			if field != "context_window" && field != "output_reserve" {
-				return fmt.Errorf("invalid unobserved condition field")
-			}
+		if err := validateCaseMeasurements(c); err != nil {
+			return err
 		}
 	}
 	if r.Repeats > 3 || r.Repeats < 0 {
 		return fmt.Errorf("invalid repetition count")
 	}
-	if len(r.SelectedCases) > 0 {
-		ids := map[string]bool{}
-		for _, id := range r.SelectedCases {
-			if ids[id] {
-				return fmt.Errorf("duplicate selected case")
-			}
-			ids[id] = true
-			for trial := 1; trial <= max(1, r.Repeats); trial++ {
-				if !seen[fmt.Sprintf("%s/%d", id, trial)] {
-					return fmt.Errorf("%s", comparisonDiagnostic("missing case/trial %s/%d", id, trial))
-				}
-			}
-		}
-		if len(seen) != len(ids)*max(1, r.Repeats) {
-			return fmt.Errorf("unexpected case/trial outside selected experiment")
-		}
-	}
-	return nil
+	return validateSelectedTrials(r, seen)
 }
 
 func observedFields(c CaseResult) map[string]string {
@@ -147,4 +108,58 @@ func requestedDifferences(r Report) []string {
 	}
 	slices.Sort(result)
 	return result
+}
+
+func validateCaseMeasurements(c CaseResult) error {
+	if c.CriteriaSHA256 != "" {
+		raw, err := hex.DecodeString(c.CriteriaSHA256)
+		if err != nil || len(raw) != 32 {
+			return fmt.Errorf("invalid criterion digest")
+		}
+	}
+	if c.Temperature != nil && (math.IsNaN(*c.Temperature) || math.IsInf(*c.Temperature, 0) || *c.Temperature < 0 || *c.Temperature > 2) {
+		return fmt.Errorf("invalid sampling temperature")
+	}
+	if c.InputTokens != nil && *c.InputTokens < 0 || c.OutputTokens != nil && *c.OutputTokens < 0 || c.ToolCalls < 0 || c.ReportedToolCalls != nil && *c.ReportedToolCalls < 0 {
+		return fmt.Errorf("invalid negative case metrics")
+	}
+	return validateRetrievalConditions(c)
+}
+
+func validateSelectedTrials(r Report, seen map[string]bool) error {
+	if len(r.SelectedCases) > 0 {
+		ids := map[string]bool{}
+		for _, id := range r.SelectedCases {
+			if ids[id] {
+				return fmt.Errorf("duplicate selected case")
+			}
+			ids[id] = true
+			for trial := 1; trial <= max(1, r.Repeats); trial++ {
+				if !seen[fmt.Sprintf("%s/%d", id, trial)] {
+					return fmt.Errorf("%s", comparisonDiagnostic("missing case/trial %s/%d", id, trial))
+				}
+			}
+		}
+		if len(seen) != len(ids)*max(1, r.Repeats) {
+			return fmt.Errorf("unexpected case/trial outside selected experiment")
+		}
+	}
+	return nil
+}
+
+func validateRetrievalConditions(c CaseResult) error {
+	for _, value := range []*float64{c.RetrievalRecall, c.RetrievalMRR} {
+		if value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0) || *value < 0 || *value > 1) {
+			return fmt.Errorf("invalid retrieval metrics")
+		}
+	}
+	if len(c.ConditionsUnavailable) > 2 {
+		return fmt.Errorf("invalid unobserved condition fields")
+	}
+	for _, field := range c.ConditionsUnavailable {
+		if field != "context_window" && field != "output_reserve" {
+			return fmt.Errorf("invalid unobserved condition field")
+		}
+	}
+	return nil
 }

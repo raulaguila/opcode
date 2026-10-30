@@ -265,53 +265,46 @@ func unmarshallParts(data []byte) ([]ContentPart, error) {
 			return nil, err
 		}
 
-		switch wrapper.Type {
-		case reasoningType:
-			part := ReasoningContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
-				return nil, err
-			}
+		part, err := unmarshalPart(wrapper.Type, wrapper.Data)
+		if err != nil {
+			return nil, err
+		}
+		if part != nil {
 			parts = append(parts, part)
-		case textType:
-			part := TextContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
-				return nil, err
-			}
-			parts = append(parts, part)
-		case imageURLType:
-			part := ImageURLContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
-				return nil, err
-			}
-		case binaryType:
-			part := BinaryContent{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
-				return nil, err
-			}
-			parts = append(parts, part)
-		case toolCallType:
-			part := ToolCall{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
-				return nil, err
-			}
-			parts = append(parts, part)
-		case toolResultType:
-			part := ToolResult{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
-				return nil, err
-			}
-			parts = append(parts, part)
-		case finishType:
-			part := Finish{}
-			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
-				return nil, err
-			}
-			parts = append(parts, part)
-		default:
-			return nil, fmt.Errorf("unknown part type: %s", wrapper.Type)
 		}
 
 	}
 
 	return parts, nil
+}
+
+func unmarshalPart(kind partType, data json.RawMessage) (ContentPart, error) {
+	switch kind {
+	case reasoningType:
+		return decodePart[ReasoningContent](data)
+	case textType:
+		return decodePart[TextContent](data)
+	case imageURLType:
+		// Preserve historical image-URL decoding without adding it to stored parts.
+		_, err := decodePart[ImageURLContent](data)
+		return nil, err
+	case binaryType:
+		return decodePart[BinaryContent](data)
+	case toolCallType:
+		return decodePart[ToolCall](data)
+	case toolResultType:
+		return decodePart[ToolResult](data)
+	case finishType:
+		return decodePart[Finish](data)
+	default:
+		return nil, fmt.Errorf("unknown part type: %s", kind)
+	}
+}
+
+func decodePart[T ContentPart](data json.RawMessage) (ContentPart, error) {
+	var part T
+	if err := json.Unmarshal(data, &part); err != nil {
+		return nil, err
+	}
+	return part, nil
 }

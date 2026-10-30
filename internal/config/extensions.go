@@ -29,18 +29,25 @@ func (c ExtensionsConfig) Validate() error {
 		}
 	}
 	for _, hook := range c.Hooks {
-		if hook.Event != "before_tool" && hook.Event != "after_tool" {
-			return fmt.Errorf("hook event must be before_tool or after_tool")
+		if err := validateHook(hook); err != nil {
+			return err
 		}
-		if strings.TrimSpace(hook.Command) == "" || len(hook.Command) > 4096 {
-			return fmt.Errorf("hook command must contain 1–4096 bytes")
-		}
-		if hook.TimeoutSeconds < 0 || hook.TimeoutSeconds > 30 {
-			return fmt.Errorf("hook timeout_seconds must be between 0 and 30")
-		}
-		if len(hook.Tool) > 100 || strings.ContainsAny(hook.Tool, "\n\r\x00") {
-			return fmt.Errorf("invalid hook tool filter")
-		}
+	}
+	return nil
+}
+
+func validateHook(hook HookConfig) error {
+	if hook.Event != "before_tool" && hook.Event != "after_tool" {
+		return fmt.Errorf("hook event must be before_tool or after_tool")
+	}
+	if strings.TrimSpace(hook.Command) == "" || len(hook.Command) > 4096 {
+		return fmt.Errorf("hook command must contain 1–4096 bytes")
+	}
+	if hook.TimeoutSeconds < 0 || hook.TimeoutSeconds > 30 {
+		return fmt.Errorf("hook timeout_seconds must be between 0 and 30")
+	}
+	if len(hook.Tool) > 100 || strings.ContainsAny(hook.Tool, "\n\r\x00") {
+		return fmt.Errorf("invalid hook tool filter")
 	}
 	return nil
 }

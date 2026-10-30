@@ -64,9 +64,20 @@ func readSourcePage(ctx context.Context, path string, raw []byte, p ReadPagePara
 	if budget == 0 {
 		budget = 4096
 	}
-	line, column := p.Offset, p.Column
+	content, line, column := sourcePageContent(lines, p.Offset, p.Column, limit, budget)
+	recordFileRead(path)
+	response := jsonToolResult(map[string]any{"file_path": path, "file_hash": digest, "hash_scope": "whole file (max 16 MiB)", "offset": p.Offset, "column": p.Column, "content": content, "bytes": len(content), "next_offset": line, "next_column": column, "more": line < len(lines)})
+	if len(content) > 0 {
+		end := p.Offset + strings.Count(strings.TrimSuffix(content, "\n"), "\n") + 1
+		response = sourceReadMetadata(response, path, raw, p.Offset+1, end)
+	}
+	return response, nil
+}
+
+func sourcePageContent(lines []string, offset, initialColumn, limit, budget int) (string, int, int) {
+	line, column := offset, initialColumn
 	var content strings.Builder
-	for line < len(lines) && line-p.Offset < limit && content.Len() < budget {
+	for line < len(lines) && line-offset < limit && content.Len() < budget {
 		remaining := lines[line][column:]
 		take := min(len(remaining), budget-content.Len())
 		for take > 0 && take < len(remaining) && !utf8.RuneStart(remaining[take]) {
@@ -92,11 +103,5 @@ func readSourcePage(ctx context.Context, path string, raw []byte, p ReadPagePara
 		line++
 		column = 0
 	}
-	recordFileRead(path)
-	response := jsonToolResult(map[string]any{"file_path": path, "file_hash": digest, "hash_scope": "whole file (max 16 MiB)", "offset": p.Offset, "column": p.Column, "content": content.String(), "bytes": content.Len(), "next_offset": line, "next_column": column, "more": line < len(lines)})
-	if content.Len() > 0 {
-		end := p.Offset + strings.Count(strings.TrimSuffix(content.String(), "\n"), "\n") + 1
-		response = sourceReadMetadata(response, path, raw, p.Offset+1, end)
-	}
-	return response, nil
+	return content.String(), line, column
 }

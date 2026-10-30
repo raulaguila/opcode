@@ -80,7 +80,7 @@ func TestWebSearchBoundsParametersBodyAndResults(t *testing.T) {
 				t.Error("query was not URL encoded correctly")
 			}
 			w.Header().Set("Content-Type", "text/html")
-			for i := 0; i < 15; i++ {
+			for i := range 15 {
 				fmt.Fprintf(w, `<div class="result"><a class="result__a" href="https://example.test/%d">Title %d</a><div class="result__snippet">Untrusted snippet %d</div></div>`, i, i, i)
 			}
 		}

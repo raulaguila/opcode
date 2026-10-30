@@ -55,42 +55,7 @@ func runPTYStreamingSpeedBeforeCompletion(t *testing.T, env ...string) {
 	releaseSecond := func() { secondOnce.Do(func() { close(second) }) }
 	releaseComplete := func() { completeOnce.Do(func() { close(complete) }) }
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/chat" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		var body struct{ Stream bool }
-		if json.NewDecoder(r.Body).Decode(&body) != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		if !body.Stream {
-			w.Header().Set("Content-Type", "application/json")
-			io.WriteString(w, `{"message":{"content":"Speed test"},"done":true,"done_reason":"stop"}`)
-			return
-		}
-		w.Header().Set("Content-Type", "application/x-ndjson")
-		flush := w.(http.Flusher)
-		flush.Flush()
-		for _, step := range []struct {
-			ready <-chan struct{}
-			frame string
-		}{
-			{first, `{"message":{"content":"SPEED_BEGIN "},"done":false}`},
-			{second, `{"message":{"content":"Streaming output while the provider is still working. "},"done":false}`},
-			{complete, `{"message":{"content":"SPEED_DONE"},"done":true,"done_reason":"stop","prompt_eval_count":20,"eval_count":40,"eval_duration":2000000000}`},
-		} {
-			select {
-			case <-step.ready:
-			case <-r.Context().Done():
-				return
-			}
-			if step.ready == complete {
-				finalSent.Store(true)
-			}
-			io.WriteString(w, step.frame+"\n")
-			flush.Flush()
-		}
+		runPTYStreamingSpeedBeforeCompletionCallback(&first, &second, &complete, &finalSent, w, r)
 	}))
 	t.Cleanup(server.Close)
 	t.Cleanup(func() { releaseFirst(); releaseSecond(); releaseComplete() })
@@ -148,12 +113,7 @@ func runPTYStreamingSpeedBeforeCompletion(t *testing.T, env ...string) {
 	// A drag highlights text without opening actions or copying on release.
 	selected := "Streaming output"
 	x, y := -1, -1
-	for row, line := range strings.Split(h.frame(), "\n") {
-		if at := strings.Index(line, selected); at >= 0 {
-			x, y = ansi.StringWidth(line[:at]), row
-			break
-		}
-	}
+	runPTYStreamingSpeedBeforeCompletionHFrameN(h, selected, &x, &y)
 	require.NotEqual(t, -1, x)
 	h.mu.Lock()
 	before := h.screen.Cell(x, y)
@@ -180,4 +140,59 @@ func runPTYStreamingSpeedBeforeCompletion(t *testing.T, env ...string) {
 		return cleared && strings.Contains(frame, "SPEED_DONE")
 	})
 	h.assertComposer()
+}
+
+func runPTYStreamingSpeedBeforeCompletionStruct(first chan struct{}, second chan struct{}, complete chan struct{}, finalSent *atomic.Bool, w http.ResponseWriter, r *http.Request, flush http.Flusher) (handled bool) {
+	for _, step := range []struct {
+		ready <-chan struct{}
+		frame string
+	}{
+		{first, `{"message":{"content":"SPEED_BEGIN "},"done":false}`},
+		{second, `{"message":{"content":"Streaming output while the provider is still working. "},"done":false}`},
+		{complete, `{"message":{"content":"SPEED_DONE"},"done":true,"done_reason":"stop","prompt_eval_count":20,"eval_count":40,"eval_duration":2000000000}`},
+	} {
+		select {
+		case <-step.ready:
+		case <-r.Context().Done():
+			return true
+		}
+		if step.ready == complete {
+			finalSent.Store(true)
+		}
+		io.WriteString(w, step.frame+"\n")
+		flush.Flush()
+	}
+	return false
+}
+
+func runPTYStreamingSpeedBeforeCompletionHFrameN(h *ptyUIHarness, selected string, x *int, y *int) {
+	for row, line := range strings.Split(h.frame(), "\n") {
+		if before, _, ok := strings.Cut(line, selected); ok {
+			(*x), (*y) = ansi.StringWidth(before), row
+			break
+		}
+	}
+}
+
+func runPTYStreamingSpeedBeforeCompletionCallback(first *chan struct{}, second *chan struct{}, complete *chan struct{}, finalSent *atomic.Bool, w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/api/chat" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	var body struct{ Stream bool }
+	if json.NewDecoder(r.Body).Decode(&body) != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if !body.Stream {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"message":{"content":"Speed test"},"done":true,"done_reason":"stop"}`)
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	flush := w.(http.Flusher)
+	flush.Flush()
+	if handled := runPTYStreamingSpeedBeforeCompletionStruct((*first), (*second), (*complete), finalSent, w, r, flush); handled {
+		return
+	}
 }

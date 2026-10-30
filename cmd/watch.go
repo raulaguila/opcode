@@ -130,27 +130,13 @@ func streamWatch(ctx context.Context, conn *sql.DB, o watchOptions, out io.Write
 		if ctx.Err() != nil {
 			return nil
 		}
-		query, cancel := context.WithTimeout(ctx, 3*time.Second)
-		snapshot, err := readWatchSnapshot(query, conn, o)
-		cancel()
+		snapshot, encoded, err := sampleWatchSnapshot(ctx, conn, o)
 		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
-		}
-		encoded, err := json.Marshal(snapshot)
-		if err != nil {
-			return fmt.Errorf("cannot encode observer snapshot")
+			return watchStreamError(ctx, err)
 		}
 		digest := sha256.Sum256(encoded)
 		if !sent || digest != previous {
-			if o.Format == "json" {
-				_, err = fmt.Fprintln(out, string(encoded))
-			} else {
-				err = printWatchText(out, snapshot)
-			}
-			if err != nil {
+			if err := writeWatchSnapshot(out, snapshot, encoded, o.Format); err != nil {
 				return err
 			}
 			previous = digest
@@ -177,30 +163,7 @@ func readWatchSnapshot(ctx context.Context, conn *sql.DB, o watchOptions) (watch
 	}
 	defer tx.Rollback()
 	if o.Session == "" {
-		rows, err := tx.QueryContext(ctx, `SELECT substr(id,1,128),substr(title,1,1024),updated_at FROM sessions ORDER BY updated_at DESC,id LIMIT ? OFFSET ?`, o.Limit+1, o.Offset)
-		if err != nil {
-			return result, fmt.Errorf("cannot read sessions; database schema may be unsupported")
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var item watchSession
-			if err = rows.Scan(&item.ID, &item.Title, &item.UpdatedAt); err != nil {
-				return result, fmt.Errorf("cannot decode saved session")
-			}
-			if len(result.Sessions) == o.Limit {
-				next := o.Offset + o.Limit
-				result.NextOffset = &next
-				result.Truncated = true
-				break
-			}
-			item.ID = watchSafe(item.ID, 128)
-			item.Title = watchSafe(item.Title, 1024)
-			result.Sessions = append(result.Sessions, item)
-		}
-		if rows.Err() != nil {
-			return result, fmt.Errorf("cannot finish session snapshot")
-		}
-		return result, nil
+		return readWatchSessions(ctx, tx, o, result)
 	}
 	var exists int
 	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM sessions WHERE id=?`, o.Session).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
@@ -213,43 +176,9 @@ func readWatchSnapshot(ctx context.Context, conn *sql.DB, o watchOptions) (watch
 	if err != nil {
 		return result, fmt.Errorf("cannot read messages; database schema may be unsupported")
 	}
-	consumed, remaining := 0, watchSnapshotLimit
-	for rows.Next() {
-		if consumed == o.Limit {
-			result.Truncated = true
-			break
-		}
-		var item watchMessage
-		var raw sql.NullString
-		if err = rows.Scan(&item.ID, &item.Role, &raw, &item.Finished); err != nil {
-			rows.Close()
-			return result, fmt.Errorf("cannot decode saved message")
-		}
-		consumed++
-		if !raw.Valid {
-			item.Text = "[saved message exceeds observer limit]"
-			item.Truncated = true
-		} else {
-			text, application, invalid := watchMessageText(raw.String)
-			if application {
-				continue
-			}
-			if invalid {
-				item.Text = "[saved message text unavailable]"
-				item.Truncated = true
-			} else {
-				item.Truncated = len(text) > watchTextLimit
-				item.Text = watchSafe(text, watchTextLimit)
-			}
-		}
-		if len(item.Text) > remaining {
-			result.Truncated = true
-			consumed--
-			break
-		}
-		remaining -= len(item.Text)
-		item.ID = watchSafe(item.ID, 128)
-		result.Messages = append(result.Messages, item)
+	consumed, err := scanWatchMessages(rows, o, &result)
+	if err != nil {
+		return result, err
 	}
 	err = rows.Err()
 	rows.Close()
@@ -260,18 +189,7 @@ func readWatchSnapshot(ctx context.Context, conn *sql.DB, o watchOptions) (watch
 		next := o.Offset + consumed
 		result.NextOffset = &next
 	}
-	// Optional workflow state is projected to known non-executable labels only.
-	var table int
-	if err = tx.QueryRowContext(ctx, `SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_workflows'`).Scan(&table); err == nil {
-		var raw sql.NullString
-		if tx.QueryRowContext(ctx, `SELECT CASE WHEN length(CAST(state AS BLOB))<=? THEN state ELSE NULL END FROM agent_workflows WHERE session_id=?`, watchPartsLimit, o.Session).Scan(&raw) == nil && raw.Valid {
-			var state struct{ Status, Mode string }
-			if json.Unmarshal([]byte(raw.String), &state) == nil {
-				result.State = watchSafe(state.Status, 64)
-				result.Mode = watchSafe(state.Mode, 32)
-			}
-		}
-	}
+	readWatchTask(ctx, tx, o.Session, &result)
 	return result, nil
 }
 func watchMessageText(raw string) (string, bool, bool) {
@@ -338,4 +256,123 @@ func printWatchText(out io.Writer, s watchSnapshot) error {
 		return err
 	}
 	return nil
+}
+
+func readWatchSessions(ctx context.Context, tx *sql.Tx, o watchOptions, result watchSnapshot) (watchSnapshot, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT substr(id,1,128),substr(title,1,1024),updated_at FROM sessions ORDER BY updated_at DESC,id LIMIT ? OFFSET ?`, o.Limit+1, o.Offset)
+	if err != nil {
+		return result, fmt.Errorf("cannot read sessions; database schema may be unsupported")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item watchSession
+		if err = rows.Scan(&item.ID, &item.Title, &item.UpdatedAt); err != nil {
+			return result, fmt.Errorf("cannot decode saved session")
+		}
+		if len(result.Sessions) == o.Limit {
+			next := o.Offset + o.Limit
+			result.NextOffset = &next
+			result.Truncated = true
+			break
+		}
+		item.ID = watchSafe(item.ID, 128)
+		item.Title = watchSafe(item.Title, 1024)
+		result.Sessions = append(result.Sessions, item)
+	}
+	if rows.Err() != nil {
+		return result, fmt.Errorf("cannot finish session snapshot")
+	}
+	return result, nil
+}
+
+func projectWatchMessage(item *watchMessage, raw sql.NullString) bool {
+	if !raw.Valid {
+		item.Text = "[saved message exceeds observer limit]"
+		item.Truncated = true
+	} else {
+		text, application, invalid := watchMessageText(raw.String)
+		if application {
+			return true
+		}
+		if invalid {
+			item.Text = "[saved message text unavailable]"
+			item.Truncated = true
+		} else {
+			item.Truncated = len(text) > watchTextLimit
+			item.Text = watchSafe(text, watchTextLimit)
+		}
+	}
+	return false
+}
+
+func readWatchTask(ctx context.Context, tx *sql.Tx, session string, result *watchSnapshot) {
+	// Optional workflow state is projected to known non-executable labels only.
+	var table int
+	if err := tx.QueryRowContext(ctx, `SELECT 1 FROM sqlite_master WHERE type='table' AND name='agent_workflows'`).Scan(&table); err == nil {
+		var raw sql.NullString
+		if tx.QueryRowContext(ctx, `SELECT CASE WHEN length(CAST(state AS BLOB))<=? THEN state ELSE NULL END FROM agent_workflows WHERE session_id=?`, watchPartsLimit, session).Scan(&raw) == nil && raw.Valid {
+			var state struct{ Status, Mode string }
+			if json.Unmarshal([]byte(raw.String), &state) == nil {
+				result.State = watchSafe(state.Status, 64)
+				result.Mode = watchSafe(state.Mode, 32)
+			}
+		}
+	}
+}
+
+func writeWatchSnapshot(out io.Writer, snapshot watchSnapshot, encoded []byte, format string) error {
+	if format == "json" {
+		_, err := fmt.Fprintln(out, string(encoded))
+		return err
+	}
+	return printWatchText(out, snapshot)
+}
+
+func sampleWatchSnapshot(ctx context.Context, conn *sql.DB, o watchOptions) (watchSnapshot, []byte, error) {
+	query, cancel := context.WithTimeout(ctx, 3*time.Second)
+	snapshot, err := readWatchSnapshot(query, conn, o)
+	cancel()
+	if err != nil {
+		return snapshot, nil, err
+	}
+	encoded, err := json.Marshal(snapshot)
+	if err != nil {
+		return snapshot, nil, fmt.Errorf("cannot encode observer snapshot")
+	}
+	return snapshot, encoded, nil
+}
+func watchStreamError(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return nil
+	}
+	return err
+}
+
+func scanWatchMessages(rows *sql.Rows, o watchOptions, result *watchSnapshot) (int, error) {
+	consumed, remaining := 0, watchSnapshotLimit
+	for rows.Next() {
+		if consumed == o.Limit {
+			result.Truncated = true
+			break
+		}
+		var item watchMessage
+		var raw sql.NullString
+		if err := rows.Scan(&item.ID, &item.Role, &raw, &item.Finished); err != nil {
+			rows.Close()
+			return consumed, fmt.Errorf("cannot decode saved message")
+		}
+		consumed++
+		if projectWatchMessage(&item, raw) {
+			continue
+		}
+		if len(item.Text) > remaining {
+			result.Truncated = true
+			consumed--
+			break
+		}
+		remaining -= len(item.Text)
+		item.ID = watchSafe(item.ID, 128)
+		result.Messages = append(result.Messages, item)
+	}
+	return consumed, nil
 }

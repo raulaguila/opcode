@@ -46,41 +46,53 @@ func TestReleaseArchivesAreReproducibleAndIncludeOnlyPublicFiles(t *testing.T) {
 			b, err := os.ReadFile(second)
 			require.NoError(t, err)
 			require.Equal(t, a, b, "source mtimes must not affect release bytes")
-			names := []string{}
 			if format == "zip" {
-				reader, err := zip.OpenReader(first)
-				require.NoError(t, err)
-				defer reader.Close()
-				for _, file := range reader.File {
-					names = append(names, file.Name)
-					require.Equal(t, 1980, file.Modified.Year())
-					input, err := file.Open()
-					require.NoError(t, err)
-					data, err := io.ReadAll(input)
-					require.NoError(t, err)
-					require.NoError(t, input.Close())
-					require.NotContains(t, string(data), "fake-secret-never-archive")
-				}
-				require.Equal(t, []string{"opcode.exe", "LICENSE", "README.md"}, names)
+				verifyReleaseZIP(t, first)
 			} else {
-				file, err := os.Open(first)
-				require.NoError(t, err)
-				defer file.Close()
-				gzipReader, err := gzip.NewReader(file)
-				require.NoError(t, err)
-				defer gzipReader.Close()
-				reader := tar.NewReader(gzipReader)
-				for {
-					header, err := reader.Next()
-					if err == io.EOF {
-						break
-					}
-					require.NoError(t, err)
-					names = append(names, header.Name)
-					require.Equal(t, int64(0), header.ModTime.Unix())
-				}
-				require.Equal(t, []string{"opcode", "LICENSE", "README.md"}, names)
+				verifyReleaseTar(t, first)
 			}
 		})
 	}
+}
+
+func verifyReleaseZIP(t *testing.T, first string) {
+	t.Helper()
+	names := []string{}
+	reader, err := zip.OpenReader(first)
+	require.NoError(t, err)
+	defer reader.Close()
+	for _, file := range reader.File {
+		names = append(names, file.Name)
+		require.Equal(t, 1980, file.Modified.Year())
+		input, err := file.Open()
+		require.NoError(t, err)
+		data, err := io.ReadAll(input)
+		require.NoError(t, err)
+		require.NoError(t, input.Close())
+		require.NotContains(t, string(data), "fake-secret-never-archive")
+	}
+	require.Equal(t, []string{"opcode.exe", "LICENSE", "README.md"}, names)
+}
+
+func verifyReleaseTar(t *testing.T, first string) {
+	t.Helper()
+	names := []string{}
+
+	file, err := os.Open(first)
+	require.NoError(t, err)
+	defer file.Close()
+	gzipReader, err := gzip.NewReader(file)
+	require.NoError(t, err)
+	defer gzipReader.Close()
+	reader := tar.NewReader(gzipReader)
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		names = append(names, header.Name)
+		require.Equal(t, int64(0), header.ModTime.Unix())
+	}
+	require.Equal(t, []string{"opcode", "LICENSE", "README.md"}, names)
 }

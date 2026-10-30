@@ -11,8 +11,8 @@ func interfaceCopy(english string) string {
 	if english == "TLS insecure" {
 		return config.Text("TLS inseguro", english)
 	}
-	if strings.HasPrefix(english, "› ") {
-		return "› " + interfaceCopy(strings.TrimPrefix(english, "› "))
+	if after, ok := strings.CutPrefix(english, "› "); ok {
+		return "› " + interfaceCopy(after)
 	}
 	portuguese := map[string]string{
 		"Authentication": "Autenticação", "API key": "Chave da API",

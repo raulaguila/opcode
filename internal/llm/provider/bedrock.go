@@ -34,19 +34,13 @@ func (b *bedrockProtocol) request(params object, stream bool) (string, any, erro
 	return "/model/" + url.PathEscape(b.model) + "/" + method, params, nil
 }
 func newBedrockClient(opts providerClientOptions) (*anthropicClient, error) {
-	region := os.Getenv("AWS_REGION")
-	if region == "" {
-		region = os.Getenv("AWS_DEFAULT_REGION")
-	}
-	if region == "" {
-		region = "us-east-1"
-	}
-	if !regexp.MustCompile(`^[a-z]{2}(-[a-z0-9]+)+-\d+$`).MatchString(region) {
-		return nil, fmt.Errorf("invalid AWS region")
+	region, err := bedrockRegion()
+	if err != nil {
+		return nil, err
 	}
 	model := opts.model.APIModel
 	if strings.HasPrefix(model, "anthropic.") {
-		prefix := strings.Split(region, "-")[0]
+		prefix, _, _ := strings.Cut(region, "-")
 		if prefix == "ap" {
 			prefix = "apac"
 		}
@@ -101,21 +95,47 @@ func readBedrockEvents(r io.Reader, consume func(string, json.RawMessage) (bool,
 		if value := frame.Headers.Get(":message-type"); value != nil {
 			kind = value.String()
 		}
-		if kind == "exception" || kind == "error" {
-			return fmt.Errorf("Bedrock stream exception: %s", frame.Payload)
-		}
-		var envelope struct {
-			Bytes []byte `json:"bytes"`
-		}
-		if err := json.Unmarshal(frame.Payload, &envelope); err != nil {
+		chunk, err := decodeBedrockChunk(kind, frame.Payload)
+		if err != nil {
 			return err
 		}
-		if len(envelope.Bytes) == 0 {
-			return fmt.Errorf("Bedrock stream returned an empty chunk")
-		}
-		stop, err := consume("", envelope.Bytes)
+		stop, err := consume("", chunk)
 		if stop || err != nil {
 			return err
 		}
 	}
+}
+
+var bedrockRegionPattern = regexp.MustCompile(`^[a-z]{2}(-[a-z0-9]+)+-\d+$`)
+
+func bedrockRegion() (string, error) {
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = os.Getenv("AWS_DEFAULT_REGION")
+	}
+	if region == "" {
+		region = "us-east-1"
+	}
+	if !bedrockRegionPattern.MatchString(region) {
+		return "", fmt.Errorf("invalid AWS region")
+	}
+
+	return region, nil
+}
+
+func decodeBedrockChunk(kind string, payload []byte) ([]byte, error) {
+	if kind == "exception" || kind == "error" {
+		return nil, fmt.Errorf("provider Bedrock stream exception: %s", payload)
+	}
+	var envelope struct {
+		Bytes []byte `json:"bytes"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return nil, err
+	}
+	if len(envelope.Bytes) == 0 {
+		return nil, fmt.Errorf("provider Bedrock stream returned an empty chunk")
+	}
+
+	return envelope.Bytes, nil
 }

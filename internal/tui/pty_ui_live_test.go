@@ -35,9 +35,7 @@ import (
 // injected Bubble Tea events. Run alone: model generation is intentionally real.
 // No inherited credentials, user configuration, or writable real project is used.
 func TestLiveOllamaPTYUI(t *testing.T) {
-	if os.Getenv("OPCODE_LIVE_TESTS") != "1" || os.Getenv("OPCODE_LIVE_OLLAMA") != "1" {
-		t.Skip("requires explicit OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 opt-in")
-	}
+	testLiveOllamaPTYUIOPCODELIVEOLLAMA(t)
 	if runtime.GOOS != "linux" {
 		t.Skip("requires Linux and Bubblewrap")
 	}
@@ -83,18 +81,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	// replace the model list rather than merely changing the provider title.
 	var catalogAvailable atomic.Bool
 	catalogAvailable.Store(true)
-	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !catalogAvailable.Load() {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
-		}
-		if r.URL.Path != "/v1/models" {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"models":[{"id":"UI_NAVIGATION_ONLY_MODEL","openai":{"max_model_len":131072}}]}`)
-	}))
+	catalog := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { testLiveOllamaPTYUICallback(&catalogAvailable, w, r) }))
 	defer catalog.Close()
 	configuration := map[string]any{
 		"data": map[string]any{"directory": data}, "runtime": map[string]any{"mode": "ask"},
@@ -115,9 +102,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.resize(60, 20)
 	h.wait("fresh-project initialization choice", 20*time.Second, func(frame string) bool { return strings.Contains(frame, "Initialize Project") })
 	h.send("n") // decline optional memory-file generation; never authorize mutations in Ask.
-	h.wait("initialization dismissed", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Initialize Project") && ptyUIHasFooter(frame)
-	})
+	h.wait("initialization dismissed", 5*time.Second, testLiveOllamaPTYUIInitializationDismissed)
 	h.wait("initial composer", 20*time.Second, ptyUIHasFooter)
 	h.assertComposer()
 	h.resize(80, 24)
@@ -131,9 +116,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 		h.send("\x1b[13;2u") // enhanced Shift+Enter, decoded by the shipped keyboard filter
 		h.send(fmt.Sprintf("draft-%02d", i))
 	}
-	h.wait("eight draft rows", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "draft-01 ação 漢字") && strings.Contains(frame, "draft-08")
-	})
+	h.wait("eight draft rows", 5*time.Second, testLiveOllamaPTYUIEightDraftRows)
 	for _, size := range [][2]int{{120, 36}, {180, 40}, {80, 24}} {
 		h.resize(size[0], size[1])
 		h.wait("resized draft", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "draft-08") })
@@ -142,88 +125,49 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("\x0f") // Ctrl+O opens model selection even with a draft.
 	h.wait("model selector", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Choose model") })
 	h.wait("provider catalog", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Provider catalog") })
-	for _, keys := range []struct{ next, previous string }{
-		{"\x1b[1;3C", "\x1b[1;3D"},         // Xterm Alt+arrows.
-		{"\x1b[57351;3u", "\x1b[57350;3u"}, // CSI-u Alt+arrows.
-		{"\t", "\x1b[Z"},                   // Tab/Shift+Tab fallback.
-	} {
-		h.send(keys.next)
-		h.wait("second provider and distinct catalog", 10*time.Second, func(frame string) bool {
-			return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && strings.Contains(frame, "Context: 128k")
-		})
-		h.send(keys.previous)
-		h.wait("Ollama provider restored", 10*time.Second, func(frame string) bool {
-			return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
-		})
-	}
+	testLiveOllamaPTYUIStruct(h)
 	h.send("\t")
 	h.wait("catalog before outage", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") })
 	catalogAvailable.Store(false)
 	h.send("\x12") // Ctrl+R refresh against a failing provider.
-	h.wait("failed provider stays selected with empty list", 10*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "Provider query failed") && strings.Contains(frame, "Empty list: query failed") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
-	})
+	h.wait("failed provider stays selected with empty list", 10*time.Second, testLiveOllamaPTYUIFailedProviderStaysSelectedWithEmptyList)
 	catalogAvailable.Store(true)
 	h.send("\x12")
-	h.wait("provider retry recovers catalog", 10*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && !strings.Contains(frame, "query failed")
-	})
+	h.wait("provider retry recovers catalog", 10*time.Second, testLiveOllamaPTYUIProviderRetryRecoversCatalog)
 	h.send("\x1b[Z")
-	h.wait("return to Ollama after outage", 10*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog")
-	})
-	for i := 0; i < 16; i++ {
+	h.wait("return to Ollama after outage", 10*time.Second, testLiveOllamaPTYUIReturnToOllamaAfterOutage)
+	for range 16 {
 		h.send("\x1b[B")
 	}
-	h.wait("model list position", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, " of ") && strings.Contains(frame, "✓ current")
-	})
+	h.wait("model list position", 5*time.Second, testLiveOllamaPTYUIModelListPosition)
 	h.paste("NO_SUCH_UI_ACCEPTANCE_MODEL")
 	h.wait("model search filters catalog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "No models found") })
 	h.send("\x15")
 	h.paste("llama3.1")
-	h.wait("local model search", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Search: llama3.1") && !strings.Contains(frame, "No models found")
-	})
+	h.wait("local model search", 5*time.Second, testLiveOllamaPTYUILocalModelSearch)
 	h.resize(120, 36)
 	h.send("\x1b")
-	h.wait("model selector dismissed", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Choose model") && strings.Contains(frame, "draft-08")
-	})
+	h.wait("model selector dismissed", 5*time.Second, testLiveOllamaPTYUIModelSelectorDismissed)
 	require.Contains(t, h.frame(), "draft-01 ação 漢字", "modal search must not consume the conversation draft")
 	h.clearDraft()
 	h.paste("/settings")
 	h.send("\r")
-	h.wait("connection list before deletion", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
-	})
+	h.wait("connection list before deletion", 5*time.Second, testLiveOllamaPTYUIConnectionListBeforeDeletion)
 	h.send("d")
-	h.wait("delete connection confirmation", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Delete connection?") && strings.Contains(frame, "Navigation fixture")
-	})
+	h.wait("delete connection confirmation", 5*time.Second, testLiveOllamaPTYUIDeleteConnectionConfirmation)
 	h.send("\r") // Confirmation defaults to Cancel.
-	h.wait("cancel preserves connection", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
-	})
+	h.wait("cancel preserves connection", 5*time.Second, testLiveOllamaPTYUICancelPreservesConnection)
 	h.send("d")
 	h.wait("second delete confirmation", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Delete connection?") })
 	h.send("\x1b[C\r") // Explicitly select Delete, then confirm.
-	h.wait("deleted connection disappears", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Connections and preferences") && !strings.Contains(frame, "Navigation fixture")
-	})
+	h.wait("deleted connection disappears", 5*time.Second, testLiveOllamaPTYUIDeletedConnectionDisappears)
 	h.send("\x1b")
-	h.wait("connection list dismissed", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Connections and preferences") && ptyUIHasFooter(frame)
-	})
+	h.wait("connection list dismissed", 5*time.Second, testLiveOllamaPTYUIConnectionListDismissed)
 	t.Log("PTY failed catalog is empty, retry recovers, delete defaults to Cancel and explicit deletion removes connection")
 	h.clickMode()
-	h.wait("mode chooser", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Work mode") || strings.Contains(frame, "Modo de trabalho")
-	})
+	h.wait("mode chooser", 5*time.Second, testLiveOllamaPTYUIModeChooser)
 	h.send("\x1b")
-	h.wait("mode chooser dismissed", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Work mode") && !strings.Contains(frame, "Modo de trabalho")
-	})
+	h.wait("mode chooser dismissed", 5*time.Second, testLiveOllamaPTYUIModeChooserDismissed)
 	h.clearDraft()
 	t.Log("PTY draft, Unicode paste, three resizes, model catalog/search and mode chooser passed")
 	h.paste("edit-key-check")
@@ -231,18 +175,14 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.wait("Ctrl+U edits the input", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "edit-key-check") })
 	h.paste("/task")
 	h.send("\r")
-	h.wait("task overview", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Task") && strings.Contains(frame, "Expected outcome")
-	})
+	h.wait("task overview", 5*time.Second, testLiveOllamaPTYUITaskOverview)
 	h.send("\x1b")
-	h.wait("overview dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Expected outcome") && ptyUIHasFooter(frame) })
+	h.wait("overview dismissed", 5*time.Second, testLiveOllamaPTYUIOverviewDismissed)
 	h.paste("/context")
 	h.send("\r")
-	h.wait("unified context panel", 10*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "1 Budget") && strings.Contains(frame, "Source:")
-	})
+	h.wait("unified context panel", 10*time.Second, testLiveOllamaPTYUIUnifiedContextPanel)
 	h.send("\x1b")
-	h.wait("context dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "1 Budget") && ptyUIHasFooter(frame) })
+	h.wait("context dismissed", 5*time.Second, testLiveOllamaPTYUIContextDismissed)
 
 	// Exercise the same real LSP NewClient stderr path via an explicit settings
 	// probe. This does not depend on a small model obeying diagnostic arguments,
@@ -259,9 +199,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("\x1b[F")
 	h.wait("complete argument target", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "lsp-stderr.sh") })
 	h.send("\x1b")
-	h.wait("LSP form restored", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Configure LSP") && !strings.Contains(frame, "one per row")
-	})
+	h.wait("LSP form restored", 5*time.Second, testLiveOllamaPTYUILSPFormRestored)
 	h.send("\x14") // Ctrl+T requests a connection test, with its own permission.
 	h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })
 	if !strings.Contains(h.frame(), "Tool: test_lsp_connection") {
@@ -272,17 +210,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "LSP probe must not start before explicit UI approval")
 	require.Contains(t, h.frame(), "/bin/bash")
 	require.Contains(t, h.frame(), "lsp-stderr.sh")
-	for _, refuse := range []string{"\x1b", "\r"} {
-		require.Contains(t, h.frame(), "› Deny (Esc/d)")
-		h.send(refuse)
-		h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool {
-			return !strings.Contains(frame, "Allow (a)") && strings.Contains(frame, "Test failed:")
-		})
-		_, statErr := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
-		require.True(t, os.IsNotExist(statErr), "denied probe must never run")
-		h.send("\x14")
-		h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "› Deny (Esc/d)") })
-	}
+	testLiveOllamaPTYUIState(t, workspace, h)
 	h.clickLabel("Allow (a)")
 	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow (a)") })
 	h.wait("LSP stderr fixture executed", 10*time.Second, func(string) bool {
@@ -294,9 +222,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("\x1b")
 	h.wait("integration list restored", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "MCP and language servers") })
 	h.send("\x1b")
-	h.wait("integration dialog dismissed", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "MCP and language servers") && ptyUIHasFooter(frame)
-	})
+	h.wait("integration dialog dismissed", 5*time.Second, testLiveOllamaPTYUIIntegrationDialogDismissed)
 	require.Contains(t, h.frame(), "Ask ▾", "probing an integration must not change the work mode")
 	t.Log("separate LSP probe explicitly approved in UI; stderr burst suppressed and Ask mode preserved")
 
@@ -313,23 +239,11 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	}
 	sourceCitation := regexp.MustCompile(`(?i)(README\.md|main\.go)(:[1-9][0-9]*|#L[1-9][0-9]*)`)
 	h.wait("factual completed overview", 180*time.Second, func(frame string) bool {
-		if !ptyUIIdleFooter(frame) {
-			return false
-		}
-		messages := ptyUIMessages(conn)
-		if len(messages) == 0 {
-			return false
-		}
-		last := messages[len(messages)-1]
-		text := strings.ToLower(last.text())
-		return last.Role == "assistant" && last.finished() && strings.Contains(text, "igarapewatch") && strings.Contains(text, "sqlite") && strings.Contains(text, "sensor") && sourceCitation.MatchString(text)
+		return testLiveOllamaPTYUIFactualCompletedOverview(&conn, &sourceCitation, frame)
 	})
 	require.NotContains(t, h.frame(), "Application validation:", "internal repairs must stay in process details")
 	h.wait("no loading remnants", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Loading conversation") })
-	h.wait("context and measured provider speed in footer", 5*time.Second, func(frame string) bool {
-		footer := ptyUIFooter(frame)
-		return strings.Contains(footer, "/16k ctx") && strings.Contains(footer, "tok/s") && !strings.Contains(footer, "— tok/s")
-	})
+	h.wait("context and measured provider speed in footer", 5*time.Second, testLiveOllamaPTYUIContextAndMeasuredProviderSpeedInFooter)
 	require.NotContains(t, h.rawOutput(), "UI_LSP_SECRET_SENTINEL", "child stderr must never corrupt the terminal")
 	h.assertComposer()
 	initialHistory := ptyUIMessages(conn)
@@ -343,74 +257,35 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	expectedOSC, copyErr := clipboard.OSC52(overview)
 	require.NoError(t, copyErr)
 	h.wait("OSC52 emitted while alternate screen is active", 5*time.Second, func(frame string) bool {
-		return strings.Contains(h.rawOutput(), expectedOSC) && strings.Contains(frame, "receipt unconfirmed")
+		return testLiveOllamaPTYUIOSC52EmittedWhileAlternateScreenIsActive(&h, &expectedOSC, frame)
 	})
 	h.send("\x1b")
-	h.wait("SSH copy panel dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Copy response") && ptyUIIdleFooter(frame) })
+	h.wait("SSH copy panel dismissed", 5*time.Second, testLiveOllamaPTYUISSHCopyPanelDismissed)
 
 	// A native model question must reach the human, accept a real answer, and
 	// resume once. Encoded choices are additionally injected in runtime tests.
 	beforeQuestion := len(ptyUIMessages(conn))
 	h.paste(`Use ask_user_question exactly once to ask "Qual área você quer revisar?" with choices ["UI","Contexto"]. Wait for the human answer. Then reply with exactly "Resposta recebida: " followed by the chosen option. Do not call other tools or commands.`)
 	h.send("\r")
-	h.wait("real model question with selectable choices", 120*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Decision:") && strings.Contains(frame, "UI") && strings.Contains(frame, "Contexto")
-	})
+	h.wait("real model question with selectable choices", 120*time.Second, testLiveOllamaPTYUIRealModelQuestionWithSelectableChoices)
 	h.send("\x1b[B\r")
 	h.wait("human question answer resumes generation", 120*time.Second, func(frame string) bool {
-		history := ptyUIMessages(conn)
-		return len(history) > beforeQuestion && history[len(history)-1].finished() && strings.Contains(history[len(history)-1].text(), "Resposta recebida:") && !strings.Contains(frame, "Decision:") && ptyUIIdleFooter(frame)
+		return testLiveOllamaPTYUIHumanQuestionAnswerResumesGeneration(&conn, &beforeQuestion, frame)
 	})
 	questions := 0
-	for _, msg := range ptyUIMessages(conn)[beforeQuestion:] {
-		for _, part := range msg.Parts {
-			if part.Type != "tool_call" {
-				continue
-			}
-			var call struct{ Name string }
-			require.NoError(t, json.Unmarshal(part.Data, &call))
-			if call.Name == "ask_user_question" {
-				questions++
-			}
-		}
-	}
+	testLiveOllamaPTYUIPtyUIMessagesConnBeforeQuestion(t, conn, beforeQuestion, &questions)
 	require.Equal(t, 1, questions, "no failed question or repeated question call")
 
 	h.paste("/mode execute")
 	h.send("\r")
-	h.wait("execute mode and acknowledged command submission", 5*time.Second, func(frame string) bool {
-		// The workflow mode update precedes the editor submission receipt. Do
-		// not append the next prompt to a draft still awaiting that receipt.
-		return strings.HasPrefix(strings.TrimSpace(ptyUIFooter(frame)), "Execute") && !strings.Contains(frame, "/mode execute")
-	})
+	h.wait("execute mode and acknowledged command submission", 5*time.Second, testLiveOllamaPTYUIExecuteModeAndAcknowledgedCommandSubmission)
 	h.paste(`Call bash with these arguments: {"command":"bash interactive.sh","pty":true,"timeout":120000}. Wait for the actual tool result. The human will provide terminal input. Do not execute any other command.`)
 	h.send("\r")
 	h.wait("explicit permission dialog", 120*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })
 	_, err = os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "command-started"))
 	require.True(t, os.IsNotExist(err), "command must not execute before UI approval")
 	approved := false
-	for _, msg := range ptyUIMessages(conn) {
-		for _, part := range msg.Parts {
-			if part.Type != "tool_call" {
-				continue
-			}
-			var call struct{ Name, Input string }
-			_ = json.Unmarshal(part.Data, &call)
-			if call.Name != "bash" {
-				continue
-			}
-			var args struct {
-				Command string `json:"command"`
-				PTY     bool   `json:"pty"`
-			}
-			if json.Unmarshal([]byte(call.Input), &args) == nil && args.Command == "bash interactive.sh" && args.PTY {
-				approved = true
-			} else {
-				h.send("d")
-				t.Fatal("unexpected shell command or non-PTY request was denied")
-			}
-		}
-	}
+	testLiveOllamaPTYUIPtyUIMessagesConn(t, h, conn, &approved)
 	if !approved {
 		h.send("d")
 		t.Fatal("permission request had no matching persisted PTY tool call; denied")
@@ -432,21 +307,8 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("HUMAN_PTY_OK\r")
 	h.wait("human input delivered to PTY", 15*time.Second, func(frame string) bool { return strings.Contains(frame, "LIVE_INPUT:HUMAN_PTY_OK") })
 	h.send("\x10")
-	h.wait("steered response and persisted tool result", 180*time.Second, func(string) bool {
-		messages := ptyUIMessages(conn)
-		toolAt, instructionAt, finalAt := -1, -1, -1
-		for i, msg := range messages {
-			if msg.Role == "tool" && strings.Contains(msg.allContent(), "LIVE_INPUT:HUMAN_PTY_OK") {
-				toolAt = i
-			}
-			if msg.Role == "user" && strings.Contains(msg.text(), "LIVE_STEERING_OK") {
-				instructionAt = i
-			}
-			if msg.Role == "assistant" && msg.finished() && strings.Contains(msg.text(), "LIVE_STEERING_OK") {
-				finalAt = i
-			}
-		}
-		return toolAt >= 0 && instructionAt > toolAt && finalAt > instructionAt
+	h.wait("steered response and persisted tool result", 180*time.Second, func(callbackArg0 string) bool {
+		return testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(&conn, callbackArg0)
 	})
 	h.resize(80, 24)
 	h.wait("final composer", 5*time.Second, ptyUIIdleFooter)
@@ -454,14 +316,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.NotContains(t, h.frame(), "Loading conversation")
 	require.NotContains(t, h.rawOutput(), "UI_LSP_SECRET_SENTINEL")
 	bashCalls := 0
-	for _, msg := range ptyUIMessages(conn) {
-		for _, part := range msg.Parts {
-			var call struct{ Name string }
-			if part.Type == "tool_call" && json.Unmarshal(part.Data, &call) == nil && call.Name == "bash" {
-				bashCalls++
-			}
-		}
-	}
+	testLiveOllamaPTYUIPtyUIMessagesConnCase(conn, &bashCalls)
 	require.Equal(t, 1, bashCalls, "steering and resize must never replay an approved command")
 	for name, original := range fixtures {
 		current, err := os.ReadFile(filepath.Join(workspace, name))
@@ -480,9 +335,6 @@ type ptyUIHarness struct {
 	stderrSeen bool
 }
 
-func newPTYUIHarness(t *testing.T, binary, home, workspace string) *ptyUIHarness {
-	return newPTYUIHarnessAtSize(t, binary, home, workspace, 80, 24)
-}
 func newPTYUIHarnessAtSize(t *testing.T, binary, home, workspace string, cols, rows int, extraEnv ...string) *ptyUIHarness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Minute)
@@ -602,7 +454,7 @@ func (h *ptyUIHarness) assertComposer() {
 	h.t.Helper()
 	frame := h.frame()
 	prompts, footers := 0, 0
-	for _, line := range strings.Split(frame, "\n") {
+	for line := range strings.SplitSeq(frame, "\n") {
 		if strings.HasPrefix(strings.TrimSpace(line), ">") {
 			prompts++
 		}
@@ -632,7 +484,7 @@ func ptyUIIdleFooter(frame string) bool {
 }
 
 func ptyUIFooter(frame string) string {
-	for _, line := range strings.Split(frame, "\n") {
+	for line := range strings.SplitSeq(frame, "\n") {
 		if strings.Count(line, "▾") == 2 {
 			return line
 		}
@@ -649,23 +501,7 @@ func (f *ptyUIControlFilter) write(input []byte) []byte {
 	var output []byte
 	for _, b := range input {
 		f.pending = append(f.pending, b)
-		for len(f.pending) > 0 {
-			prefix := false
-			for _, control := range controls {
-				if strings.HasPrefix(control, string(f.pending)) {
-					prefix = true
-					if control == string(f.pending) {
-						f.pending = nil
-					}
-					break
-				}
-			}
-			if prefix {
-				break
-			}
-			output = append(output, f.pending[0])
-			f.pending = f.pending[1:]
-		}
+		writeFPending(f, controls, &output)
 	}
 	return output
 }
@@ -756,8 +592,8 @@ func (m ptyUIMessage) finished() bool {
 func (h *ptyUIHarness) clickLabel(label string) {
 	h.t.Helper()
 	for y, line := range strings.Split(h.frame(), "\n") {
-		if at := strings.Index(line, label); at >= 0 {
-			x := ansi.StringWidth(line[:at]) + 1
+		if before, _, ok := strings.Cut(line, label); ok {
+			x := ansi.StringWidth(before) + 1
 			h.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, y+1, x, y+1))
 			return
 		}
@@ -774,89 +610,366 @@ func TestPTYUICompactThemes(t *testing.T) {
 	}
 	binary := os.Getenv("OPCODE_EVAL_BINARY")
 	require.True(t, filepath.IsAbs(binary))
+	testPTYUICompactThemesStruct(t, &binary)
+}
+
+func testLiveOllamaPTYUIMessages(messages []ptyUIMessage, toolAt *int, instructionAt *int, finalAt *int) {
+	for i, msg := range messages {
+		if msg.Role == "tool" && strings.Contains(msg.allContent(), "LIVE_INPUT:HUMAN_PTY_OK") {
+			(*toolAt) = i
+		}
+		if msg.Role == "user" && strings.Contains(msg.text(), "LIVE_STEERING_OK") {
+			(*instructionAt) = i
+		}
+		if msg.Role == "assistant" && msg.finished() && strings.Contains(msg.text(), "LIVE_STEERING_OK") {
+			(*finalAt) = i
+		}
+	}
+}
+
+func testLiveOllamaPTYUIPtyUIMessagesConn(t *testing.T, h *ptyUIHarness, conn *sql.DB, approved *bool) {
+	for _, msg := range ptyUIMessages(conn) {
+		for _, part := range msg.Parts {
+			if part.Type != "tool_call" {
+				continue
+			}
+			var call struct{ Name, Input string }
+			_ = json.Unmarshal(part.Data, &call)
+			if call.Name != "bash" {
+				continue
+			}
+			var args struct {
+				Command string `json:"command"`
+				PTY     bool   `json:"pty"`
+			}
+			if json.Unmarshal([]byte(call.Input), &args) == nil && args.Command == "bash interactive.sh" && args.PTY {
+				(*approved) = true
+			} else {
+				h.send("d")
+				t.Fatal("unexpected shell command or non-PTY request was denied")
+			}
+		}
+	}
+}
+
+func testLiveOllamaPTYUIStruct(h *ptyUIHarness) {
+	for _, keys := range []struct{ next, previous string }{
+		{"\x1b[1;3C", "\x1b[1;3D"},         // Xterm Alt+arrows.
+		{"\x1b[57351;3u", "\x1b[57350;3u"}, // CSI-u Alt+arrows.
+		{"\t", "\x1b[Z"},                   // Tab/Shift+Tab fallback.
+	} {
+		h.send(keys.next)
+		h.wait("second provider and distinct catalog", 10*time.Second, func(frame string) bool {
+			return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && strings.Contains(frame, "Context: 128k")
+		})
+		h.send(keys.previous)
+		h.wait("Ollama provider restored", 10*time.Second, func(frame string) bool {
+			return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+		})
+	}
+}
+
+func testLiveOllamaPTYUIPtyUIMessagesConnCase(conn *sql.DB, bashCalls *int) {
+	for _, msg := range ptyUIMessages(conn) {
+		for _, part := range msg.Parts {
+			var call struct{ Name string }
+			if part.Type == "tool_call" && json.Unmarshal(part.Data, &call) == nil && call.Name == "bash" {
+				(*bashCalls)++
+			}
+		}
+	}
+}
+
+func testLiveOllamaPTYUIPtyUIMessagesConnBeforeQuestion(t *testing.T, conn *sql.DB, beforeQuestion int, questions *int) {
+	for _, msg := range ptyUIMessages(conn)[beforeQuestion:] {
+		for _, part := range msg.Parts {
+			if part.Type != "tool_call" {
+				continue
+			}
+			var call struct{ Name string }
+			require.NoError(t, json.Unmarshal(part.Data, &call))
+			if call.Name == "ask_user_question" {
+				(*questions)++
+			}
+		}
+	}
+}
+
+func testLiveOllamaPTYUIOPCODELIVEOLLAMA(t *testing.T) {
+	if os.Getenv("OPCODE_LIVE_TESTS") != "1" || os.Getenv("OPCODE_LIVE_OLLAMA") != "1" {
+		t.Skip("requires explicit OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 opt-in")
+	}
+}
+
+func testLiveOllamaPTYUIState(t *testing.T, workspace string, h *ptyUIHarness) {
+	for _, refuse := range []string{"\x1b", "\r"} {
+		require.Contains(t, h.frame(), "› Deny (Esc/d)")
+		h.send(refuse)
+		h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool {
+			return !strings.Contains(frame, "Allow (a)") && strings.Contains(frame, "Test failed:")
+		})
+		_, statErr := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
+		require.True(t, os.IsNotExist(statErr), "denied probe must never run")
+		h.send("\x14")
+		h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "› Deny (Esc/d)") })
+	}
+}
+
+func testPTYUICompactThemesStruct(t *testing.T, binary *string) {
 	for _, variant := range []struct {
 		name, bg string
 		noColor  bool
 	}{{"dark", "15;0", false}, {"light", "0;15", false}, {"no-color", "0;15", true}} {
-		t.Run(variant.name, func(t *testing.T) {
-			root := t.TempDir()
-			home, workspace := filepath.Join(root, "home"), filepath.Join(root, "project")
-			require.NoError(t, os.MkdirAll(filepath.Join(home, ".opcode"), 0700))
-			require.NoError(t, os.MkdirAll(workspace, 0700))
-			configuration := map[string]any{
-				"data": map[string]any{"directory": filepath.Join(root, "data")}, "tui": map[string]any{"language": "en", "theme": "opcode", "sidebar": "hidden"},
-				"runtime": map[string]any{"mode": "ask"}, "providers": map[string]any{"local": map[string]any{"baseURL": "http://127.0.0.1:11434/v1", "api": "ollama"}},
-				"models": map[string]any{"local.llama3.1:8b": map[string]any{"provider": "local", "api_model": "llama3.1:8b", "api": "ollama", "context_window": 16384, "default_max_tokens": 2048}},
-				"agents": map[string]any{"coder": map[string]any{"model": "local.llama3.1:8b"}},
-			}
-			raw, err := json.Marshal(configuration)
-			require.NoError(t, err)
-			require.NoError(t, os.WriteFile(filepath.Join(home, ".opcode", "config.json"), raw, 0600))
-			env := []string{"COLORFGBG=" + variant.bg}
-			if variant.noColor {
-				env = append(env, "NO_COLOR=1")
-			}
-			h := newPTYUIHarnessAtSize(t, binary, home, workspace, 60, 20, env...)
-			h.wait("compact initialization", 20*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "Initialize Project") && strings.Contains(frame, "Create Opcode.md") && strings.Contains(frame, "Not now")
-			})
-			h.send("n")
-			h.wait("compact input", 10*time.Second, func(frame string) bool {
-				return !strings.Contains(frame, "Initialize Project") && ptyUIHasFooter(frame)
-			})
-			h.assertComposer()
-			h.paste("compact draft ação")
-			h.wait("compact draft typed", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })
-			h.send("\x0f")
-			h.wait("compact model selector", 10*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "Choose model") && strings.Contains(frame, "Context:") && strings.Contains(frame, "Tools:")
-			})
-			require.Contains(t, h.frame(), "›")
-			h.send("\x1b")
-			h.wait("draft restored", 5*time.Second, func(frame string) bool {
-				return !strings.Contains(frame, "Choose model") && strings.Contains(frame, "compact draft ação")
-			})
-			h.send("\x06")
-			h.wait("compact file picker", 5*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "Attach file") && strings.Contains(frame, "Empty directory")
-			})
-			h.send("\rl")
-			h.wait("empty picker stays usable", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Attach file") })
-			h.send("\x1b")
-			h.wait("file picker draft restored", 5*time.Second, func(frame string) bool {
-				return !strings.Contains(frame, "Attach file") && strings.Contains(frame, "compact draft ação")
-			})
-			h.send("\x03")
-			h.wait("quit menu", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Continue") && strings.Contains(frame, "Quit") })
-			h.clickLabel("Continue")
-			h.wait("quit cancelled by mouse", 5*time.Second, func(frame string) bool {
-				return !strings.Contains(frame, "Continue") && strings.Contains(frame, "compact draft ação")
-			})
-			h.send("\x14")
-			h.wait("theme after quit click", 5*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "Select Theme") && strings.Contains(frame, "›")
-			})
-			h.send("\x05")
-			h.wait("compact theme editor", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Edit theme") })
-			h.send("\t")
-			h.resize(80, 24)
-			h.wait("theme editor survives resize", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Edit theme") })
-			h.send("\x1b")
-			h.wait("theme preview cancelled", 5*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "Select Theme") && !strings.Contains(frame, "Edit theme")
-			})
-
-			h.send("\x1b")
-			h.wait("theme dismissed", 5*time.Second, func(frame string) bool {
-				return !strings.Contains(frame, "Select Theme") && strings.Contains(frame, "compact draft ação")
-			})
-			h.resize(80, 24)
-			h.wait("resized draft intact", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })
-			if variant.noColor {
-				require.NotRegexp(t, regexp.MustCompile("\x1b\\[(?:38|48);"), h.rawOutput(), "NO_COLOR must suppress foreground/background color sequences")
-			}
-			require.NoFileExists(t, filepath.Join(workspace, "Opcode.md"), "declining init must not create project memory")
-			require.NoError(t, os.WriteFile("/tmp/opcode-ui-"+variant.name+"-frame.txt", []byte(h.frame()), 0600))
-		})
+		t.Run(variant.name, func(t *testing.T) { testPTYUICompactThemesStructCallback(&binary, &variant, t) })
 	}
+}
+
+func writeFPending(f *ptyUIControlFilter, controls []string, output *[]byte) {
+	for len(f.pending) > 0 {
+		prefix := false
+		for _, control := range controls {
+			if strings.HasPrefix(control, string(f.pending)) {
+				prefix = true
+				if control == string(f.pending) {
+					f.pending = nil
+				}
+				break
+			}
+		}
+		if prefix {
+			break
+		}
+		(*output) = append((*output), f.pending[0])
+		f.pending = f.pending[1:]
+	}
+}
+
+func testLiveOllamaPTYUIFactualCompletedOverview(conn **sql.DB, sourceCitation **regexp.Regexp, frame string) bool {
+	if !ptyUIIdleFooter(frame) {
+		return false
+	}
+	messages := ptyUIMessages((*conn))
+	if len(messages) == 0 {
+		return false
+	}
+	last := messages[len(messages)-1]
+	text := strings.ToLower(last.text())
+	return last.Role == "assistant" && last.finished() && strings.Contains(text, "igarapewatch") && strings.Contains(text, "sqlite") && strings.Contains(text, "sensor") && (*sourceCitation).MatchString(text)
+}
+
+func testLiveOllamaPTYUIHumanQuestionAnswerResumesGeneration(conn **sql.DB, beforeQuestion *int, frame string) bool {
+	history := ptyUIMessages((*conn))
+	return len(history) > (*beforeQuestion) && history[len(history)-1].finished() && strings.Contains(history[len(history)-1].text(), "Resposta recebida:") && !strings.Contains(frame, "Decision:") && ptyUIIdleFooter(frame)
+}
+
+func testLiveOllamaPTYUIFailedProviderStaysSelectedWithEmptyList(frame string) bool {
+	return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "Provider query failed") && strings.Contains(frame, "Empty list: query failed") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+}
+
+func testLiveOllamaPTYUICallback(catalogAvailable *atomic.Bool, w http.ResponseWriter, r *http.Request) {
+	if !catalogAvailable.Load() {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+	if r.URL.Path != "/v1/models" {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	io.WriteString(w, `{"models":[{"id":"UI_NAVIGATION_ONLY_MODEL","openai":{"max_model_len":131072}}]}`)
+}
+
+func testLiveOllamaPTYUIContextAndMeasuredProviderSpeedInFooter(frame string) bool {
+	footer := ptyUIFooter(frame)
+	return strings.Contains(footer, "/16k ctx") && strings.Contains(footer, "tok/s") && !strings.Contains(footer, "— tok/s")
+}
+
+func testLiveOllamaPTYUIRealModelQuestionWithSelectableChoices(frame string) bool {
+	return strings.Contains(frame, "Decision:") && strings.Contains(frame, "UI") && strings.Contains(frame, "Contexto")
+}
+
+func testPTYUICompactThemesStructCallback(binary **string, variant *struct {
+	name    string
+	bg      string
+	noColor bool
+}, t *testing.T) {
+	root := t.TempDir()
+	home, workspace := filepath.Join(root, "home"), filepath.Join(root, "project")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".opcode"), 0700))
+	require.NoError(t, os.MkdirAll(workspace, 0700))
+	configuration := map[string]any{
+		"data": map[string]any{"directory": filepath.Join(root, "data")}, "tui": map[string]any{"language": "en", "theme": "opcode", "sidebar": "hidden"},
+		"runtime": map[string]any{"mode": "ask"}, "providers": map[string]any{"local": map[string]any{"baseURL": "http://127.0.0.1:11434/v1", "api": "ollama"}},
+		"models": map[string]any{"local.llama3.1:8b": map[string]any{"provider": "local", "api_model": "llama3.1:8b", "api": "ollama", "context_window": 16384, "default_max_tokens": 2048}},
+		"agents": map[string]any{"coder": map[string]any{"model": "local.llama3.1:8b"}},
+	}
+	raw, err := json.Marshal(configuration)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".opcode", "config.json"), raw, 0600))
+	env := []string{"COLORFGBG=" + variant.bg}
+	if variant.noColor {
+		env = append(env, "NO_COLOR=1")
+	}
+	h := newPTYUIHarnessAtSize(t, (*(*binary)), home, workspace, 60, 20, env...)
+	h.wait("compact initialization", 20*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Initialize Project") && strings.Contains(frame, "Create Opcode.md") && strings.Contains(frame, "Not now")
+	})
+	h.send("n")
+	h.wait("compact input", 10*time.Second, func(frame string) bool {
+		return !strings.Contains(frame, "Initialize Project") && ptyUIHasFooter(frame)
+	})
+	h.assertComposer()
+	h.paste("compact draft ação")
+	h.wait("compact draft typed", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })
+	h.send("\x0f")
+	h.wait("compact model selector", 10*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Choose model") && strings.Contains(frame, "Context:") && strings.Contains(frame, "Tools:")
+	})
+	require.Contains(t, h.frame(), "›")
+	h.send("\x1b")
+	h.wait("draft restored", 5*time.Second, func(frame string) bool {
+		return !strings.Contains(frame, "Choose model") && strings.Contains(frame, "compact draft ação")
+	})
+	h.send("\x06")
+	h.wait("compact file picker", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Attach file") && strings.Contains(frame, "Empty directory")
+	})
+	h.send("\rl")
+	h.wait("empty picker stays usable", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Attach file") })
+	h.send("\x1b")
+	h.wait("file picker draft restored", 5*time.Second, func(frame string) bool {
+		return !strings.Contains(frame, "Attach file") && strings.Contains(frame, "compact draft ação")
+	})
+	h.send("\x03")
+	h.wait("quit menu", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Continue") && strings.Contains(frame, "Quit") })
+	h.clickLabel("Continue")
+	h.wait("quit cancelled by mouse", 5*time.Second, func(frame string) bool {
+		return !strings.Contains(frame, "Continue") && strings.Contains(frame, "compact draft ação")
+	})
+	h.send("\x14")
+	h.wait("theme after quit click", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Select Theme") && strings.Contains(frame, "›")
+	})
+	h.send("\x05")
+	h.wait("compact theme editor", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Edit theme") })
+	h.send("\t")
+	h.resize(80, 24)
+	h.wait("theme editor survives resize", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Edit theme") })
+	h.send("\x1b")
+	h.wait("theme preview cancelled", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Select Theme") && !strings.Contains(frame, "Edit theme")
+	})
+
+	h.send("\x1b")
+	h.wait("theme dismissed", 5*time.Second, func(frame string) bool {
+		return !strings.Contains(frame, "Select Theme") && strings.Contains(frame, "compact draft ação")
+	})
+	h.resize(80, 24)
+	h.wait("resized draft intact", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })
+	if variant.noColor {
+		require.NotRegexp(t, regexp.MustCompile("\x1b\\[(?:38|48);"), h.rawOutput(), "NO_COLOR must suppress foreground/background color sequences")
+	}
+	require.NoFileExists(t, filepath.Join(workspace, "Opcode.md"), "declining init must not create project memory")
+	require.NoError(t, os.WriteFile("/tmp/opcode-ui-"+variant.name+"-frame.txt", []byte(h.frame()), 0600))
+}
+
+func testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(conn **sql.DB, callbackArg0 string) bool {
+	messages := ptyUIMessages((*conn))
+	toolAt, instructionAt, finalAt := -1, -1, -1
+	testLiveOllamaPTYUIMessages(messages, &toolAt, &instructionAt, &finalAt)
+	return toolAt >= 0 && instructionAt > toolAt && finalAt > instructionAt
+}
+
+func testLiveOllamaPTYUIInitializationDismissed(frame string) bool {
+	return !strings.Contains(frame, "Initialize Project") && ptyUIHasFooter(frame)
+}
+
+func testLiveOllamaPTYUIEightDraftRows(frame string) bool {
+	return strings.Contains(frame, "draft-01 ação 漢字") && strings.Contains(frame, "draft-08")
+}
+
+func testLiveOllamaPTYUIProviderRetryRecoversCatalog(frame string) bool {
+	return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && !strings.Contains(frame, "query failed")
+}
+
+func testLiveOllamaPTYUIReturnToOllamaAfterOutage(frame string) bool {
+	return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog")
+}
+
+func testLiveOllamaPTYUIModelListPosition(frame string) bool {
+	return strings.Contains(frame, " of ") && strings.Contains(frame, "✓ current")
+}
+
+func testLiveOllamaPTYUILocalModelSearch(frame string) bool {
+	return strings.Contains(frame, "Search: llama3.1") && !strings.Contains(frame, "No models found")
+}
+
+func testLiveOllamaPTYUIModelSelectorDismissed(frame string) bool {
+	return !strings.Contains(frame, "Choose model") && strings.Contains(frame, "draft-08")
+}
+
+func testLiveOllamaPTYUIConnectionListBeforeDeletion(frame string) bool {
+	return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
+}
+
+func testLiveOllamaPTYUIDeleteConnectionConfirmation(frame string) bool {
+	return strings.Contains(frame, "Delete connection?") && strings.Contains(frame, "Navigation fixture")
+}
+
+func testLiveOllamaPTYUICancelPreservesConnection(frame string) bool {
+	return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
+}
+
+func testLiveOllamaPTYUIDeletedConnectionDisappears(frame string) bool {
+	return strings.Contains(frame, "Connections and preferences") && !strings.Contains(frame, "Navigation fixture")
+}
+
+func testLiveOllamaPTYUIConnectionListDismissed(frame string) bool {
+	return !strings.Contains(frame, "Connections and preferences") && ptyUIHasFooter(frame)
+}
+
+func testLiveOllamaPTYUIModeChooser(frame string) bool {
+	return strings.Contains(frame, "Work mode") || strings.Contains(frame, "Modo de trabalho")
+}
+
+func testLiveOllamaPTYUIModeChooserDismissed(frame string) bool {
+	return !strings.Contains(frame, "Work mode") && !strings.Contains(frame, "Modo de trabalho")
+}
+
+func testLiveOllamaPTYUITaskOverview(frame string) bool {
+	return strings.Contains(frame, "Task") && strings.Contains(frame, "Expected outcome")
+}
+
+func testLiveOllamaPTYUIOverviewDismissed(frame string) bool {
+	return !strings.Contains(frame, "Expected outcome") && ptyUIHasFooter(frame)
+}
+
+func testLiveOllamaPTYUIUnifiedContextPanel(frame string) bool {
+	return strings.Contains(frame, "1 Budget") && strings.Contains(frame, "Source:")
+}
+
+func testLiveOllamaPTYUIContextDismissed(frame string) bool {
+	return !strings.Contains(frame, "1 Budget") && ptyUIHasFooter(frame)
+}
+
+func testLiveOllamaPTYUILSPFormRestored(frame string) bool {
+	return strings.Contains(frame, "Configure LSP") && !strings.Contains(frame, "one per row")
+}
+
+func testLiveOllamaPTYUIIntegrationDialogDismissed(frame string) bool {
+	return !strings.Contains(frame, "MCP and language servers") && ptyUIHasFooter(frame)
+}
+
+func testLiveOllamaPTYUIOSC52EmittedWhileAlternateScreenIsActive(h **ptyUIHarness, expectedOSC *string, frame string) bool {
+	return strings.Contains((*h).rawOutput(), (*expectedOSC)) && strings.Contains(frame, "receipt unconfirmed")
+}
+
+func testLiveOllamaPTYUISSHCopyPanelDismissed(frame string) bool {
+	return !strings.Contains(frame, "Copy response") && ptyUIIdleFooter(frame)
+}
+
+func testLiveOllamaPTYUIExecuteModeAndAcknowledgedCommandSubmission(frame string) bool {
+	// The workflow mode update precedes the editor submission receipt. Do
+	// not append the next prompt to a draft still awaiting that receipt.
+	return strings.HasPrefix(strings.TrimSpace(ptyUIFooter(frame)), "Execute") && !strings.Contains(frame, "/mode execute")
 }

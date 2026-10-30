@@ -17,7 +17,7 @@ import (
 func TestPhaseMetricsAccumulateSafelyAndStopExactlyOnce(t *testing.T) {
 	a := &agent{}
 	var workers sync.WaitGroup
-	for i := 0; i < 40; i++ {
+	for range 40 {
 		workers.Add(1)
 		go func() {
 			defer workers.Done()

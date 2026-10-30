@@ -123,22 +123,11 @@ func (s *service) createWithVersion(ctx context.Context, sessionID, path, conten
 			// Rollback the transaction
 			tx.Rollback()
 
-			// Check if this is a uniqueness constraint violation
-			if strings.Contains(txErr.Error(), "UNIQUE constraint failed") {
-				if attempt < maxRetries-1 {
-					// If we have retries left, generate a new version and try again
-					if strings.HasPrefix(version, "v") {
-						versionNum, parseErr := strconv.Atoi(version[1:])
-						if parseErr == nil {
-							version = fmt.Sprintf("v%d", versionNum+1)
-							continue
-						}
-					}
-					// If we can't parse the version, use a timestamp-based version
-					version = fmt.Sprintf("v%d", time.Now().Unix())
-					continue
-				}
+			if strings.Contains(txErr.Error(), "UNIQUE constraint failed") && attempt < maxRetries-1 {
+				version = nextHistoryVersion(version)
+				continue
 			}
+
 			return File{}, txErr
 		}
 
@@ -249,4 +238,13 @@ func (s *service) fromDBItem(item db.File) File {
 		CreatedAt: item.CreatedAt,
 		UpdatedAt: item.UpdatedAt,
 	}
+}
+
+func nextHistoryVersion(version string) string {
+	if strings.HasPrefix(version, "v") {
+		if number, err := strconv.Atoi(version[1:]); err == nil {
+			return fmt.Sprintf("v%d", number+1)
+		}
+	}
+	return fmt.Sprintf("v%d", time.Now().Unix())
 }

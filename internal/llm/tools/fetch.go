@@ -146,8 +146,33 @@ func (t *fetchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 		return NewTextErrorResponse("Failed to read response body: " + err.Error()), nil
 	}
 
-	content := string(body)
-	contentType := resp.Header.Get("Content-Type")
+	return formatFetchedContent(format, resp.Header.Get("Content-Type"), string(body))
+}
+
+func extractTextFromHTML(html string) (string, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return "", err
+	}
+
+	text := doc.Text()
+	text = strings.Join(strings.Fields(text), " ")
+
+	return text, nil
+}
+
+func convertHTMLToMarkdown(html string) (string, error) {
+	converter := md.NewConverter("", true, nil)
+
+	markdown, err := converter.ConvertString(html)
+	if err != nil {
+		return "", err
+	}
+
+	return markdown, nil
+}
+
+func formatFetchedContent(format, contentType, content string) (ToolResponse, error) {
 
 	switch format {
 	case "text":
@@ -177,27 +202,4 @@ func (t *fetchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	default:
 		return NewTextResponse(content), nil
 	}
-}
-
-func extractTextFromHTML(html string) (string, error) {
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-	if err != nil {
-		return "", err
-	}
-
-	text := doc.Text()
-	text = strings.Join(strings.Fields(text), " ")
-
-	return text, nil
-}
-
-func convertHTMLToMarkdown(html string) (string, error) {
-	converter := md.NewConverter("", true, nil)
-
-	markdown, err := converter.ConvertString(html)
-	if err != nil {
-		return "", err
-	}
-
-	return markdown, nil
 }

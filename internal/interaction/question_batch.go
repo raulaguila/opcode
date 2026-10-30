@@ -50,32 +50,8 @@ func normalizeBatch(q Question) (Question, error) {
 			return q, fmt.Errorf("question IDs must be unique and up to 64 bytes")
 		}
 		seen[item.ID] = true
-		if strings.TrimSpace(item.Question) == "" || len(item.Question) > 500 || len(item.Explanation) > 1000 {
-			return q, fmt.Errorf("question text is required (up to 500 bytes); explanation up to 1000 bytes")
-		}
-		switch item.Type {
-		case "free_text":
-			if len(item.Choices) > 0 {
-				return q, fmt.Errorf("free_text does not accept choices")
-			}
-		case "yes_no":
-			if len(item.Choices) > 0 {
-				return q, fmt.Errorf("yes_no uses fixed yes/no choices")
-			}
-			item.Choices = []string{"yes", "no"}
-		case "single_choice", "multi_choice":
-			if len(item.Choices) < 2 || len(item.Choices) > 5 {
-				return q, fmt.Errorf("choice questions require two to five choices")
-			}
-		default:
-			return q, fmt.Errorf("unsupported question type")
-		}
-		choices := map[string]bool{}
-		for _, c := range item.Choices {
-			if strings.TrimSpace(c) == "" || len(c) > 300 || choices[c] {
-				return q, fmt.Errorf("choices must be distinct and contain up to 300 bytes")
-			}
-			choices[c] = true
+		if err := normalizeQuestionItem(item); err != nil {
+			return q, err
 		}
 	}
 	return q, nil
@@ -98,24 +74,8 @@ func ValidateAnswers(q Question, answers []AnswerItem) error {
 			return fmt.Errorf("unknown or repeated question ID")
 		}
 		seen[answer.QuestionID] = true
-		if len(answer.Text) > 4000 || (strings.TrimSpace(answer.Text) == "" && len(answer.Choices) == 0) {
-			return fmt.Errorf("each answer requires a selection or up to 4000 bytes of text")
-		}
-		if len(answer.Choices) > 0 && strings.TrimSpace(answer.Text) != "" {
-			return fmt.Errorf("choose options or enter a free-text alternative")
-		}
-		if len(answer.Choices) > 5 || (item.Type != "multi_choice" && len(answer.Choices) > 1) {
-			return fmt.Errorf("too many selected choices")
-		}
-		if item.Type == "free_text" && len(answer.Choices) > 0 {
-			return fmt.Errorf("free_text requires text")
-		}
-		selected := map[string]bool{}
-		for _, choice := range answer.Choices {
-			if !slices.Contains(item.Choices, choice) || selected[choice] {
-				return fmt.Errorf("unknown or repeated choice")
-			}
-			selected[choice] = true
+		if err := validateAnswerItem(item, answer); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -140,4 +100,58 @@ func parseAnswerBatch(text string) (AnswerBatch, error) {
 		return batch, fmt.Errorf("trailing answer data")
 	}
 	return batch, nil
+}
+
+func normalizeQuestionItem(item *QuestionItem) error {
+	if strings.TrimSpace(item.Question) == "" || len(item.Question) > 500 || len(item.Explanation) > 1000 {
+		return fmt.Errorf("question text is required (up to 500 bytes); explanation up to 1000 bytes")
+	}
+	switch item.Type {
+	case "free_text":
+		if len(item.Choices) > 0 {
+			return fmt.Errorf("free_text does not accept choices")
+		}
+	case "yes_no":
+		if len(item.Choices) > 0 {
+			return fmt.Errorf("yes_no uses fixed yes/no choices")
+		}
+		item.Choices = []string{"yes", "no"}
+	case "single_choice", "multi_choice":
+		if len(item.Choices) < 2 || len(item.Choices) > 5 {
+			return fmt.Errorf("choice questions require two to five choices")
+		}
+	default:
+		return fmt.Errorf("unsupported question type")
+	}
+	choices := map[string]bool{}
+	for _, c := range item.Choices {
+		if strings.TrimSpace(c) == "" || len(c) > 300 || choices[c] {
+			return fmt.Errorf("choices must be distinct and contain up to 300 bytes")
+		}
+		choices[c] = true
+	}
+	return nil
+}
+
+func validateAnswerItem(item QuestionItem, answer AnswerItem) error {
+	if len(answer.Text) > 4000 || (strings.TrimSpace(answer.Text) == "" && len(answer.Choices) == 0) {
+		return fmt.Errorf("each answer requires a selection or up to 4000 bytes of text")
+	}
+	if len(answer.Choices) > 0 && strings.TrimSpace(answer.Text) != "" {
+		return fmt.Errorf("choose options or enter a free-text alternative")
+	}
+	if len(answer.Choices) > 5 || (item.Type != "multi_choice" && len(answer.Choices) > 1) {
+		return fmt.Errorf("too many selected choices")
+	}
+	if item.Type == "free_text" && len(answer.Choices) > 0 {
+		return fmt.Errorf("free_text requires text")
+	}
+	selected := map[string]bool{}
+	for _, choice := range answer.Choices {
+		if !slices.Contains(item.Choices, choice) || selected[choice] {
+			return fmt.Errorf("unknown or repeated choice")
+		}
+		selected[choice] = true
+	}
+	return nil
 }

@@ -29,8 +29,6 @@ type simpleListCmp[T SimpleListItem] struct {
 	maxWidth            int
 	maxVisibleItems     int
 	useAlphaNumericKeys bool
-	width               int
-	height              int
 }
 
 type simpleListKeyMap struct {

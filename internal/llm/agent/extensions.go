@@ -58,15 +58,9 @@ func (a *agent) runHooks(ctx context.Context, run *generationRun, event, name st
 	if err := cfg.Extensions.Validate(); err != nil {
 		return err
 	}
-	var bash tools.BaseTool
-	for _, tool := range a.tools {
-		if tool.Info().Name == tools.BashToolName {
-			bash = tool
-			break
-		}
-	}
+	bash := a.configuredHookBash()
 	for _, hook := range cfg.Extensions.Hooks {
-		if hook.Event != event || (hook.Tool != "" && hook.Tool != "*" && hook.Tool != name) {
+		if !hookMatches(hook, event, name) {
 			continue
 		}
 		if run.hookRuns >= 16 {
@@ -76,10 +70,7 @@ func (a *agent) runHooks(ctx context.Context, run *generationRun, event, name st
 		if bash == nil {
 			return fmt.Errorf("hook requires the permission-protected bash tool")
 		}
-		seconds := hook.TimeoutSeconds
-		if seconds == 0 {
-			seconds = 10
-		}
+		seconds := hookTimeout(hook)
 		hookCtx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
 		raw, _ := json.Marshal(tools.BashParams{Command: hook.Command, Timeout: seconds * 1000})
 		response, err := bash.Run(hookCtx, tools.ToolCall{ID: fmt.Sprintf("hook-%d", run.hookRuns), Name: tools.BashToolName, Input: string(raw)})
@@ -92,4 +83,22 @@ func (a *agent) runHooks(ctx context.Context, run *generationRun, event, name st
 		}
 	}
 	return nil
+}
+
+func (a *agent) configuredHookBash() tools.BaseTool {
+	for _, tool := range a.tools {
+		if tool.Info().Name == tools.BashToolName {
+			return tool
+		}
+	}
+	return nil
+}
+func hookMatches(hook config.HookConfig, event, name string) bool {
+	return hook.Event == event && (hook.Tool == "" || hook.Tool == "*" || hook.Tool == name)
+}
+func hookTimeout(hook config.HookConfig) int {
+	if hook.TimeoutSeconds == 0 {
+		return 10
+	}
+	return hook.TimeoutSeconds
 }

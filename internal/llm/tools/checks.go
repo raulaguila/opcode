@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -37,20 +38,9 @@ func (c *checksTool) Run(ctx context.Context, call ToolCall) (ToolResponse, erro
 	if cfg == nil || len(cfg.Checks) == 0 {
 		return NewTextErrorResponse("no checks configured; add named command entries under checks in opcode.json"), nil
 	}
-	names := input.Names
-	if len(names) == 0 {
-		for name := range cfg.Checks {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-	}
-	if len(names) > 16 {
-		return NewTextErrorResponse("at most 16 checks may run at once"), nil
-	}
-	for _, name := range names {
-		if entry, exists := cfg.Checks[name]; !exists || entry.Command == "" {
-			return NewTextErrorResponse("unknown or empty configured check"), nil
-		}
+	names, err := configuredCheckNames(cfg.Checks, input.Names)
+	if err != nil {
+		return NewTextErrorResponse(err.Error()), nil
 	}
 	type result struct {
 		Name     string          `json:"name"`
@@ -89,3 +79,23 @@ func (c *checksTool) Close() error {
 	return nil
 }
 func (c *checksTool) CancelSession(session string) { c.manager.CancelSession(session) }
+
+func configuredCheckNames(checks map[string]config.CheckConfig, requested []string) ([]string, error) {
+	names := requested
+	if len(names) == 0 {
+		for name := range checks {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+	}
+	if len(names) > 16 {
+		return nil, fmt.Errorf("at most 16 checks may run at once")
+	}
+	for _, name := range names {
+		if entry, exists := checks[name]; !exists || entry.Command == "" {
+			return nil, fmt.Errorf("unknown or empty configured check")
+		}
+	}
+
+	return names, nil
+}

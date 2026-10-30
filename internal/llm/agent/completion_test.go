@@ -16,7 +16,7 @@ func TestImplementationCannotFinishWithoutChanges(t *testing.T) {
 	a, p, _, _ := runtimeAgent(t, workflow.Execute)
 	done, err := a.Run(context.Background(), "s", "Corrija o arquivo main.go")
 	require.NoError(t, err)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		call := nextGeneration(t, p)
 		if i > 0 {
 			require.Contains(t, call.history[len(call.history)-1].Content().String(), "no file changes")
@@ -109,7 +109,7 @@ func TestInvalidStructuredPlanCannotFinishAsOrdinarySuccess(t *testing.T) {
 		require.True(t, result.IsError)
 	}
 	ordinary.reply <- provider.ProviderResponse{Content: "Plano salvo para revisar igarape-42.", FinishReason: message.FinishReasonEndTurn}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		repair := nextGeneration(t, p)
 		require.Contains(t, repair.history[len(repair.history)-1].Content().String(), "no valid objective and steps were saved")
 		repair.reply <- provider.ProviderResponse{Content: "Plano concluído.", FinishReason: message.FinishReasonEndTurn}

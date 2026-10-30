@@ -14,7 +14,6 @@ import (
 )
 
 type CompletionItem struct {
-	title string
 	Title string
 	Value string
 }
@@ -137,65 +136,7 @@ func (c *completionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if c.pseudoSearchTextArea.Focused() {
-
-			if !key.Matches(msg, completionDialogKeys.Complete) {
-
-				var cmd tea.Cmd
-				c.pseudoSearchTextArea, cmd = c.pseudoSearchTextArea.Update(msg)
-				cmds = append(cmds, cmd)
-
-				var query string
-				query = c.pseudoSearchTextArea.Value()
-				if query != "" {
-					query = query[1:]
-				}
-
-				if query != c.query {
-					logging.Info("Query", query)
-					items, err := c.completionProvider.GetChildEntries(query)
-					if err != nil {
-						logging.Error("Failed to get child entries", err)
-					}
-
-					c.listView.SetItems(items)
-					c.query = query
-				}
-
-				u, cmd := c.listView.Update(msg)
-				c.listView = u.(utilComponents.SimpleList[CompletionItemI])
-
-				cmds = append(cmds, cmd)
-			}
-
-			switch {
-			case key.Matches(msg, completionDialogKeys.Complete):
-				item, i := c.listView.GetSelectedItem()
-				if i == -1 {
-					return c, nil
-				}
-
-				cmd := c.complete(item)
-
-				return c, cmd
-			case key.Matches(msg, completionDialogKeys.Cancel):
-				// Only close on backspace when there are no characters left
-				if msg.String() != "backspace" || len(c.pseudoSearchTextArea.Value()) <= 0 {
-					return c, c.close()
-				}
-			}
-
-			return c, tea.Batch(cmds...)
-		} else {
-			items, err := c.completionProvider.GetChildEntries("")
-			if err != nil {
-				logging.Error("Failed to get child entries", err)
-			}
-
-			c.listView.SetItems(items)
-			c.pseudoSearchTextArea.SetValue(msg.String())
-			return c, c.pseudoSearchTextArea.Focus()
-		}
+		return updateCompletionDialogCmpKeyMsg(c, &cmds, &msg)
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
@@ -260,5 +201,72 @@ func NewCompletionDialogCmp(completionProvider CompletionProvider) CompletionDia
 		completionProvider:   completionProvider,
 		pseudoSearchTextArea: ti,
 		listView:             li,
+	}
+}
+
+func updateCompletionDialogCmpKeyMsg(c *completionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+	if c.pseudoSearchTextArea.Focused() {
+
+		completeSelectedItem(c, cmds, msg)
+
+		switch {
+		case key.Matches((*msg), completionDialogKeys.Complete):
+			item, i := c.listView.GetSelectedItem()
+			if i == -1 {
+				return c, nil
+			}
+
+			cmd := c.complete(item)
+
+			return c, cmd
+		case key.Matches((*msg), completionDialogKeys.Cancel):
+			// Only close on backspace when there are no characters left
+			if msg.String() != "backspace" || len(c.pseudoSearchTextArea.Value()) <= 0 {
+				return c, c.close()
+			}
+		}
+
+		return c, tea.Batch((*cmds)...)
+	} else {
+		items, err := c.completionProvider.GetChildEntries("")
+		if err != nil {
+			logging.Error("Failed to get child entries", err)
+		}
+
+		c.listView.SetItems(items)
+		c.pseudoSearchTextArea.SetValue(msg.String())
+		return c, c.pseudoSearchTextArea.Focus()
+	}
+
+}
+
+func completeSelectedItem(c *completionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) {
+	if !key.Matches((*msg), completionDialogKeys.Complete) {
+
+		var cmd tea.Cmd
+		c.pseudoSearchTextArea, cmd = c.pseudoSearchTextArea.Update((*msg))
+		(*cmds) = append((*cmds), cmd)
+
+		var query string
+		query = c.pseudoSearchTextArea.Value()
+		if query != "" {
+			query = query[1:]
+		}
+
+		if query != c.query {
+			logging.Info("Query", query)
+			items, err := c.completionProvider.GetChildEntries(query)
+			if err != nil {
+				logging.Error("Failed to get child entries", err)
+			}
+
+			c.listView.SetItems(items)
+			c.query = query
+		}
+
+		u, cmd := c.listView.Update((*msg))
+		c.listView = u.(utilComponents.SimpleList[CompletionItemI])
+
+		(*cmds) = append((*cmds), cmd)
 	}
 }

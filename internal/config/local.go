@@ -19,18 +19,7 @@ func configureLocalProvider(discovery ...bool) error {
 	if endpoint == "" {
 		endpoint = local.BaseURL
 	}
-	needsDiscovery := cfg.Agents[AgentCoder].Model == ""
-	usesLocal := false
-	for _, agent := range cfg.Agents {
-		model, exists := models.SupportedModels[agent.Model]
-		if model.ProviderProfile != "" {
-			continue
-		}
-		if model.Provider == models.ProviderLocal || strings.HasPrefix(string(agent.Model), "local.") {
-			usesLocal = true
-			needsDiscovery = needsDiscovery || !exists
-		}
-	}
+	needsDiscovery, usesLocal := localDiscoveryNeeded()
 	if endpoint == "" && !usesLocal {
 		return nil
 	}
@@ -53,6 +42,26 @@ func configureLocalProvider(discovery ...bool) error {
 	if err != nil {
 		return fmt.Errorf("local provider: %w", err)
 	}
+	return publishDiscoveredLocalModels(local, found)
+}
+
+func localDiscoveryNeeded() (bool, bool) {
+	needsDiscovery := cfg.Agents[AgentCoder].Model == ""
+	usesLocal := false
+	for _, agent := range cfg.Agents {
+		model, exists := models.SupportedModels[agent.Model]
+		if model.ProviderProfile != "" {
+			continue
+		}
+		if model.Provider == models.ProviderLocal || strings.HasPrefix(string(agent.Model), "local.") {
+			usesLocal = true
+			needsDiscovery = needsDiscovery || !exists
+		}
+	}
+	return needsDiscovery, usesLocal
+}
+
+func publishDiscoveredLocalModels(local Provider, found []models.Model) error {
 	for _, model := range found {
 		if _, explicit := cfg.Models[model.ID]; !explicit {
 			models.SupportedModels[model.ID] = providerModelDefaults(local, model)

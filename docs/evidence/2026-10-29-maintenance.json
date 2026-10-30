@@ -1,0 +1,180 @@
+{
+  "date": "2026-10-29",
+  "baseline_commit": "a25c481d71b8790716d02a5ed139a9663d72ec69",
+  "analysis": {
+    "gocognit_version": "1.3.0",
+    "staticcheck_version": "0.8.2",
+    "complexity_threshold": 15,
+    "file_exclusions": [],
+    "baseline_functions_over_threshold": 336,
+    "baseline_test_functions_over_threshold": 31,
+    "baseline_generated_db_functions_over_threshold": 2,
+    "final_functions_over_threshold": 0,
+    "final_exact_recursion_functions_over_threshold": 0,
+    "baseline_staticcheck_diagnostics": 91,
+    "final_staticcheck_diagnostics": 0,
+    "final_integration_staticcheck_diagnostics": 0
+  },
+  "observed_checks": [
+    "gocognit -over 15 .",
+    "gocognit -exact-recursion -over 15 .",
+    "go test -race -p 1 ./...",
+    "go vet ./...",
+    "staticcheck ./...",
+    "staticcheck -tags integration ./...",
+    "go test -p 1 -tags integration ./... -run '^$'",
+    "go run ./scripts/language-docs -check",
+    "SQLC normalizer reproduces current db.go from the baseline generated output",
+    "git diff --check",
+    "go version: go1.27.3 linux/amd64",
+    "Go 1.27.3 cross-build: windows/amd64 and darwin/arm64"
+  ],
+  "benchmark_environment": {
+    "os": "linux",
+    "arch": "amd64",
+    "cpu": "Intel Core i9-12900K",
+    "go": "1.27.0",
+    "scope": "synthetic component microbenchmarks; not end-to-end model latency"
+  },
+  "benchmarks": [
+    {
+      "component": "Sourcegraph formatting",
+      "fixture": "100 matches in a 2000-line file, context window 2",
+      "baseline_ns_per_op": 4087304,
+      "candidate_ns_per_op": 60899,
+      "baseline_bytes_per_op": 3372399,
+      "candidate_bytes_per_op": 108593,
+      "baseline_allocs_per_op": 1634,
+      "candidate_allocs_per_op": 1021,
+      "samples_per_variant": 3
+    },
+    {
+      "component": "Overlay shadow",
+      "fixture": "120 columns by 40 rows",
+      "baseline_ns_per_op": 122344,
+      "candidate_ns_per_op": 11076,
+      "baseline_bytes_per_op": 637748,
+      "candidate_bytes_per_op": 17712,
+      "baseline_allocs_per_op": 142,
+      "candidate_allocs_per_op": 26,
+      "samples_per_variant": 3
+    },
+    {
+      "component": "Grep formatting",
+      "fixture": "100 matches, exact output comparison",
+      "baseline_ns_per_op": 408294,
+      "candidate_ns_per_op": 68711,
+      "baseline_bytes_per_op": 1798918,
+      "candidate_bytes_per_op": 115377,
+      "baseline_allocs_per_op": 407,
+      "candidate_allocs_per_op": 142,
+      "samples_per_variant": 1
+    },
+    {
+      "component": "UTF-16 replacement offsets",
+      "fixture": "1000 edits in a synthetic 100 kB document",
+      "baseline_ns_per_op": 7774032,
+      "candidate_ns_per_op": 67603,
+      "baseline_bytes_per_op": 70208,
+      "candidate_bytes_per_op": 41008,
+      "baseline_allocs_per_op": 10,
+      "candidate_allocs_per_op": 3,
+      "samples_per_variant": 3
+    },
+    {
+      "component": "Adapter version regex",
+      "fixture": "compile per observation versus reuse compiled regex",
+      "baseline_ns_per_op": 35639,
+      "candidate_ns_per_op": 155,
+      "baseline_bytes_per_op": 65921,
+      "candidate_bytes_per_op": 0,
+      "baseline_allocs_per_op": 303,
+      "candidate_allocs_per_op": 0,
+      "samples_per_variant": 1
+    }
+  ],
+  "regressions_fixed": [
+    "Permission denial stops the remaining tool batch",
+    "Agent events retain activity, completion and notification commands",
+    "Debug log creation closes the file handle",
+    "Workspace watcher creation failure returns safely",
+    "Malformed Sourcegraph line numbers do not index negative positions",
+    "Attach input Scanner reports read errors and lines above the existing 32000-byte limit"
+  ],
+  "preserved_boundaries": [
+    "Explicit command and network permissions",
+    "Bubblewrap isolation and credential masks",
+    "Current native source read receipts, hashes and delivered lines",
+    "Transaction CAS checks and rollback",
+    "Original evaluation criteria"
+  ],
+  "generated_code": {
+    "generator_header": "sqlc v1.29.0",
+    "normalizer_reproduced_baseline_output": true,
+    "external_sqlc_cli_invoked": false
+  },
+  "live_acceptance": {
+    "test": "TestLiveOllamaPTYUI",
+    "model": "llama3.1:8b",
+    "protocol": "native Ollama",
+    "loopback_only": true,
+    "duration_seconds": 27.32,
+    "result": "passed",
+    "isolated_home_workspace_and_credentials": true,
+    "sandbox": "bubblewrap",
+    "flow": [
+      "Unicode paste",
+      "3–8 row input",
+      "three terminal resizes",
+      "model catalog search/provider failure/retry/deletion",
+      "modal keyboard focus",
+      "Ask mode source evidence",
+      "explicitly approved LSP probe",
+      "one explicitly approved PTY command",
+      "live output before command exit",
+      "human terminal input",
+      "queued user instruction"
+    ],
+    "toolchain": "go1.27.3",
+    "prior_run_seconds": 28.73
+  },
+  "marker_audit": {
+    "inactive_copilot_monkey_patch": "removed",
+    "overlay_fixme": "explicit policy preserved and output equivalence tested",
+    "view_image_todo": "text-only boundary retained and documented",
+    "lsp_uri_compatibility": "retained for URI interoperability",
+    "lsp_quickfix_action_kind": "retained as supported protocol data",
+    "watcher_exclusions_configuration_todo": "future optional configurability; current fixed exclusions preserved"
+  },
+  "project_go": {
+    "minimum": "1.27.0",
+    "recommended_toolchain": "1.27.3",
+    "ci": "1.27.x",
+    "local_toolchain_verified": "go1.27.3",
+    "benchmark_toolchain": "go1.27.0"
+  },
+  "gopls_audit": {
+    "version": "v0.23.0",
+    "files_inspected_before_modernization": 575,
+    "scope": "errors, warnings, performance opportunities and optional modernization hints",
+    "performance_modernizers": [
+      "SplitSeq/FieldsSeq iteration",
+      "strings.Builder",
+      "maps.Copy",
+      "slices helpers",
+      "direct formatted writes"
+    ],
+    "preserved_semantics": [
+      "Explicit test cancellation ordering",
+      "Explicit goroutine lifecycle",
+      "Public parameter types and arity",
+      "Generated LSP JSON behavior"
+    ]
+  },
+  "build_validation": {
+    "linux_amd64": "build and native PTY passed",
+    "windows_amd64": "cross-build passed; native execution not performed",
+    "darwin_arm64": "cross-build passed; native execution not performed",
+    "toolchain": "go1.27.3"
+  }
+}

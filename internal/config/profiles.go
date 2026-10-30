@@ -324,21 +324,14 @@ func StoredProviderKey(id string, legacy bool) string {
 		if json.Unmarshal(data, &file) != nil {
 			continue
 		}
-		if legacy {
-			if p, ok := file.Providers[models.ModelProvider(id)]; ok {
-				if p.APIKeyEnv != "" || p.APIKeyRef != "" {
-					return ""
-				}
-				return p.APIKey
-			}
-		} else {
-			if p, ok := file.ProviderProfiles[id]; ok {
-				if p.APIKeyEnv != "" || p.APIKeyRef != "" {
-					return ""
-				}
-				return p.APIKey
-			}
+		provider, exists := storedProvider(file, id, legacy)
+		if !exists {
+			continue
 		}
+		if provider.APIKeyEnv != "" || provider.APIKeyRef != "" {
+			return ""
+		}
+		return provider.APIKey
 	}
 	return ""
 }
@@ -361,4 +354,13 @@ func configuredFilePath() string {
 
 func requiresAPIKey(backend models.ModelProvider) bool {
 	return backend != models.ProviderLocal && backend != models.ProviderBedrock && backend != models.ProviderVertexAI && backend != models.ProviderAzure
+}
+
+func storedProvider(file Config, id string, legacy bool) (Provider, bool) {
+	if legacy {
+		p, ok := file.Providers[models.ModelProvider(id)]
+		return p, ok
+	}
+	p, ok := file.ProviderProfiles[id]
+	return p.Provider, ok
 }

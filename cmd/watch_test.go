@@ -89,7 +89,7 @@ func TestWatchProjectionIsBoundedRedactedAndControlSafe(t *testing.T) {
 }
 func TestWatchPaginationAndOversizedParts(t *testing.T) {
 	path, writer := watchFixture(t)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		insertWatchText(t, writer, string(rune('a'+i)), "user", "message", "", 1)
 	}
 	_, err := writer.Exec(`INSERT INTO messages VALUES ('oversized','one','assistant',?,999999999999999999,1)`, strings.Repeat("x", watchPartsLimit+1))

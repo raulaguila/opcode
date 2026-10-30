@@ -154,20 +154,7 @@ func newMCPClient(server config.MCPServer) (MCPClient, error) {
 		return nil, err
 	}
 	if server.OAuth != nil {
-		oauth, store, err := oauthClientConfig(server, "")
-		if err != nil {
-			return nil, err
-		}
-		if _, err := store.GetToken(context.Background()); err != nil {
-			return nil, fmt.Errorf("MCP OAuth login required: use opcode mcp login <server>")
-		}
-		if server.Type == config.MCPHTTP {
-			return client.NewOAuthStreamableHttpClient(server.URL, oauth, transport.WithHTTPHeaders(server.Headers), transport.WithHTTPBasicClient(oauth.HTTPClient))
-		}
-		if server.Type == config.MCPSse {
-			return client.NewOAuthSSEClient(server.URL, oauth, client.WithHeaders(server.Headers), client.WithHTTPClient(oauth.HTTPClient))
-		}
-		return nil, fmt.Errorf("OAuth requires HTTP or SSE transport")
+		return newOAuthMCPClient(server)
 	}
 	switch server.Type {
 	case "", config.MCPStdio:
@@ -196,4 +183,23 @@ func newMCPClient(server config.MCPServer) (MCPClient, error) {
 // a process or connects to a remote endpoint during application initialization.
 func GetMcpTools(_ context.Context, permissions permission.Service) []tools.BaseTool {
 	return []tools.BaseTool{&mcpCatalogTool{permissions: permissions, factory: newMCPClient}, &mcpCallTool{permissions: permissions, factory: newMCPClient}}
+}
+
+func newOAuthMCPClient(server config.MCPServer) (MCPClient, error) {
+
+	oauth, store, err := oauthClientConfig(server, "")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := store.GetToken(context.Background()); err != nil {
+		return nil, fmt.Errorf("MCP OAuth login required: use opcode mcp login <server>")
+	}
+	if server.Type == config.MCPHTTP {
+		return client.NewOAuthStreamableHttpClient(server.URL, oauth, transport.WithHTTPHeaders(server.Headers), transport.WithHTTPBasicClient(oauth.HTTPClient))
+	}
+	if server.Type == config.MCPSse {
+		return client.NewOAuthSSEClient(server.URL, oauth, client.WithHeaders(server.Headers), client.WithHTTPClient(oauth.HTTPClient))
+	}
+	return nil, fmt.Errorf("OAuth requires HTTP or SSE transport")
+
 }

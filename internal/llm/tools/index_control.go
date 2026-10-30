@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -87,11 +88,7 @@ func ControlCodeIndex(ctx context.Context, action, path string) (IndexStatus, er
 		return status, fmt.Errorf("index action: status, update, rebuild, pause, resume, clear or explain")
 	}
 	if action == "explain" {
-		target := absolutePath(path)
-		status.Exclusion = ExclusionReason(root, target)
-		if status.Exclusion == "" {
-			status.Exclusion = "eligible; binary/size/scan limits are checked during update"
-		}
+		status.Exclusion = indexExclusion(root, path)
 		return status, nil
 	}
 	db, err := openCodeIndex(ctx, root)
@@ -100,59 +97,18 @@ func ControlCodeIndex(ctx context.Context, action, path string) (IndexStatus, er
 	}
 	defer db.Close()
 	if action == "clear" {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return status, err
-		}
-		for _, q := range []string{"DELETE FROM chunks", "DELETE FROM files", "DELETE FROM embeddings"} {
-			if _, err := tx.ExecContext(ctx, q); err != nil {
-				tx.Rollback()
-				return status, err
-			}
-		}
-		if err := tx.Commit(); err != nil {
+		if err := clearCodeIndex(ctx, db); err != nil {
 			return status, err
 		}
 	}
 	if action == "update" || action == "rebuild" {
-		if status.Paused {
-			return status, fmt.Errorf("index paused; resume before updating")
-		}
-		if action == "rebuild" {
-			ctx = context.WithValue(ctx, indexRebuildKey{}, true)
-		}
-		stats, err := refreshCodeIndex(ctx, db, root)
+		ctx, err = updateControlledIndex(ctx, action, root, db, &status)
 		if err != nil {
 			return status, err
 		}
-		status.UpdatedFiles = stats.Updated
-		status.ReusedFiles = stats.Reused
-		status.Pending = stats.Pending
 	}
-	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM files").Scan(&status.Files); err != nil {
-		return status, err
-	}
-	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM chunks").Scan(&status.Chunks); err != nil {
-		return status, err
-	}
-	digest := sha256.New()
-	rows, err := db.QueryContext(ctx, "SELECT path,digest FROM files ORDER BY path")
-	if err != nil {
-		return status, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var p, h string
-		if err := rows.Scan(&p, &h); err != nil {
-			return status, err
-		}
-		fmt.Fprintf(digest, "%s\x00%s\n", p, h)
-	}
-	if err := rows.Err(); err != nil {
-		return status, err
-	}
-	status.Snapshot = fmt.Sprintf("%x", digest.Sum(nil))
-	return status, nil
+	err = populateCodeIndexStatus(ctx, db, &status)
+	return status, err
 }
 
 // IndexWatcher owns its goroutine and OS handles; Close cancels in-progress
@@ -194,50 +150,15 @@ func (w *IndexWatcher) watch(ctx context.Context) {
 	defer ticker.Stop()
 	timer := time.NewTimer(150 * time.Millisecond)
 	defer timer.Stop()
-	refresh := func() {
-		limits := indexLimits()
-		if limits.Background != nil && !*limits.Background {
-			return
-		}
-		updateCtx, cancel := context.WithTimeout(ctx, time.Duration(limits.UpdateSeconds)*time.Second)
-		defer cancel()
-		status, err := ControlCodeIndex(context.WithValue(updateCtx, indexBatchLimitKey{}, 8), "update", "")
-		if err == nil && status.Pending > 0 {
-			timer.Reset(time.Second)
-		}
-		w.mu.Lock()
-		if err != nil {
-			w.lastError = "Background index unavailable; run /index or opcode index update for details"
-		} else {
-			w.lastError = ""
-		}
-		w.mu.Unlock()
-		if watch != nil {
-			files, _, e := scopedFilePaths(updateCtx, root, retrievalScope{}, nil)
-			if e == nil {
-				existing := map[string]bool{}
-				for _, dir := range watch.WatchList() {
-					existing[dir] = true
-				}
-				for _, path := range files {
-					dir := filepath.Dir(filepath.Join(root, path))
-					if !existing[dir] && len(existing) < 2048 {
-						if watch.Add(dir) == nil {
-							existing[dir] = true
-						}
-					}
-				}
-			}
-		}
-	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			refresh()
+			w.refresh(ctx, root, watch, timer)
 		case <-ticker.C:
-			refresh()
+			w.refresh(ctx, root, watch, timer)
 		case _, ok := <-failures:
 			if !ok {
 				failures = nil
@@ -247,14 +168,8 @@ func (w *IndexWatcher) watch(ctx context.Context) {
 				events = nil
 				continue
 			}
-			if filepath.Base(event.Name) == ".gitignore" || filepath.Base(event.Name) == ".opcodeignore" || ExclusionReason(root, event.Name) == "" {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timer.Reset(150 * time.Millisecond)
+			if shouldRefreshIndexEvent(root, event) {
+				resetIndexTimer(timer, 150*time.Millisecond)
 			}
 		}
 	}
@@ -290,4 +205,128 @@ func prioritizeIndexPaths(paths []string) {
 		}
 		return paths[i] < paths[j]
 	})
+}
+
+func (w *IndexWatcher) refresh(ctx context.Context, root string, watch *fsnotify.Watcher, timer *time.Timer) {
+	limits := indexLimits()
+	if limits.Background != nil && !*limits.Background {
+		return
+	}
+	updateCtx, cancel := context.WithTimeout(ctx, time.Duration(limits.UpdateSeconds)*time.Second)
+	defer cancel()
+	status, err := ControlCodeIndex(context.WithValue(updateCtx, indexBatchLimitKey{}, 8), "update", "")
+	if err == nil && status.Pending > 0 {
+		timer.Reset(time.Second)
+	}
+	w.mu.Lock()
+	if err != nil {
+		w.lastError = "Background index unavailable; run /index or opcode index update for details"
+	} else {
+		w.lastError = ""
+	}
+	w.mu.Unlock()
+	if watch != nil {
+		syncIndexWatchDirectories(updateCtx, root, watch)
+	}
+}
+
+func shouldRefreshIndexEvent(root string, event fsnotify.Event) bool {
+	base := filepath.Base(event.Name)
+	return base == ".gitignore" || base == ".opcodeignore" || ExclusionReason(root, event.Name) == ""
+}
+func resetIndexTimer(timer *time.Timer, delay time.Duration) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(delay)
+}
+func syncIndexWatchDirectories(ctx context.Context, root string, watch *fsnotify.Watcher) {
+	files, _, err := scopedFilePaths(ctx, root, retrievalScope{}, nil)
+	if err != nil {
+		return
+	}
+	existing := map[string]bool{}
+	for _, dir := range watch.WatchList() {
+		existing[dir] = true
+	}
+	for _, path := range files {
+		dir := filepath.Dir(filepath.Join(root, path))
+		if !existing[dir] && len(existing) < 2048 {
+			if watch.Add(dir) == nil {
+				existing[dir] = true
+			}
+		}
+	}
+}
+
+func clearCodeIndex(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	for _, q := range []string{"DELETE FROM chunks", "DELETE FROM files", "DELETE FROM embeddings"} {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func populateCodeIndexStatus(ctx context.Context, db *sql.DB, status *IndexStatus) error {
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM files").Scan(&status.Files); err != nil {
+		return err
+	}
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM chunks").Scan(&status.Chunks); err != nil {
+		return err
+	}
+	digest := sha256.New()
+	rows, err := db.QueryContext(ctx, "SELECT path,digest FROM files ORDER BY path")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p, h string
+		if err := rows.Scan(&p, &h); err != nil {
+			return err
+		}
+		fmt.Fprintf(digest, "%s\x00%s\n", p, h)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	status.Snapshot = fmt.Sprintf("%x", digest.Sum(nil))
+	return nil
+}
+
+func updateControlledIndex(ctx context.Context, action, root string, db *sql.DB, status *IndexStatus) (context.Context, error) {
+	if status.Paused {
+		return ctx, fmt.Errorf("index paused; resume before updating")
+	}
+	if action == "rebuild" {
+		ctx = context.WithValue(ctx, indexRebuildKey{}, true)
+	}
+	stats, err := refreshCodeIndex(ctx, db, root)
+	if err != nil {
+		return ctx, err
+	}
+	status.UpdatedFiles = stats.Updated
+	status.ReusedFiles = stats.Reused
+	status.Pending = stats.Pending
+	return ctx, nil
+}
+
+func indexExclusion(root, path string) string {
+	reason := ExclusionReason(root, absolutePath(path))
+	if reason == "" {
+		return "eligible; binary/size/scan limits are checked during update"
+	}
+	return reason
 }

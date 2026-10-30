@@ -60,26 +60,7 @@ func TestLocalLanguageDeclarations(t *testing.T) {
 	for _, f := range fixtures {
 		covered[sourceLanguage(f.path)] = true
 		t.Run(f.path, func(t *testing.T) {
-			symbols, err := localOutline(context.Background(), f.path, []byte(f.source))
-			require.NoError(t, err)
-			names := []string{}
-			for _, s := range symbols {
-				names = append(names, s.Name)
-				if expected, ok := ranges[sourceLanguage(f.path)]; ok && s.Name == f.symbol {
-					require.Equal(t, expected, [2]int{s.Start, s.End}, "declaration range must use original source lines")
-				}
-				require.GreaterOrEqual(t, s.Start, 1)
-				require.GreaterOrEqual(t, s.End, s.Start)
-			}
-			require.Contains(t, names, f.symbol)
-			found := false
-			for _, c := range codeChunks(f.path, f.source) {
-				if c.Symbol == f.symbol {
-					found = true
-					require.Contains(t, c.Content, "37")
-				}
-			}
-			require.True(t, found, "structural declaration must reach index chunks: %s", strings.Join(names, ","))
+			assertLocalDeclaration(t, f.path, f.source, f.symbol, ranges)
 		})
 	}
 	registered := RegisteredLanguageSupport()
@@ -121,4 +102,30 @@ func TestExpressionShapedNodesAreNotDeclarations(t *testing.T) {
 			require.Empty(t, symbols)
 		})
 	}
+}
+
+func assertLocalDeclaration(t *testing.T, path, source, symbol string, ranges map[string][2]int) {
+	t.Helper()
+
+	symbols, err := localOutline(context.Background(), path, []byte(source))
+	require.NoError(t, err)
+	names := []string{}
+	for _, s := range symbols {
+		names = append(names, s.Name)
+		if expected, ok := ranges[sourceLanguage(path)]; ok && s.Name == symbol {
+			require.Equal(t, expected, [2]int{s.Start, s.End}, "declaration range must use original source lines")
+		}
+		require.GreaterOrEqual(t, s.Start, 1)
+		require.GreaterOrEqual(t, s.End, s.Start)
+	}
+	require.Contains(t, names, symbol)
+	found := false
+	for _, c := range codeChunks(path, source) {
+		if c.Symbol == symbol {
+			found = true
+			require.Contains(t, c.Content, "37")
+		}
+	}
+	require.True(t, found, "structural declaration must reach index chunks: %s", strings.Join(names, ","))
+
 }

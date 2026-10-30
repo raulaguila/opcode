@@ -14,7 +14,9 @@ verificações executadas; os recursos disponíveis não garantem correção ger
 
 ## Instalar e executar
 
-Use Go 1.26 ou posterior para compilar o checkout:
+Use Go 1.27 ou posterior para compilar o checkout. O módulo recomenda a toolchain
+1.27.3; com `GOTOOLCHAIN=auto`, o Go pode obtê-la automaticamente. O CI acompanha
+os patches da linha 1.27:
 
 ```sh
 git clone --branch develop https://github.com/raulaguila/opcode.git
@@ -242,6 +244,22 @@ go vet ./...
 go build .
 go run . evaluate --output /tmp/opcode-fixtures.json
 ```
+
+O gate de manutenção usa Gocognit 1.3.0 e Staticcheck 0.8.2. As ferramentas de
+análise são instaladas separadamente; não entram nas dependências da aplicação:
+
+```sh
+go install github.com/uudashr/gocognit/cmd/gocognit@v1.3.0
+go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+make complexity staticcheck
+```
+
+O limite é 15 por função, incluindo testes e código gerado, sem exclusões.
+Staticcheck cobre também os arquivos com a tag `integration`, sem executar
+as APIs reais. `make quality` reúne complexidade, Staticcheck, vet e a suíte comum. O CI também
+executa a suíte com detector de corridas e verifica o inventário gerado de linguagens.
+Para regenerar o código SQLC, consulte `internal/db/generate.go`: o pós-processador
+reproduzível de prepared statements mantém os métodos gerados dentro do limite.
 
 A avaliação offline verifica contratos das fixtures; não executa nem simula um
 agente. O modo real exige `--live --provider-config /caminho/provedor.json` e pode

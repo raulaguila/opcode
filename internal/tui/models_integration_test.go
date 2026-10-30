@@ -58,6 +58,9 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 	selected := models.Model{ID: "local.old:8b", Name: "Old local", Provider: models.ProviderLocal, APIModel: "old:8b", API: "ollama", ContextWindow: 16384, DefaultMaxTokens: 2048}
 	cfg.Providers = map[models.ModelProvider]config.Provider{models.ProviderLocal: {BaseURL: "http://local.invalid/v1", API: "ollama", ContextWindow: 16384, DefaultMaxTokens: 2048}}
 	cfg.Agents = maps.Clone(cfg.Agents)
+	if cfg.Agents == nil {
+		cfg.Agents = map[config.AgentName]config.Agent{}
+	}
 	cfg.Agents[config.AgentCoder] = config.Agent{Model: selected.ID, MaxTokens: 2048}
 	cfg.Models = map[models.ModelID]models.Model{selected.ID: selected}
 	models.SupportedModels[selected.ID] = selected
@@ -96,8 +99,8 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 			select {
 			case frame := <-harness.frames:
 				lastFrame = frame
-				if strings.Contains(frame, text) && (sized || lipgloss.Width(frame) == 110) {
-					return frame
+				if result0, handled := testUserClicksActiveModelSearchesProviderAndPersistsSelectionLipglossWidthFrame(sized, text, frame); handled {
+					return result0
 				}
 			case <-timer.C:
 				t.Fatalf("model UI did not render %q; last frame:\n%s", text, lastFrame)
@@ -120,13 +123,7 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 	lines = strings.Split(frame, "\n")
 	y := -1
 	x = -1
-	for i, line := range lines {
-		if strings.Contains(line, "new.model:7b") {
-			y = i
-			x = strings.Index(line, "new.model:7b")
-			break
-		}
-	}
+	testUserClicksActiveModelSearchesProviderAndPersistsSelectionLines(lines, &x, &y)
 	require.GreaterOrEqual(t, y, 0)
 	program.Send(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	wait("Model changed to")
@@ -138,4 +135,21 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 	saved, err := os.ReadFile(filepath.Join(root, ".opcode.json"))
 	require.NoError(t, err)
 	require.Contains(t, string(saved), "local.new.model:7b")
+}
+
+func testUserClicksActiveModelSearchesProviderAndPersistsSelectionLipglossWidthFrame(sized bool, text string, frame string) (extractedResult0 string, handled bool) {
+	if strings.Contains(frame, text) && (sized || lipgloss.Width(frame) == 110) {
+		return frame, true
+	}
+	return extractedResult0, false
+}
+
+func testUserClicksActiveModelSearchesProviderAndPersistsSelectionLines(lines []string, x *int, y *int) {
+	for i, line := range lines {
+		if strings.Contains(line, "new.model:7b") {
+			(*y) = i
+			(*x) = strings.Index(line, "new.model:7b")
+			break
+		}
+	}
 }

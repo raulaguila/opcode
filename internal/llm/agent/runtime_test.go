@@ -127,7 +127,7 @@ func TestRepeatedCallsStopAndSaveBlockedTask(t *testing.T) {
 	a.tools = []tools.BaseTool{repeat}
 	done, err := a.Run(context.Background(), "s", "Investigue")
 	require.NoError(t, err)
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		call := nextGeneration(t, p)
 		replyTools(call, toolCall("view", `{"x":1}`))
 	}
@@ -138,36 +138,7 @@ func TestRepeatedCallsStopAndSaveBlockedTask(t *testing.T) {
 }
 func TestStepAndResultBudgetsBoundGeneration(t *testing.T) {
 	for _, kind := range []string{"steps", "results"} {
-		t.Run(kind, func(t *testing.T) {
-			a, p, m, _ := runtimeAgent(t, workflow.Execute)
-			cfg := config.Get()
-			cfg.Runtime.MaxSteps = 1
-			cfg.Runtime.ToolBudget = 4096
-			output := "result"
-			if kind == "results" {
-				cfg.Runtime.MaxSteps = 10
-				output = strings.Repeat("x", 8192)
-			}
-			a.tools = []tools.BaseTool{&countedTool{name: "view", output: output}}
-			done, err := a.Run(context.Background(), "s", "Investigue")
-			require.NoError(t, err)
-			call := nextGeneration(t, p)
-			replyTools(call, toolCall("view", `{}`))
-			result := finishGeneration(t, done)
-			require.Error(t, result.Error)
-			if kind == "steps" {
-				require.ErrorContains(t, result.Error, "step limit")
-			} else {
-				require.ErrorContains(t, result.Error, "budget")
-				items, err := m.List(context.Background(), "s")
-				require.NoError(t, err)
-				for _, item := range items {
-					for _, result := range item.ToolResults() {
-						require.LessOrEqual(t, len(result.Content), 4096)
-					}
-				}
-			}
-		})
+		t.Run(kind, func(t *testing.T) { testStepAndResultBudget(t, kind) })
 	}
 }
 func TestModeCannotChangeDuringRunAndRevokesOnIdleChange(t *testing.T) {
@@ -313,4 +284,35 @@ func TestTurnDeadlineCancelsSilentProviderAndKeepsTask(t *testing.T) {
 	task, err := a.workflow.Get(context.Background(), "s")
 	require.NoError(t, err)
 	require.Equal(t, "blocked", task.Status)
+}
+
+func testStepAndResultBudget(t *testing.T, kind string) {
+	a, p, m, _ := runtimeAgent(t, workflow.Execute)
+	cfg := config.Get()
+	cfg.Runtime.MaxSteps = 1
+	cfg.Runtime.ToolBudget = 4096
+	output := "result"
+	if kind == "results" {
+		cfg.Runtime.MaxSteps = 10
+		output = strings.Repeat("x", 8192)
+	}
+	a.tools = []tools.BaseTool{&countedTool{name: "view", output: output}}
+	done, err := a.Run(context.Background(), "s", "Investigue")
+	require.NoError(t, err)
+	call := nextGeneration(t, p)
+	replyTools(call, toolCall("view", `{}`))
+	result := finishGeneration(t, done)
+	require.Error(t, result.Error)
+	if kind == "steps" {
+		require.ErrorContains(t, result.Error, "step limit")
+	} else {
+		require.ErrorContains(t, result.Error, "budget")
+		items, err := m.List(context.Background(), "s")
+		require.NoError(t, err)
+		for _, item := range items {
+			for _, result := range item.ToolResults() {
+				require.LessOrEqual(t, len(result.Content), 4096)
+			}
+		}
+	}
 }

@@ -5,6 +5,78 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Manutenção e desempenho — 29/10/2026
+
+A auditoria partiu de `a25c481`. `gocognit -over 15 .` encontrou 336 funções,
+incluindo 31 em testes e duas no arquivo gerado pelo SQLC. Após a decomposição
+por responsabilidade, o mesmo comando e a variante `-exact-recursion` retornaram
+zero ocorrências. O limite permaneceu em 15; nenhum arquivo foi excluído.
+Os 91 diagnósticos iniciais do Staticcheck foram resolvidos; a análise com
+`-tags integration` também terminou sem diagnósticos.
+
+Passaram a suíte completa `go test -race -p 1 ./...`, `go vet ./...`, a compilação
+dos testes com tag `integration` sem execução das APIs e o inventário de linguagens.
+O pós-processador SQLC reproduziu exatamente o `db.go` atual a partir da saída
+gerada do commit inicial; não foi necessário executar um SQLC externo.
+
+Foram corrigidas falhas de continuação do lote após negar permissão, descarte de
+comandos de atividade/conclusão na interface, descritor de log deixado aberto,
+falha na criação do watcher, índice negativo em resultados Sourcegraph malformados
+e erros de leitura do Scanner do cliente attach. O limite de entrada de 32.000
+bytes foi preservado; falhas de leitura agora chegam ao caller sem falso EOF.
+Os testes preservam aprovações, sandbox, CAS/rollback, recibos de leitura e os
+critérios das avaliações.
+
+A varredura complementar do gopls 0.23.0 considerou 575 arquivos. Modernizações
+oficiais do Go removeram alocações em iterações sobre texto e simplificaram
+coleções e escritas de saída. Sugestões que mudariam JSON gerado, layout de
+campos atômicos, cancelamento explícito de testes ou ciclo de goroutines não
+foram aplicadas automaticamente. As assinaturas públicas continuam com os
+mesmos tipos e aridade.
+
+O módulo passou a exigir Go 1.27.0, recomenda a toolchain 1.27.3 e o CI acompanha
+`1.27.x`. Fixtures de projetos Go 1.26 permanecem como casos de compatibilidade;
+os dados e critérios dessas fixtures não foram migrados. A troca da toolchain
+não altera formatos de configuração, bancos ou recibos de leitura. Os
+benchmarks abaixo foram coletados com Go 1.27.0 e não constituem uma comparação
+entre Go 1.26 e Go 1.27.
+
+Microbenchmarks locais em Linux amd64, Go 1.27.0, Core i9-12900K:
+
+| Trecho e fixture | B/op antes | B/op depois | Alocações antes → depois |
+| --- | ---: | ---: | ---: |
+| Sourcegraph: 100 ocorrências, arquivo de 2.000 linhas | 3.372.399 | 108.593 | 1.634 → 1.021 |
+| Sombra do overlay, 120×40 | 637.748 | 17.712 | 142 → 26 |
+| Formatação grep, 100 ocorrências | 1.798.918 | 115.377 | 407 → 142 |
+| Conversão UTF-16, 1.000 edições / 100 kB | 70.208 | 41.008 | 10 → 3 |
+| Regex da versão de adapter | 65.921 | 0 | 303 → 0 |
+
+Na conversão UTF-16, a mediana local caiu de 7,774 ms para 67,603 µs por operação.
+As medições são de componentes e fixtures sintéticas, com três amostras onde
+indicado no [registro estruturado](evidence/2026-10-29-maintenance.json); regex e
+grep têm uma amostra. Elas não medem a latência geral do agente nem a inferência
+do modelo. A equivalência da saída é verificada pelos testes dos formatters e
+do overlay, incluindo Unicode e ANSI.
+
+A aceitação `TestLiveOllamaPTYUI` passou com o binário real e `llama3.1:8b` no
+Ollama em loopback. A execução final com Go 1.27.3 terminou em 27,32 segundos
+(a execução anterior com Go 1.27.0 levou 28,73 segundos). Esses tempos isolados
+não demonstram uma melhora de latência da toolchain. O fluxo cobriu colagem Unicode, input de
+3–8 linhas, três redimensionamentos, catálogos/modelos, foco de modais, evidências
+em modo Ask, probe LSP aprovado separadamente, um comando PTY aprovado, saída ao
+vivo, entrada humana e uma nova instrução enquanto o comando aguardava entrada.
+HOME, credenciais e repositório eram fixtures descartáveis; Bubblewrap permaneceu
+habilitado e os arquivos de fonte foram comparados no final. Builds Go 1.27.3
+também passaram para Linux amd64, Windows amd64 e macOS ARM64; os dois últimos
+foram compilados de forma cruzada, sem execução nativa.
+
+A varredura dos marcadores removeu o remendo Copilot inativo. A limitação de imagens
+no leitor de texto ficou explícita; as compatibilidades de URI e a ação `quickfix`
+do protocolo LSP foram preservadas. O TODO de tornar as exclusões do watcher
+configuráveis permanece como possibilidade de configuração futura; as exclusões
+atuais continuam protegendo o workspace. Makefile e CI verificam complexidade e
+Staticcheck com versões fixas, incluindo a tag `integration` na análise estática.
+
 ## Ollama real — 28/10/2026
 
 Modelo instalado: `llama3.1:8b`, API nativa do Ollama em loopback, janela

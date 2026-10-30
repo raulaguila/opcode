@@ -58,21 +58,7 @@ func (p *processTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 		return NewTextErrorResponse(err.Error()), nil
 	}
 	if p.name == "process_write" {
-		if len(input.Data) == 0 || len(input.Data) > 16384 || redact(input.Data) != input.Data {
-			return NewTextErrorResponse("invalid terminal input or configured credential in input"), nil
-		}
-		if p.permissions == nil || !p.permissions.Request(ctx, permission.CreatePermissionRequest{
-			SessionID: owner, ToolName: p.name, Action: "write_stdin:" + record.id, Path: config.WorkingDirectory(),
-			Description: "Send input to interactive process", Params: map[string]string{"id": input.ID, "data": input.Data},
-		}) {
-			return ToolResponse{}, permission.ErrorPermissionDenied
-		}
-		if err := ctx.Err(); err != nil {
-			return ToolResponse{}, err
-		}
-		if err := p.manager.Input(owner, input.ID, input.Data); err != nil {
-			return NewTextErrorResponse(err.Error()), nil
-		}
+		return p.writeInput(ctx, owner, record, input.ID, input.Data)
 	} else if p.name == "process_stop" {
 		if err := p.manager.Stop(ctx, owner, input.ID); err != nil {
 			return ToolResponse{}, err
@@ -84,3 +70,24 @@ func (p *processTool) Run(ctx context.Context, call ToolCall) (ToolResponse, err
 // A process tool borrows its manager; its application or factory owns shutdown.
 func (p *processTool) Close() error                 { return nil }
 func (p *processTool) CancelSession(session string) { p.manager.CancelSession(session) }
+
+func (p *processTool) writeInput(ctx context.Context, owner string, record *managedProcess, id, data string) (ToolResponse, error) {
+
+	if len(data) == 0 || len(data) > 16384 || redact(data) != data {
+		return NewTextErrorResponse("invalid terminal input or configured credential in input"), nil
+	}
+	if p.permissions == nil || !p.permissions.Request(ctx, permission.CreatePermissionRequest{
+		SessionID: owner, ToolName: p.name, Action: "write_stdin:" + record.id, Path: config.WorkingDirectory(),
+		Description: "Send input to interactive process", Params: map[string]string{"id": id, "data": data},
+	}) {
+		return ToolResponse{}, permission.ErrorPermissionDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return ToolResponse{}, err
+	}
+	if err := p.manager.Input(owner, id, data); err != nil {
+		return NewTextErrorResponse(err.Error()), nil
+	}
+
+	return p.manager.snapshot(record), nil
+}

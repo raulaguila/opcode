@@ -1,10 +1,19 @@
-.PHONY: test vet build release-local
+.PHONY: test vet build release-local complexity staticcheck quality
 
 test:
 	go test ./...
 
 vet:
 	go vet ./...
+
+complexity:
+	gocognit -over 15 .
+
+staticcheck:
+	staticcheck ./...
+	staticcheck -tags integration ./...
+
+quality: complexity staticcheck vet test
 
 build:
 	go build -trimpath -o bin/opcode .

@@ -79,7 +79,7 @@ func TestThemeEditorCompactResizeAndNoColorKeepFocus(t *testing.T) {
 	defer lipgloss.SetColorProfile(before)
 	for _, size := range []tea.WindowSizeMsg{{Width: 36, Height: 12}, {Width: 60, Height: 20}, {Width: 80, Height: 24}} {
 		m.Update(size)
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			view := m.View()
 			require.LessOrEqual(t, lipgloss.Width(view), size.Width)
 			require.LessOrEqual(t, lipgloss.Height(view), size.Height)
@@ -104,62 +104,64 @@ func TestThemeEditorFailedSettingsSaveRestoresDiskAndRegistry(t *testing.T) {
 		if existed {
 			name = "active_custom_palette"
 		}
-		t.Run(name, func(t *testing.T) {
-			m := editableTheme(t)
-			cfg := config.Get()
-			original, err := theme.PaletteFor("opcode")
-			require.NoError(t, err)
-			path, err := theme.CustomThemePath()
-			require.NoError(t, err)
-			var originalBytes []byte
-			if existed {
-				require.NoError(t, theme.SaveCustomPalette(original))
-				m.editor.restore = theme.CustomThemeName
-				m.currentTheme = theme.CustomThemeName
-				// Preserve user formatting exactly when rolling back.
-				data, err := json.Marshal(original)
-				require.NoError(t, err)
-				originalBytes = append([]byte(" \n"), append(data, '\n', '\n')...)
-				require.NoError(t, localstate.WriteBytes(path, originalBytes))
-			}
-			registeredBefore := theme.GetTheme(theme.CustomThemeName)
-			configuredBefore := cfg.TUI.Theme
-			m.editor.fields[1].SetValue("#ffb283")
-			m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
-			// Invalid JSON fails the config patch without relying on host file
-			// permissions (which behave differently when tests run as root).
-			configPath := viper.ConfigFileUsed()
-			require.NoError(t, os.WriteFile(configPath, []byte(`{`), 0600))
-			_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
-			require.Nil(t, cmd)
-			require.NotNil(t, m.editor)
-			require.Contains(t, m.editor.note, "previous palette restored")
-			require.Equal(t, configuredBefore, cfg.TUI.Theme)
-			if registeredBefore == nil {
-				require.Nil(t, theme.GetTheme(theme.CustomThemeName))
-			} else {
-				require.Same(t, registeredBefore, theme.GetTheme(theme.CustomThemeName))
-			}
-			if existed {
-				data, err := os.ReadFile(path)
-				require.NoError(t, err)
-				require.Equal(t, originalBytes, data)
-			} else {
-				require.NoFileExists(t, path)
-			}
-			m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-			require.Nil(t, m.editor)
-			require.Equal(t, m.currentTheme, theme.CurrentThemeName())
-			require.Equal(t, original.Primary, theme.CurrentTheme().Primary())
-			require.NoError(t, theme.LoadCustomTheme())
-			if existed {
-				loaded, err := theme.PaletteFor(theme.CustomThemeName)
-				require.NoError(t, err)
-				require.Equal(t, original, loaded, "restart must keep the last successful palette")
-			}
-			configBytes, err := os.ReadFile(configPath)
-			require.NoError(t, err)
-			require.Equal(t, []byte(`{`), configBytes)
-		})
+		t.Run(name, func(t *testing.T) { testThemeEditorFailedSettingsSaveRestoresDiskAndRegistryCallback(&existed, t) })
 	}
+}
+
+func testThemeEditorFailedSettingsSaveRestoresDiskAndRegistryCallback(existed *bool, t *testing.T) {
+	m := editableTheme(t)
+	cfg := config.Get()
+	original, err := theme.PaletteFor("opcode")
+	require.NoError(t, err)
+	path, err := theme.CustomThemePath()
+	require.NoError(t, err)
+	var originalBytes []byte
+	if *existed {
+		require.NoError(t, theme.SaveCustomPalette(original))
+		m.editor.restore = theme.CustomThemeName
+		m.currentTheme = theme.CustomThemeName
+		// Preserve user formatting exactly when rolling back.
+		data, err := json.Marshal(original)
+		require.NoError(t, err)
+		originalBytes = append([]byte(" \n"), append(data, '\n', '\n')...)
+		require.NoError(t, localstate.WriteBytes(path, originalBytes))
+	}
+	registeredBefore := theme.GetTheme(theme.CustomThemeName)
+	configuredBefore := cfg.TUI.Theme
+	m.editor.fields[1].SetValue("#ffb283")
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	// Invalid JSON fails the config patch without relying on host file
+	// permissions (which behave differently when tests run as root).
+	configPath := viper.ConfigFileUsed()
+	require.NoError(t, os.WriteFile(configPath, []byte(`{`), 0600))
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	require.Nil(t, cmd)
+	require.NotNil(t, m.editor)
+	require.Contains(t, m.editor.note, "previous palette restored")
+	require.Equal(t, configuredBefore, cfg.TUI.Theme)
+	if registeredBefore == nil {
+		require.Nil(t, theme.GetTheme(theme.CustomThemeName))
+	} else {
+		require.Same(t, registeredBefore, theme.GetTheme(theme.CustomThemeName))
+	}
+	if *existed {
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Equal(t, originalBytes, data)
+	} else {
+		require.NoFileExists(t, path)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	require.Nil(t, m.editor)
+	require.Equal(t, m.currentTheme, theme.CurrentThemeName())
+	require.Equal(t, original.Primary, theme.CurrentTheme().Primary())
+	require.NoError(t, theme.LoadCustomTheme())
+	if *existed {
+		loaded, err := theme.PaletteFor(theme.CustomThemeName)
+		require.NoError(t, err)
+		require.Equal(t, original, loaded, "restart must keep the last successful palette")
+	}
+	configBytes, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Equal(t, []byte(`{`), configBytes)
 }

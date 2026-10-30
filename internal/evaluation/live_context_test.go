@@ -49,18 +49,7 @@ func testLiveOllamaFirstQuestion(t *testing.T, fixedWindow bool) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
 	defer cancel()
-	catalog, err := models.DiscoverLocalModels(ctx, endpoint, "")
-	require.NoError(t, err)
-	var selected models.Model
-	for _, model := range catalog {
-		if model.APIModel == modelName {
-			selected = model
-			break
-		}
-	}
-	require.NotEmpty(t, selected.ID, "the model must already be installed; this test never downloads weights")
-	require.Contains(t, []string{"ollama:model", "ollama:parameter"}, selected.ContextSource)
-
+	selected := installedLiveOllamaModel(t, ctx, endpoint, modelName)
 	root := t.TempDir()
 	home, workspace := filepath.Join(root, "home"), filepath.Join(root, "workspace")
 	require.NoError(t, os.MkdirAll(filepath.Join(home, ".opcode"), 0700))
@@ -104,16 +93,7 @@ func testLiveOllamaFirstQuestion(t *testing.T, fixedWindow bool) {
 	require.NoError(t, json.Unmarshal(output, &response))
 	require.NotEmpty(t, strings.TrimSpace(response.Response))
 	require.Contains(t, strings.ToLower(response.Response), "sensor", "answer must reflect the real README")
-	allocated, err := models.InspectOllama(ctx, endpoint, "")
-	require.NoError(t, err)
-	matched := false
-	for _, model := range allocated {
-		if model.Name == modelName || model.Name == modelName+":latest" {
-			matched = true
-			require.Equal(t, wantWindow, model.Context, "native request must honor discovery or the explicit manual limit")
-		}
-	}
-	require.True(t, matched)
+	requireLiveOllamaAllocation(t, ctx, endpoint, modelName, wantWindow)
 	for name, expected := range files {
 		actual, err := os.ReadFile(filepath.Join(workspace, name))
 		require.NoError(t, err)
@@ -132,4 +112,35 @@ func testLiveOllamaFirstQuestion(t *testing.T, fixedWindow bool) {
 		require.NotContains(t, string(saved), "context_window")
 	}
 	t.Logf("First project question passed with %d tokens allocated, mode %s and unchanged source files", wantWindow, mode)
+}
+
+func installedLiveOllamaModel(t *testing.T, ctx context.Context, endpoint, modelName string) models.Model {
+	t.Helper()
+	catalog, err := models.DiscoverLocalModels(ctx, endpoint, "")
+	require.NoError(t, err)
+	var selected models.Model
+	for _, model := range catalog {
+		if model.APIModel == modelName {
+			selected = model
+			break
+		}
+	}
+	require.NotEmpty(t, selected.ID, "the model must already be installed; this test never downloads weights")
+	require.Contains(t, []string{"ollama:model", "ollama:parameter"}, selected.ContextSource)
+
+	return selected
+}
+
+func requireLiveOllamaAllocation(t *testing.T, ctx context.Context, endpoint, modelName string, wantWindow int64) {
+	t.Helper()
+	allocated, err := models.InspectOllama(ctx, endpoint, "")
+	require.NoError(t, err)
+	matched := false
+	for _, model := range allocated {
+		if model.Name == modelName || model.Name == modelName+":latest" {
+			matched = true
+			require.Equal(t, wantWindow, model.Context, "native request must honor discovery or the explicit manual limit")
+		}
+	}
+	require.True(t, matched)
 }

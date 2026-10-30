@@ -90,6 +90,18 @@ func testLiveOllamaIndexWorkflow(t *testing.T, compound bool) {
 		}
 	}
 	require.Contains(t, response.Response, "37")
+	calls, results := liveRetrievalReceipts(t, ctx, state)
+	assertLiveRetrievalReceipts(t, calls, results)
+	for name, text := range files {
+		actual, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(name)))
+		require.NoError(t, err)
+		require.Equal(t, text, string(actual))
+	}
+	t.Logf("Real Ollama retrieval workflow: compound=%t, all four required operations verified at 16k; files unchanged", compound)
+}
+
+func liveRetrievalReceipts(t *testing.T, ctx context.Context, state string) (map[string]message.ToolCall, map[string]message.ToolResult) {
+	t.Helper()
 	db, err := sql.Open("sqlite3", filepath.Join(state, "opcode.db"))
 	require.NoError(t, err)
 	defer db.Close()
@@ -120,44 +132,50 @@ func testLiveOllamaIndexWorkflow(t *testing.T, compound bool) {
 		}
 	}
 	require.NoError(t, rows.Err())
-	first, next, index, read := false, false, false, false
+	return calls, results
+}
+
+type retrievalReceiptCoverage struct{ first, next, index, read bool }
+
+func (c *retrievalReceiptCoverage) observe(t *testing.T, call message.ToolCall, result message.ToolResult) {
+	t.Helper()
+	var args struct {
+		Path, Language string
+		Offset, Limit  int
+	}
+	require.NoError(t, json.Unmarshal([]byte(call.Input), &args))
+	t.Logf("Successful tool: %s path=%q language=%q offset=%d limit=%d", call.Name, args.Path, args.Language, args.Offset, args.Limit)
+	if call.Name == "ls" && args.Limit == 2 {
+		c.first = c.first || args.Offset == 0
+		c.next = c.next || args.Offset == 2
+		require.Contains(t, result.Content, "next_offset")
+	}
+	if call.Name == "search_code_index" && args.Language == "python" {
+		c.index = true
+		require.Contains(t, result.Content, "src/service.py")
+		require.NotContains(t, result.Content, "src/service.ts")
+	}
+	var view struct {
+		Path string `json:"file_path"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(call.Input), &view))
+	if call.Name == "view" && strings.HasSuffix(view.Path, "service.py") {
+		c.read = true
+	}
+}
+
+func assertLiveRetrievalReceipts(t *testing.T, calls map[string]message.ToolCall, results map[string]message.ToolResult) {
+	t.Helper()
+	coverage := retrievalReceiptCoverage{}
 	for id, call := range calls {
 		result, ok := results[id]
 		if !ok || result.IsError {
 			continue
 		}
-		var args struct {
-			Path, Language string
-			Offset, Limit  int
-		}
-		require.NoError(t, json.Unmarshal([]byte(call.Input), &args))
-		t.Logf("Successful tool: %s path=%q language=%q offset=%d limit=%d", call.Name, args.Path, args.Language, args.Offset, args.Limit)
-		if call.Name == "ls" && args.Limit == 2 {
-			first = first || args.Offset == 0
-			next = next || args.Offset == 2
-			require.Contains(t, result.Content, "next_offset")
-		}
-		if call.Name == "search_code_index" && args.Language == "python" {
-			index = true
-			require.Contains(t, result.Content, "src/service.py")
-			require.NotContains(t, result.Content, "src/service.ts")
-		}
-		var view struct {
-			Path string `json:"file_path"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(call.Input), &view))
-		if call.Name == "view" && strings.HasSuffix(view.Path, "service.py") {
-			read = true
-		}
+		coverage.observe(t, call, result)
 	}
-	require.True(t, first, "model must request the first bounded file page")
-	require.True(t, next, "model must request the next page")
-	require.True(t, index, "model must use the filtered index")
-	require.True(t, read, "model must read current source after the preview")
-	for name, text := range files {
-		actual, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(name)))
-		require.NoError(t, err)
-		require.Equal(t, text, string(actual))
-	}
-	t.Logf("Real Ollama retrieval workflow: compound=%t, all four required operations verified at 16k; files unchanged", compound)
+	require.True(t, coverage.first, "model must request the first bounded file page")
+	require.True(t, coverage.next, "model must request the next page")
+	require.True(t, coverage.index, "model must use the filtered index")
+	require.True(t, coverage.read, "model must read current source after the preview")
 }

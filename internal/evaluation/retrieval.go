@@ -152,20 +152,9 @@ func RunRetrieval(ctx context.Context, suite RetrievalSuite, raw []byte, executa
 	}
 	for _, c := range suite.Cases {
 		for _, strategy := range []string{"lexical", "hybrid"} {
-			if err := ctx.Err(); err != nil {
-				return report, err
-			}
-			base, root, err := Prepare(Case{Files: c.Files})
+			results, err := runPreparedRanking(ctx, c, strategy, executable, embeddings)
 			if err != nil {
 				return report, err
-			}
-			results, runErr := runRankingCase(ctx, base, root, c, strategy, executable, embeddings)
-			removeErr := os.RemoveAll(base)
-			if runErr != nil {
-				return report, runErr
-			}
-			if removeErr != nil {
-				return report, removeErr
 			}
 			report.Results = append(report.Results, results...)
 		}
@@ -201,30 +190,9 @@ func runRankingCase(ctx context.Context, base, root string, c RetrievalCase, str
 }
 
 func RetrievalWorker(ctx context.Context, jobPath string, out io.Writer) error {
-	raw, err := readBounded(jobPath, 2<<20)
+	job, err := prepareRankingWorker(jobPath)
 	if err != nil {
 		return err
-	}
-	var job rankingJob
-	if json.Unmarshal(raw, &job) != nil {
-		return fmt.Errorf("invalid ranking job")
-	}
-	base := filepath.Dir(jobPath)
-	if !strings.HasPrefix(filepath.Base(base), "opcode-eval-") || job.Workspace != filepath.Join(base, "workspace") || job.Config != filepath.Join(base, "config.json") || job.Strategy != "lexical" && job.Strategy != "hybrid" {
-		return fmt.Errorf("ranking worker requires disposable paths and known strategy")
-	}
-	if err := (RetrievalSuite{Version: 1, Cases: []RetrievalCase{job.Case}}).Validate(); err != nil {
-		return err
-	}
-	if config.Get() != nil {
-		return fmt.Errorf("ranking worker requires fresh configuration")
-	}
-	if err := os.Chdir(job.Workspace); err != nil {
-		return err
-	}
-	viper.SetConfigFile(job.Config)
-	if _, err := config.LoadOffline(job.Workspace); err != nil {
-		return fmt.Errorf("ranking configuration failed")
 	}
 	query, _ := json.Marshal(map[string]any{"query": job.Case.Query, "path": job.Case.Path, "language": job.Case.Language, "strategy": job.Strategy, "intent": "implementation", "limit": 12})
 	tool := tools.SecureTool(tools.NewCodeIndexTool(), permission.NewPermissionService())
@@ -260,4 +228,51 @@ func RetrievalWorker(ctx context.Context, jobPath string, out io.Writer) error {
 		results = append(results, r)
 	}
 	return json.NewEncoder(out).Encode(results)
+}
+
+func runPreparedRanking(ctx context.Context, c RetrievalCase, strategy, executable string, embeddings *config.EmbeddingConfig) ([]RankingResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	base, root, err := Prepare(Case{Files: c.Files})
+	if err != nil {
+		return nil, err
+	}
+	results, runErr := runRankingCase(ctx, base, root, c, strategy, executable, embeddings)
+	removeErr := os.RemoveAll(base)
+	if runErr != nil {
+		return nil, runErr
+	}
+	if removeErr != nil {
+		return nil, removeErr
+	}
+	return results, nil
+}
+
+func prepareRankingWorker(jobPath string) (job rankingJob, err error) {
+	raw, err := readBounded(jobPath, 2<<20)
+	if err != nil {
+		return job, err
+	}
+	if json.Unmarshal(raw, &job) != nil {
+		return job, fmt.Errorf("invalid ranking job")
+	}
+	base := filepath.Dir(jobPath)
+	if !strings.HasPrefix(filepath.Base(base), "opcode-eval-") || job.Workspace != filepath.Join(base, "workspace") || job.Config != filepath.Join(base, "config.json") || job.Strategy != "lexical" && job.Strategy != "hybrid" {
+		return job, fmt.Errorf("ranking worker requires disposable paths and known strategy")
+	}
+	if err := (RetrievalSuite{Version: 1, Cases: []RetrievalCase{job.Case}}).Validate(); err != nil {
+		return job, err
+	}
+	if config.Get() != nil {
+		return job, fmt.Errorf("ranking worker requires fresh configuration")
+	}
+	if err := os.Chdir(job.Workspace); err != nil {
+		return job, err
+	}
+	viper.SetConfigFile(job.Config)
+	if _, err := config.LoadOffline(job.Workspace); err != nil {
+		return job, fmt.Errorf("ranking configuration failed")
+	}
+	return job, nil
 }

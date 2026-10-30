@@ -54,26 +54,7 @@ func readSkill(root, relative string) (Skill, string, error) {
 		return Skill{}, "", fmt.Errorf("skill exceeds 16 KiB or is not text")
 	}
 	text := string(raw)
-	name := filepath.Base(filepath.Dir(relative))
-	description := ""
-	if strings.HasPrefix(text, "---\n") {
-		parts := strings.SplitN(text, "\n---", 2)
-		if len(parts) == 2 {
-			for _, line := range strings.Split(parts[0], "\n") {
-				key, value, ok := strings.Cut(line, ":")
-				if !ok {
-					continue
-				}
-				value = strings.Trim(strings.TrimSpace(value), "\"'")
-				switch key {
-				case "name":
-					name = value
-				case "description":
-					description = value
-				}
-			}
-		}
-	}
+	name, description := skillFrontmatter(text, relative)
 	if name == "." || name == "" || len(name) > 100 || strings.ContainsAny(name, " /\\\r\n\x00") {
 		return Skill{}, "", fmt.Errorf("invalid skill name")
 	}
@@ -93,43 +74,12 @@ func Discover(ctx context.Context, dirs []string) ([]Skill, error) {
 		if !filepath.IsAbs(dir) {
 			return nil, fmt.Errorf("skill directories must be absolute")
 		}
-		directory, err := os.Open(dir)
+		entries, err := skillDirectoryEntries(dir)
 		if err != nil {
-			return nil, fmt.Errorf("cannot open skill directory: %w", err)
+			return nil, err
 		}
-		entries, readErr := directory.ReadDir(257)
-		closeErr := directory.Close()
-		if readErr != nil && readErr != io.EOF {
-			return nil, fmt.Errorf("cannot list skill directory: %w", readErr)
-		}
-		if closeErr != nil {
-			return nil, fmt.Errorf("cannot close skill directory: %w", closeErr)
-		}
-		if len(entries) > 256 {
-			return nil, fmt.Errorf("skill directory exceeds 256 entries")
-		}
-		for _, entry := range entries {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			if !entry.IsDir() {
-				continue
-			}
-			skill, _, err := readSkill(dir, filepath.Join(entry.Name(), "SKILL.md"))
-			if os.IsNotExist(err) {
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			if names[skill.Name] {
-				return nil, fmt.Errorf("duplicate skill name: %s", skill.Name)
-			}
-			names[skill.Name] = true
-			result = append(result, skill)
-			if len(result) > 64 {
-				return nil, fmt.Errorf("at most 64 configured skills are supported")
-			}
+		if err := appendDiscoveredSkills(ctx, dir, entries, names, &result); err != nil {
+			return nil, err
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
@@ -146,4 +96,74 @@ func Load(ctx context.Context, dirs []string, name string) (Skill, string, error
 		}
 	}
 	return Skill{}, "", fmt.Errorf("configured skill not found")
+}
+
+func skillFrontmatter(text, relative string) (string, string) {
+	name := filepath.Base(filepath.Dir(relative))
+	description := ""
+	if strings.HasPrefix(text, "---\n") {
+		parts := strings.SplitN(text, "\n---", 2)
+		if len(parts) == 2 {
+			for line := range strings.SplitSeq(parts[0], "\n") {
+				key, value, ok := strings.Cut(line, ":")
+				if !ok {
+					continue
+				}
+				value = strings.Trim(strings.TrimSpace(value), "\"'")
+				switch key {
+				case "name":
+					name = value
+				case "description":
+					description = value
+				}
+			}
+		}
+	}
+	return name, description
+}
+
+func skillDirectoryEntries(dir string) ([]os.DirEntry, error) {
+	directory, err := os.Open(dir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open skill directory: %w", err)
+	}
+	entries, readErr := directory.ReadDir(257)
+	closeErr := directory.Close()
+	if readErr != nil && readErr != io.EOF {
+		return nil, fmt.Errorf("cannot list skill directory: %w", readErr)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("cannot close skill directory: %w", closeErr)
+	}
+	if len(entries) > 256 {
+		return nil, fmt.Errorf("skill directory exceeds 256 entries")
+	}
+	return entries, nil
+}
+
+func appendDiscoveredSkills(ctx context.Context, dir string, entries []os.DirEntry, names map[string]bool, result *[]Skill) error {
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if !entry.IsDir() {
+			continue
+		}
+		skill, _, err := readSkill(dir, filepath.Join(entry.Name(), "SKILL.md"))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if names[skill.Name] {
+			return fmt.Errorf("duplicate skill name: %s", skill.Name)
+		}
+		names[skill.Name] = true
+		*result = append(*result, skill)
+		if len(*result) > 64 {
+			return fmt.Errorf("at most 64 configured skills are supported")
+		}
+	}
+	return nil
 }

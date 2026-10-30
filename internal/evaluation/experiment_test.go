@@ -104,56 +104,7 @@ func saveManifest(t *testing.T, dir string, m ExperimentManifest) string {
 func TestSharedExperimentRunsIdenticalCasesAndPreservesObservedDrift(t *testing.T) {
 	for _, mode := range []string{"ok", "drift", "unavailable", "fail", "missing", "unobserved"} {
 		t.Run(mode, func(t *testing.T) {
-			dir, m := experimentFixture(t)
-			var a Adapter
-			raw, err := os.ReadFile(filepath.Join(dir, "crush-adapter.json"))
-			require.NoError(t, err)
-			require.NoError(t, json.Unmarshal(raw, &a))
-			a.Args[len(a.Args)-1] = mode
-			if mode == "missing" {
-				a.Command = filepath.Join(dir, "not-installed")
-			}
-			raw, _ = json.Marshal(a)
-			require.NoError(t, os.WriteFile(filepath.Join(dir, "crush-adapter.json"), raw, 0600))
-			x, err := LoadExperiment(saveManifest(t, dir, m))
-			require.NoError(t, err)
-			output := filepath.Join(dir, "reports")
-			report, err := x.Run(context.Background(), os.Args[0], output, true, false)
-			require.NoError(t, err)
-			require.NotNil(t, report.Comparison)
-			if mode == "ok" {
-				require.True(t, report.Comparison.Comparable)
-				require.True(t, report.Comparison.Rankable)
-			} else {
-				require.False(t, report.Comparison.Rankable)
-			}
-			if mode == "drift" {
-				require.Contains(t, strings.Join(report.Comparison.Differences, "\n"), "context_window differs from manifest")
-			}
-			if mode == "unobserved" {
-				require.Contains(t, strings.Join(report.Comparison.RankingUnavailable, "\n"), "effective context_window unavailable")
-			}
-			if mode == "unavailable" || mode == "missing" {
-				require.Positive(t, report.Comparison.Runs[1].Unavailable)
-			}
-			for _, name := range []string{"codaro.json", "crush.json", "experiment.json"} {
-				info, e := os.Stat(filepath.Join(output, name))
-				require.NoError(t, e)
-				if os.PathSeparator == '/' {
-					require.EqualValues(t, 0600, info.Mode().Perm())
-				}
-			}
-			var observed Report
-			raw, err = os.ReadFile(filepath.Join(output, "codaro.json"))
-			require.NoError(t, err)
-			require.NoError(t, json.Unmarshal(raw, &observed))
-			require.Len(t, observed.Cases, 2)
-			require.EqualValues(t, 2048, observed.Cases[0].OutputReserve)
-			require.Len(t, observed.Cases[0].CriteriaSHA256, 64)
-			require.Equal(t, 1, observed.Cases[0].Trial)
-			require.Equal(t, 2, observed.Cases[1].Trial)
-			_, err = x.Run(context.Background(), os.Args[0], output, true, false)
-			require.ErrorContains(t, err, "must not already exist")
+			testSharedExperimentMode(t, mode)
 		})
 	}
 }
@@ -305,4 +256,58 @@ func TestComparisonRejectsNegativeAndOverflowedMeasurements(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testSharedExperimentMode(t *testing.T, mode string) {
+	t.Helper()
+	dir, m := experimentFixture(t)
+	var a Adapter
+	raw, err := os.ReadFile(filepath.Join(dir, "crush-adapter.json"))
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(raw, &a))
+	a.Args[len(a.Args)-1] = mode
+	if mode == "missing" {
+		a.Command = filepath.Join(dir, "not-installed")
+	}
+	raw, _ = json.Marshal(a)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "crush-adapter.json"), raw, 0600))
+	x, err := LoadExperiment(saveManifest(t, dir, m))
+	require.NoError(t, err)
+	output := filepath.Join(dir, "reports")
+	report, err := x.Run(context.Background(), os.Args[0], output, true, false)
+	require.NoError(t, err)
+	require.NotNil(t, report.Comparison)
+	if mode == "ok" {
+		require.True(t, report.Comparison.Comparable)
+		require.True(t, report.Comparison.Rankable)
+	} else {
+		require.False(t, report.Comparison.Rankable)
+	}
+	if mode == "drift" {
+		require.Contains(t, strings.Join(report.Comparison.Differences, "\n"), "context_window differs from manifest")
+	}
+	if mode == "unobserved" {
+		require.Contains(t, strings.Join(report.Comparison.RankingUnavailable, "\n"), "effective context_window unavailable")
+	}
+	if mode == "unavailable" || mode == "missing" {
+		require.Positive(t, report.Comparison.Runs[1].Unavailable)
+	}
+	for _, name := range []string{"codaro.json", "crush.json", "experiment.json"} {
+		info, e := os.Stat(filepath.Join(output, name))
+		require.NoError(t, e)
+		if os.PathSeparator == '/' {
+			require.EqualValues(t, 0600, info.Mode().Perm())
+		}
+	}
+	var observed Report
+	raw, err = os.ReadFile(filepath.Join(output, "codaro.json"))
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(raw, &observed))
+	require.Len(t, observed.Cases, 2)
+	require.EqualValues(t, 2048, observed.Cases[0].OutputReserve)
+	require.Len(t, observed.Cases[0].CriteriaSHA256, 64)
+	require.Equal(t, 1, observed.Cases[0].Trial)
+	require.Equal(t, 2, observed.Cases[1].Trial)
+	_, err = x.Run(context.Background(), os.Args[0], output, true, false)
+	require.ErrorContains(t, err, "must not already exist")
 }

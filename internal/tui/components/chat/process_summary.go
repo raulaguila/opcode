@@ -10,25 +10,7 @@ import (
 
 func processSummary(messages []message.Message) string {
 	var reads, searches, reused, commands, calls, repairs int
-	for _, msg := range messages {
-		if msg.IsApplication() {
-			repairs++
-		}
-		for _, call := range msg.ToolCalls() {
-			switch {
-			case call.Origin == "context-reused":
-				reused++
-			case call.Origin == "context" && call.Name == "view":
-				reads++
-			case call.Origin == "context" && call.Name == "search_code_index":
-				searches++
-			case call.Name == "bash" || call.Name == "process_start" || call.Name == "run_checks":
-				commands++
-			default:
-				calls++
-			}
-		}
-	}
+	processSummaryMessages(messages, &reads, &searches, &reused, &commands, &calls, &repairs)
 	var labels []string
 	for _, item := range []struct {
 		n                    int
@@ -52,4 +34,26 @@ func processSummary(messages []message.Message) string {
 		return config.Text("raciocínio", "reasoning")
 	}
 	return strings.Join(labels, " · ")
+}
+
+func processSummaryMessages(messages []message.Message, reads *int, searches *int, reused *int, commands *int, calls *int, repairs *int) {
+	for _, msg := range messages {
+		if msg.IsApplication() {
+			(*repairs)++
+		}
+		for _, call := range msg.ToolCalls() {
+			switch {
+			case call.Origin == "context-reused":
+				(*reused)++
+			case call.Origin == "context" && call.Name == "view":
+				(*reads)++
+			case call.Origin == "context" && call.Name == "search_code_index":
+				(*searches)++
+			case call.Name == "bash" || call.Name == "process_start" || call.Name == "run_checks":
+				(*commands)++
+			default:
+				(*calls)++
+			}
+		}
+	}
 }

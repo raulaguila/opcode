@@ -24,6 +24,9 @@ type generationState struct {
 	history                                                      []message.Message
 	signatures                                                   [][32]byte
 	repairs, citationRepairs, contextRetries, finalAnswerRetries int
+	citationMessages                                             []string
+	citationFailures                                             []string
+	citationQuestionAnswered                                     bool
 }
 
 func (a *agent) prepareGenerationHistory(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, run *generationRun) ([]message.Message, error) {
@@ -169,14 +172,24 @@ func (g *generationState) validateRequiredCalls() (bool, error) {
 	return true, nil
 }
 func (g *generationState) validateCitations(agentMessage message.Message) (bool, error) {
-	if problem := missingSourceCitation(g.run, g.history, agentMessage.Content().Text); problem != "" {
+	assessment, err := g.citationProblem(agentMessage)
+	if err != nil {
+		return false, err
+	}
+	if err := g.setCitationState(&agentMessage, assessment.state); err != nil {
+		return false, err
+	}
+	if assessment.state == message.CitationInvalid {
+		g.citationFailures = append(g.citationFailures, agentMessage.ID)
+	}
+	if assessment.problem != "" {
 		if g.citationRepairs >= 1 {
-			return false, fmt.Errorf("source citation remains missing after repair; read evidence preserved: %s", clip(tools.RedactCredentials(problem), 1800))
+			return false, fmt.Errorf("%w: %s", ErrSourceCitation, clip(tools.RedactCredentials(assessment.problem), 1800))
 		}
 		g.citationRepairs++
 		g.agent.observePhase(g.sessionID, "repair", 0)
 		g.run.citationRepair = true
-		correction, err := g.agent.createApplicationMessage(g.ctx, g.sessionID, citationRepairRequest(g.run, g.history, problem), nil)
+		correction, err := g.agent.createApplicationMessage(g.ctx, g.sessionID, citationRepairRequest(g.run, g.history, assessment.problem), nil)
 		if err != nil {
 			return false, err
 		}
@@ -188,10 +201,18 @@ func (g *generationState) validateCitations(agentMessage message.Message) (bool,
 		g.agent.runMu.Unlock()
 		return true, nil
 	}
-
+	if err := g.supersedeInvalidCitations(); err != nil {
+		return false, err
+	}
 	return false, nil
 }
 func (g *generationState) completed(agentMessage message.Message) AgentEvent {
+	for i := len(g.history) - 1; i >= 0; i-- {
+		if g.history[i].ID == agentMessage.ID {
+			agentMessage = g.history[i]
+			break
+		}
+	}
 	outcome := "completed"
 	if g.agent.workflow != nil {
 		if task, err := g.agent.workflow.Get(g.ctx, g.sessionID); err == nil && (task.Status == "blocked" || task.Status == "partial" || task.Status == "planned") {
@@ -207,10 +228,10 @@ func (g *generationState) completed(agentMessage message.Message) AgentEvent {
 }
 func (g *generationState) validateCompletion(agentMessage message.Message) (bool, error) {
 	if retry, err := g.validateTask(); retry || err != nil {
-		return retry, err
+		return retry, errors.Join(err, g.resolvePendingCitation(agentMessage))
 	}
 	if retry, err := g.validateRequiredCalls(); retry || err != nil {
-		return retry, err
+		return retry, errors.Join(err, g.resolvePendingCitation(agentMessage))
 	}
 	return g.validateCitations(agentMessage)
 }
@@ -364,6 +385,9 @@ func (g *generationState) step() (bool, AgentEvent) {
 	}
 
 	g.appendOperation(reply, results)
+	if err := g.recordPublicCitation(&reply, results); err != nil {
+		return true, g.agent.err(err)
+	}
 	if err := g.checkRepetition(reply, results); err != nil {
 		return true, g.agent.err(err)
 	}

@@ -155,16 +155,7 @@ func (p *chatPage) workflowHeight() int {
 	}
 	h := 1
 	if p.workflow.question.ID != "" {
-		if len(p.workflow.question.Questions) > 0 {
-			return min(p.batchQuestionHeight(), max(1, p.height-5))
-		}
-		if p.workflow.details {
-			return min(max(3, p.height-5), 18)
-		}
-		h = 4 + len(p.workflow.question.Choices)
-		if p.workflow.question.Explanation != "" {
-			h++
-		}
+		return p.questionPanelHeight()
 	} else if p.workflow.expanded {
 		h += min(len(p.planRows()), max(1, min(8, p.height/3)))
 	}
@@ -175,8 +166,8 @@ func (p *chatPage) workflowView() string {
 	if height == 0 {
 		return ""
 	}
-	if len(p.workflow.question.Questions) > 0 {
-		return p.batchQuestionView(height)
+	if p.workflow.question.ID != "" {
+		return p.questionPanelView(height)
 	}
 	w := max(1, p.width-2)
 	task := p.workflow.task
@@ -195,18 +186,6 @@ func (p *chatPage) workflowView() string {
 		}
 	}
 
-	q := p.workflow.question
-	if q.ID != "" && p.workflow.details {
-		rows := []string{config.Text("Pergunta: ", "Question: ") + panelText(q.Question), panelText(q.Explanation)}
-		for i, choice := range q.Choices {
-			rows = append(rows, fmt.Sprintf("%d. %s", i+1, panelText(choice)))
-		}
-		p.workflow.detailView.Width = w
-		p.workflow.detailView.Height = max(1, height-2)
-		p.workflow.detailView.SetContent(ansi.Hardwrap(strings.Join(rows, "\n\n"), w, true))
-		return strings.Join([]string{lines[0], p.workflow.detailView.View(), " F2/Esc volta · ↑/↓/PgUp/PgDn rola"}, "\n")
-	}
-	workflowViewQID(p, w, &lines, &q)
 	if len(lines) > height {
 		lines = lines[len(lines)-height:]
 	}
@@ -315,26 +294,6 @@ func panelText(value string) string {
 		}
 		return r
 	}, ansi.Strip(tools.RedactCredentials(value)))
-}
-
-func workflowViewQID(p *chatPage, w int, lines *[]string, q *interaction.Question) {
-	if q.ID != "" {
-		// Keep the decision and answer visible even when the plan is expanded.
-		(*lines) = (*lines)[:1]
-		(*lines) = append((*lines), ansi.Truncate(config.Text(" Decisão: ", " Decision: ")+panelText(q.Question), w, "…"))
-		if q.Explanation != "" {
-			(*lines) = append((*lines), ansi.Truncate(" "+panelText(q.Explanation), w, "…"))
-		}
-		for i, choice := range q.Choices {
-			mark := " "
-			if p.workflow.choice == i {
-				mark = "›"
-			}
-			(*lines) = append((*lines), ansi.Truncate(fmt.Sprintf(" %s %d. %s", mark, i+1, panelText(choice)), w, "…"))
-		}
-		p.workflow.answer.Width = max(1, w-4)
-		(*lines) = append((*lines), " "+p.workflow.answer.View(), config.Text(" ↑/↓ escolhe · digitar responde · Enter envia · F2 detalhes · Esc cancela", " ↑/↓ choose · type to answer · Enter send · F2 details · Esc cancel"))
-	}
 }
 
 func questionKeyWorkflowDetails(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {

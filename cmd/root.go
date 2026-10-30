@@ -33,6 +33,9 @@ to assist developers in writing, debugging, and understanding code directly from
   # Run in interactive mode
   opcode
 
+  # Reopen the last conversation in this project
+  opcode --resume
+
   # Run with debug logging
   opcode -d
 
@@ -134,7 +137,10 @@ to assist developers in writing, debugging, and understanding code directly from
 		if err := loadedConfig.Runtime.Validate(); err != nil {
 			return err
 		}
-		resumeID, _ := cmd.Flags().GetString("resume")
+		resumeID, err := resumeRequest(cmd, args)
+		if err != nil {
+			return err
+		}
 		// Connect DB, this will also run migrations
 		conn, err := db.Connect()
 		if err != nil {
@@ -173,19 +179,24 @@ to assist developers in writing, debugging, and understanding code directly from
 
 		var initialSessions []session.Session
 		if resumeID != "" {
-			saved, err := app.Sessions.Get(ctx, resumeID)
+			saved, err := resolveResumeSession(ctx, loadedConfig, resumeID, app.Sessions.Get)
 			if err != nil {
 				return fmt.Errorf("resume session: %w", err)
 			}
-			if _, err := app.Workflows.Get(ctx, resumeID); err != nil {
-				return err
-			}
-			if cmd.Flags().Changed("mode") {
-				if err := app.CoderAgent.SetMode(ctx, resumeID, workflow.Mode(loadedConfig.Runtime.Mode)); err != nil {
+			resumeID = saved.ID
+			if resumeID == "" {
+				fmt.Fprintln(cmd.ErrOrStderr(), config.Text("Nenhuma conversa anterior disponível neste projeto; iniciando uma nova conversa.", "No previous conversation available in this project; starting a new conversation."))
+			} else {
+				if _, err := app.Workflows.Get(ctx, resumeID); err != nil {
 					return err
 				}
+				if cmd.Flags().Changed("mode") {
+					if err := app.CoderAgent.SetMode(ctx, resumeID, workflow.Mode(loadedConfig.Runtime.Mode)); err != nil {
+						return err
+					}
+				}
+				initialSessions = append(initialSessions, saved)
 			}
-			initialSessions = append(initialSessions, saved)
 		}
 		// Initialize MCP tools early for both modes
 		initMCPTools(ctx, app)
@@ -401,7 +412,7 @@ func init() {
 	// Add quiet flag to hide spinner in non-interactive mode
 	rootCmd.Flags().BoolP("quiet", "q", false, "Hide spinner in non-interactive mode")
 	rootCmd.Flags().String("mode", "", "Initial mode: ask, plan or execute")
-	rootCmd.Flags().String("resume", "", "Resume a saved session ID (also works with --prompt)")
+	addResumeFlag(rootCmd)
 	rootCmd.Flags().Int("max-steps", 0, "Maximum model requests per turn (1–200)")
 	rootCmd.Flags().Int("max-seconds", 0, "Maximum turn duration including user waits (seconds, 1–7200)")
 	rootCmd.Flags().Int("tool-budget", 0, "Maximum bytes of tool results per turn (4096–1048576)")

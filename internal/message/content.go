@@ -50,6 +50,31 @@ type TextContent struct {
 	Text string `json:"text"`
 	// Origin is set only by application code, never inferred from user text.
 	Origin string `json:"origin,omitempty"`
+	// CitationStatus is presentation metadata set by application validation.
+	CitationStatus string `json:"citation_status,omitempty"`
+}
+
+const (
+	CitationPending    = "pending"
+	CitationValid      = "valid"
+	CitationInvalid    = "invalid"
+	CitationSuperseded = "superseded"
+)
+
+func (m *Message) CitationValidation() string { return m.Content().CitationStatus }
+
+func (m *Message) SetCitationValidation(state string) bool {
+	for i, part := range m.Parts {
+		if text, ok := part.(TextContent); ok {
+			if text.CitationStatus == state {
+				return false
+			}
+			text.CitationStatus = state
+			m.Parts[i] = text
+			return true
+		}
+	}
+	return false
 }
 
 func (tc TextContent) String() string {

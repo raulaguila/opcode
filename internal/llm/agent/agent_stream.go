@@ -67,6 +67,9 @@ func (a *agent) preserveInterruptedStream(sessionID string, assistantMsg *messag
 	if errors.Is(*failure, context.Canceled) {
 		reason = message.FinishReasonCanceled
 	}
+	if assistantMsg.CitationValidation() == message.CitationPending {
+		assistantMsg.SetCitationValidation(message.CitationInvalid)
+	}
 	a.finishMessage(saveCtx, assistantMsg, reason)
 }
 func (a *agent) toolExecutionContext(ctx context.Context, sessionID, messageID string) context.Context {

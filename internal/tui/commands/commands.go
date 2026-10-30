@@ -47,6 +47,7 @@ var Builtins = []Command{
 	{ID: "process", Title: "Mostrar/recolher processo", Description: "Revisar as etapas da última interação"},
 	{ID: "latest", Title: "Novas mensagens", Description: "Voltar ao acompanhamento da resposta"},
 	{ID: "cancel", Title: "Interromper atividade", Description: "Solicitar interrupção preservando o progresso"},
+	{ID: "quit", Title: "Sair do Opcode", Description: "Salvar o rascunho e encerrar a aplicação"},
 }
 
 func Category(id string) string {

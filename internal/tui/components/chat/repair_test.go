@@ -22,7 +22,7 @@ func TestApplicationRepairStaysInsideProcess(t *testing.T) {
 	require.Len(t, m.groups(), 1)
 	m.renderView()
 	require.NotContains(t, ansi.Strip(m.viewport.View()), "Application validation:")
-	require.NotContains(t, ansi.Strip(m.viewport.View()), "invalid answer")
+	require.Contains(t, ansi.Strip(m.viewport.View()), "invalid answer", "public responses remain visible during repair")
 	require.Contains(t, ansi.Strip(m.viewport.View()), "Verified answer")
 	m.Update(ToggleProcessMsg{})
 	require.Contains(t, ansi.Strip(m.viewport.View()), "Application validation: cite evidence")

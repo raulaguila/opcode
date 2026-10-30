@@ -1,0 +1,434 @@
+{
+  "date": "2026-10-30",
+  "checkpoint": {
+    "tag": "checkpoint/2026-10-30-before-conversation-ux",
+    "commit": "ea03185e36da48472a156ba426359b0278d6f51a",
+    "remote": "origin/develop"
+  },
+  "changes": [
+    "chronological public messages interleaved with consecutive independently collapsible tool groups",
+    "per-message citation validation state preserved through storage, streaming, history and repair",
+    "neutral question acknowledgment scoped separately from earlier explanation; earlier invalid diagnosis still requires repair",
+    "typed source-citation and context errors; specific fallback phrases for legacy errors",
+    "shared bounded question panel for legacy, batch, multi-choice, free-text and review",
+    "local /quit through existing guarded shutdown and draft persistence",
+    "bare --resume with current-project catalog and preserved explicit-ID syntax"
+  ],
+  "checks": [
+    {
+      "name": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "vet-integration",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "<analysis-tools>/staticcheck",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck-integration",
+      "command": [
+        "<analysis-tools>/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "-exact-recursion",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "languages",
+      "command": [
+        "go",
+        "run",
+        "./scripts/language-docs",
+        "-check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "workflows",
+      "command": [
+        "<analysis-tools>/actionlint",
+        ".github/workflows/build.yml",
+        ".github/workflows/test.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/performance.yml"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "windows",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode-windows.exe",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "darwin",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "<artifacts>/opcode-darwin",
+        "."
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "ollama-pty",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUITerminalStartupQueries|TestPTYStreamingSpeedBeforeCompletion|TestPTYTranscriptSearchAndKeyboardSelection|TestPTYConversationChronologyQuitAndResume)$",
+        "-count=1",
+        "-v"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "pty": {
+    "all_six_scenarios_executed": true,
+    "duration_seconds": {
+      "TestPTYConversationChronologyQuitAndResume": 8.35,
+      "TestPTYStreamingSpeedBeforeCompletion": 3.87,
+      "TestPTYTranscriptSearchAndKeyboardSelection": 2.19,
+      "TestLiveOllamaPTYUI": 18.55,
+      "TestPTYUICompactThemes": 3.07,
+      "TestPTYUITerminalStartupQueries": 0.0
+    },
+    "live_model": "llama3.1:8b",
+    "transport": "native Ollama on HTTP loopback",
+    "live_test_context_tokens": 16384,
+    "source_files_unchanged": true,
+    "explicit_permissions_required": true,
+    "resume_no_inference_or_new_messages": true,
+    "unicode_draft_restored": true,
+    "themes": [
+      "dark",
+      "light",
+      "no-color"
+    ],
+    "compact_terminal": [
+      60,
+      20
+    ]
+  },
+  "benchmarks": {
+    "baseline_commit": "ea03185e36da48472a156ba426359b0278d6f51a",
+    "toolchain": "go version go1.27.3 linux/amd64",
+    "gomaxprocs": 2,
+    "paired_rounds": 5,
+    "operations_per_sample": 1000,
+    "fixture_sha256": "31cf0e2bf34708b199f17d34ceead8641b8f642b097deab5b12d694ff722b675",
+    "samples": {
+      "before": {
+        "BenchmarkTranscriptRenderWarm": [
+          {
+            "ns_op": 59.84,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 59.93,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 59.77,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 59.85,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 61.27,
+            "bytes_op": 0,
+            "allocs_op": 0
+          }
+        ],
+        "BenchmarkTranscriptRenderTailInvalidated": [
+          {
+            "ns_op": 85567.0,
+            "bytes_op": 89995,
+            "allocs_op": 905
+          },
+          {
+            "ns_op": 91837.0,
+            "bytes_op": 98556,
+            "allocs_op": 905
+          },
+          {
+            "ns_op": 92819.0,
+            "bytes_op": 107120,
+            "allocs_op": 905
+          },
+          {
+            "ns_op": 87340.0,
+            "bytes_op": 94182,
+            "allocs_op": 905
+          },
+          {
+            "ns_op": 89888.0,
+            "bytes_op": 98480,
+            "allocs_op": 905
+          }
+        ],
+        "BenchmarkTranscriptRenderStreaming": [
+          {
+            "ns_op": 84993.0,
+            "bytes_op": 98742,
+            "allocs_op": 927
+          },
+          {
+            "ns_op": 87683.0,
+            "bytes_op": 107340,
+            "allocs_op": 927
+          },
+          {
+            "ns_op": 86608.0,
+            "bytes_op": 103005,
+            "allocs_op": 927
+          },
+          {
+            "ns_op": 86226.0,
+            "bytes_op": 98743,
+            "allocs_op": 927
+          },
+          {
+            "ns_op": 83499.0,
+            "bytes_op": 94481,
+            "allocs_op": 927
+          }
+        ]
+      },
+      "after": {
+        "BenchmarkTranscriptRenderWarm": [
+          {
+            "ns_op": 59.52,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 59.71,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 60.03,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 59.73,
+            "bytes_op": 0,
+            "allocs_op": 0
+          },
+          {
+            "ns_op": 59.61,
+            "bytes_op": 0,
+            "allocs_op": 0
+          }
+        ],
+        "BenchmarkTranscriptRenderTailInvalidated": [
+          {
+            "ns_op": 95337.0,
+            "bytes_op": 94203,
+            "allocs_op": 904
+          },
+          {
+            "ns_op": 92319.0,
+            "bytes_op": 94167,
+            "allocs_op": 904
+          },
+          {
+            "ns_op": 91211.0,
+            "bytes_op": 98502,
+            "allocs_op": 904
+          },
+          {
+            "ns_op": 93145.0,
+            "bytes_op": 102763,
+            "allocs_op": 904
+          },
+          {
+            "ns_op": 88314.0,
+            "bytes_op": 89978,
+            "allocs_op": 904
+          }
+        ],
+        "BenchmarkTranscriptRenderStreaming": [
+          {
+            "ns_op": 88262.0,
+            "bytes_op": 103002,
+            "allocs_op": 926
+          },
+          {
+            "ns_op": 83036.0,
+            "bytes_op": 90144,
+            "allocs_op": 926
+          },
+          {
+            "ns_op": 91268.0,
+            "bytes_op": 107376,
+            "allocs_op": 926
+          },
+          {
+            "ns_op": 86958.0,
+            "bytes_op": 94406,
+            "allocs_op": 926
+          },
+          {
+            "ns_op": 82050.0,
+            "bytes_op": 90218,
+            "allocs_op": 926
+          }
+        ]
+      }
+    },
+    "summary": {
+      "BenchmarkTranscriptRenderWarm": {
+        "before": {
+          "ns_op": 59.85,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        "after": {
+          "ns_op": 59.71,
+          "bytes_op": 0,
+          "allocs_op": 0
+        },
+        "change_percent": {
+          "ns_op": -0.23,
+          "bytes_op": null,
+          "allocs_op": null
+        }
+      },
+      "BenchmarkTranscriptRenderTailInvalidated": {
+        "before": {
+          "ns_op": 89888.0,
+          "bytes_op": 98480,
+          "allocs_op": 905
+        },
+        "after": {
+          "ns_op": 92319.0,
+          "bytes_op": 94203,
+          "allocs_op": 904
+        },
+        "change_percent": {
+          "ns_op": 2.7,
+          "bytes_op": -4.34,
+          "allocs_op": -0.11
+        }
+      },
+      "BenchmarkTranscriptRenderStreaming": {
+        "before": {
+          "ns_op": 86226.0,
+          "bytes_op": 98743,
+          "allocs_op": 927
+        },
+        "after": {
+          "ns_op": 86958.0,
+          "bytes_op": 94406,
+          "allocs_op": 926
+        },
+        "change_percent": {
+          "ns_op": 0.85,
+          "bytes_op": -4.39,
+          "allocs_op": -0.11
+        }
+      }
+    }
+  },
+  "additional_regressions": [
+    "legacy tool result without Name resolves through ToolCallID",
+    "first click inverts each process block actual rendered expansion state",
+    "resizing follows the latest response only when already following; historical readers retain offset",
+    "interrupted or workflow-repaired answers cannot remain pending citation validation",
+    "earlier diagnosis failure does not incorrectly mark neutral acknowledgment invalid",
+    "LSP PTY readiness waits for title and required fields; fragmented terminal draws do not satisfy it"
+  ],
+  "limitations": [
+    "Enterprise OpenAI-compatible endpoint was not accessed.",
+    "Citation validation checks provenance, current file hash and delivered line ranges, not semantic interpretation.",
+    "Neutral-acknowledgment recognition is conservative in Portuguese and English.",
+    "Benchmarks measure transcript components, not provider inference latency."
+  ]
+}

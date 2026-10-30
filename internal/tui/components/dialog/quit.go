@@ -17,6 +17,7 @@ const question = "Are you sure you want to quit?"
 
 type CloseQuitMsg struct{}
 type ConfirmQuitMsg struct{}
+type OpenQuitMsg struct{}
 
 type QuitDialog interface {
 	tea.Model

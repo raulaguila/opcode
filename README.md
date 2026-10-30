@@ -138,13 +138,27 @@ Veja [configuração de provedores/modelos](docs/model-selection.md),
 Veja o [guia de uso diário](docs/daily-workflow.md) para configurar, definir o
 resultado esperado de tarefas e trabalhar com Git/worktrees.
 
+Para reabrir a última conversa disponível do projeto atual:
+
+```sh
+opcode --resume
+opcode --resume ID_DA_SESSAO
+```
+
+`--resume=ID_DA_SESSAO` também é aceito. Sem conversa anterior disponível,
+`--resume` informa isso e abre uma nova. A retomada interativa abre histórico e
+rascunho, sem continuar ferramentas automaticamente nem restaurar aprovações.
+Na conversa, `/resume` pede a continuação da tarefa salva. `/quit` inicia o
+encerramento da interface, preservando o rascunho e as proteções de operações em
+andamento. No cliente `attach`, `/quit` apenas desconecta do servidor.
+
 ## Recursos
 
 | Frente | Disponível neste fork |
 | --- | --- |
 | Tarefas | Contratos explícitos em `/contract` ou `--task-kind`, com alvos, critérios e checks da revisão atual. |
 | Configuração | Perfis com ID, nome e backend separados; múltiplos endpoints, formulários, teste de conexão, catálogo dinâmico, favoritos, recentes e modelos auxiliares independentes. |
-| Chat | Processo recolhível por interação, resposta final separada, ações de texto/código/arquivos, aviso de novas mensagens, histórico e rascunhos por conversa. |
+| Chat | Mensagens em ordem cronológica intercaladas com grupos recolhíveis de ferramentas, estados de citação visíveis, seleção/cópia, aviso de novas mensagens e rascunhos por conversa. |
 | Execução | Terminal PTY com entrada do usuário, saída ao vivo e fila de instruções editável durante o trabalho. |
 | Contexto | Estimativa preventiva do payload e schemas, reserva de resposta e compactação local preservando a conversa salva. |
 | Revisão | Diffs por interação, recibos de checks e undo/redo de edições de arquivos com detecção de conflitos e aprovação. |
@@ -152,7 +166,7 @@ resultado esperado de tarefas e trabalhar com Git/worktrees.
 | Ferramentas | Listagem paginada, índice local com filtros e prévias curtas, mapa, outline/símbolos, artefatos paginados, checks, navegação/edição LSP e MCP sob demanda. |
 | Linguagens | 26 perfis de parsers locais; diagnóstico `doctor --languages --json` distingue parser, LSP e checks sem instalar ferramentas. |
 | Referências | Citações verificadas contra caminho, linhas realmente lidas e hash atual; reparo limitado preserva o pedido original. |
-| Decisões | Perguntas individuais ou agrupadas com seleção única/múltipla, texto livre e revisão antes do envio. |
+| Decisões | Painel destacado de perguntas individuais ou agrupadas, seleção explícita única/múltipla, texto livre e revisão antes do envio. |
 | Extensões | Skills invocadas explicitamente pelo usuário e hooks globais opt-in, sujeitos às permissões e ao sandbox. |
 | Avaliações | Fixtures e avaliações reais opt-in, drivers Codaro/Crush, comparação de condições e medição de ranking lexical/híbrido sem inferência. |
 | Confiabilidade | Conclusão com evidência de alteração ou justificativa explícita, estado parcial/bloqueado e recuperação de contexto/OOM com calibração local temporária. |
@@ -204,7 +218,7 @@ Comece pelo [guia da interface](docs/workspace-ui.md). Os principais controles:
 | --- | --- |
 | `/` e `Ctrl+K` | Sugestões de comandos e paleta |
 | `/mode ask`, `/mode plan`, `/mode execute` | Perguntar, Planejar e Executar |
-| `Ctrl+B`, `/process` | Expandir/recolher o processo da última interação |
+| `Ctrl+B`, `/process` | Expandir/recolher o grupo de ferramentas mais recente |
 | `Alt+End`, `/latest` | Ir às mensagens novas |
 | `Alt+PgUp` / `Alt+PgDn` | Rolar meia página de conversa |
 | `Ctrl+U`, `Ctrl+End` | Apagar até o início / ir ao final do rascunho |
@@ -216,6 +230,8 @@ Comece pelo [guia da interface](docs/workspace-ui.md). Os principais controles:
 | `/task` | Plano, fila, alterações, checks e permissões em um painel |
 | `/changes`, `/checks` | Ver alterações e validações; `U`/`R` prepara undo/redo |
 | `/sessions` | Buscar, renomear, arquivar e exportar conversas |
+| `/resume` | Pedir a continuação da tarefa salva |
+| `/quit` | Salvar o rascunho e iniciar o encerramento da interface |
 | `/settings`, `/models`, `/integrations` | Configurar a aplicação |
 | `/skills`, `/skill NOME argumentos` | Consultar/invocar skills cadastradas |
 | `/error`, `/retry` | Ver falha e retomar o último pedido |

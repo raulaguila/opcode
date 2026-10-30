@@ -193,7 +193,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("\r")
 	h.wait("integration list", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "MCP and language servers") })
 	h.send("\r")
-	h.wait("LSP form", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Configure LSP") })
+	h.wait("complete LSP form", 5*time.Second, testLiveOllamaPTYUILSPFormReady)
 	require.Contains(t, h.frame(), "00-ui-acceptance")
 	require.Contains(t, h.frame(), "/bin/bash")
 	h.send("\t\t\r") // Open the argument list and inspect the end of a long path.
@@ -329,6 +329,8 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 }
 
 type ptyUIHarness struct {
+	command    *exec.Cmd
+	exited     <-chan struct{}
 	t          *testing.T
 	terminal   *os.File
 	screen     vt10x.Terminal
@@ -338,15 +340,20 @@ type ptyUIHarness struct {
 }
 
 func newPTYUIHarnessAtSize(t *testing.T, binary, home, workspace string, cols, rows int, extraEnv ...string) *ptyUIHarness {
+	return newPTYUIHarnessWithArgs(t, binary, home, workspace, cols, rows, nil, extraEnv...)
+}
+
+func newPTYUIHarnessWithArgs(t *testing.T, binary, home, workspace string, cols, rows int, args []string, extraEnv ...string) *ptyUIHarness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Minute)
-	command := exec.CommandContext(ctx, binary, "--cwd", workspace)
+	command := exec.CommandContext(ctx, binary, append([]string{"--cwd", workspace}, args...)...)
 	command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "SHELL=/bin/bash", "LANG=C.UTF-8", "TERM=xterm-256color"}
 	command.Env = append(command.Env, extraEnv...)
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 	require.NoError(t, err)
 	h := &ptyUIHarness{t: t, terminal: terminal, screen: vt10x.New(vt10x.WithSize(cols, rows), vt10x.WithWriter(terminal))}
 	done := make(chan struct{})
+	h.command, h.exited = command, done
 	go func() {
 		defer close(done)
 		filter := ptyUIControlFilter{}
@@ -783,7 +790,18 @@ func testLiveOllamaPTYUIFactualCompletedOverview(conn **sql.DB, sourceCitation *
 
 func testLiveOllamaPTYUIHumanQuestionAnswerResumesGeneration(conn **sql.DB, beforeQuestion *int, frame string) bool {
 	history := ptyUIMessages((*conn))
-	return len(history) > (*beforeQuestion) && history[len(history)-1].finished() && strings.Contains(history[len(history)-1].text(), "Resposta recebida:") && !strings.Contains(frame, "Decision:") && ptyUIIdleFooter(frame)
+	return len(history) > (*beforeQuestion) && history[len(history)-1].finished() && strings.Contains(history[len(history)-1].text(), "Resposta recebida:") && !strings.Contains(frame, "Waiting for your answer") && ptyUIIdleFooter(frame)
+}
+
+func testLiveOllamaPTYUILSPFormReady(frame string) bool {
+	// A VT frame arrives in fragments; the title alone can precede its fields.
+	return strings.Contains(frame, "Configure LSP") && strings.Contains(frame, "00-ui-acceptance") && strings.Contains(frame, "/bin/bash")
+}
+
+func TestPTYUILSPFormWaitsForAllFields(t *testing.T) {
+	require.False(t, testLiveOllamaPTYUILSPFormReady("Configure LSP"))
+	require.False(t, testLiveOllamaPTYUILSPFormReady("Configure LSP\n00-ui-acceptance"))
+	require.True(t, testLiveOllamaPTYUILSPFormReady("Configure LSP\n00-ui-acceptance\n/bin/bash"))
 }
 
 func testLiveOllamaPTYUIFailedProviderStaysSelectedWithEmptyList(frame string) bool {
@@ -809,7 +827,7 @@ func testLiveOllamaPTYUIContextAndMeasuredProviderSpeedInFooter(frame string) bo
 }
 
 func testLiveOllamaPTYUIRealModelQuestionWithSelectableChoices(frame string) bool {
-	return strings.Contains(frame, "Decision:") && strings.Contains(frame, "UI") && strings.Contains(frame, "Contexto")
+	return strings.Contains(frame, "Question for you") && strings.Contains(frame, "Waiting for your answer") && strings.Contains(frame, "UI") && strings.Contains(frame, "Contexto")
 }
 
 func testPTYUICompactThemesStructCallback(binary **string, variant *struct {

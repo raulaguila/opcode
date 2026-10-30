@@ -37,6 +37,19 @@ formulário. Processo e lateral começam recolhidos, respeitando preferências
 explicitamente salvas. `/plan` mostra o plano quando você precisar consultá-lo;
 perguntas, aprovações e erros continuam aparecendo durante o trabalho.
 
+As mensagens públicas mantêm a ordem da conversa entre grupos recolhíveis de
+ferramentas. Um diagnóstico continua acessível depois de você responder à
+pergunta do modelo; o estado de citação acompanha o texto correspondente.
+Perguntas usam painel destacado, aguardam seleção ou texto explícito e não
+concedem autorização para ferramentas.
+
+`/quit` salva o rascunho pelo fluxo normal de encerramento. Na próxima abertura,
+`opcode --resume` reabre a última conversa disponível do projeto atual;
+`opcode --resume ID` escolhe uma conversa específica. Isso não continua ações
+automaticamente nem restaura aprovações. Dentro da conversa, `/resume` pede a
+continuação da tarefa salva. Sem conversa anterior disponível, a flag informa
+isso e abre uma nova. No cliente `attach`, `/quit` apenas desconecta do servidor.
+
 O input começa com três linhas úteis e cresce até oito; `Shift+Enter` insere
 uma nova linha quando o terminal transmite o atalho. `Ctrl+J` e `Alt+Enter`
 também inserem uma linha. Colagem com múltiplas linhas preserva o texto sem enviar.

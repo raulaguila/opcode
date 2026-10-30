@@ -316,6 +316,9 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	if failure != nil {
 		return assistantMsg, nil, failure
 	}
+	if err := a.markAssistantCitation(ctx, msgHistory, run, &assistantMsg); err != nil {
+		return assistantMsg, nil, err
+	}
 	toolMsg, failure = a.executeToolBatch(ctx, sessionID, &assistantMsg, run)
 	return assistantMsg, toolMsg, failure
 }

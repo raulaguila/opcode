@@ -83,6 +83,16 @@ func TestReturningToBottomResumesFollowingResponse(t *testing.T) {
 	require.True(t, m.viewport.AtBottom())
 }
 
+func TestResizingForQuestionPanelKeepsFollowingLatestResponse(t *testing.T) {
+	m := scrollableMessages(t)
+	m.SetSize(50, 8)
+	require.True(t, m.viewport.AtBottom(), "shrinking chat for a question must keep the latest response visible")
+	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	offset := m.viewport.YOffset
+	m.SetSize(48, 7)
+	require.Equal(t, offset, m.viewport.YOffset, "resizing must preserve someone reading history")
+}
+
 func TestSendingMessageReturnsToBottom(t *testing.T) {
 	m := scrollableMessages(t)
 	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})

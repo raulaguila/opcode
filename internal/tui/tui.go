@@ -231,7 +231,7 @@ func (a *appModel) routeEvent(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return a.routeTheme(msg)
 	case dialog.ModelSelectedMsg, dialog.ShowInitDialogMsg, dialog.CloseInitDialogMsg:
 		return a.routeSetup(msg)
-	case dialog.ConfirmQuitMsg, dialog.CloseQuitMsg, dialog.CloseSessionDialogMsg, dialog.CloseCommandDialogMsg, dialog.CloseModelDialogMsg:
+	case dialog.OpenQuitMsg, dialog.ConfirmQuitMsg, dialog.CloseQuitMsg, dialog.CloseSessionDialogMsg, dialog.CloseCommandDialogMsg, dialog.CloseModelDialogMsg:
 		return a.routeLifecycle(msg)
 	case page.GitWorkspaceMsg, page.TerminalTickMsg, page.TerminalStartedMsg, page.WorkflowCommandMsg, page.WorkspaceCommandMsg, page.WorkspaceResultMsg, chat.ResponseActionsMsg, chat.SubmissionResultMsg, page.PageChangeMsg, startCompactSessionMsg, pubsub.Event[agent.AgentEvent]:
 		return a.routeWorkspace(msg)
@@ -490,6 +490,11 @@ func (a *appModel) routeSetup(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 func (a *appModel) routeLifecycle(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	var cmds []tea.Cmd
 	switch msg.(type) {
+	case dialog.OpenQuitMsg:
+		if a.showQuit {
+			return *a, nil, true
+		}
+		return updateAppModelKeyMsgQuit(a)
 	case dialog.ConfirmQuitMsg:
 		if a.pendingProviderNativeOperation() {
 			a.showQuit = false
@@ -995,7 +1000,7 @@ func newInitial(app *app.App, initial []session.Session, model *appModel) {
 	} else if cfg := config.Get(); cfg != nil && cfg.Preferences.ResumeLast && app.Sessions != nil {
 		metadata, last, err := session.NewCatalog(cfg.WorkingDir, cfg.Data.Directory).Snapshot()
 		if err == nil && last != "" && !metadata[last].Archived {
-			if sess, err := app.Sessions.Get(context.Background(), last); err == nil {
+			if sess, err := app.Sessions.Get(context.Background(), last); err == nil && sess.ParentSessionID == "" {
 				model.selectedSession = sess
 			}
 		}

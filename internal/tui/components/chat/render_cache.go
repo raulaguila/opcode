@@ -57,6 +57,8 @@ type installedTurn struct {
 	line, item, hit int
 }
 
+type toolOwner struct{ message, name string }
+
 type transcriptCache struct {
 	markdown                          styles.MarkdownCache
 	markdownOwner                     string
@@ -67,7 +69,7 @@ type transcriptCache struct {
 	count                             int
 	versions                          map[string]uint64
 	messageTurn                       map[string]string
-	toolOwners                        map[string]string
+	toolOwners                        map[string]toolOwner
 	frames                            map[string]turnCacheItem
 	frameBytes, messageBytes, entries int
 	clock                             uint64
@@ -99,7 +101,7 @@ func (m *messagesCmp) ensureRenderCache() {
 		c.frames = map[string]turnCacheItem{}
 		c.versions = map[string]uint64{}
 		c.messageTurn = map[string]string{}
-		c.toolOwners = map[string]string{}
+		c.toolOwners = map[string]toolOwner{}
 	}
 	if m.cachedContent == nil {
 		m.cachedContent = map[string]cacheItem{}
@@ -195,7 +197,7 @@ func (m *messagesCmp) renderGroups() []turnGroup {
 	c.groups = nil
 	c.groupIndex = map[string]int{}
 	c.messageTurn = map[string]string{}
-	c.toolOwners = map[string]string{}
+	c.toolOwners = map[string]toolOwner{}
 	start := 0
 	for index, item := range m.messages {
 		if item.Role == message.User && !item.IsApplication() {
@@ -224,7 +226,7 @@ func (m *messagesCmp) appendRenderGroup(start, end int) {
 	for _, item := range items {
 		c.messageTurn[item.ID] = g.key
 		for _, call := range item.ToolCalls() {
-			c.toolOwners[call.ID] = item.ID
+			c.toolOwners[call.ID] = toolOwner{message: item.ID, name: call.Name}
 		}
 	}
 }
@@ -240,7 +242,7 @@ func (m *messagesCmp) storeTurnFrame(key string, frame turnCacheItem) {
 		c.frameBytes -= old.bytes
 		delete(c.frames, key)
 	}
-	frame.bytes = len(frame.text) + len(frame.lines)*16 + cacheContentBytes(frame.items) + len(frame.hits)*64 + len(key) + 128
+	frame.bytes = len(frame.text) + len(frame.lines)*16 + cacheContentBytes(frame.items) + len(frame.hits)*56 + len(key) + 128
 	for _, id := range frame.dependencies {
 		frame.bytes += len(id) + 16
 	}
@@ -321,8 +323,8 @@ func (m *messagesCmp) deleteMessageCache(id string) {
 }
 func (m *messagesCmp) invalidateToolResponses(item message.Message) {
 	for _, result := range item.ToolResults() {
-		if owner := m.renderCache.toolOwners[result.ToolCallID]; owner != "" {
-			m.invalidateMessageCache(owner)
+		if owner := m.renderCache.toolOwners[result.ToolCallID]; owner.message != "" {
+			m.invalidateMessageCache(owner.message)
 		}
 	}
 }

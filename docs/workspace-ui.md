@@ -116,20 +116,34 @@ enviar. `Ctrl+V` também funciona nos campos da paleta e das preferências.
 Esse ajuste do VS Code vale para seus terminais em foco. O Opcode não altera
 atalhos globais do editor automaticamente.
 
-Cada interação agrupa a pergunta, o processo e a resposta final. Clique no
-cabeçalho do processo para expandir/recolher. `Ctrl+B` ou `/process` alterna o
-processo da última interação. Ele começa recolhido; uma preferência explícita
-`showProcess: true` mantém a abertura durante a execução.
+A conversa intercala mensagens públicas com grupos consecutivos de ferramentas
+na ordem em que foram registradas. Uma mensagem do modelo encerra o grupo
+anterior; novas chamadas abrem outro grupo. O diagnóstico e a confirmação
+posterior, como “deixamos as mudanças para depois”, permanecem como mensagens
+separadas, inclusive ao reabrir a conversa. Recolher ferramentas preserva esses
+textos. Clique no cabeçalho de cada grupo para expandir/recolher; `Ctrl+B` ou
+`/process` alterna o grupo mais recente. Os grupos começam recolhidos; uma
+preferência explícita `showProcess: true` mantém a abertura durante a execução.
 O resumo distingue leituras e buscas de contexto, fontes reutilizadas, chamadas
 de terminal, outras ferramentas e reparos. Por exemplo, “3 leituras de contexto”
 descreve a preparação inicial; não significa três comandos ou três chamadas ao
 modelo. Detalhes em [perguntas e evidências](question-and-evidence-recovery.md).
 Reparos internos de protocolo, conclusão e citações ficam identificados como
 validação da aplicação dentro do processo. Não aparecem como perguntas suas,
-não entram no histórico de rascunhos e não substituem as validações. A resposta
-provisória rejeitada deixa de ser apresentada como final. Essa identificação
-usa metadados nas mensagens novas; textos antigos sem metadados não são ocultados
-por uma heurística de prefixos.
+não entram no histórico de rascunhos e não substituem as validações. O texto da
+resposta permanece acessível durante “Validando citações…”. Falhas recebem
+“Citações não validadas”; quando houver correção aprovada, a resposta anterior
+recebe “Resposta substituída”. Visibilidade não significa aprovação da resposta.
+Esses estados usam metadados; textos antigos sem metadados não recebem um estado
+de validação inferido pelo conteúdo.
+
+Perguntas ao usuário aparecem acima do input em painel com borda, fundo distinto
+e o estado “Aguardando sua resposta”. Setas e marcadores indicam as opções; nada
+é enviado por pré-seleção. O campo “Outra resposta” aceita texto livre. `F2`
+abre o conteúdo completo com rolagem; `F2`/`Esc` volta ao painel. `Esc` no painel
+normal cancela a geração. Perguntas agrupadas mantêm a revisão antes do envio.
+Depois da resposta, a conversa mostra “Você respondeu: …”. Esse painel não
+concede permissões para executar ferramentas.
 Ao rolar para cima, novas mensagens não puxam a leitura para o fim. Use
 `Alt+End`, `/latest` ou o indicador de novas mensagens para acompanhar o final.
 `Alt+PgUp`/`Alt+PgDn` rolam meia página; `Ctrl+U`, `Ctrl+D` e `Ctrl+End` ficam
@@ -269,7 +283,15 @@ humana, omitindo instruções internas de reparo.
 `/export` exporta a conversa atual em `data.directory/exports`. A exportação
 contém o processo como histórico, redige credenciais conhecidas e não concede
 permissões. Settings permite retomar a última conversa usada, quando ela não estiver
-arquivada. Rascunhos
+arquivada. `opcode --resume` faz essa escolha para a abertura atual, dentro do
+projeto; sem conversa disponível, informa isso e inicia uma nova. Para uma
+conversa específica, use `opcode --resume ID` ou `opcode --resume=ID`.
+Uma retomada interativa não reexecuta ferramentas nem restaura aprovações.
+`/resume` na conversa pede a continuação da tarefa salva.
+
+`/quit` inicia o fluxo normal de encerramento, salvando o rascunho antes de
+sair e respeitando operações protegidas em andamento. No cliente `attach`, o
+mesmo comando apenas desconecta, mantendo a execução no servidor. Rascunhos
 são separados por conversa; `↑`/`↓` percorre o histórico de entrada e preserva o
 rascunho original e seus anexos ao voltar.
 
@@ -280,10 +302,12 @@ automático nem uma garantia de evitar todo efeito repetido: permissões,
 verificações e inspeção do estado continuam necessárias. O plano e os arquivos
 já alterados permanecem disponíveis para revisão.
 
-O aviso junto ao campo usa uma causa curta e ações: orçamento de contexto,
-memória insuficiente no servidor, conexão ou autenticação são situações
+O aviso junto ao campo usa uma causa curta e ações: falha de citações, orçamento
+de contexto, memória insuficiente no servidor, conexão ou autenticação são situações
 diferentes. Detalhes técnicos ficam em `/error`. Ao resolver a falha, o aviso
 deixa o campo livre; o diagnóstico continua disponível para consulta.
+Uma falha de citação que menciona preparação de contexto não indica, por si só,
+que a janela do modelo acabou; a barra inferior continua mostrando o orçamento.
 
 ## Skills, hooks e avaliações
 

@@ -116,9 +116,11 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case ToggleProcessMsg:
-		groups := m.groups()
-		if len(groups) > 0 {
-			m.toggleProcess(groups[len(groups)-1].key)
+		for i := len(m.hits) - 1; i >= 0; i-- {
+			if m.hits[i].kind == "process" {
+				m.toggleProcess(m.hits[i].id)
+				break
+			}
 		}
 		return m, nil
 	case JumpToLatestMsg:
@@ -195,6 +197,7 @@ func (m *messagesCmp) SetSize(width, height int) tea.Cmd {
 	if m.width == width && m.height == height {
 		return nil
 	}
+	follow := m.viewport.AtBottom() && !m.selection.engaged() && !m.find.open
 	m.selection = textSelection{} // Reflow invalidates display-cell coordinates.
 	m.width = width
 	m.height = height
@@ -203,6 +206,9 @@ func (m *messagesCmp) SetSize(width, height int) tea.Cmd {
 	m.attachments.Width = width + 40
 	m.attachments.Height = 3
 	m.rerender()
+	if follow {
+		m.viewport.GotoBottom()
+	}
 	return nil
 }
 

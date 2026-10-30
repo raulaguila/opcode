@@ -73,6 +73,20 @@ As exceções explícitas de estilo solicitadas pelo usuário permanecem respeit
 O gate verifica proveniência e o vínculo com a fonte selecionada; não certifica
 a interpretação de cada afirmação. As avaliações de conteúdo permanecem necessárias.
 
+O diagnóstico público que acompanha uma chamada de pergunta também mantém sua
+validação. Uma confirmação simples após a resposta humana pode encerrar o fluxo
+sem repetir as referências quando a explicação anterior continua validada. Isso
+não dispensa novas afirmações técnicas: elas seguem a validação normal, e uma
+confirmação não faz um diagnóstico sem evidências passar.
+O reconhecimento dessas confirmações usa frases conservadoras em português e
+inglês; outras formulações continuam sujeitas à validação normal.
+
+A interface mantém o texto visível durante a validação e associa o estado à
+resposta correspondente: “Validando citações…”, “Citações não validadas” ou
+“Resposta substituída”. Reparos internos ficam nos detalhes do processo, sem
+recolher o diagnóstico. A falha de citação é distinta de contexto excedido;
+palavras como “context preparation” no detalhe não mudam a categoria do erro.
+
 Uma leitura automática anterior pode ser reaproveitada somente quando seu
 resultado visível e recibo continuam completos e o hash do arquivo é revalidado
 dentro do workspace e da política de caminhos. Arquivo alterado, fonte sensível,
@@ -103,6 +117,11 @@ repete efeitos colaterais nem fabrica referências para fazer uma resposta passa
 
 O resumo distingue leituras/buscas de contexto, fontes reutilizadas, chamadas de
 terminal, outras ferramentas e reparos. `Ctrl+B` continua abrindo os detalhes.
+Cada sequência consecutiva de ferramentas forma um grupo recolhível entre as
+mensagens públicas. Novas mensagens encerram o grupo anterior; novas chamadas
+abrem outro. `Ctrl+B` e `/process` alternam o grupo mais recente, e o clique no
+cabeçalho alterna um grupo específico. A resposta humana a uma pergunta aparece
+na sequência como “Você respondeu: …”.
 Essas contagens representam operações da aplicação; não são contagens de
 requisições ao modelo nem prova de que a resposta interpretou as fontes corretamente.
 A classificação usa metadados da aplicação, que são removidos de chamadas

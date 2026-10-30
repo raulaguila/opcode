@@ -6,11 +6,19 @@
 go run . --mode ask
 go run . --mode plan
 go run . --mode execute
+go run . --resume
 go run . --resume ID_DA_SESSAO
 go run . --resume ID_DA_SESSAO -p "Continue a tarefa e valide os arquivos atuais"
 ```
 
 Na interface, use a paleta `Ctrl+K` ou as sugestões de comandos com `/`.
+
+`--resume` sem ID reabre a última conversa disponível do projeto atual. Sem
+conversa disponível, informa isso e abre uma nova. As formas `--resume ID` e
+`--resume=ID` escolhem uma sessão específica; ID inexistente continua sendo erro.
+Reabrir interativamente não continua ferramentas automaticamente nem restaura
+aprovações. Com `--prompt`, o novo pedido explícito é executado na sessão
+escolhida, sujeito ao modo, às permissões e às verificações atuais.
 
 Digitar `/` no início de uma mensagem abre as sugestões acima do campo.
 Continue digitando para filtrar, use ↑/↓ para navegar, Tab para completar sem
@@ -24,6 +32,7 @@ preservam o comando no rascunho.
 - `/mode ask|plan|execute`: seleciona Perguntar, Planejar ou Executar.
 - `/plan` ou `/task`: mostra/recolhe objetivo, etapas, critérios, verificações e ID da sessão. `Alt+↑/↓` e a roda sobre o painel percorrem o plano.
 - `/resume`: pede continuação da tarefa salva, respeitando o modo atual.
+- `/quit`: inicia o encerramento normal da interface, salvando o rascunho e respeitando operações protegidas em andamento; não chama o modelo.
 - `/task new`: limpa o plano e os registros de validação, preservando a conversa e os arquivos. Revoga as autorizações lembradas e encerra processos anteriores.
 
 Trocas de modo são recusadas enquanto o agente trabalha. Pressione Esc para
@@ -85,6 +94,8 @@ autorizam ferramentas. O prompt e a orientação limitada são recompostos por r
 
 `ask_user_question` apresenta até cinco opções e aceita resposta livre. Nada é
 enviado por pré-seleção: use setas para escolher ou digite e pressione Enter.
+O painel usa borda, superfície distinta e o estado “Aguardando sua resposta”,
+com pergunta em destaque e campo “Outra resposta” quando há opções.
 F2 abre os detalhes completos, com rolagem; F2/Esc retorna à resposta. Esc na
 pergunta normal cancela a geração. O rascunho principal do chat é preservado.
 

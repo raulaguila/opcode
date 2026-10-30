@@ -104,20 +104,23 @@ func recoveryTitle(err error) string {
 	if err == nil {
 		return ""
 	}
-	s := strings.ToLower(err.Error())
-	switch {
-	case strings.Contains(s, "401") || strings.Contains(s, "403") || strings.Contains(s, "api key") || strings.Contains(s, "unauthorized") || strings.Contains(s, "authentication"):
+	switch classifyRecovery(err) {
+	case recoveryCitation:
+		return config.Text("Citações não validadas", "Citations not validated")
+	case recoveryAuthentication:
 		return config.Text("Autenticação necessária", "Authentication required")
-	case strings.Contains(s, "out of memory") || strings.Contains(s, "insufficient memory") || strings.Contains(s, "requires more system memory"):
+	case recoveryMemory:
 		return config.Text("Memória insuficiente no servidor", "Server memory exhausted")
-	case strings.Contains(s, "cancel"):
+	case recoveryCancelled:
 		return config.Text("Execução cancelada", "Run cancelled")
-	case strings.Contains(s, "connection") || strings.Contains(s, "timeout") || strings.Contains(s, "deadline exceeded") || strings.Contains(s, "429") || strings.Contains(s, "503"):
+	case recoveryUnavailable:
 		return config.Text("Provedor indisponível", "Provider unavailable")
-	case strings.Contains(s, "context") || strings.Contains(s, "413"):
+	case recoveryCapacity:
 		return config.Text("Limite do modelo atingido", "Model limit reached")
-	case strings.Contains(s, "conflict") || strings.Contains(s, "modified externally"):
+	case recoveryConflict:
 		return config.Text("Conflito de arquivo", "File conflict")
+	case recoveryBudget:
+		return config.Text("Limite da execução atingido", "Run limit reached")
 	default:
 		return config.Text("Execução interrompida", "Run interrupted")
 	}
@@ -125,6 +128,10 @@ func recoveryTitle(err error) string {
 func recoveryActions(err error) string {
 	title := recoveryTitle(err)
 	switch title {
+	case config.Text("Citações não validadas", "Citations not validated"):
+		return config.Text(" /error Ver detalhes · /retry Solicitar correção", " /error View details · /retry Request correction")
+	case config.Text("Limite da execução atingido", "Run limit reached"):
+		return config.Text(" /task Rever tarefa · /error Detalhes", " /task Review task · /error Details")
 	case config.Text("Autenticação necessária", "Authentication required"):
 		return config.Text(" /settings Configurar acesso · /error Detalhes", " /settings Configure access · /error Details")
 	case config.Text("Limite do modelo atingido", "Model limit reached"):

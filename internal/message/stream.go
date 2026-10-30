@@ -103,7 +103,9 @@ func newStreamPart(index int, initial, origin string) *streamPart {
 
 func (b *StreamBuffer) Materialize() {
 	for _, part := range b.text {
-		b.message.Parts[part.index] = TextContent{Text: part.value.String(), Origin: part.origin}
+		text := b.message.Parts[part.index].(TextContent)
+		text.Text, text.Origin = part.value.String(), part.origin
+		b.message.Parts[part.index] = text
 	}
 	for _, part := range b.reasoning {
 		b.message.Parts[part.index] = ReasoningContent{Thinking: part.value.String()}

@@ -5,6 +5,80 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Conversa cronológica, perguntas e retomada — 30/10/2026
+
+O estado anterior foi preservado na tag remota
+`checkpoint/2026-10-30-before-conversation-ux`, no commit `ea03185`.
+Mensagens públicas agora permanecem na ordem da conversa, entre grupos
+consecutivos e independentes de ferramentas. Diagnósticos com chamadas de
+pergunta não ficam escondidos no processo; respostas humanas têm resumo
+visível e correções internas não removem texto público.
+
+A validação mantém recibos, hash atual, vínculo com a fonte selecionada e
+intervalos realmente lidos. Estados pendente, inválido e substituído pertencem
+à mensagem correspondente. Uma confirmação neutra após a pergunta pode encerrar
+uma explicação válida sem repetir referências. Diagnóstico anterior inválido
+continua exigindo reparo; novas afirmações e referências continuam validadas.
+Falha de citação não é mais classificada como contexto excedido por conter
+“context preparation”. Não foram alteradas aprovações, sandbox ou critérios
+semânticos das avaliações.
+
+Perguntas simples, agrupadas e revisão usam o mesmo painel com borda, estado de
+espera, foco explícito e alternativa de texto. O layout foi verificado em
+60×20, 25×10 e 20×8; detalhes longos continuam acessíveis por F2 e rolagem.
+Reduzir o chat para exibir uma pergunta acompanha a resposta recente apenas
+quando o leitor já estava no fim. O primeiro clique em cada grupo respeita
+seu estado de expansão real.
+
+`/quit` usa o encerramento existente, salva o rascunho e conserva a proteção
+para operações nativas pendentes. `--resume` abre a última conversa válida do
+projeto; `--resume ID`, `--resume=ID` e `--prompt` permanecem disponíveis.
+Reabrir não chama o modelo, não executa ferramentas e não restaura aprovações.
+Sessões filhas, arquivadas ou removidas não são escolhidas automaticamente.
+O comportamento de `/quit` no modo `attach` permanece o de desconectar.
+
+Passaram as suítes completas comum e `integration` com `-race -p 1`, Vet e
+Staticcheck com e sem integração, Gocognit sem funções acima de 15
+(incluindo recursão exata), verificação do inventário de linguagens, Actionlint
+e builds Linux/amd64, Windows/amd64 e macOS/arm64. Seis cenários de PTY
+executaram: conversa/recusa/encerramento/retomada, velocidade durante streaming,
+busca e seleção, fluxo com Ollama, temas compactos e consultas de inicialização.
+
+No fluxo real com `llama3.1:8b`, a aplicação leu o projeto, apresentou referências,
+fez uma pergunta e continuou após a resposta humana. Uma chamada Bash com PTY
+recebeu aprovação explícita, publicou saída antes de terminar, aceitou entrada
+e uma nova instrução durante a execução. O teste usa projeto e HOME isolados,
+contexto de 16.384 tokens e sandbox obrigatório. A sequência exata de diagnóstico,
+“Agora não”, confirmação e retomada também passou com transporte controlado,
+sem inferência extra, mensagens novas na retomada ou alterações das fontes.
+
+Uma execução revelou leitura prematura do título do formulário LSP em um frame
+VT ainda incompleto. A espera passou a exigir também os campos de nome e comando;
+uma regressão rejeita frames parciais. Os mesmos critérios de aprovação e
+execução permaneceram ativos, e o fluxo completo foi executado novamente.
+
+Cinco pares alternados de 1.000 operações compararam o checkpoint com a versão
+final, usando Go 1.27.3, Linux/amd64, `GOMAXPROCS=2` e o mesmo fixture de 1.000
+mensagens. Medianas:
+
+| Caso | Tempo antes → depois | B/op antes → depois | allocs/op antes → depois |
+| --- | --- | --- | --- |
+| Sem mudanças | 0.060 → 0.060 µs | 0 → 0 | 0 → 0 |
+| Última resposta invalidada | 89.888 → 92.319 µs | 98,480 → 94,203 | 905 → 904 |
+| Streaming | 86.226 → 86.958 µs | 98,743 → 94,406 | 927 → 926 |
+
+O redesenho sem mudanças continua com zero alocações. Os bytes por atualização
+caíram aproximadamente 4,3–4,4%, com uma alocação a menos; as medianas de tempo
+variaram de −0,2% a +2,7%. A comparação é de componentes e não mede velocidade
+de inferência. O cache deixou de guardar um campo de texto sem consumidores.
+
+Amostras, comandos e resultados estão em
+[`2026-10-30-conversation-ux-validation.json`](evidence/2026-10-30-conversation-ux-validation.json).
+O provedor empresarial não foi acessado. A validação comprova procedência das
+referências; não certifica a interpretação do modelo. Confirmações reconhecidas
+usam frases conservadoras em português e inglês; outras formulações continuam
+sujeitas à validação normal.
+
 ## Alocações da retenção — 30/10/2026
 
 A partir de `d9d010b`, a verificação do limite usa uma consulta preparada no

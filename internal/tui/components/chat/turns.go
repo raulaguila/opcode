@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -20,8 +22,9 @@ type ToggleProcessMsg struct{}
 type ProcessPreferencesChangedMsg struct{}
 type JumpToLatestMsg struct{}
 type transcriptHit struct {
-	start, end     int
-	kind, id, text string
+	start, end int
+	kind, id   string
+	expanded   bool
 }
 type TranscriptControl interface{ LatestResponse() string }
 type turnGroup struct {
@@ -33,7 +36,7 @@ type turnGroup struct {
 func (m *messagesCmp) LatestResponse() string {
 	for _, v := range slices.Backward(m.messages) {
 
-		if v.Role == message.Assistant && len(v.ToolCalls()) == 0 && v.Content().String() != "" {
+		if v.Role == message.Assistant && v.Content().String() != "" {
 			return v.Content().String()
 		}
 	}
@@ -141,13 +144,97 @@ func (r *turnRenderer) appendText(id, text string) {
 
 func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	r.renderUser(group)
-	finals, hasProcess := turnFinals(group.messages)
-	if hasProcess {
-		r.renderProcess(group, latest && r.messages.IsAgentWorking())
+	start, first := -1, true
+	lastPublic := lastPublicIndex(group.messages)
+	for index, item := range group.messages {
+		answer := questionAnswer(item, r.messages.renderCache.toolOwners)
+		if publicResponse(item) || answer != "" {
+			if start >= 0 {
+				r.renderProcessRange(group, start, index, first, false)
+				first, start = false, -1
+			}
+			r.renderPublicItem(item, index, latest && index == lastPublic, answer)
+		}
+		if answer == "" && processEvent(item) && start < 0 {
+			start = index
+		}
 	}
-	for index, final := range finals {
-		r.renderFinal(group.messages[final], final, latest && index == len(finals)-1)
+	if start >= 0 {
+		r.renderProcessRange(group, start, len(group.messages), first, latest && r.messages.IsAgentWorking())
 	}
+}
+
+func lastPublicIndex(items []message.Message) int {
+	last := -1
+	for i, item := range items {
+		if publicResponse(item) {
+			last = i
+		}
+	}
+	return last
+}
+
+func (r *turnRenderer) renderPublicItem(item message.Message, index int, latest bool, answer string) {
+	if answer == "" {
+		r.renderFinal(item, index, latest)
+		return
+	}
+	answerMessage := message.Message{ID: item.ID + ":answer", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: config.Text("Você respondeu: ", "You answered: ") + answer}}}
+	r.appendItem(renderUserMessage(answerMessage, false, r.messages.width, r.position))
+}
+
+func questionAnswer(item message.Message, owners map[string]toolOwner) string {
+	if item.Role != message.Tool {
+		return ""
+	}
+	for _, result := range item.ToolResults() {
+		name := result.Name
+		if name == "" {
+			name = owners[result.ToolCallID].name
+		}
+		if (name != "ask_user_question" && name != "ask_user_questions") || result.IsError {
+			continue
+		}
+		var decoded struct {
+			Response string `json:"user_response"`
+		}
+		if json.Unmarshal([]byte(result.Content), &decoded) == nil {
+			return tools.RedactCredentials(questionAnswerText(decoded.Response))
+		}
+	}
+	return ""
+}
+
+func questionAnswerText(text string) string {
+	var batch interaction.AnswerBatch
+	if json.Unmarshal([]byte(text), &batch) != nil || len(batch.Answers) == 0 {
+		return text
+	}
+	values := make([]string, 0, len(batch.Answers))
+	for _, item := range batch.Answers {
+		value := item.Text
+		if len(item.Choices) > 0 {
+			value = strings.Join(item.Choices, ", ")
+		}
+		values = append(values, value)
+	}
+	return strings.Join(values, "; ")
+}
+
+func publicResponse(item message.Message) bool {
+	return item.Role == message.Assistant && item.Content().String() != ""
+}
+
+func processEvent(item message.Message) bool {
+	return item.IsApplication() || item.Role == message.Tool || len(item.ToolCalls()) > 0 || item.ReasoningContent().Thinking != ""
+}
+
+func (r *turnRenderer) renderProcessRange(group turnGroup, start, end int, first, active bool) {
+	key := group.key
+	if !first {
+		key += "\x00process:" + group.messages[start].ID
+	}
+	r.renderProcess(turnGroup{key: key, messages: group.messages[start:end]}, active)
 }
 
 func (r *turnRenderer) renderUser(group turnGroup) {
@@ -165,19 +252,6 @@ func (r *turnRenderer) renderUser(group turnGroup) {
 	for _, item := range cached.content {
 		r.appendItem(item)
 	}
-}
-
-func turnFinals(messages []message.Message) (finals []int, process bool) {
-	for index, item := range messages {
-		process = process || len(item.ToolCalls()) > 0 || item.IsApplication() || (item.Role == message.Assistant && item.ReasoningContent().Thinking != "")
-		if item.IsApplication() {
-			finals = nil
-		}
-		if item.Role == message.Assistant && len(item.ToolCalls()) == 0 && item.Content().String() != "" {
-			finals = append(finals, index)
-		}
-	}
-	return finals, process
 }
 
 func (r *turnRenderer) processExpanded(group turnGroup, active bool) bool {
@@ -202,7 +276,7 @@ func (r *turnRenderer) renderProcess(group turnGroup, active bool) {
 	}
 	start := r.position
 	r.appendText(group.key+":process", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(label, m.width, "…")))
-	r.hits = append(r.hits, transcriptHit{start, start + 1, "process", group.key, ""})
+	r.hits = append(r.hits, transcriptHit{start: start, end: start + 1, kind: "process", id: group.key, expanded: expanded})
 	if expanded {
 		for index, item := range group.messages {
 			r.renderProcessMessage(item, index)
@@ -218,9 +292,7 @@ func processMessage(item message.Message) message.Message {
 		case message.ReasoningContent:
 			continue
 		case message.TextContent:
-			if len(item.ToolCalls()) == 0 {
-				continue
-			}
+			continue
 		}
 		copy.Parts = append(copy.Parts, part)
 	}
@@ -267,11 +339,14 @@ func (r *turnRenderer) renderProcessMessageContent(item message.Message, index i
 	}
 }
 
-func withoutReasoning(item message.Message) message.Message {
+func publicMessage(item message.Message) message.Message {
 	parts := item.Parts
 	item.Parts = nil
 	for _, part := range parts {
-		if _, thinking := part.(message.ReasoningContent); !thinking {
+		switch part.(type) {
+		case message.ReasoningContent, message.ToolCall:
+			continue
+		default:
 			item.Parts = append(item.Parts, part)
 		}
 	}
@@ -294,7 +369,7 @@ func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool)
 	}
 	cached, ok := m.cachedContent[item.ID]
 	if !ok || cached.width != m.width {
-		cached = cacheItem{width: m.width, content: renderAssistantMessage(withoutReasoning(item), index, m.messages, m.nestedProjection(), m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position, markdown)}
+		cached = cacheItem{width: m.width, content: renderAssistantMessage(publicMessage(item), index, m.messages, m.nestedProjection(), m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position, markdown)}
 		m.putMessageCache(item.ID, cached)
 	}
 	r.dependencies = append(r.dependencies, item.ID)
@@ -302,7 +377,7 @@ func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool)
 	for _, rendered := range cached.content {
 		r.appendItem(rendered)
 	}
-	r.hits = append(r.hits, transcriptHit{start, r.position - 1, "actions", item.ID, item.Content().String()})
+	r.hits = append(r.hits, transcriptHit{start: start, end: r.position - 1, kind: "actions", id: item.ID})
 	if latest && !m.IsAgentWorking() {
 		r.renderActions(item)
 	}
@@ -312,27 +387,36 @@ func (r *turnRenderer) renderActions(item message.Message) {
 	start := r.position
 	text := config.Text("Arraste para selecionar · Ctrl+C copia · Ctrl+Y ações", "Drag to select · Ctrl+C copies · Ctrl+Y actions")
 	r.appendText(item.ID+":actions", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(text, r.messages.width, "…")))
-	r.hits = append(r.hits, transcriptHit{start, r.position - 1, "actions", item.ID, item.Content().String()})
+	r.hits = append(r.hits, transcriptHit{start: start, end: r.position - 1, kind: "actions", id: item.ID})
 }
 
 func (m *messagesCmp) toggleProcess(id string) {
+	expanded := m.expanded[id]
+	if !m.toggled[id] {
+		expanded = m.renderedProcessExpanded(id)
+	}
 	m.ClearSelection()
 	if m.expanded == nil {
 		m.expanded = map[string]bool{}
 		m.toggled = map[string]bool{}
 	}
-	if !m.toggled[id] {
-		m.expanded[id] = false
-		if cfg := config.Get(); cfg != nil {
-			m.expanded[id] = m.IsAgentWorking() && len(m.groups()) > 0 && m.groups()[len(m.groups())-1].key == id && cfg.Preferences.ProcessVisible()
-		}
-	}
-	m.expanded[id] = !m.expanded[id]
+	m.expanded[id] = !expanded
 	m.toggled[id] = true
+	parent, _, _ := strings.Cut(id, "\x00process:")
+	m.renderCache.versions[parent]++
 	m.renderCache.dirty = true
 	offset := m.viewport.YOffset
 	m.renderView()
 	m.viewport.SetYOffset(offset)
+}
+
+func (m *messagesCmp) renderedProcessExpanded(id string) bool {
+	for _, hit := range m.hits {
+		if hit.kind == "process" && hit.id == id {
+			return hit.expanded
+		}
+	}
+	return false
 }
 func (m *messagesCmp) transcriptMouse(msg tea.MouseMsg) tea.Cmd {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {

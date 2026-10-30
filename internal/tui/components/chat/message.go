@@ -148,6 +148,9 @@ func renderAssistantMessage(
 
 	t := theme.CurrentTheme()
 	baseStyle := styles.BaseStyle()
+	if label := citationStatusLabel(msg.CitationValidation()); label != "" {
+		info = append(info, baseStyle.Foreground(t.Warning()).Render(" "+label))
+	}
 
 	// Add finish info if available
 	if finished {

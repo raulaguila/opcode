@@ -33,6 +33,16 @@ A interface deve funcionar por teclado e mouse, preservar rascunhos, manter
 leitura durante streaming e comunicar carregamento, vazio, falha e recuperação.
 Não há metas de latência ou paridade de qualidade entre modelos estabelecidas.
 
+A conversa mantém a ordem das mensagens públicas e intercala grupos consecutivos
+de ferramentas recolhíveis. Diagnósticos permanecem visíveis após perguntas,
+respostas humanas e reparos internos, com estado de citação associado ao texto.
+Uma falha de citação tem categoria própria e não indica contexto esgotado.
+Perguntas usam painel com borda, superfície distinta, estado de espera e seleção
+explícita, preservando a distinção entre responder e autorizar uma ferramenta.
+`/quit` usa o encerramento protegido; `--resume` sem ID reabre a última conversa
+disponível do projeto, sem continuar ações ou restaurar aprovações. A sintaxe com
+ID e o comando `/resume` para continuar tarefas permanecem disponíveis.
+
 A estabilidade visual inclui um único composer/rodapé, input de três a oito
 linhas conforme o espaço, foco exclusivo dos diálogos e catálogo com busca,
 modelo ativo e paginação visíveis. Redimensionar ou consultar seletores preserva

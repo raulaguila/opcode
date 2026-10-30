@@ -241,6 +241,9 @@ func (snapshot providerCatalogSnapshot) discover(ctx context.Context) ([]models.
 			return nil, err
 		}
 	}
+	if snapshot.selected.Provider == snapshot.id && snapshot.selected.ProviderProfile == snapshot.profile {
+		ctx = models.WithPreferredOllamaModel(ctx, snapshot.selected.APIModel)
+	}
 	found, err := models.DiscoverProviderModels(httpclient.WithInsecureTLS(ctx, p.BaseURL, p.TLSInsecure), snapshot.id, p.BaseURL, p.APIKey)
 	if err != nil {
 		return nil, err

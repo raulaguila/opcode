@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -34,8 +35,10 @@ type Service interface {
 
 type service struct {
 	*pubsub.Broker[Message]
-	q     db.Querier
-	index *SearchIndexer
+	q        db.Querier
+	index    *SearchIndexer
+	streamMu sync.RWMutex
+	streams  map[string]Message
 }
 
 func NewService(q db.Querier, options ...func(*service)) Service {
@@ -58,6 +61,7 @@ func (s *service) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	s.forgetStream(message.ID)
 	if s.index != nil {
 		if err := memoryindex.Remove(ctx, s.index.Directory, s.index.Project, "message:"+id); err != nil {
 			logging.Warn("Deleted message search projection could not be removed", "error_kind", fmt.Sprintf("%T", err))
@@ -130,6 +134,7 @@ func (s *service) Update(ctx context.Context, message Message) error {
 	if err != nil {
 		return err
 	}
+	s.forgetStream(message.ID)
 	message.UpdatedAt = time.Now().Unix()
 	s.projectMessage(ctx, message)
 	s.Publish(pubsub.UpdatedEvent, snapshotMessage(message))
@@ -162,7 +167,11 @@ func (s *service) Get(ctx context.Context, id string) (Message, error) {
 	if err != nil {
 		return Message{}, err
 	}
-	return s.fromDBItem(dbMessage)
+	msg, err := s.fromDBItem(dbMessage)
+	if err != nil {
+		return Message{}, err
+	}
+	return s.liveMessage(msg), nil
 }
 
 func (s *service) List(ctx context.Context, sessionID string) ([]Message, error) {
@@ -176,6 +185,7 @@ func (s *service) List(ctx context.Context, sessionID string) ([]Message, error)
 		if err != nil {
 			return nil, err
 		}
+		messages[i] = s.liveMessage(messages[i])
 	}
 	return messages, nil
 }

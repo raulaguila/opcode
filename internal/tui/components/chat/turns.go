@@ -56,36 +56,70 @@ func (m *messagesCmp) groups() []turnGroup {
 }
 
 type turnRenderer struct {
-	messages *messagesCmp
-	base     lipgloss.Style
-	theme    theme.Theme
-	rendered []string
-	position int
+	messages     *messagesCmp
+	base         lipgloss.Style
+	theme        theme.Theme
+	rendered     []string
+	position     int
+	items        []uiMessage
+	hits         []transcriptHit
+	dependencies []string
 }
 
 func (m *messagesCmp) renderTurns() {
 	if m.selection.engaged() || m.width < 1 {
 		return
 	}
-	groups := m.groups()
-	m.lastWorking = len(m.messages) > 0 && m.IsAgentWorking()
-	m.uiMessages, m.hits = nil, nil
-	renderer := turnRenderer{messages: m, base: styles.BaseStyle(), theme: theme.CurrentTheme()}
-	for index, group := range groups {
-		renderer.renderGroup(group, index == len(groups)-1)
+	m.ensureRenderCache()
+	groups := m.renderGroups()
+	working := len(m.messages) > 0 && m.IsAgentWorking()
+	if !m.renderCache.dirty && m.lastWorking == working {
+		return
 	}
-	content := renderer.base.Width(m.width).Render(strings.Join(renderer.rendered, "\n"))
-	m.transcriptLines = strings.Split(content, "\n")
-	if m.find.open {
-		m.updateSearch()
+	m.lastWorking = working
+	m.uiMessages = m.uiMessages[:0]
+	m.hits = m.hits[:0]
+	var content strings.Builder
+	content.Grow(len(m.renderCache.content))
+	offset := 0
+	for index, g := range groups {
+		frame := m.renderTurnFrame(g, index == len(groups)-1, working)
+		if index > 0 {
+			content.WriteByte('\n')
+		}
+		content.WriteString(frame.text)
+		m.appendTurnFrame(frame, offset)
+		offset += frame.height
 	}
-	m.viewport.SetContent(content)
+	m.renderCache.dirty = false
+	m.installTranscript(content.String())
+}
+func (m *messagesCmp) renderTurnFrame(g turnGroup, latest, working bool) turnCacheItem {
+	active := latest && working
+	renderer := turnRenderer{messages: m}
+	expanded := renderer.processExpanded(g, active)
+	if frame, ok := m.renderCache.frames[g.key]; ok && m.frameValid(frame, g, active, expanded, latest) {
+		m.renderCache.clock++
+		frame.used = m.renderCache.clock
+		m.renderCache.frames[g.key] = frame
+		return frame
+	}
+	renderer.base, renderer.theme = styles.BaseStyle(), theme.CurrentTheme()
+	renderer.renderGroup(g, latest)
+	frame := turnCacheItem{text: renderer.base.Width(m.width).Render(strings.Join(renderer.rendered, "\n")), version: m.renderCache.versions[g.key], active: active, expanded: expanded, latest: latest, summary: m.session.SummaryMessageID}
+	// A frame owns relative positions independently of the assembled transcript.
+	frame.items = renderer.items
+	frame.hits = renderer.hits
+	frame.dependencies = renderer.dependencies
+	frame.height = lipgloss.Height(frame.text)
+	m.storeTurnFrame(g.key, frame)
+	return frame
 }
 
 func (r *turnRenderer) appendItem(item uiMessage) {
 	item.position = r.position
 	item.height = lipgloss.Height(item.content)
-	r.messages.uiMessages = append(r.messages.uiMessages, item)
+	r.items = append(r.items, item)
 	r.rendered = append(r.rendered, item.content, "")
 	r.position += item.height + 1
 }
@@ -113,8 +147,10 @@ func (r *turnRenderer) renderUser(group turnGroup) {
 	cached, ok := m.cachedContent[group.user.ID]
 	if !ok || cached.width != m.width {
 		cached = cacheItem{width: m.width, content: []uiMessage{renderUserMessage(*group.user, group.key == m.currentMsgID, m.width, r.position)}}
-		m.cachedContent[group.user.ID] = cached
+		m.putMessageCache(group.user.ID, cached)
 	}
+	r.dependencies = append(r.dependencies, group.user.ID)
+	m.touchMessageCache(group.user.ID, cached)
 	for _, item := range cached.content {
 		r.appendItem(item)
 	}
@@ -155,7 +191,7 @@ func (r *turnRenderer) renderProcess(group turnGroup, active bool) {
 	}
 	start := r.position
 	r.appendText(group.key+":process", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(label, m.width, "…")))
-	m.hits = append(m.hits, transcriptHit{start, start + 1, "process", group.key, ""})
+	r.hits = append(r.hits, transcriptHit{start, start + 1, "process", group.key, ""})
 	if expanded {
 		for index, item := range group.messages {
 			r.renderProcessMessage(item, index)
@@ -181,6 +217,25 @@ func processMessage(item message.Message) message.Message {
 }
 
 func (r *turnRenderer) renderProcessMessage(item message.Message, index int) {
+	if item.Role != message.Assistant && !item.IsApplication() {
+		return
+	}
+	m := r.messages
+	key := processCacheKey(item.ID)
+	cached, ok := m.cachedContent[key]
+	if !ok || cached.width != m.width {
+		child := turnRenderer{messages: m, base: r.base, theme: r.theme}
+		child.renderProcessMessageContent(item, index)
+		cached = cacheItem{width: m.width, content: child.items}
+		m.putMessageCache(key, cached)
+	}
+	r.dependencies = append(r.dependencies, key)
+	m.touchMessageCache(key, cached)
+	for _, rendered := range cached.content {
+		r.appendItem(rendered)
+	}
+}
+func (r *turnRenderer) renderProcessMessageContent(item message.Message, index int) {
 	m := r.messages
 	if item.IsApplication() {
 		r.appendText(item.ID, r.base.Foreground(r.theme.TextMuted()).Render(config.Text("Validação da aplicação", "Application validation")+"\n"+toMarkdown(tools.RedactCredentials(item.Content().String()), false, m.width)))
@@ -196,7 +251,7 @@ func (r *turnRenderer) renderProcessMessage(item message.Message, index int) {
 	if len(copy.ToolCalls()) == 0 && copy.Content().String() == "" {
 		return
 	}
-	for _, rendered := range renderAssistantMessage(copy, index, m.messages, m.app.Messages, m.currentMsgID, false, m.width, r.position) {
+	for _, rendered := range renderAssistantMessage(copy, index, m.messages, m.nestedProjection(), m.currentMsgID, false, m.width, r.position) {
 		r.appendItem(rendered)
 	}
 }
@@ -214,17 +269,18 @@ func withoutReasoning(item message.Message) message.Message {
 
 func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool) {
 	m := r.messages
-	item = withoutReasoning(item)
 	start := r.position
 	cached, ok := m.cachedContent[item.ID]
 	if !ok || cached.width != m.width {
-		cached = cacheItem{width: m.width, content: renderAssistantMessage(item, index, m.messages, m.app.Messages, m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position)}
-		m.cachedContent[item.ID] = cached
+		cached = cacheItem{width: m.width, content: renderAssistantMessage(withoutReasoning(item), index, m.messages, m.nestedProjection(), m.currentMsgID, m.session.SummaryMessageID == item.ID, m.width, r.position)}
+		m.putMessageCache(item.ID, cached)
 	}
+	r.dependencies = append(r.dependencies, item.ID)
+	m.touchMessageCache(item.ID, cached)
 	for _, rendered := range cached.content {
 		r.appendItem(rendered)
 	}
-	m.hits = append(m.hits, transcriptHit{start, r.position - 1, "actions", item.ID, item.Content().String()})
+	r.hits = append(r.hits, transcriptHit{start, r.position - 1, "actions", item.ID, item.Content().String()})
 	if latest && !m.IsAgentWorking() {
 		r.renderActions(item)
 	}
@@ -234,7 +290,7 @@ func (r *turnRenderer) renderActions(item message.Message) {
 	start := r.position
 	text := config.Text("Arraste para selecionar · Ctrl+C copia · Ctrl+Y ações", "Drag to select · Ctrl+C copies · Ctrl+Y actions")
 	r.appendText(item.ID+":actions", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(text, r.messages.width, "…")))
-	r.messages.hits = append(r.messages.hits, transcriptHit{start, r.position - 1, "actions", item.ID, item.Content().String()})
+	r.hits = append(r.hits, transcriptHit{start, r.position - 1, "actions", item.ID, item.Content().String()})
 }
 
 func (m *messagesCmp) toggleProcess(id string) {
@@ -251,6 +307,7 @@ func (m *messagesCmp) toggleProcess(id string) {
 	}
 	m.expanded[id] = !m.expanded[id]
 	m.toggled[id] = true
+	m.renderCache.dirty = true
 	offset := m.viewport.YOffset
 	m.renderView()
 	m.viewport.SetYOffset(offset)

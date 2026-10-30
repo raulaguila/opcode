@@ -417,3 +417,53 @@ O input cresce por linhas visuais (3–8 quando há espaço), com prévia de ane
 limitada e rascunho preservado. Busca do catálogo usa seu próprio textinput e
 geometria compartilhada entre desenho e mouse. Metadados continuam canceláveis,
 sem inferência automática e sem mudar autorizações.
+
+
+## Responsabilidades nos caminhos de streaming e busca
+
+A geração é dona do `message.StreamBuffer`, que acumula texto e raciocínio sem
+copiar o prefixo a cada fragmento. O worker publica snapshots imutáveis em até
+50 ms quando recebe novos eventos, ou a cada 4 KiB. Checkpoints duráveis ocorrem
+em até 1 s quando há eventos, ou 16 KiB, e nas fronteiras de conclusão, tools,
+erro e cancelamento. Não há timer independente que grave em silêncio durante
+um provedor parado. O serviço de mensagens mantém o último snapshot publicado
+como overlay de `Get/List`, para uma reconciliação não regredir ao checkpoint.
+Uma gravação durável bem-sucedida ou exclusão remove o overlay. Se a gravação
+final falhar, o progresso continua em memória; isso não é promessa de recuperação
+após encerrar o processo. Snapshots não compartilham partes mutáveis com o worker.
+
+O orçamento do provedor mede um `PreparedRequest` imutável, e o mesmo envelope é
+enviado. Compactação e mudanças de histórico/ferramentas/opções exigem nova
+preparação. Título, resumo e exploração seguem o mesmo contrato. Transportes e
+autenticação pertencem à conexão; clones de prompt/contexto/citações preservam
+esse proprietário sem misturar conexões, credenciais ou políticas TLS.
+
+A TUI separa projeção, layout e comandos de carregamento. Renderizadores não
+consultam o armazenamento: subtarefas chegam por projeções assíncronas limitadas
+e protegidas por geração. Caches de mensagens/processos e turnos têm limites de
+4 MiB cada; busca normalizada usa até 2 MiB, e subtarefas até 2 MiB/32 tarefas.
+Troca de conversa, tema e largura invalidam as projeções correspondentes.
+Atualizações estáveis reutilizam o layout; polling de terminal ocioso evita SQL
+ou reconstrução de saída sem revisão nova.
+
+O broker mantém uma fila limitada por assinante. Saturação preserva a cauda e
+marca `ReconcileRequired`; não oferece entrega ilimitada de todo evento.
+Forwarders usam `PublishEvent` para preservar a marca. Mensagens e sessões
+recarregam estado autoritativo; permissões consultam pedidos ainda pendentes e
+continuam exigindo resposta explícita para o escopo original. O servidor já
+consulta snapshots vivos em seu polling. Encerrar o broker também encerra seus
+waiters de assinatura, mesmo se o contexto do assinante permanecer ativo.
+
+A busca captura candidatos e escopo sob o semáforo do índice e o libera antes
+do HTTP de embeddings. O refresh possui statements preparados por transação.
+Snapshots de ignore pertencem a uma operação, validam seus stamps antes do
+commit/resultado e rejeitam a operação ao exceder 65.536 políticas observadas.
+Caminhos sensíveis, symlinks e autorização continuam verificados por caminho.
+Embeddings usam até 16 misses/64 KiB em um lote e podam o cache uma vez por lote;
+resultados revalidam política e hash antes de sair. O índice continua navegação,
+sem fornecer evidência de leitura para edição ou citação. Redatores preparados
+pertencem à operação; a saída de `SecureTool` captura credenciais novamente.
+
+Formulários de conexão têm handlers tipados e módulos próprios para campos,
+validação, persistência, navegação e apresentação. Commit/rollback do cofre e
+as permissões permanecem nas camadas que executam essas operações.

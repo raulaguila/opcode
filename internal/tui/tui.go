@@ -110,8 +110,11 @@ type appModel struct {
 	app             *app.App
 	selectedSession session.Session
 
-	showPermissions bool
-	permissions     dialog.PermissionDialogCmp
+	showPermissions        bool
+	activePermissionID     string
+	sessionRecoveryPending bool
+	sessionEventVersion    uint64
+	permissions            dialog.PermissionDialogCmp
 
 	showHelp bool
 	help     dialog.HelpCmp
@@ -223,7 +226,7 @@ func (a *appModel) routeEvent(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return a.routeStatus(msg)
 	case pubsub.Event[permission.PermissionRequest], dialog.PermissionResponseMsg:
 		return a.routePermission(msg)
-	case chat.SessionClearedMsg, chat.SessionSelectedMsg, pubsub.Event[session.Session], dialog.SessionSelectedMsg:
+	case chat.SessionClearedMsg, chat.SessionSelectedMsg, pubsub.Event[session.Session], dialog.SessionSelectedMsg, sessionsRecoveredMsg:
 		return a.routeSession(msg)
 	case dialog.CommandSelectedMsg, dialog.ShowMultiArgumentsDialogMsg, dialog.CloseMultiArgumentsDialogMsg:
 		return a.routeCommands(msg)
@@ -339,10 +342,7 @@ func (a *appModel) routePermission(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case pubsub.Event[permission.PermissionRequest]:
-		a.showPermissions = true
-		activity, activityCmd := a.pages[page.ChatPage].Update(page.ActivityMsg{SessionID: msg.Payload.SessionID, State: config.Text("Aguardando aprovação", "Waiting for approval")})
-		a.pages[page.ChatPage] = activity
-		return *a, tea.Batch(a.permissions.SetPermissions(msg.Payload), activityCmd, a.notify()), true
+		return *a, a.reconcilePermissions(msg.Payload), true
 
 	case dialog.PermissionResponseMsg:
 		var cmd tea.Cmd
@@ -355,9 +355,11 @@ func (a *appModel) routePermission(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			a.app.Permissions.Deny(msg.Permission)
 		}
 		a.showPermissions = false
+		a.activePermissionID = ""
 		activity, activityCmd := a.pages[page.ChatPage].Update(page.ActivityMsg{SessionID: msg.Permission.SessionID, State: config.Text("Executando operação", "Running operation")})
 		a.pages[page.ChatPage] = activity
-		return *a, tea.Batch(cmd, activityCmd), true
+		nextPermission := a.reconcilePermissions(permission.PermissionRequest{})
+		return *a, tea.Batch(cmd, activityCmd, nextPermission), true
 
 	}
 	return *a, tea.Batch(cmds...), false
@@ -377,9 +379,16 @@ func (a *appModel) routeSession(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 
 	case pubsub.Event[session.Session]:
+		a.sessionEventVersion++
+		if msg.ReconcileRequired {
+			cmds = append(cmds, a.recoverSessions())
+		}
 		if msg.Type == pubsub.UpdatedEvent && msg.Payload.ID == a.selectedSession.ID {
 			a.selectedSession = msg.Payload
 		}
+
+	case sessionsRecoveredMsg:
+		return *a, a.applyRecoveredSessions(msg), true
 
 	case dialog.SessionSelectedMsg:
 		a.showSessionDialog = false

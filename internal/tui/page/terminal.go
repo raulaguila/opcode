@@ -19,6 +19,7 @@ import (
 )
 
 type TerminalTickMsg struct{}
+type scheduledTerminalTickMsg struct{}
 type TerminalStartedMsg struct {
 	sessionID, id string
 	err           error
@@ -31,10 +32,37 @@ type terminalPanel struct {
 	processes         []tools.ProcessInfo
 	snapshot          tools.ProcessSnapshot
 	logs              viewport.Model
+	resizedID         string
+	cols, rows        int
 }
 
-func terminalTick() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(time.Time) tea.Msg { return TerminalTickMsg{} })
+func (p *chatPage) terminalTick() tea.Cmd {
+	interval := time.Second
+	if p.liveActivity() {
+		interval = 100 * time.Millisecond
+	}
+	return tea.Tick(interval, func(time.Time) tea.Msg { return scheduledTerminalTickMsg{} })
+}
+func (p *chatPage) liveActivity() bool {
+	if p.terminal.focused || p.terminal.starting || p.terminal.snapshot.Running || p.workflow.question.ID != "" || p.progress != "" {
+		return true
+	}
+	return p.app != nil && p.app.CoderAgent != nil && p.app.CoderAgent.IsSessionBusy(p.session.ID)
+}
+func (p *chatPage) pollTerminal(manual bool) tea.Cmd {
+	before := p.terminalVisible()
+	panelHeight := p.composerPanelHeight()
+	if manual {
+		p.refreshWorkflow()
+	} else {
+		p.pollWorkflow()
+	}
+	p.refreshTerminal()
+	var resize tea.Cmd
+	if before != p.terminalVisible() || panelHeight != p.composerPanelHeight() {
+		resize = p.resizeContent()
+	}
+	return tea.Batch(resize, p.terminalTick())
 }
 
 func (p *chatPage) TerminalFocused() bool { return p.terminal.focused }
@@ -66,21 +94,42 @@ func (p *chatPage) refreshTerminal() {
 	if !found || !t.focused {
 		t.selected = t.processes[len(t.processes)-1].ID
 	}
-	if t.focused {
-		_ = p.app.Processes.Resize(p.session.ID, t.selected, max(10, p.width-2), max(3, p.height-3))
+	dimensionsChanged := p.resizeTerminal()
+	if t.snapshot.ID == t.selected && !t.snapshot.Running && !dimensionsChanged {
+		return
 	}
 	snapshot, err := p.app.Processes.Snapshot(p.session.ID, t.selected)
 	if err != nil {
 		return
 	}
+	p.installTerminalSnapshot(snapshot)
+}
+func (p *chatPage) resizeTerminal() bool {
+	t := &p.terminal
+	cols, rows := max(10, p.width-2), max(3, p.height-3)
+	if !t.focused || (t.resizedID == t.selected && t.cols == cols && t.rows == rows) {
+		return false
+	}
+	if p.app.Processes.Resize(p.session.ID, t.selected, cols, rows) != nil {
+		return false
+	}
+	t.resizedID, t.cols, t.rows = t.selected, cols, rows
+	return true
+}
+func (p *chatPage) installTerminalSnapshot(snapshot tools.ProcessSnapshot) {
+	t := &p.terminal
+	changed := t.snapshot.ID != snapshot.ID || t.snapshot.Stdout != snapshot.Stdout || t.snapshot.Stderr != snapshot.Stderr
 	t.snapshot = snapshot
 	if t.logs.Width == 0 {
 		t.logs = viewport.New(max(1, p.width-2), max(1, p.height-3))
+		changed = true
 	}
 	follow := t.logs.AtBottom()
 	t.logs.Width, t.logs.Height = max(1, p.width-2), max(1, p.height-3)
-	t.logs.SetContent(snapshot.Stdout + snapshot.Stderr)
-	if follow {
+	if changed {
+		t.logs.SetContent(snapshot.Stdout + snapshot.Stderr)
+	}
+	if changed && follow {
 		t.logs.GotoBottom()
 	}
 }

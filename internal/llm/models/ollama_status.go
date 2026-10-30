@@ -14,6 +14,7 @@ import (
 
 // OllamaRuntime is observed allocation, not a promise about free GPU memory.
 type OllamaRuntime struct {
+	Digest  string `json:"digest,omitempty"`
 	Name    string `json:"name"`
 	Context int64  `json:"context_length"`
 	Size    int64  `json:"size"`

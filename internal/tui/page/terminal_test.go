@@ -13,6 +13,7 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
+	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
 
@@ -115,4 +116,38 @@ func TestRunningTerminalPreviewDoesNotRequireFocus(t *testing.T) {
 	require.False(t, p.terminalVisible(), "small windows retain the composer space")
 	p.terminal.focused = true
 	require.True(t, p.terminalVisible(), "explicit full-screen terminal remains available")
+}
+
+func TestTerminalSnapshotReusePreservesScrollAndRefreshesCursor(t *testing.T) {
+	p := &chatPage{width: 80, height: 12}
+	snapshot := tools.ProcessSnapshot{ProcessInfo: tools.ProcessInfo{ID: "p", Running: true}, Stdout: "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve"}
+	p.installTerminalSnapshot(snapshot)
+	p.terminal.logs.SetYOffset(1)
+	before := p.terminal.logs.YOffset
+	snapshot.CursorX = 7
+	snapshot.CursorVisible = true
+	p.installTerminalSnapshot(snapshot)
+	require.Equal(t, before, p.terminal.logs.YOffset)
+	require.Equal(t, 7, p.terminal.snapshot.CursorX)
+	require.True(t, p.terminal.snapshot.CursorVisible)
+	snapshot.Stdout += "\nnew line"
+	p.installTerminalSnapshot(snapshot)
+	require.Equal(t, before, p.terminal.logs.YOffset, "streaming must not interrupt a user reading older terminal output")
+	require.Contains(t, p.terminal.snapshot.Stdout, "new line")
+}
+func TestIdleWorkflowPollingUsesEventsAndKeepsQuestionMemoryFresh(t *testing.T) {
+	p := &chatPage{app: &app.App{Workflows: workflow.New(nil, t.TempDir(), workflow.Execute)}, session: session.Session{ID: "s"}}
+	p.refreshWorkflow()
+	before := p.workflow.lastRead
+	_, err := p.app.Workflows.UpdatePlan(context.Background(), "s", "new plan", []workflow.Step{{Title: "Read", Status: "pending"}}, []string{"Reviewed"}, nil)
+	require.NoError(t, err)
+	p.pollWorkflow()
+	require.Equal(t, before, p.workflow.lastRead, "idle ticks must not query task persistence")
+	require.NotEqual(t, "new plan", p.workflow.task.Objective)
+	p.refreshWorkflow()
+	require.Equal(t, "new plan", p.workflow.task.Objective, "explicit workflow events load authoritative state")
+	p.progress = "Working"
+	p.workflow.lastRead = time.Now().Add(-2 * time.Second)
+	p.pollWorkflow()
+	require.WithinDuration(t, time.Now(), p.workflow.lastRead, time.Second)
 }

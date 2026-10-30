@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -24,6 +25,7 @@ type WorkflowCommandMsg struct{ Command, Value string }
 type OpenModeChooserMsg struct{}
 type workflowPanel struct {
 	task            workflow.Task
+	lastRead        time.Time
 	expanded        bool
 	question        interaction.Question
 	answer          textinput.Model
@@ -37,12 +39,28 @@ type workflowPanel struct {
 }
 
 func (p *chatPage) refreshWorkflow() {
+	p.refreshWorkflowTask()
+	p.refreshQuestion()
+}
+func (p *chatPage) pollWorkflow() {
+	if p.workflow.lastRead.IsZero() || (p.liveActivity() && time.Since(p.workflow.lastRead) >= time.Second) {
+		p.refreshWorkflowTask()
+	}
+	p.refreshQuestion()
+}
+func (p *chatPage) refreshWorkflowTask() {
+	if p.app == nil {
+		return
+	}
+	p.workflow.lastRead = time.Now()
 	if p.app.Workflows != nil && p.session.ID != "" {
 		if task, err := p.app.Workflows.Get(context.Background(), p.session.ID); err == nil {
 			p.workflow.task = task
 		}
 	}
-	if p.app.Questions == nil {
+}
+func (p *chatPage) refreshQuestion() {
+	if p.app == nil || p.app.Questions == nil {
 		return
 	}
 	q, ok := p.app.Questions.Pending(p.session.ID)

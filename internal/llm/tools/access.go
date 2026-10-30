@@ -41,13 +41,14 @@ func (s *secureTool) Run(ctx context.Context, call ToolCall) (ToolResponse, erro
 		return ToolResponse{}, err
 	}
 	response, err := s.BaseTool.Run(ctx, call)
-	response.Content = redact(response.Content)
+	redactor := newCredentialRedactor(credentialValues())
+	response.Content = redactor.Redact(response.Content)
 	if len(response.Content) > 16384 && !strings.Contains(response.Content, "[Command output saved as artifact]") && s.Info().Name != "read_artifact" && s.Info().Name != "search_artifact" {
 		if snapshot, snapshotErr := SnapshotOutput(ctx, s.Info().Name, response.Content); snapshotErr == nil {
 			response.Content = "[Output saved as artifact; inspect with read_artifact/search_artifact]\n" + snapshot + "\n" + response.Content[:8192]
 		}
 	}
-	response.Metadata = redact(response.Metadata)
+	response.Metadata = redactor.Redact(response.Metadata)
 	if err != nil {
 		return response, &toolError{name: s.Info().Name, cause: err}
 	}
@@ -77,23 +78,21 @@ func redact(value string) string {
 // A live snapshot can end in the first bytes of a credential. Hide suffixes
 // until the process completes, so splitting writes never exposes a key prefix.
 func redactLive(value string, running bool) string {
-	value = redact(value)
+	redactor := newCredentialRedactor(credentialValues())
+	value = redactor.Redact(value)
 	if !running {
 		return value
 	}
-	for _, secret := range credentialValues() {
-		for _, candidate := range []string{secret, strings.Trim(string(mustJSON(secret)), "\"")} {
-			for n := min(len(candidate)-1, len(value)); n > 0; n-- {
-				if strings.HasSuffix(value, candidate[:n]) {
-					value = value[:len(value)-n] + "[redacted]"
-					break
-				}
+	for _, candidate := range redactor.representations {
+		for n := min(len(candidate)-1, len(value)); n > 0; n-- {
+			if strings.HasSuffix(value, candidate[:n]) {
+				value = value[:len(value)-n] + "[redacted]"
+				break
 			}
 		}
 	}
 	return value
 }
-func mustJSON(value string) []byte { result, _ := json.Marshal(value); return result }
 
 // Terminal wrapping inserts row separators inside keys. Match a compact view
 // and mask the corresponding screen bytes, including incomplete trailing keys.
@@ -109,11 +108,12 @@ func redactScreen(value string, running bool) string {
 		positions = append(positions, i)
 	}
 
+	redactor := newCredentialRedactor(credentialValues())
 	masker := screenCredentialMasker{raw: raw, positions: positions, text: string(compact)}
-	for _, secret := range credentialValues() {
+	for _, secret := range redactor.representations {
 		masker.hide(secret, running)
 	}
-	return redact(string(raw))
+	return redactor.Redact(string(raw))
 }
 func absolutePath(path string) string {
 	if path == "" {

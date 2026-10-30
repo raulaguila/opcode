@@ -89,6 +89,7 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 }
 
 type localModel struct {
+	Digest              string `json:"digest,omitempty"`
 	ID                  string `json:"id"`
 	Object              string `json:"object"`
 	Type                string `json:"type"`

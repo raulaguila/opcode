@@ -2,8 +2,6 @@ package dialog
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,8 +20,18 @@ import (
 )
 
 const (
-	providerAuthField = 10
-	providerKeyField  = 11
+	providerIDField = iota
+	providerNameField
+	providerBackendField
+	providerURLField
+	providerEnvironmentField
+	providerAPIField
+	providerContextField
+	providerOutputField
+	providerActiveField
+	providerTLSField
+	providerAuthField
+	providerKeyField
 )
 
 type OpenProviderDialogMsg struct {
@@ -236,54 +244,22 @@ func (m *providerDialogCmp) preferences() tea.Cmd {
 	return textinput.Blink
 }
 func (m *providerDialogCmp) readProfile() (string, config.ProviderProfile, error) {
-	value := func(i int) string { return strings.TrimSpace(m.fields[i].Value()) }
-	id := value(0)
-	p := config.ProviderProfile{Name: value(1), Backend: models.ModelProvider(value(2)), BaseURL: value(3), API: value(5)}
-	if result0, result1, result2, handled := readProfileOriginalIDIdOriginalID(m, id, &p); handled {
-		return result0, result1, result2
+	id := m.fieldValue(providerIDField)
+	profile := config.ProviderProfile{Name: m.fieldValue(providerNameField), Backend: models.ModelProvider(m.fieldValue(providerBackendField)), BaseURL: m.fieldValue(providerURLField), API: m.fieldValue(providerAPIField)}
+	if err := m.validateProfileIdentity(id, profile); err != nil {
+		return "", profile, err
 	}
-	if result0, result1, result2, handled := readProfileModelsModelProviderId(m, id, &p); handled {
-		return result0, result1, result2
-	}
-	var err error
-	p.ContextWindow, err = strconv.ParseInt(value(6), 10, 64)
-	if result0, result1, result2, handled := readProfileContextWindow(&p, err); handled {
-		return result0, result1, result2
-	}
-	p.DefaultMaxTokens, err = strconv.ParseInt(value(7), 10, 64)
-	if result0, result1, result2, handled := readProfileDefaultMaxTokens(&p, err); handled {
-		return result0, result1, result2
-	}
-	active, err := strconv.ParseBool(value(8))
-	p.Disabled = !active
+	profile, err := m.readProfileLimits(profile)
 	if err != nil {
-		return "", p, fmt.Errorf("connection active must be true or false")
+		return "", profile, err
 	}
-	p.TLSInsecure, err = strconv.ParseBool(value(9))
+	profile, err = m.readProfileAuthentication(profile)
 	if err != nil {
-		return "", p, fmt.Errorf("TLS insecure must be true or false")
+		return "", profile, err
 	}
-	switch value(providerAuthField) {
-	case "api_key":
-		if result0, result1, result2, handled := readProfileCaseApiKey(value, &p); handled {
-			return result0, result1, result2
-		}
-	case "vault":
-		p.APIKeyRef = m.originalKeyRef
-		if p.APIKeyRef == "" && value(providerKeyField) == "" {
-			return "", p, errors.New(config.Text("Informe a chave para o cofre nativo", "Enter the API key for the native vault"))
-		}
-	case "environment":
-		p.APIKeyEnv = value(4)
-		if p.APIKeyEnv == "" && !p.Disabled {
-			return "", p, errors.New(config.Text("Informe o nome da variável de ambiente", "Enter the environment variable name"))
-		}
-	case "none":
-	default:
-		return "", p, fmt.Errorf("invalid authentication method")
-	}
-	return id, p, nil
+	return id, profile, nil
 }
+
 func (m *providerDialogCmp) test() tea.Cmd {
 	id, p, err := m.readProfile()
 	if err != nil {
@@ -315,34 +291,34 @@ func (m *providerDialogCmp) save() tea.Cmd {
 			return nil
 		}
 	}
-	var err error
-	disabled := false
-	var destination models.ModelProvider
-	if result0, handled := saveProvider(m, &err, &disabled, &destination); handled {
-		return result0
+	result := m.persistSettings()
+	if result.pending {
+		return result.command
 	}
-	if err != nil {
-		m.note = err.Error()
+	if result.err != nil {
+		m.note = result.err.Error()
 		return nil
 	}
 	changed := m.screen == "provider"
 	m.Close()
-	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Provider: destination, Disabled: disabled})
+	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Provider: result.destination, Disabled: result.disabled})
 }
+
 func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if result, ok := msg.(providerVaultRollbackMsg); ok {
+	switch result := msg.(type) {
+	case providerVaultRollbackMsg:
 		m.saving = false
 		m.note = result.err.Error()
 		return m, nil
+	case providerVaultSaveMsg:
+		return m, m.finishVaultSave(result)
 	}
-	if result0, result1, handled := updateProviderVaultSaveMsg(m, msg); handled {
-		return result0, result1
+	if m.saving {
+		if size, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width, m.height = size.Width, size.Height
+		}
+		return m, nil // Native operations must finish commit/rollback before navigation.
 	}
-
-	if result0, result1, handled := updateSaving(m, msg); handled {
-		return result0, result1
-	}
-
 	if cmd, handled := m.deleteUpdate(msg); handled {
 		return m, cmd
 	}
@@ -352,27 +328,13 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, handled := m.experienceUpdate(msg); handled {
 		return m, cmd
 	}
-	switch msg := msg.(type) {
-	case providerTestMsg:
-		if result0, result1, handled := updateProviderDialogCmpDefault(m, &msg); handled {
-			return result0, result1
-		}
-	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-	case tea.MouseMsg:
-		if result0, result1, handled := updateProviderDialogCmpMouseMsg(m, &msg); handled {
-			return result0, result1
-		}
-	case tea.KeyMsg:
-		if result0, result1, handled := updateProviderDialogCmpKeyMsg(&m, &msg); handled {
-			return result0, result1
-		}
+	action := m.handleProviderMessage(msg)
+	if action.handled {
+		return m, action.command
 	}
-	if result0, result1, handled := updateScreenListFields(m, msg); handled {
-		return result0, result1
-	}
-	return m, nil
+	return m, m.updateProviderInput(msg)
 }
+
 func (m *providerDialogCmp) contentWidth() int {
 	if m.width == 0 {
 		return 72
@@ -386,8 +348,9 @@ func (m *providerDialogCmp) View() string {
 	if m.screen == "delete-provider" {
 		return m.deleteView()
 	}
-	if result0, handled := viewSettings(m); handled {
-		return result0
+	switch m.screen {
+	case "settings", "setting", "effective", "presets":
+		return m.experienceView()
 	}
 	t := theme.CurrentTheme()
 	width := m.contentWidth()
@@ -401,7 +364,7 @@ func (m *providerDialogCmp) View() string {
 		title = "Preferences"
 	}
 	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(interfaceCopy(title))}
-	viewList(m, t, width, &base, line, &lines)
+	lines = append(lines, m.providerBodyLines(t, width, base, line)...)
 	note := m.note
 	if note == "" && m.screen == "provider" && m.fields[providerAuthField].Value() == "api_key" {
 		note = config.Text("Ao salvar: chave no JSON local, sem criptografia.", "On save: key in local JSON, unencrypted.")
@@ -495,486 +458,3 @@ func (m *providerDialogCmp) dirty() bool {
 
 // Metadata is committed on the UI owner; all native rollback runs in a command.
 // Keep saving true until its message arrives, including failure to clean up.
-func rollbackVaultCommand(prepared *config.PreparedVaultCredential, cause error) tea.Cmd {
-	return func() tea.Msg { return providerVaultRollbackMsg{err: errors.Join(cause, prepared.Rollback())} }
-}
-
-func updateProviderDialogCmpMouseMsg(m *providerDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if result0, result1, result2, handled := updateProviderDialogCmpMouseMsgList(m, msg); handled {
-		return result0, result1, result2
-	}
-	if m.screen == "provider" {
-		for _, a := range []struct{ label, key string }{{config.Text("[Salvar]", "[Save]"), "ctrl+s"}, {config.Text("[Catálogo]", "[Catalog]"), "ctrl+t"}, {config.Text("[Mais]", "[More]"), "ctrl+a"}} {
-			if clickedLabel(m.View(), a.label, (*msg)) {
-				returned1Value0, returned1Value1 := m.Update(tea.KeyMsg{Type: map[string]tea.KeyType{"ctrl+s": tea.KeyCtrlS, "ctrl+t": tea.KeyCtrlT, "ctrl+a": tea.KeyCtrlA}[a.key]})
-				return returned1Value0, returned1Value1, true
-			}
-		}
-	}
-
-	if m.screen == "list" && len(m.rows) > 0 {
-		if msg.Button == tea.MouseButtonWheelUp {
-			m.selected = max(0, m.selected-1)
-		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			m.selected = min(len(m.rows)-1, m.selected+1)
-		}
-	}
-	if result0, result1, result2, handled := updateProviderDialogCmpMouseMsgXXContentWidth(m, msg); handled {
-		return result0, result1, result2
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func updateProviderDialogCmpKeyMsg(m **providerDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if result0, result1, result2, handled := updateProviderDialogCmpKeyMsgEsc(&m, msg); handled {
-		return result0, result1, result2
-	}
-	if result0, result1, result2, handled := updateProviderDialogCmpKeyMsgFieldOptionsLabelsFocus(m, msg); handled {
-		return result0, result1, result2
-	}
-	if result0, result1, result2, handled := updateProviderDialogCmpKeyMsgList(m, msg); handled {
-		return result0, result1, result2
-	}
-	switch msg.String() {
-	case "ctrl+g":
-		if (*m).screen == "provider" {
-			(*m).fields[8].SetValue("true")
-			return (*m), (*m).save(), true
-		}
-		return (*m), nil, true
-	case "ctrl+s":
-		return (*m), (*m).save(), true
-	case "ctrl+a":
-		return updateProviderDialogCmpKeyMsgCtrlA(m)
-	case "ctrl+t":
-		if (*m).screen == "provider" {
-			return (*m), (*m).test(), true
-		}
-		return (*m), nil, true
-	case "tab", "down", "enter", "shift+tab", "up":
-		return updateProviderDialogCmpKeyMsgTab(m, msg)
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func updateProviderDialogCmpDefault(m *providerDialogCmp, msg *providerTestMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if msg.request != m.request {
-		return m, nil, true
-	}
-	m.testing = false
-	m.cancel = nil
-	if msg.err != nil {
-		m.note = config.Text("Falha na consulta: ", "Connection test failed: ") + msg.err.Error()
-	} else {
-		m.note = fmt.Sprintf(config.Text("Catálogo consultado · %d modelos. Ferramentas não testadas. Ctrl+S salva.", "Catalog queried · %d models. Tools not tested. Ctrl+S saves."), msg.count)
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func updateProviderDialogCmpKeyMsgCtrlA(m **providerDialogCmp) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
-	if (*m).screen == "provider" {
-		(*m).advanced = !(*m).advanced
-		if !slices.Contains((*m).fieldIndices(), (*m).focus) {
-			(*m).fields[(*m).focus].Blur()
-			(*m).focus = (*m).fieldIndices()[0]
-			(*m).fields[(*m).focus].Focus()
-		}
-	}
-	return (*m), nil, true
-
-}
-
-func updateProviderDialogCmpKeyMsgTab(m **providerDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool) {
-	(*m).fields[(*m).focus].Blur()
-	delta := 1
-	if msg.String() == "shift+tab" || msg.String() == "up" {
-		delta = -1
-	}
-	indices := (*m).fieldIndices()
-	index := slices.Index(indices, (*m).focus)
-	(*m).focus = indices[(index+delta+len(indices))%len(indices)]
-	return (*m), (*m).fields[(*m).focus].Focus(), true
-
-}
-
-func viewList(m *providerDialogCmp, t theme.Theme, width int, base *lipgloss.Style, line func(s string) string, lines *[]string) {
-	if m.screen == "list" {
-		if len(m.rows) == 0 {
-			(*lines) = append((*lines), line("No connections yet. Press N to add Ollama or another provider."))
-		}
-		rows := m.listRows()
-		start := max(0, m.selected-rows+1)
-		viewListStart(m, t, width, base, lines, rows, start)
-		(*lines) = append((*lines), line(config.Text("N Adicionar · Enter Editar · [Excluir] D · Esc", "N Add · Enter Edit · [Delete] D · Esc")))
-		(*lines) = append((*lines), line(config.Text("[Preferências] P · [Integrações] I", "[Preferences] P · [Integrations] I")))
-	} else {
-		// Keep the focused field visible on small terminals; labels remain attached.
-		viewListProvider(m)
-		count := m.formRows()
-		indices := m.fieldIndices()
-		start := max(0, slices.Index(indices, m.focus)-count+1)
-		for _, i := range indices[start:min(len(indices), start+count)] {
-			label := fieldLabel(m.labels[i])
-			if i == m.focus {
-				label = "› " + label
-			}
-			(*lines) = append((*lines), line(label))
-			m.fields[i].Width = max(8, width-2)
-			(*lines) = append((*lines), line(choiceView(m.fields[i], fieldOptions(m.labels[i]))))
-		}
-		hint := "Tab/↑↓ fields · Ctrl+S save · Esc back"
-		if m.screen == "provider" {
-			hint = config.Text("[Salvar] [Catálogo] [Mais] · Esc", "[Save] [Catalog] [More] · Esc")
-			if m.fields[8].Value() == "false" {
-				hint = config.Text("Ctrl+G salvar e ativar · ", "Ctrl+G save and enable · ") + hint
-			}
-		}
-		(*lines) = append((*lines), line(hint))
-	}
-}
-
-func updateProviderVaultSaveMsg(m *providerDialogCmp, msg tea.Msg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if result, ok := msg.(providerVaultSaveMsg); ok {
-		if result0, result1, result2, handled := updateProviderVaultSaveMsgSaving(m, &result); handled {
-			return result0, result1, result2
-		}
-		err := result.err
-		updateProviderVaultSaveMsgResultPrepared(&result, &err)
-		updateProviderVaultSaveMsgAllowSave(m, &err)
-		destination := models.ModelProvider("profile:" + result.id)
-		if err == nil {
-			if m.legacy {
-				destination = result.profile.Backend
-				err = result.prepared.CommitProvider(result.profile.Backend, result.profile.Provider)
-			} else {
-				err = result.prepared.CommitProviderProfile(result.id, result.profile)
-			}
-		}
-		if err != nil {
-			if result.prepared != nil {
-				return m, rollbackVaultCommand(result.prepared, err), true
-			}
-			m.saving = false
-			m.note = err.Error()
-			return m, nil, true
-		}
-		m.saving = false
-		m.Close()
-		return m, util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: true, Provider: destination, Disabled: result.profile.Disabled}), true
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func viewListStart(m *providerDialogCmp, t theme.Theme, width int, base *lipgloss.Style, lines *[]string, rows int, start int) {
-	for i := start; i < min(len(m.rows), start+rows); i++ {
-		row := m.rows[i]
-		var label string
-		if row.legacy {
-			label = config.Text("Servidor local", "Local server") + " · " + row.id
-		} else {
-			p := config.Get().ProviderProfiles[row.id]
-			label = p.Name + " · " + row.id + " (" + string(p.Backend) + ")"
-		}
-		disabled := false
-		if row.legacy {
-			disabled = config.Get().Providers[models.ModelProvider(row.id)].Disabled
-		} else {
-			disabled = config.Get().ProviderProfiles[row.id].Disabled
-		}
-		if disabled {
-			label += config.Text(" · desativada", " · disabled")
-		}
-		style := (*base)
-		if i == m.selected {
-			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
-		}
-		(*lines) = append((*lines), style.Render(ansi.Truncate(selectionMark(i == m.selected)+label, width, "…")))
-	}
-}
-
-func updateProviderDialogCmpKeyMsgList(m **providerDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if (*m).screen == "list" {
-		switch msg.String() {
-		case "d", "delete":
-			return (*m), (*m).startDelete(), true, true
-		case "up":
-			if len((*m).rows) > 0 {
-				(*m).selected = ((*m).selected - 1 + len((*m).rows)) % len((*m).rows)
-			}
-		case "down":
-			if len((*m).rows) > 0 {
-				(*m).selected = ((*m).selected + 1) % len((*m).rows)
-			}
-		case "enter":
-			if len((*m).rows) > 0 {
-				return (*m), (*m).edit(&(*m).rows[(*m).selected]), true, true
-			}
-			return (*m), (*m).edit(nil), true, true
-		case "r":
-			if (*m).resumeDraft != nil {
-				(*m).resumeDraft()
-				return (*m), textinput.Blink, true, true
-			}
-		case "n":
-			(*m).screen = "presets"
-			(*m).selected = 0
-			(*m).note = config.Text("↑↓ escolhe · Enter configura · Esc volta", "↑↓ choose · Enter configure · Esc back")
-			return (*m), nil, true, true
-		case "p":
-			return (*m), (*m).settings(), true, true
-		case "i":
-			(*m).Close()
-			return (*m), util.CmdHandler(OpenIntegrationDialogMsg{}), true, true
-		}
-		return (*m), nil, true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func updateProviderDialogCmpMouseMsgXXContentWidth(m *providerDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < m.contentWidth()+3 {
-		if m.screen == "list" {
-			rows := m.listRows()
-			start := max(0, m.selected-rows+1)
-			i := msg.Y - 3 + start
-			if msg.Y >= 3 && msg.Y < 3+rows && i < len(m.rows) {
-				m.selected = i
-				return m, m.edit(&m.rows[i]), true, true
-			}
-		} else {
-			count := m.formRows()
-			indices := m.fieldIndices()
-			start := max(0, slices.Index(indices, m.focus)-count+1)
-			i := start + (msg.Y-3)/2
-			if msg.Y >= 3 && msg.Y < 3+count*2 && i < len(indices) {
-				m.fields[m.focus].Blur()
-				m.focus = indices[i]
-				return m, m.fields[m.focus].Focus(), true, true
-			}
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func saveProvider(m *providerDialogCmp, err *error, disabled *bool, destination *models.ModelProvider) (extractedResult0 tea.Cmd, handled bool) {
-	if m.screen == "provider" {
-		var id string
-		var p config.ProviderProfile
-		id, p, (*err) = m.readProfile()
-		(*destination) = models.ModelProvider("profile:" + id)
-		if m.legacy {
-			(*destination) = p.Backend
-		}
-		(*disabled) = p.Disabled
-		if result0, result1, handled := saveProviderState(m, err, &id, &p); handled {
-			return result0, result1
-		}
-	} else if m.screen == "preferences" {
-		c := config.Get()
-		r := c.Runtime
-		p := c.Preferences
-		r.Mode = strings.TrimSpace(m.fields[0].Value())
-		targets := []*int{&r.MaxSteps, &r.MaxSeconds, &r.ToolBudget, &r.FirstTokenTimeout, &r.IdleTimeout}
-		saveProviderTargets(m, err, targets)
-		if (*err) == nil {
-			p.ResumeLast, (*err) = strconv.ParseBool(strings.TrimSpace(m.fields[6].Value()))
-		}
-		if (*err) == nil {
-			var visible bool
-			visible, (*err) = strconv.ParseBool(strings.TrimSpace(m.fields[7].Value()))
-			p.ShowProcess = &visible
-		}
-		if (*err) == nil {
-			(*err) = config.SavePreferences(p, r)
-		}
-	}
-	return extractedResult0, false
-}
-
-func saveProviderState(m *providerDialogCmp, err *error, id *string, p *config.ProviderProfile) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
-	if (*err) == nil {
-		if m.fields[providerAuthField].Value() == "vault" {
-			m.Close()
-			m.saving = true
-			secret := strings.TrimSpace(m.fields[providerKeyField].Value())
-			prepare := m.prepareVault
-			return func() tea.Msg {
-				prepared, err := prepare(p.APIKeyRef, secret)
-				return providerVaultSaveMsg{id: (*id), profile: (*p), prepared: prepared, err: err}
-			}, true, true
-		}
-		if m.legacy {
-			(*err) = config.SaveProvider(p.Backend, p.Provider)
-		} else {
-			(*err) = config.SaveProviderProfile((*id), (*p))
-		}
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func viewListProvider(m *providerDialogCmp) {
-	if m.screen == "provider" {
-		m.fields[3].Placeholder = config.Text("Padrão do provedor", "Provider default")
-		m.fields[4].Placeholder = config.Text("Nome da variável com a chave", "Variable holding the API key")
-		if m.fields[2].Value() == "local" {
-			m.fields[3].Placeholder = "https://server.example/v1"
-		}
-		m.fields[providerKeyField].Placeholder = config.Text("Cole sua chave da API", "Paste your API key")
-		if m.fields[providerAuthField].Value() == "vault" && m.originalKeyRef != "" {
-			m.fields[providerKeyField].Placeholder = config.Text("Vazio mantém a chave no cofre", "Blank keeps the existing vault key")
-		}
-	}
-}
-
-func updateProviderVaultSaveMsgSaving(m *providerDialogCmp, result *providerVaultSaveMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if !m.saving {
-		if result.prepared == nil {
-			return m, nil, true, true
-		}
-		m.saving = true
-		return m, rollbackVaultCommand(result.prepared, errors.New("stale vault save discarded; previous configuration preserved")), true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func updateScreenListFields(m *providerDialogCmp, msg tea.Msg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if m.screen != "list" && len(m.fields) > 0 {
-		var cmd tea.Cmd
-		m.fields[m.focus], cmd = m.fields[m.focus].Update(msg)
-		if _, ok := msg.(tea.KeyMsg); ok && m.testing {
-			m.Close()
-			m.note = "Edited; test again to validate these settings."
-		}
-		return m, cmd, true
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func readProfileOriginalIDIdOriginalID(m *providerDialogCmp, id string, p *config.ProviderProfile) (extractedResult0 string, extractedResult1 config.ProviderProfile, extractedResult2 error, handled bool) {
-	if m.originalID != "" && id != m.originalID {
-		return "", (*p), fmt.Errorf("profile ID cannot be changed; add a new connection instead"), true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func updateProviderVaultSaveMsgResultPrepared(result *providerVaultSaveMsg, err *error) {
-	if (*err) == nil && result.prepared == nil {
-		(*err) = errors.New("native credential was not prepared")
-	}
-}
-
-func updateProviderDialogCmpMouseMsgList(m *providerDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if m.screen == "list" {
-		if clickedLabel(m.View(), config.Text("[Excluir]", "[Delete]"), (*msg)) {
-			return m, m.startDelete(), true, true
-		}
-		if clickedLabel(m.View(), config.Text("[Preferências]", "[Preferences]"), (*msg)) {
-			return m, m.settings(), true, true
-		}
-		if clickedLabel(m.View(), config.Text("[Integrações]", "[Integrations]"), (*msg)) {
-			return m, util.CmdHandler(OpenIntegrationDialogMsg{}), true, true
-		}
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func readProfileModelsModelProviderId(m *providerDialogCmp, id string, p *config.ProviderProfile) (extractedResult0 string, extractedResult1 config.ProviderProfile, extractedResult2 error, handled bool) {
-	if m.legacy && p.Backend != models.ModelProvider(id) {
-		return "", (*p), fmt.Errorf("legacy backend cannot be changed; add a named profile instead"), true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func updateProviderDialogCmpKeyMsgFieldOptionsLabelsFocus(m **providerDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if (*m).screen != "list" && len((*m).fields) > (*m).focus && choiceKey(&(*m).fields[(*m).focus], fieldOptions((*m).labels[(*m).focus]), (*msg)) {
-		if (*m).testing {
-			(*m).Close()
-			(*m).note = "Edited; test again to validate these settings."
-		}
-		return (*m), nil, true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func readProfileContextWindow(p *config.ProviderProfile, err error) (extractedResult0 string, extractedResult1 config.ProviderProfile, extractedResult2 error, handled bool) {
-	if err != nil || p.ContextWindow < 0 {
-		return "", (*p), fmt.Errorf("context window must be a nonnegative integer"), true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func saveProviderTargets(m *providerDialogCmp, err *error, targets []*int) {
-	for i, target := range targets {
-		*target, (*err) = strconv.Atoi(strings.TrimSpace(m.fields[i+1].Value()))
-		if (*err) != nil || *target < 1 {
-			(*err) = fmt.Errorf("limits must be positive integers")
-			break
-		}
-	}
-}
-
-func updateProviderVaultSaveMsgAllowSave(m *providerDialogCmp, err *error) {
-	if (*err) == nil && m.allowSave != nil {
-		(*err) = m.allowSave()
-	}
-}
-
-func readProfileDefaultMaxTokens(p *config.ProviderProfile, err error) (extractedResult0 string, extractedResult1 config.ProviderProfile, extractedResult2 error, handled bool) {
-	if err != nil || p.DefaultMaxTokens < 0 {
-		return "", (*p), fmt.Errorf("output tokens must be a nonnegative integer"), true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func updateProviderDialogCmpKeyMsgEsc(m ***providerDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.String() == "esc" {
-		if (*(*m)).testing {
-			(*(*m)).Close()
-			(*(*m)).note = "Connection test cancelled; your edits are preserved."
-			return (*(*m)), nil, true, true
-		}
-		if (*(*m)).screen != "list" {
-			saved := *(*(*m))
-			saved.cancel = nil
-			saved.testing = false
-			saved.resumeDraft = nil
-			cmd := (*(*m)).Open()
-			(*(*m)).resumeDraft = func() {
-				w, h, request := (*(*m)).width, (*(*m)).height, (*(*m)).request+1
-				*(*(*m)) = saved
-				(*(*m)).width, (*(*m)).height, (*(*m)).request = w, h, request
-			}
-			(*(*m)).note = config.Text("R retoma a edição preservada", "R resumes preserved edits")
-			return (*(*m)), cmd, true, true
-		}
-		(*(*m)).Close()
-		return (*(*m)), util.CmdHandler(CloseProviderDialogMsg{}), true, true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}
-
-func updateSaving(m *providerDialogCmp, msg tea.Msg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if m.saving {
-		if size, ok := msg.(tea.WindowSizeMsg); ok {
-			m.width, m.height = size.Width, size.Height
-		}
-		return m, nil, true // Native store operations cannot be cancelled; await completion.
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func viewSettings(m *providerDialogCmp) (extractedResult0 string, handled bool) {
-	if m.screen == "settings" || m.screen == "setting" || m.screen == "effective" || m.screen == "presets" {
-		return m.experienceView(), true
-	}
-	return extractedResult0, false
-}
-
-func readProfileCaseApiKey(value func(i int) string, p *config.ProviderProfile) (extractedResult0 string, extractedResult1 config.ProviderProfile, extractedResult2 error, handled bool) {
-	p.APIKey = value(providerKeyField)
-	if p.APIKey == "" && !p.Disabled {
-		return "", (*p), errors.New(config.Text("Informe a chave da API ou escolha outra autenticação", "Enter the API key or choose another authentication method")), true
-	}
-	return extractedResult0, extractedResult1, extractedResult2, false
-}

@@ -20,7 +20,7 @@ func (p *baseProvider) WithContextWindow(window int64) (Provider, error) {
 	if opts.maxTokens <= 0 {
 		opts.maxTokens = min(2048, window/4)
 	}
-	return NewProvider(opts.model.Provider, func(dst *providerClientOptions) { *dst = opts })
+	return p.cloneRequest(opts)
 }
 
 // SystemPromptController creates a request-scoped connection, preserving auth
@@ -32,7 +32,7 @@ type SystemPromptController interface {
 func (p *baseProvider) WithSystemPrompt(system string) (Provider, error) {
 	opts := p.options
 	opts.systemMessage = system
-	return NewProvider(opts.model.Provider, func(dst *providerClientOptions) { *dst = opts })
+	return p.cloneRequest(opts)
 }
 
 // SourceCitationController binds a repair's reply schema to references supplied
@@ -55,5 +55,5 @@ func (p *baseProvider) WithSourceCitations(citations []string) (Provider, error)
 	}
 	opts := p.options
 	opts.sourceCitations = slices.Clone(citations)
-	return NewProvider(opts.model.Provider, func(dst *providerClientOptions) { *dst = opts })
+	return p.cloneRequest(opts)
 }

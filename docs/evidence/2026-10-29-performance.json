@@ -1,0 +1,720 @@
+{
+  "date": "2026-10-29",
+  "baseline_commit": "0cbda0a35cdc8fa88c88467eb25f52e5620d5779",
+  "go": "go version go1.27.3 linux/amd64",
+  "environment": {
+    "os": "linux",
+    "arch": "amd64",
+    "cpu": "Intel Core i9-12900K",
+    "gomaxprocs": "recorded per sample; compare only paired cases"
+  },
+  "benchmarks": {
+    "stream": {
+      "BenchmarkStreamAccumulation/Baseline": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 57828480.0,
+            "bytes_op": 146264525.0,
+            "allocs_op": 14624.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 51734329.0,
+            "bytes_op": 146449946.0,
+            "allocs_op": 14624.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 51862806.0,
+            "bytes_op": 146592146.0,
+            "allocs_op": 14642.0
+          }
+        ],
+        "median": {
+          "ns_op": 51862806.0,
+          "bytes_op": 146449946.0,
+          "allocs_op": 14624.0
+        }
+      },
+      "BenchmarkStreamAccumulation/Checkpoints": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 102587.0,
+            "bytes_op": 542000.0,
+            "allocs_op": 80.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 106956.0,
+            "bytes_op": 542000.0,
+            "allocs_op": 80.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 110545.0,
+            "bytes_op": 542000.0,
+            "allocs_op": 80.0
+          }
+        ],
+        "median": {
+          "ns_op": 106956.0,
+          "bytes_op": 542000.0,
+          "allocs_op": 80.0
+        }
+      }
+    },
+    "chat_before": {
+      "BenchmarkAuditChatEvent/100": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 722090.0,
+            "bytes_op": 784220.0,
+            "allocs_op": 1162.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 782841.0,
+            "bytes_op": 878215.0,
+            "allocs_op": 1163.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 664519.0,
+            "bytes_op": 803415.0,
+            "allocs_op": 1162.0
+          }
+        ],
+        "median": {
+          "ns_op": 722090.0,
+          "bytes_op": 803415.0,
+          "allocs_op": 1162.0
+        }
+      },
+      "BenchmarkAuditChatEvent/1000": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 5905129.0,
+            "bytes_op": 6415968.0,
+            "allocs_op": 3006.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 5635964.0,
+            "bytes_op": 5433451.0,
+            "allocs_op": 3002.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 5930803.0,
+            "bytes_op": 5795234.0,
+            "allocs_op": 3003.0
+          }
+        ],
+        "median": {
+          "ns_op": 5905129.0,
+          "bytes_op": 5795234.0,
+          "allocs_op": 3003.0
+        }
+      }
+    },
+    "chat_after": {
+      "BenchmarkAuditChatEvent/100": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 204080.0,
+            "bytes_op": 215626.0,
+            "allocs_op": 922.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 184735.0,
+            "bytes_op": 214932.0,
+            "allocs_op": 922.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 219041.0,
+            "bytes_op": 220303.0,
+            "allocs_op": 922.0
+          }
+        ],
+        "median": {
+          "ns_op": 204080.0,
+          "bytes_op": 215626.0,
+          "allocs_op": 922.0
+        }
+      },
+      "BenchmarkAuditChatEvent/1000": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 1361121.0,
+            "bytes_op": 855608.0,
+            "allocs_op": 923.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 1072739.0,
+            "bytes_op": 922956.0,
+            "allocs_op": 924.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 1032787.0,
+            "bytes_op": 791358.0,
+            "allocs_op": 923.0
+          }
+        ],
+        "median": {
+          "ns_op": 1072739.0,
+          "bytes_op": 855608.0,
+          "allocs_op": 923.0
+        }
+      }
+    },
+    "tools": {
+      "BenchmarkDiscoveryPolicy/false": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 2093147.0,
+            "bytes_op": 443300.0,
+            "allocs_op": 6801.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 2128760.0,
+            "bytes_op": 443296.0,
+            "allocs_op": 6801.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 2009672.0,
+            "bytes_op": 443251.0,
+            "allocs_op": 6801.0
+          }
+        ],
+        "median": {
+          "ns_op": 2093147.0,
+          "bytes_op": 443296.0,
+          "allocs_op": 6801.0
+        }
+      },
+      "BenchmarkDiscoveryPolicy/true": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 1138860.0,
+            "bytes_op": 318961.0,
+            "allocs_op": 4466.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 1170975.0,
+            "bytes_op": 318961.0,
+            "allocs_op": 4466.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 1186638.0,
+            "bytes_op": 318961.0,
+            "allocs_op": 4466.0
+          }
+        ],
+        "median": {
+          "ns_op": 1170975.0,
+          "bytes_op": 318961.0,
+          "allocs_op": 4466.0
+        }
+      },
+      "BenchmarkCredentialRedactionBatch/false": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 39041.0,
+            "bytes_op": 12816.0,
+            "allocs_op": 600.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 31874.0,
+            "bytes_op": 12816.0,
+            "allocs_op": 600.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 34925.0,
+            "bytes_op": 12815.0,
+            "allocs_op": 600.0
+          }
+        ],
+        "median": {
+          "ns_op": 34925.0,
+          "bytes_op": 12816.0,
+          "allocs_op": 600.0
+        }
+      },
+      "BenchmarkCredentialRedactionBatch/true": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 3247.0,
+            "bytes_op": 328.0,
+            "allocs_op": 12.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 3541.0,
+            "bytes_op": 328.0,
+            "allocs_op": 12.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 3616.0,
+            "bytes_op": 328.0,
+            "allocs_op": 12.0
+          }
+        ],
+        "median": {
+          "ns_op": 3541.0,
+          "bytes_op": 328.0,
+          "allocs_op": 12.0
+        }
+      },
+      "BenchmarkIndexPreparedStatements/false": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 590558.0,
+            "bytes_op": 28211.0,
+            "allocs_op": 896.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 759224.0,
+            "bytes_op": 28029.0,
+            "allocs_op": 896.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 437578.0,
+            "bytes_op": 28074.0,
+            "allocs_op": 896.0
+          }
+        ],
+        "median": {
+          "ns_op": 590558.0,
+          "bytes_op": 28074.0,
+          "allocs_op": 896.0
+        }
+      },
+      "BenchmarkIndexPreparedStatements/true": {
+        "samples": [
+          {
+            "gomaxprocs": 24,
+            "ns_op": 222050.0,
+            "bytes_op": 13852.0,
+            "allocs_op": 602.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 220052.0,
+            "bytes_op": 13842.0,
+            "allocs_op": 602.0
+          },
+          {
+            "gomaxprocs": 24,
+            "ns_op": 250948.0,
+            "bytes_op": 13833.0,
+            "allocs_op": 602.0
+          }
+        ],
+        "median": {
+          "ns_op": 222050.0,
+          "bytes_op": 13842.0,
+          "allocs_op": 602.0
+        }
+      }
+    },
+    "provider": {
+      "BenchmarkRequestScopedClone/rebuild_connection": {
+        "samples": [
+          {
+            "gomaxprocs": 2,
+            "ns_op": 1004.0,
+            "bytes_op": 3120.0,
+            "allocs_op": 17.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 972.6,
+            "bytes_op": 3120.0,
+            "allocs_op": 17.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 978.5,
+            "bytes_op": 3120.0,
+            "allocs_op": 17.0
+          }
+        ],
+        "median": {
+          "ns_op": 978.5,
+          "bytes_op": 3120.0,
+          "allocs_op": 17.0
+        }
+      },
+      "BenchmarkRequestScopedClone/clone_request": {
+        "samples": [
+          {
+            "gomaxprocs": 2,
+            "ns_op": 288.1,
+            "bytes_op": 984.0,
+            "allocs_op": 3.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 284.0,
+            "bytes_op": 984.0,
+            "allocs_op": 3.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 289.1,
+            "bytes_op": 984.0,
+            "allocs_op": 3.0
+          }
+        ],
+        "median": {
+          "ns_op": 288.1,
+          "bytes_op": 984.0,
+          "allocs_op": 3.0
+        }
+      },
+      "BenchmarkPreparedRequestBudget/rebuild_after_budget": {
+        "samples": [
+          {
+            "gomaxprocs": 2,
+            "ns_op": 9549.0,
+            "bytes_op": 6223.0,
+            "allocs_op": 121.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 9954.0,
+            "bytes_op": 6222.0,
+            "allocs_op": 121.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 9685.0,
+            "bytes_op": 6222.0,
+            "allocs_op": 121.0
+          }
+        ],
+        "median": {
+          "ns_op": 9685.0,
+          "bytes_op": 6222.0,
+          "allocs_op": 121.0
+        }
+      },
+      "BenchmarkPreparedRequestBudget/prepare_once": {
+        "samples": [
+          {
+            "gomaxprocs": 2,
+            "ns_op": 5526.0,
+            "bytes_op": 3484.0,
+            "allocs_op": 66.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 5870.0,
+            "bytes_op": 3484.0,
+            "allocs_op": 66.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 5702.0,
+            "bytes_op": 3484.0,
+            "allocs_op": 66.0
+          }
+        ],
+        "median": {
+          "ns_op": 5702.0,
+          "bytes_op": 3484.0,
+          "allocs_op": 66.0
+        }
+      }
+    },
+    "broker": {
+      "BenchmarkBrokerSaturatedPublish": {
+        "samples": [
+          {
+            "gomaxprocs": 2,
+            "ns_op": 63.19,
+            "bytes_op": 0.0,
+            "allocs_op": 0.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 64.01,
+            "bytes_op": 0.0,
+            "allocs_op": 0.0
+          },
+          {
+            "gomaxprocs": 2,
+            "ns_op": 62.95,
+            "bytes_op": 0.0,
+            "allocs_op": 0.0
+          }
+        ],
+        "median": {
+          "ns_op": 63.19,
+          "bytes_op": 0.0,
+          "allocs_op": 0.0
+        }
+      }
+    }
+  },
+  "limitations": [
+    "Synthetic component benchmarks; not model inference latency.",
+    "Bytes/op is cumulative allocated memory, not retained heap.",
+    "Streaming compares 2048 deltas of 32 bytes with checkpoint serialization/snapshots; SQL I/O excluded in both cases.",
+    "Chat comparison uses identical Update(pubsub.Event) benchmark in baseline archive and current source, 100/1000 messages, caches warmed and tail text changing.",
+    "Timing samples vary; memory and correctness are primary evidence.",
+    "All byte budgets, permissions, provenance and current-file citation checks remain enforced."
+  ],
+  "findings": [
+    {
+      "id": "streaming",
+      "evidence_level": "measured",
+      "mechanism": "Growing string plus full JSON for every delta",
+      "recommendation": "Separate stream accumulator, immutable UI snapshots and bounded persistence checkpoints; flush at completion/error/cancel.",
+      "implementation": "addressed",
+      "baseline_location": "internal/message/content.go:244"
+    },
+    {
+      "id": "render",
+      "evidence_level": "measured",
+      "mechanism": "Rebuilds grouped transcript and ANSI layout despite history caches",
+      "recommendation": "Incremental turn/line layout; bounded cache keyed by revision/theme/width.",
+      "implementation": "addressed",
+      "baseline_location": "internal/tui/components/chat/turns.go:66"
+    },
+    {
+      "id": "broker",
+      "evidence_level": "reproduced",
+      "mechanism": "Subscription goroutines await only context cancellation",
+      "recommendation": "Wait for both context and broker shutdown; preserve send/close synchronization.",
+      "implementation": "addressed",
+      "baseline_location": "internal/pubsub/broker.go:66"
+    },
+    {
+      "id": "broker_options",
+      "evidence_level": "reproduced",
+      "mechanism": "Configured capacity ignored; full channels discard newest event",
+      "recommendation": "Honor or remove options; specify delivery/reconciliation policy without blocking publishers.",
+      "implementation": "addressed",
+      "baseline_location": "internal/pubsub/broker.go:22"
+    },
+    {
+      "id": "provider_transport",
+      "evidence_level": "code_observation",
+      "mechanism": "Prompt copies recreate provider/transport",
+      "recommendation": "Reuse connection resources with immutable request options and strict credential/TLS identity isolation.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/provider/context_window.go:32"
+    },
+    {
+      "id": "index_network_lock",
+      "evidence_level": "code_observation",
+      "mechanism": "Workspace semaphore held across sequential embedding HTTP",
+      "recommendation": "Batch misses and release lock during HTTP; revalidate policy/hash before returning.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/tools/code_index.go:82"
+    },
+    {
+      "id": "index_sql",
+      "evidence_level": "code_observation",
+      "mechanism": "SQL operations repeated per file/chunk",
+      "recommendation": "Prepare statements per transaction; separate refresh store responsibility.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/tools/code_index.go:260"
+    },
+    {
+      "id": "embedding_eviction",
+      "evidence_level": "code_observation",
+      "mechanism": "Ordered pruning runs per miss without matching at/key index",
+      "recommendation": "Prune once per batch and validate query plan/index.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/tools/embeddings.go:113"
+    },
+    {
+      "id": "ignore_policy",
+      "evidence_level": "code_observation",
+      "mechanism": "Cached matchers still reopen/stat policy at each path component",
+      "recommendation": "Per-operation directory policy snapshot with explicit invalidation and secure path rechecks.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/tools/discovery.go:26"
+    },
+    {
+      "id": "redaction",
+      "evidence_level": "code_observation",
+      "mechanism": "Repeated environment/credential collection and JSON encoding",
+      "recommendation": "Versioned immutable redactor; preserve rotation and fragmented-secret masking.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/tools/access.go:56"
+    },
+    {
+      "id": "request_serialization",
+      "evidence_level": "code_observation",
+      "mechanism": "Prepare/serialize for budget then reconstruct/serialize for send",
+      "recommendation": "Single immutable prepared request reused after exact budget check.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/provider/request_budget.go:39"
+    },
+    {
+      "id": "stream_metrics_lock",
+      "evidence_level": "code_observation",
+      "mechanism": "Bounded tokenizer executes under shared contextMu",
+      "recommendation": "Per-stream buffer/state; compute outside global lock with version/cancel protection.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/agent/stream_usage.go:59"
+    },
+    {
+      "id": "ollama_metadata",
+      "evidence_level": "code_observation",
+      "mechanism": "Sequential model show calls consume shared deadline",
+      "recommendation": "Bounded concurrency/cache by digest, selected model first; dynamic runtime allocation stays separate.",
+      "implementation": "addressed",
+      "baseline_location": "internal/llm/models/ollama_metadata.go:15"
+    },
+    {
+      "id": "chat_cache_lifetime",
+      "evidence_level": "code_observation",
+      "mechanism": "Cache crosses sessions; theme invalidation only visits current session",
+      "recommendation": "Cache byte budget/session scope/theme generation; test A/B/theme/A.",
+      "implementation": "addressed",
+      "baseline_location": "internal/tui/components/chat/list.go:204"
+    },
+    {
+      "id": "render_copy",
+      "evidence_level": "code_observation",
+      "mechanism": "Parts filtered before cache lookup",
+      "recommendation": "Move filtering to cache miss, preserving immutable source messages.",
+      "implementation": "addressed",
+      "baseline_location": "internal/tui/components/chat/turns.go:215"
+    },
+    {
+      "id": "render_io",
+      "evidence_level": "code_observation",
+      "mechanism": "Expanded tool renderer can load child messages synchronously",
+      "recommendation": "Event-fed tool result index and cached process lines; renderer performs no storage calls.",
+      "implementation": "addressed",
+      "baseline_location": "internal/tui/components/chat/message.go:586"
+    },
+    {
+      "id": "idle_ticks",
+      "evidence_level": "code_observation",
+      "mechanism": "100ms terminal ticks trigger synchronous workflow/layout refresh",
+      "recommendation": "Revision/events or active-only polling; skip unchanged content.",
+      "implementation": "addressed",
+      "baseline_location": "internal/tui/page/chat.go:111"
+    },
+    {
+      "id": "search_normalization",
+      "evidence_level": "code_observation",
+      "mechanism": "Open transcript search repeatedly normalizes stable prefix",
+      "recommendation": "Incremental normalized lines/matches, retaining limits/Unicode/reflow behavior.",
+      "implementation": "addressed",
+      "baseline_location": "internal/tui/components/chat/navigation.go:161"
+    },
+    {
+      "id": "responsibility",
+      "evidence_level": "structural_observation",
+      "mechanism": "187 helpers with extraction-result plumbing across 45 files",
+      "recommendation": "Domain handlers with typed results, ownership boundaries and names explaining intent.",
+      "implementation": "addressed",
+      "baseline_location": "internal/tui/components/dialog/providers.go:529"
+    }
+  ],
+  "broker_reproduction": {
+    "waiters_after_shutdown_before": 32,
+    "waiters_after_shutdown_after": 0,
+    "configured_capacity": 1,
+    "actual_before": 64,
+    "actual_after": 1,
+    "latest_delivered_after_saturation_before": false,
+    "latest_delivered_after_saturation_after": true,
+    "recovery": "bounded tail with ReconcileRequired; authoritative reload, no automatic grants"
+  },
+  "build_environment_repair": {
+    "cause": "per-user quota on tmpfs /tmp with usrquota; write probe failed with EDQUOT despite free filesystem blocks",
+    "action": "go clean -cache scoped to two identified obsolete task-specific Go build caches",
+    "source_or_configuration_deleted": false,
+    "unmodified_go_run_version_after": "0.2.0-dev"
+  },
+  "validation": {
+    "race_suite": "passed",
+    "vet": "passed",
+    "staticcheck": "passed",
+    "staticcheck_integration": "passed",
+    "integration_compile": "passed",
+    "complexity_exact_over_15": 0,
+    "dependencies_changed": false,
+    "live_pty": {
+      "result": "failed fixed overview deadline in this environment",
+      "model": "llama3.1:8b",
+      "shared_candidate_seconds": 184.07,
+      "shared_baseline_seconds": 184.23,
+      "observed_candidate_seconds": 184.02,
+      "isolated_cpu_candidate_seconds": 184.73,
+      "fixed_overview_deadline_seconds": 180,
+      "criteria_or_timeouts_changed": false,
+      "completed_stages": [
+        "Unicode/paste and composer sizing",
+        "three resizes",
+        "model/provider failure/retry/deletion",
+        "mode selector",
+        "explicitly approved LSP probe and stderr suppression"
+      ],
+      "incomplete_stages": [
+        "citation-validated project overview",
+        "model-generated human question",
+        "model-driven approved PTY command and queued instruction"
+      ],
+      "isolation": {
+        "cpu_server": "temporary loopback-only Ollama 0.33.3 in Bubblewrap with read-only model store, separate HOME/TMPDIR and cloud disabled",
+        "shared_server_modified_or_stopped": false,
+        "model_downloaded": false
+      },
+      "interpretation": "Live model acceptance is not claimed. Both baseline and candidate hit the same fixed deadline; upstream telemetry attributes 156.37s of a 159.78s response to model loading."
+    },
+    "live_pty_initial_shared_endpoint": {
+      "candidate": "failed overview deadline, 184.07 seconds total",
+      "baseline": "same overview deadline, 184.23 seconds total",
+      "criteria_changed": false,
+      "wire_parity": "normal, citation-repair and adaptive-repair serialized bytes identical in ephemeral replay",
+      "ui_replay": "legacy versus incremental transcript/hit equivalence passed through repair",
+      "passive_trace": {
+        "request_model": "llama3.1:8b",
+        "context": 16384,
+        "max_output": 2048,
+        "response_ms": 159781.84,
+        "ollama_load_ns": 156371388076,
+        "ollama_generation_ns": 2875814000
+      },
+      "interpretation": "Shared endpoint model loading consumed most of the fixed overview deadline; not an application speed comparison."
+    },
+    "native_build": "passed",
+    "windows_amd64": "cross-build passed, no native execution",
+    "darwin_arm64": "cross-build passed, no native execution",
+    "final_reconciliation_race": "passed after final delivery/version guards",
+    "language_inventory": "passed"
+  }
+}

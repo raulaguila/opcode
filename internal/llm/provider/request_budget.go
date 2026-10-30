@@ -37,33 +37,33 @@ func countBytes(raw []byte) (ascii, other int64) {
 	return
 }
 func (p *baseProvider) RequestFootprint(history []message.Message, definitions []tools.BaseTool) (RequestFootprint, error) {
-	footprint := RequestFootprint{ReservedOutputTokens: p.options.maxTokens}
-	var payload any
-	if protocol, ok := p.client.(interface {
-		request([]message.Message, []tools.BaseTool, bool) (string, any, error)
-	}); ok {
-		_, value, err := protocol.request(history, definitions, true)
+	if _, ok := p.client.(interface{ requestHTTP() *httpProvider }); ok {
+		prepared, err := p.PrepareRequest(history, definitions, true)
 		if err != nil {
-			return footprint, err
+			return RequestFootprint{}, err
 		}
-		payload = value
-		footprint.ExactSerialization = true
-	} else {
-		var schemas []tools.ToolInfo
-		for _, tool := range definitions {
-			schemas = append(schemas, tool.Info())
-		}
-		payload = map[string]any{"system": p.options.systemMessage, "messages": history, "tools": schemas}
+		return prepared.RequestFootprint()
 	}
-	raw, err := json.Marshal(payload)
+	var schemas []tools.ToolInfo
+	for _, tool := range definitions {
+		schemas = append(schemas, tool.Info())
+	}
+	raw, err := json.Marshal(map[string]any{"system": p.options.systemMessage, "messages": history, "tools": schemas})
 	if err != nil {
-		return footprint, err
+		return RequestFootprint{}, err
 	}
+	footprint := p.serializedFootprint(raw)
+	footprint.ExactSerialization = false
+	return footprint, nil
+}
+
+func (p *baseProvider) serializedFootprint(raw []byte) RequestFootprint {
+	footprint := RequestFootprint{ReservedOutputTokens: p.options.maxTokens, ExactSerialization: true}
 	footprint.ASCIIBytes, footprint.OtherBytes = countBytes(raw)
 	counter := p.footprintTokenizer()
 	footprint.countPayload(counter, raw)
 	footprint.countSchemas(counter, raw)
-	return footprint, nil
+	return footprint
 }
 
 func (p *baseProvider) footprintTokenizer() tokenizer.Codec {

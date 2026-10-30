@@ -44,10 +44,11 @@ func TestDeferredCoderIsSafeBeforeSetupAndKeepsSubscriptionsAcrossReplacement(t 
 	first := &delegateProbe{Broker: pubsub.NewBroker[agent.AgentEvent](), model: models.Model{ID: "first"}}
 	require.NoError(t, proxy.bind(first))
 	require.Equal(t, models.ModelID("first"), proxy.Model().ID)
-	first.Publish(pubsub.UpdatedEvent, agent.AgentEvent{Progress: "first"})
+	first.PublishEvent(pubsub.Event[agent.AgentEvent]{Type: pubsub.UpdatedEvent, Payload: agent.AgentEvent{Progress: "first"}, ReconcileRequired: true})
 	select {
 	case event := <-events:
 		require.Equal(t, "first", event.Payload.Progress)
+		require.True(t, event.ReconcileRequired, "forwarders must preserve the resynchronization signal")
 	case <-time.After(time.Second):
 		t.Fatal("initial delegate event was not forwarded")
 	}

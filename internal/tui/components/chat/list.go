@@ -22,6 +22,8 @@ import (
 type cacheItem struct {
 	width   int
 	content []uiMessage
+	bytes   int
+	used    uint64
 }
 type messagesCmp struct {
 	app             *app.App
@@ -32,6 +34,9 @@ type messagesCmp struct {
 	uiMessages      []uiMessage
 	currentMsgID    string
 	cachedContent   map[string]cacheItem
+	renderCache     transcriptCache
+	nested          nestedHistory
+	reconcile       messageReconciliation
 	spinner         spinner.Model
 	rendering       bool
 	attachments     viewport.Model
@@ -79,7 +84,12 @@ func (m *messagesCmp) Init() tea.Cmd {
 func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
+	case messageReloadMsg:
+		return m, m.acceptMessageReload(msg)
+	case nestedHistoryMsg:
+		return m, m.acceptNestedHistory(msg)
 	case ProcessPreferencesChangedMsg:
+		m.renderCache.dirty = true
 		m.renderView()
 		return m, nil
 	case dialog.ThemeChangedMsg:
@@ -92,6 +102,9 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case SessionClearedMsg:
+		m.resetRenderCache()
+		m.resetNestedHistory()
+		m.resetMessageReconciliation()
 		m.find = transcriptFind{}
 		m.selection = textSelection{}
 		m.transcriptLines = nil
@@ -133,7 +146,9 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pubsub.Event[session.Session]:
 		updateEventSessionSession(m, &msg)
 	case pubsub.Event[message.Message]:
+		m.reconcile.version++
 		updateMessagesCmpMessage(m, &msg)
+		cmds = append(cmds, m.reconcileMessageEvent(msg), m.nestedMessageEvent(msg))
 	}
 
 	updateMessagesLastWorkingIsAgentWorking(m)
@@ -176,9 +191,10 @@ func (m *messagesCmp) initialScreen() string {
 }
 
 func (m *messagesCmp) rerender() {
-	for _, msg := range m.messages {
-		delete(m.cachedContent, msg.ID)
-	}
+	m.cachedContent = make(map[string]cacheItem)
+	m.renderCache = transcriptCache{dirty: true}
+	m.find.normalized = nil
+	m.find.normalizedBytes = 0
 	m.renderView()
 }
 
@@ -206,6 +222,9 @@ func (m *messagesCmp) SetSession(session session.Session) tea.Cmd {
 		return nil
 	}
 	m.selection = textSelection{}
+	m.resetRenderCache()
+	m.resetNestedHistory()
+	m.resetMessageReconciliation()
 	m.session = session
 	m.find = transcriptFind{}
 	messages, err := m.app.Messages.List(context.Background(), session.ID)
@@ -213,16 +232,15 @@ func (m *messagesCmp) SetSession(session session.Session) tea.Cmd {
 		return util.ReportError(err)
 	}
 	m.messages = messages
+	m.currentMsgID = ""
 	if len(m.messages) > 0 {
 		m.currentMsgID = m.messages[len(m.messages)-1].ID
 	}
-	delete(m.cachedContent, m.currentMsgID)
+	m.invalidateMessageCache(m.currentMsgID)
 	m.rendering = true
 	// Model mutations belong to the event loop, not to asynchronous commands.
 	m.renderView()
-	return func() tea.Msg {
-		return renderFinishedMsg{sessionID: session.ID}
-	}
+	return tea.Batch(func() tea.Msg { return renderFinishedMsg{sessionID: session.ID} }, m.requestNestedHistory())
 }
 
 func (m *messagesCmp) BindingKeys() []key.Binding {
@@ -254,6 +272,9 @@ func NewMessagesCmp(app *app.App) tea.Model {
 
 func updateMessagesCmpMessage(m *messagesCmp, msg *pubsub.Event[message.Message]) {
 	needsRerender := false
+	if msg.Payload.SessionID == m.session.ID {
+		m.invalidateToolResponses(msg.Payload)
+	}
 	updateMessagesCmpMessageTypePubsubCreatedEvent(m, msg, &needsRerender)
 	if needsRerender {
 		// Keep following only while the reader is at the bottom. Streaming
@@ -308,7 +329,7 @@ func updateMessagesCmpMessageTypePubsubCreatedEvent(m *messagesCmp, msg *pubsub.
 		for i, v := range m.messages {
 			if v.ID == msg.Payload.ID {
 				m.messages[i] = msg.Payload
-				delete(m.cachedContent, msg.Payload.ID)
+				m.invalidateMessageCache(msg.Payload.ID)
 				(*needsRerender) = true
 				break
 			}
@@ -330,11 +351,11 @@ func updateMessagesCmpMessageTypePubsubCreatedEventSessionIDSessionID(m *message
 		if !messageExists {
 			if len(m.messages) > 0 {
 				lastMsgID := m.messages[len(m.messages)-1].ID
-				delete(m.cachedContent, lastMsgID)
+				m.invalidateMessageCache(lastMsgID)
 			}
 
 			m.messages = append(m.messages, msg.Payload)
-			delete(m.cachedContent, m.currentMsgID)
+			m.invalidateMessageCache(m.currentMsgID)
 			m.currentMsgID = msg.Payload.ID
 			(*needsRerender) = true
 		}
@@ -357,7 +378,7 @@ func updateEventSessionSession(m *messagesCmp, msg *pubsub.Event[session.Session
 	if msg.Type == pubsub.UpdatedEvent && msg.Payload.ID == m.session.ID {
 		m.session = msg.Payload
 		if m.session.SummaryMessageID == m.currentMsgID {
-			delete(m.cachedContent, m.currentMsgID)
+			m.invalidateMessageCache(m.currentMsgID)
 			m.renderView()
 		}
 	}
@@ -367,7 +388,7 @@ func updateMessagesCmpMessageTypePubsubCreatedEventMessages(m *messagesCmp, msg 
 	for _, v := range m.messages {
 		for _, c := range v.ToolCalls() {
 			if c.ID == msg.Payload.SessionID {
-				delete(m.cachedContent, v.ID)
+				m.invalidateMessageCache(v.ID)
 				(*needsRerender) = true
 			}
 		}

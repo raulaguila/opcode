@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -12,11 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"sync"
-	"time"
-	"unicode/utf8"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 	_ "github.com/ncruces/go-sqlite3/embed"
@@ -83,46 +79,27 @@ func runCodeIndexSearch(ctx context.Context, root, relativeScope string, input c
 	if err != nil {
 		return ToolResponse{}, err
 	}
-	defer unlock()
+	release := sync.OnceFunc(unlock)
+	defer release()
 	db, err := openCodeIndex(ctx, root)
 	if err != nil {
 		return ToolResponse{}, err
 	}
 	defer db.Close()
-	stats := indexRefresh{}
-	paused, err := indexPaused(root)
+	snapshot, err := captureIndexSearch(ctx, db, root, relativeScope, input)
 	if err != nil {
 		return ToolResponse{}, err
 	}
-	if !paused {
-		stats, err = refreshCodeIndex(ctx, db, root)
-		if err != nil {
-			return ToolResponse{}, err
-		}
-	}
-	scoped := relativeScope != "." || input.Glob != "" || input.Language != "" || input.Extension != ""
-	if scoped {
-		if result0, result1, handled := populateCodeIndexScope(ctx, &input, relativeScope, db); handled {
-			return result0, result1
-		}
-	}
-	query, args, err := buildCodeIndexQuery(input, scoped)
-	if err != nil {
-		return NewTextErrorResponse(err.Error()), nil
-	}
-	candidates, err := readCodeIndexCandidates(ctx, db, query, args)
-	if err != nil {
-		return ToolResponse{}, err
-	}
-	strategy := "lexical BM25 + exact identifiers"
-	if input.Strategy == "hybrid" {
-		candidates, strategy = hybridCandidates(ctx, db, input.Query, candidates, scoped, input.Kind)
+	release() // Network and result verification do not own the workspace lock.
+	candidates, strategy := snapshot.candidates, snapshot.strategy
+	if snapshot.hybrid {
+		candidates, strategy = rankHybridCandidates(ctx, db, input.Query, candidates, snapshot.pool, root)
 	}
 	items, more, err := verifiedCodeIndexHits(ctx, root, candidates, input.Limit)
 	if err != nil {
 		return ToolResponse{}, err
 	}
-	return jsonToolResult(map[string]any{"results": items, "more": more || len(candidates) == 120, "updated_files": stats.Updated, "reused_files": stats.Reused, "scan_reads": stats.Read, "strategy": strategy, "index_paused": paused, "navigation_only": true}), nil
+	return jsonToolResult(map[string]any{"results": items, "more": more || len(candidates) == 120, "updated_files": snapshot.stats.Updated, "reused_files": snapshot.stats.Reused, "scan_reads": snapshot.stats.Read, "strategy": strategy, "index_paused": snapshot.paused, "navigation_only": true}), nil
 }
 func indexDigest(text string) string {
 	digest := sha256.Sum256([]byte(text))
@@ -161,182 +138,13 @@ func openCodeIndex(ctx context.Context, root string) (*sql.DB, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	for _, query := range []string{`PRAGMA journal_mode=MEMORY`, `PRAGMA secure_delete=ON`, `PRAGMA max_page_count=32768`, fmt.Sprintf("PRAGMA cache_size=-%d", indexLimits().MemoryMiB*1024), `CREATE TABLE IF NOT EXISTS embeddings(key TEXT PRIMARY KEY,vector TEXT NOT NULL,at INTEGER NOT NULL)`, `CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, digest TEXT NOT NULL, stamp TEXT NOT NULL, verified INTEGER NOT NULL, policy TEXT NOT NULL)`, `CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5(path,symbol,signature,content,terms,kind UNINDEXED,language UNINDEXED,start_line UNINDEXED,end_line UNINDEXED,digest UNINDEXED)`} {
+	for _, query := range []string{`PRAGMA journal_mode=MEMORY`, `PRAGMA secure_delete=ON`, `PRAGMA max_page_count=32768`, fmt.Sprintf("PRAGMA cache_size=-%d", indexLimits().MemoryMiB*1024), `CREATE TABLE IF NOT EXISTS embeddings(key TEXT PRIMARY KEY,vector TEXT NOT NULL,at INTEGER NOT NULL)`, `CREATE INDEX IF NOT EXISTS embeddings_recent ON embeddings(at DESC,key)`, `CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, digest TEXT NOT NULL, stamp TEXT NOT NULL, verified INTEGER NOT NULL, policy TEXT NOT NULL)`, `CREATE VIRTUAL TABLE IF NOT EXISTS chunks USING fts5(path,symbol,signature,content,terms,kind UNINDEXED,language UNINDEXED,start_line UNINDEXED,end_line UNINDEXED,digest UNINDEXED)`} {
 		if _, err := db.ExecContext(ctx, query); err != nil {
 			db.Close()
 			return nil, err
 		}
 	}
 	return db, nil
-}
-
-type indexRefresh struct{ Updated, Reused, Read, Pending int }
-
-// Metadata reuse only skips background reads; returned hits always verify content.
-func refreshCodeIndex(ctx context.Context, db *sql.DB, root string) (indexRefresh, error) {
-	var stats indexRefresh
-	paths, truncated, err := ripgrepFiles(ctx, root, "", indexLimits().MaxFiles)
-	if err != nil {
-		return stats, fmt.Errorf("index file discovery: %w", err)
-	}
-	if truncated {
-		return stats, fmt.Errorf("workspace exceeds 20000-file index limit")
-	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return stats, err
-	}
-	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `CREATE TEMP TABLE seen(path TEXT PRIMARY KEY)`); err != nil {
-		return stats, err
-	}
-	prioritizeIndexPaths(paths)
-	batchLimit, _ := ctx.Value(indexBatchLimitKey{}).(int)
-	secrets := credentialValues()
-	sort.Strings(secrets)
-	refresh := indexRefresher{ctx: ctx, tx: tx, root: root, batchLimit: batchLimit, now: time.Now().Unix(), policy: indexDigest("parser-v5\x00" + strings.Join(secrets, "\x00"))}
-	for _, path := range paths {
-		if err := refresh.process(path); err != nil {
-			return refresh.stats, err
-		}
-	}
-	if err := refresh.removeUnseen(); err != nil {
-		return refresh.stats, err
-	}
-	return refresh.stats, tx.Commit()
-}
-
-type indexRefresher struct {
-	ctx                   context.Context
-	tx                    *sql.Tx
-	root, policy          string
-	batchLimit, processed int
-	now, total            int64
-	stats                 indexRefresh
-}
-type indexedSource struct {
-	path, relative, stamp, previous, oldStamp, oldPolicy string
-	verified                                             int64
-	known                                                bool
-}
-
-func (r *indexRefresher) inspect(path string) (*indexedSource, error) {
-	if err := r.ctx.Err(); err != nil {
-		return nil, err
-	}
-	if !retrievalPathAllowed(r.root, path, nil) {
-		return nil, nil
-	}
-	resolved, err := authorizeFile(r.ctx, path, "read")
-	if err != nil {
-		return nil, err
-	}
-	if resolved != path {
-		return nil, nil
-	}
-	info, err := os.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() || info.Size() > indexLimits().MaxFileBytes {
-		return nil, nil
-	}
-	r.total += info.Size()
-	if r.total > indexLimits().MaxTextBytes {
-		return nil, fmt.Errorf("workspace text exceeds 20 MiB index scan limit")
-	}
-	rel, _ := filepath.Rel(r.root, path)
-	return &indexedSource{path: path, relative: filepath.ToSlash(rel), stamp: indexFileStamp(info)}, nil
-}
-
-func (r *indexRefresher) process(path string) error {
-	source, err := r.inspect(path)
-	if err != nil || source == nil {
-		return err
-	}
-	if err := r.loadPrevious(source); err != nil {
-		return err
-	}
-	if _, err := r.tx.ExecContext(r.ctx, `INSERT INTO seen(path) VALUES(?)`, source.relative); err != nil {
-		return err
-	}
-	force, _ := r.ctx.Value(indexRebuildKey{}).(bool)
-	if force {
-		source.oldPolicy = ""
-	}
-	if source.reusable(r.policy, r.now) {
-		r.stats.Reused++
-		return nil
-	}
-	if r.batchLimit > 0 && r.processed >= r.batchLimit {
-		r.stats.Pending++
-		return nil
-	}
-	r.processed++
-	return r.refreshSource(source)
-}
-
-func (r *indexRefresher) loadPrevious(source *indexedSource) error {
-	err := r.tx.QueryRowContext(r.ctx, `SELECT digest,stamp,verified,policy FROM files WHERE path=?`, source.relative).Scan(&source.previous, &source.oldStamp, &source.verified, &source.oldPolicy)
-	source.known = err == nil
-	if err == sql.ErrNoRows {
-		return nil
-	}
-	return err
-}
-func (s *indexedSource) reusable(policy string, now int64) bool {
-	age := now - s.verified
-	return s.known && s.stamp == s.oldStamp && policy == s.oldPolicy && age >= 0 && age < 60
-}
-
-func (r *indexRefresher) refreshSource(source *indexedSource) error {
-	raw, err := readFile(r.ctx, source.path)
-	if err != nil {
-		return err
-	}
-	r.stats.Read++
-	after, err := os.Lstat(source.path)
-	if err != nil {
-		return err
-	}
-	if indexFileStamp(after) != source.stamp {
-		return fmt.Errorf("file changed while indexing; retry search")
-	}
-	if int64(len(raw)) > indexLimits().MaxFileBytes || bytes.IndexByte(raw, 0) >= 0 || !utf8.Valid(raw) {
-		_, err := r.tx.ExecContext(r.ctx, `DELETE FROM seen WHERE path=?`, source.relative)
-		return err
-	}
-	text := redact(string(raw))
-	digest := indexDigest(string(raw))
-	if source.previous != digest || source.oldPolicy != r.policy {
-		if err := r.replaceChunks(source.relative, text, digest); err != nil {
-			return err
-		}
-		r.stats.Updated++
-	}
-	_, err = r.tx.ExecContext(r.ctx, `INSERT INTO files(path,digest,stamp,verified,policy) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET digest=excluded.digest,stamp=excluded.stamp,verified=excluded.verified,policy=excluded.policy`, source.relative, digest, source.stamp, r.now, r.policy)
-	return err
-}
-
-func (r *indexRefresher) replaceChunks(relative, text, digest string) error {
-	if _, err := r.tx.ExecContext(r.ctx, `DELETE FROM chunks WHERE path=?`, relative); err != nil {
-		return err
-	}
-	for _, chunk := range codeChunksContext(r.ctx, relative, text) {
-		searchTerms := strings.Join(codeTerms(relative+" "+chunk.Symbol+" "+chunk.Signature+" "+chunk.Content), " ")
-		if _, err := r.tx.ExecContext(r.ctx, `INSERT INTO chunks(path,symbol,signature,content,terms,kind,language,start_line,end_line,digest) VALUES(?,?,?,?,?,?,?,?,?,?)`, relative, chunk.Symbol, chunk.Signature, chunk.Content, searchTerms, chunk.Kind, sourceLanguage(relative), chunk.Start, chunk.End, digest); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-func (r *indexRefresher) removeUnseen() error {
-	for _, query := range []string{`DELETE FROM chunks WHERE path NOT IN (SELECT path FROM seen)`, `DELETE FROM files WHERE path NOT IN (SELECT path FROM seen)`, `DROP TABLE seen`} {
-		if _, err := r.tx.ExecContext(r.ctx, query); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func indexFileStamp(info os.FileInfo) string {
@@ -363,6 +171,7 @@ func verifiedCodeIndexHits(ctx context.Context, root string, candidates []codeIn
 	more := false
 	resultBytes := 0
 	verified := map[string]string{}
+	redactor := newCredentialRedactor(credentialValues())
 	for _, c := range candidates {
 		path := filepath.Join(root, c.Path)
 		if !retrievalPathAllowed(root, path, nil) {
@@ -385,8 +194,8 @@ func verifiedCodeIndexHits(ctx context.Context, root string, candidates []codeIn
 			more = true
 			break
 		}
-		c.Preview = compactPreview(redact(c.Preview), 240)
-		c.Signature = compactPreview(redact(c.Signature), 160)
+		c.Preview = compactPreview(redactor.Redact(c.Preview), 240)
+		c.Signature = compactPreview(redactor.Redact(c.Signature), 160)
 		encoded, _ := json.Marshal(c)
 		if resultBytes+len(encoded) > 7600 {
 			more = true
@@ -398,20 +207,20 @@ func verifiedCodeIndexHits(ctx context.Context, root string, candidates []codeIn
 	return items, more, nil
 }
 
-func populateCodeIndexScope(ctx context.Context, input *codeIndexInput, relativeScope string, db *sql.DB) (extractedResult0 ToolResponse, extractedResult1 error, handled bool) {
+func createIndexScope(ctx context.Context, input codeIndexInput, relativeScope string, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `CREATE TEMP TABLE scope_paths(path TEXT PRIMARY KEY)`); err != nil {
-		return ToolResponse{}, err, true
+		return err
 	}
 	paths, err := db.QueryContext(ctx, `SELECT path FROM files`)
 	if err != nil {
-		return ToolResponse{}, err, true
+		return err
 	}
 	var allowed []string
 	for paths.Next() {
 		var path string
 		if err := paths.Scan(&path); err != nil {
 			paths.Close()
-			return ToolResponse{}, err, true
+			return err
 		}
 		if (relativeScope == "." || path == relativeScope || strings.HasPrefix(path, relativeScope+"/")) && input.matches(path) {
 			allowed = append(allowed, path)
@@ -420,14 +229,14 @@ func populateCodeIndexScope(ctx context.Context, input *codeIndexInput, relative
 	err = paths.Err()
 	paths.Close()
 	if err != nil {
-		return ToolResponse{}, err, true
+		return err
 	}
 	for _, path := range allowed {
 		if _, err := db.ExecContext(ctx, `INSERT INTO scope_paths VALUES(?)`, path); err != nil {
-			return ToolResponse{}, err, true
+			return err
 		}
 	}
-	return extractedResult0, extractedResult1, false
+	return nil
 }
 
 type codeIndexInput struct {

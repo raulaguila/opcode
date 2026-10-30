@@ -5,6 +5,87 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Redução de alocações e responsabilidades — 29/10/2026
+
+O baseline desta rodada é `0cbda0a`. O erro de `go run .` foi reproduzido como
+`EDQUOT` em `/tmp`, montado como tmpfs com quota de usuário (`usrquota`), mesmo
+com blocos e inodes livres. Dois caches de compilação antigos deste trabalho
+foram limpos com `GOCACHE` explícito e `go clean -cache`; a escrita voltou a
+funcionar e `go run . -v` retornou `0.2.0-dev`. Nenhum arquivo de fonte,
+configuração, credencial ou cache de módulos foi removido. O README documenta
+`GOTMPDIR` em disco como alternativa por execução.
+
+As medições são benchmarks de componentes com Go 1.27.3 em Linux/amd64,
+Intel i9-12900K, três amostras por caso. Não representam latência de inferência
+nem memória retida. Cada par usa o mesmo cenário e GOMAXPROCS; os valores abaixo
+são medianas de bytes alocados por operação:
+
+| Cenário | Antes | Depois |
+| --- | ---: | ---: |
+| Resposta 64 KiB em 2.048 fragmentos de 32 bytes, com serialização e snapshots, sem SQL | 146.449.946 B | 542.000 B |
+| Evento de resposta alterada, conversa com 1.000 mensagens e cache aquecido | 5.795.234 B | 855.608 B |
+| Clone de opções do provedor | 3.120 B | 984 B |
+| Orçamento + preparação do pedido | 6.222 B | 3.484 B |
+| Consultar políticas de ignore para 100 caminhos | 443.202 B | 318.961 B |
+| Mascarar 100 previews com dois segredos de fixture | 12.816 B | 328 B |
+| 100 inserts em uma transação do índice | 28.074 B | 13.842 B |
+
+O cenário do chat entrega `Update(pubsub.Event)` com texto diferente a cada
+iteração em ambos os lados. O baseline foi exportado do commit acima e recebeu
+somente o mesmo benchmark por overlay; o candidato tem o benchmark versionado
+em `event_benchmark_test.go`. Um layout sem mudança também usa o cache, mas o
+caso de zero alocação mede `renderView`, não a chamada completa de `View` ou scroll.
+
+Regressões específicas comprovam que o broker encerra seus 32 waiters mesmo
+sem cancelar o contexto externo. Capacidade configurada em 1 passou de 64 para
+1; o evento mais recente sobrevive à saturação, com sinal de reconciliação.
+A UI recupera mensagens, sessões e permissões a partir dos serviços, descarta
+queries atrasadas por geração/revisão e não concede permissões nessa recuperação.
+O teste com 70 pedidos pendentes confirma que todos permanecem dependentes de
+resposta humana ou cancelamento. Forwarders preservam a marca de reconciliação.
+
+A busca híbrida libera o semáforo da workspace antes de HTTP e pede até 16 vetores
+por lote; `status` continua respondendo enquanto o servidor de embeddings aguarda.
+O cache quente não repete HTTP, e `EXPLAIN QUERY PLAN` confirma o índice de
+ordenação da poda. Alterar/criar um ignore invalida o snapshot; exceder sua
+capacidade falha explicitamente. Autorização, symlinks, hashes e redação de
+credenciais continuam ativos antes da saída. Resultados do índice continuam
+sendo navegação, sem virar recibos de leitura para citações ou edições.
+
+Os módulos de formulário, validação, persistência, navegação e visualização
+substituem os encadeamentos genéricos dos diálogos de conexão: `providers.go`
+passou de 980 para 460 linhas e `integrations.go` de 631 para 257, com o restante
+organizado por responsabilidade. Gocognit continua sem funções acima de 15,
+sem exclusões ou supressões. Não foram adicionadas dependências.
+
+Passaram a suíte global com `-race -p 1`, `go vet`, Staticcheck normal e com
+`-tags integration`, compilação dos testes de integração e inventário de linguagens.
+Os envelopes preparados, incluindo título/resumo/exploração, preservam orçamento,
+cancelamento e os mesmos bytes enviados. A validação de citações mantém recibos,
+proveniência, intervalo de linhas e hash atual; os critérios não foram relaxados.
+
+A aceitação real em PTY com `llama3.1:8b` **não passou neste ambiente**. Baseline e
+candidato falharam na mesma espera fixa de 180 s pela visão geral validada
+(184,23 s e 184,07 s totais). Um proxy local passivo, sem registrar prompts ou
+credenciais, confirmou payload correto e informou 156,37 s de carga/preparação
+no Ollama dentro de uma resposta de 159,78 s; a geração levou 2,88 s. O reparo
+foi então cancelado pelo prazo restante do harness. Paridade de bytes para
+pedido normal/reparo/contexto adaptado e replay de renderização passaram.
+Uma tentativa adicional com os mesmos pesos, servidor CPU isolado em Bubblewrap,
+model store somente leitura e sem cloud também atingiu o prazo (184,73 s).
+Nenhum critério, timeout ou guarda de citações foi alterado para obter aprovação.
+
+Nesse teste real passaram input Unicode, colagem, resize, seletores, falha/retry/
+exclusão de conexão e aprovação explícita do probe LSP, com stderr suprimido.
+A visão geral validada e as etapas posteriores de pergunta/comando/steering não
+foram concluídas; não são registradas como aprovação. Os servidores temporários
+foram encerrados sem interromper ou reconfigurar o Ollama em uso. Os testes
+Go determinísticos de processos, permissões, citações e streaming passaram.
+Build nativo Linux e cross-builds Windows/amd64 e macOS/arm64 passaram; não houve
+execução nativa nos dois últimos sistemas.
+
+Evidências estruturadas: [`2026-10-29-performance.json`](evidence/2026-10-29-performance.json).
+
 ## Manutenção e desempenho — 29/10/2026
 
 A auditoria partiu de `a25c481`. `gocognit -over 15 .` encontrou 336 funções,

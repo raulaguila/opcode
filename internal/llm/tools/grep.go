@@ -239,9 +239,12 @@ func findFiles(ctx context.Context, root, pattern string, limit int) ([]string, 
 	if _, err := exec.LookPath("rg"); err == nil {
 		return ripgrepFiles(ctx, root, pattern, limit)
 	}
-	collector := discoveryFileCollector{ctx: ctx, root: root, pattern: pattern, limit: limit}
+	collector := discoveryFileCollector{ctx: ctx, root: root, pattern: pattern, limit: limit, policy: newDiscoveryPolicy()}
 	err := filepath.WalkDir(root, collector.visit)
 	files, truncated := collector.files, collector.truncated
+	if err == nil {
+		err = collector.policy.Validate()
+	}
 	return files, truncated, err
 }
 
@@ -276,9 +279,10 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 	scanner.Buffer(make([]byte, 4096), 64<<10)
 	var paths []string
 	truncated := false
+	policy := newDiscoveryPolicy()
 	for scanner.Scan() {
 		path := scanner.Text()
-		if ExclusionReason(discoveryPolicyRoot(root), path) != "" {
+		if policy.exclusionReason(discoveryPolicyRoot(root), path) != "" {
 			continue
 		}
 		if len(paths) == limit {
@@ -302,7 +306,7 @@ func ripgrepFiles(ctx context.Context, root, pattern string, limit int) ([]strin
 	if err := ripgrepWaitError(waitErr, truncated, stderr, "ripgrep file listing failed"); err != nil {
 		return nil, false, err
 	}
-	return paths, truncated, nil
+	return policy.checkedPaths(paths, truncated)
 }
 
 func bufferHasOutput(b *shell.Buffer) bool { s, _ := b.Snapshot(); return len(s) > 0 }
@@ -444,6 +448,7 @@ func scanFallbackFile(f *os.File, path string, regex *regexp.Regexp, matches []g
 }
 
 type discoveryFileCollector struct {
+	policy        *discoveryPolicy
 	ctx           context.Context
 	root, pattern string
 	limit         int
@@ -459,7 +464,7 @@ func (c *discoveryFileCollector) visit(path string, d fs.DirEntry, err error) er
 	if c.ctx.Err() != nil {
 		return c.ctx.Err()
 	}
-	if path != c.root && ExclusionReason(discoveryPolicyRoot(c.root), path) != "" {
+	if path != c.root && c.policy.exclusionReason(discoveryPolicyRoot(c.root), path) != "" {
 		if d.IsDir() {
 			return filepath.SkipDir
 		}
@@ -482,7 +487,7 @@ func (c *discoveryFileCollector) visit(path string, d fs.DirEntry, err error) er
 		c.truncated = true
 		return filepath.SkipAll
 	}
-	if ExclusionReason(discoveryPolicyRoot(c.root), path) == "" {
+	if c.policy.exclusionReason(discoveryPolicyRoot(c.root), path) == "" {
 		c.files = append(c.files, path)
 	}
 	return nil

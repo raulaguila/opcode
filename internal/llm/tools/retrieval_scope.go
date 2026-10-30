@@ -109,8 +109,16 @@ func (s retrievalScope) matches(path string) bool {
 }
 
 func retrievalPathAllowed(root, path string, ignore []string) bool {
+	return retrievalPathAllowedPolicy(root, path, ignore, nil)
+}
+
+func retrievalPathAllowedPolicy(root, path string, ignore []string, policy *discoveryPolicy) bool {
+	exclusion := ExclusionReason
+	if policy != nil {
+		exclusion = policy.exclusionReason
+	}
 	rel, err := filepath.Rel(root, path)
-	if err != nil || !filepath.IsLocal(rel) || shell.SensitivePath(path) || ExclusionReason(discoveryPolicyRoot(root), path) != "" {
+	if err != nil || !filepath.IsLocal(rel) || shell.SensitivePath(path) || exclusion(discoveryPolicyRoot(root), path) != "" {
 		return false
 	}
 	for _, pattern := range ignore {
@@ -138,12 +146,13 @@ func scopedFilePaths(ctx context.Context, root string, scope retrievalScope, ign
 		return nil, false, err
 	}
 	files := []string{}
+	policy := newDiscoveryPolicy()
 	for _, path := range paths {
 		if err := ctx.Err(); err != nil {
 			return nil, false, err
 		}
 		rel, _ := filepath.Rel(root, path)
-		if !retrievalPathAllowed(root, path, ignore) || !scope.matches(rel) {
+		if !retrievalPathAllowedPolicy(root, path, ignore, policy) || !scope.matches(rel) {
 			continue
 		}
 		info, err := os.Lstat(path)
@@ -152,5 +161,8 @@ func scopedFilePaths(ctx context.Context, root string, scope retrievalScope, ign
 		}
 	}
 	sort.Strings(files)
+	if err := policy.Validate(); err != nil {
+		return nil, false, err
+	}
 	return files, truncated, nil
 }

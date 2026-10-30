@@ -78,7 +78,7 @@ func (p *chatPage) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		p.layout.Init(),
 		p.completionDialog.Init(),
-		terminalTick(),
+		p.terminalTick(),
 	}
 	return tea.Batch(cmds...)
 }
@@ -109,9 +109,9 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		cmd := tea.Batch(p.syncSidebar(), p.resizeContent())
 		return p, cmd
 	case TerminalTickMsg:
-		p.refreshWorkflow()
-		p.refreshTerminal()
-		return p, tea.Batch(p.resizeContent(), terminalTick())
+		return p, p.pollTerminal(true)
+	case scheduledTerminalTickMsg:
+		return p, p.pollTerminal(false)
 	case TerminalStartedMsg:
 		return updateChatPageDefaultCaseCase(p, &msg)
 	case tea.MouseMsg:
@@ -434,6 +434,7 @@ func updateChatPageKeyMsg(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Mo
 
 func updateChatPageDefault(p *chatPage, msg *AgentOutcomeMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
 	if msg.SessionID == p.session.ID {
+		p.refreshWorkflow()
 		p.outcome = msg.Outcome
 		p.progress = ""
 		p.activityStarted = time.Time{}
@@ -498,6 +499,9 @@ func updateChatPageSessionSelectedMsg(p *chatPage, cmds *[]tea.Cmd, msg *chat.Se
 
 func updateChatPageDefaultCase(p *chatPage, msg *ActivityMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
 	if msg.SessionID == p.session.ID {
+		if p.progress != msg.State {
+			p.refreshWorkflow()
+		}
 		p.progress = msg.State
 		if p.activityStarted.IsZero() {
 			p.activityStarted = time.Now()

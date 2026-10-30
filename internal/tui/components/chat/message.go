@@ -114,12 +114,18 @@ func renderUserMessage(msg message.Message, isFocused bool, width int, position 
 	return userMsg
 }
 
+// Rendering receives only an already loaded task projection. Storage access
+// belongs to update commands and never to a frame or a Markdown conversion.
+type taskHistoryReader interface {
+	List(context.Context, string) ([]message.Message, error)
+}
+
 // Returns multiple uiMessages because of the tool calls
 func renderAssistantMessage(
 	msg message.Message,
 	_ int,
 	allMessages []message.Message, // we need this to get tool results and the user message
-	messagesService message.Service, // We need this to get the task tool messages
+	messagesService taskHistoryReader, // We need this to get the task tool messages
 	focusedUIMessageId string,
 	isSummary bool,
 	width int,
@@ -508,7 +514,7 @@ func renderToolResponse(toolCall message.ToolCall, response message.ToolResult, 
 func renderToolMessage(
 	toolCall message.ToolCall,
 	allMessages []message.Message,
-	messagesService message.Service,
+	messagesService taskHistoryReader,
 	focusedUIMessageId string,
 	nested bool,
 	width int,
@@ -584,7 +590,7 @@ func renderToolMessage(
 	}
 
 	if toolCall.Name == agent.AgentToolName {
-		taskMessages, _ := messagesService.List(context.Background(), toolCall.ID)
+		taskMessages := projectedTaskHistory(messagesService, toolCall.ID)
 		toolCalls := []message.ToolCall{}
 		for _, v := range taskMessages {
 			toolCalls = append(toolCalls, v.ToolCalls()...)
@@ -653,4 +659,12 @@ func renderToolParamsCaseToolsGrepToolName(paramWidth int, toolCall *message.Too
 	}
 	return renderParams(paramWidth, toolParams...)
 
+}
+
+func projectedTaskHistory(reader taskHistoryReader, id string) []message.Message {
+	if reader == nil {
+		return nil
+	}
+	history, _ := reader.List(context.Background(), id)
+	return history
 }

@@ -225,11 +225,7 @@ func (a *agent) generateTitle(ctx context.Context, sessionID string, content str
 	}
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
 	parts := []message.ContentPart{message.TextContent{Text: content}}
-	titleHistory, err := auxiliaryBudget(config.AgentTitle, titleProvider, []message.Message{{Role: message.User, Parts: parts}})
-	if err != nil {
-		return err
-	}
-	response, err := timedProvider(titleProvider).SendMessages(ctx, titleHistory, nil)
+	response, err := sendAuxiliaryRequest(ctx, config.AgentTitle, titleProvider, []message.Message{{Role: message.User, Parts: parts}}, nil)
 	if err != nil {
 		return err
 	}
@@ -292,7 +288,7 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	ctx, cancelStream := context.WithCancel(ctx)
 	defer cancelStream()
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
-	requestHistory, err := a.prepareStreamRequest(ctx, sessionID, msgHistory, run)
+	requestHistory, prepared, err := a.prepareStreamRequest(ctx, sessionID, msgHistory, run)
 	if err != nil {
 		return assistantMsg, nil, err
 	}
@@ -303,7 +299,11 @@ func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msg
 	streamModel := runProvider(a, run).Model()
 	streamUsage := a.startStreamUsage(sessionID, streamModel.ID, streamModel)
 	defer a.finishStreamUsage(sessionID, streamUsage)
-	eventChan := timedProvider(runProvider(a, run)).StreamResponse(ctx, requestHistory, a.exposedTools(run))
+	streamProvider := runProvider(a, run)
+	if prepared != nil {
+		streamProvider = &preparedStreamProvider{Provider: streamProvider, prepared: prepared}
+	}
+	eventChan := timedProvider(streamProvider).StreamResponse(ctx, requestHistory, a.exposedTools(run))
 	assistantMsg, err = a.messages.Create(ctx, sessionID, message.CreateMessageParams{Role: message.Assistant, Parts: []message.ContentPart{}, Model: a.provider.Model().ID})
 	if err != nil {
 		return assistantMsg, nil, fmt.Errorf("failed to create assistant message: %w", err)
@@ -325,6 +325,8 @@ func (a *agent) finishMessage(ctx context.Context, msg *message.Message, finishR
 	_ = a.messages.Update(ctx, *msg)
 }
 
+// processEvent handles structural/terminal events. Text and reasoning fragments
+// belong to the stream writer, which materializes them before these transitions.
 func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg *message.Message, event provider.ProviderEvent) error {
 	select {
 	case <-ctx.Done():
@@ -334,12 +336,6 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 	}
 
 	switch event.Type {
-	case provider.EventThinkingDelta:
-		assistantMsg.AppendReasoningContent(event.Content)
-		return a.messages.Update(ctx, *assistantMsg)
-	case provider.EventContentDelta:
-		assistantMsg.AppendContent(event.Content)
-		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventToolUseStart:
 		call := *event.ToolCall
 		call.Origin = "" // Provider payloads cannot assign application-owned provenance.
@@ -633,12 +629,7 @@ func (a *agent) summarizeSession(ctx context.Context, sessionID string, cancel c
 	a.Publish(pubsub.CreatedEvent, event)
 
 	// Send the messages to the summarize provider
-	budgetHistory, budgetErr := auxiliaryBudget(config.AgentSummarizer, a.summarizeProvider, msgsWithPrompt)
-	var response *provider.ProviderResponse
-	err = budgetErr
-	if err == nil {
-		response, err = timedProvider(a.summarizeProvider).SendMessages(ctx, budgetHistory, nil)
-	}
+	response, err := sendAuxiliaryRequest(ctx, config.AgentSummarizer, a.summarizeProvider, msgsWithPrompt, nil)
 	if err != nil {
 		event = AgentEvent{
 			Type:  AgentEventTypeError,

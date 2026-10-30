@@ -25,6 +25,21 @@ go build -o opcode .
 ./opcode
 ```
 
+Se `go run .` ou `go build` falhar com `disk quota exceeded`, confira o
+armazenamento temporário e o cache do compilador. Uma quota por usuário em
+`/tmp` pode impedir gravações mesmo quando `df -h` mostra espaço livre. Para
+usar uma pasta temporária no disco da sua conta, apenas nessa execução:
+
+```sh
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/opcode/go-tmp"
+GOTMPDIR="${XDG_CACHE_HOME:-$HOME/.cache}/opcode/go-tmp" go run .
+```
+
+`go env GOCACHE GOTMPDIR` mostra os diretórios usados pelo Go. O comando
+`go clean -cache` remove o cache de compilação selecionado em `GOCACHE`, que será
+recriado na próxima compilação. Se houver caches antigos com caminhos explícitos,
+confira cada caminho antes de executar `GOCACHE=/caminho/do/cache go clean -cache`.
+
 Para instalar a partir da branch de desenvolvimento publicada:
 
 ```sh

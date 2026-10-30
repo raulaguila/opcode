@@ -72,6 +72,10 @@ func directoryIgnore(dir, name string) (*ignore.GitIgnore, error) {
 // ExclusionReason is diagnostic only. Negation can never override fixed secret,
 // private storage, symlink or dependency exclusions.
 func ExclusionReason(root, path string) string {
+	return pathExclusionReason(root, path, directoryIgnore)
+}
+
+func pathExclusionReason(root, path string, lookup func(string, string) (*ignore.GitIgnore, error)) string {
 	rel, err := filepath.Rel(root, path)
 	if err != nil || !filepath.IsLocal(rel) {
 		return "outside workspace"
@@ -93,7 +97,7 @@ func ExclusionReason(root, path string) string {
 			return "hidden, generated or dependency path"
 		}
 		suffix := filepath.ToSlash(filepath.Join(parts[i:]...))
-		if reason := ignoreExclusionReason(dir, suffix, strings.Join(parts[:i], "/")); reason != "" {
+		if reason := ignoreExclusionReasonWith(dir, suffix, strings.Join(parts[:i], "/"), lookup); reason != "" {
 			return reason
 		}
 		if i < len(parts)-1 {
@@ -134,9 +138,9 @@ func discoveryPolicyRoot(root string) string {
 	return root
 }
 
-func ignoreExclusionReason(dir, suffix, prefix string) string {
+func ignoreExclusionReasonWith(dir, suffix, prefix string, lookup func(string, string) (*ignore.GitIgnore, error)) string {
 	for _, name := range []string{".gitignore", ".opcodeignore"} {
-		matcher, e := directoryIgnore(dir, name)
+		matcher, e := lookup(dir, name)
 		if e != nil {
 			return "unreadable or unsafe ignore policy"
 		}

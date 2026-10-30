@@ -18,10 +18,12 @@ type TranscriptNavigation interface {
 }
 type transcriptMatch struct{ row, left, right int }
 type transcriptFind struct {
-	open, limited bool
-	query         string
-	matches       []transcriptMatch
-	selected      int
+	open, limited   bool
+	query           string
+	matches         []transcriptMatch
+	selected        int
+	normalized      []searchLine
+	normalizedBytes int
 }
 
 func (m *messagesCmp) TranscriptKey(msg tea.KeyMsg) bool {
@@ -173,7 +175,7 @@ func (m *messagesCmp) updateSearch() {
 			m.find.limited = true
 			break
 		}
-		plain := strings.ToLower(ansi.Strip(line))
+		plain := m.normalizedSearchLine(row, line)
 		for offset := 0; offset < len(plain); {
 			at := strings.Index(plain[offset:], query)
 			if at < 0 {

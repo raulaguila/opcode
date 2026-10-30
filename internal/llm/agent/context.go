@@ -111,8 +111,27 @@ func (a *agent) systemPrompt() string {
 	return ""
 }
 func (a *agent) budgetRequest(session string, history []message.Message, run *generationRun) ([]message.Message, error) {
+	bounded, _, err := a.budgetPreparedRequest(session, history, run)
+	return bounded, err
+}
+
+func (a *agent) budgetPreparedRequest(session string, history []message.Message, run *generationRun) ([]message.Message, provider.PreparedRequest, error) {
+	p := runProvider(a, run)
+	preparation := &requestPreparation{Provider: p}
+	if preparer, ok := p.(provider.RequestPreparer); ok {
+		preparation.preparer = preparer
+		p = preparation
+	}
+	bounded, err := a.budgetRequestWithProvider(session, history, run, p)
+	if err != nil {
+		return nil, nil, err
+	}
+	return bounded, preparation.prepared, nil
+}
+
+func (a *agent) budgetRequestWithProvider(session string, history []message.Message, run *generationRun, p provider.Provider) ([]message.Message, error) {
 	ts := a.exposedTools(run)
-	status, err := a.estimateProviderContext(runProvider(a, run), history, ts)
+	status, err := a.estimateProviderContext(p, history, ts)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +139,7 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 	manual := a.compactSessions[session]
 	a.contextMu.Unlock()
 	if !status.Fits || manual || status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100 {
-		history, status, err = a.compactRequestHistory(session, run, history, status, ts, compactHistory)
+		history, status, err = a.compactRequestHistory(p, history, status, ts, compactHistory)
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +148,7 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 	// them before proactively replacing closed batches with historical locators.
 	// The hard serialized budget (including output and safety) always applies.
 	if !status.Fits || manual || (run.steps > 1 && status.EstimatedInputTokens+status.ReservedOutputTokens+status.SafetyTokens > status.ContextWindow*85/100) {
-		history, status, err = a.compactRequestHistory(session, run, history, status, ts, compactCompletedBatches)
+		history, status, err = a.compactRequestHistory(p, history, status, ts, compactCompletedBatches)
 		if err != nil {
 			return nil, err
 		}
@@ -243,11 +262,8 @@ func configuredPrompt(agentName config.AgentName, model models.Model) (string, i
 	return system, reserve
 }
 
-// Auxiliary requests have no tool schemas but still include their actual system
-// prompt and output reservation. Never send an oversized summary/title request.
-func auxiliaryBudget(name config.AgentName, p provider.Provider, history []message.Message) ([]message.Message, error) {
-	return auxiliaryBudgetTools(name, p, history, nil)
-}
+// Auxiliary requests include their actual system prompt, any exploration tool
+// schemas and output reservation. Never send an oversized auxiliary request.
 func auxiliaryBudgetTools(name config.AgentName, p provider.Provider, history []message.Message, ts []tools.BaseTool) ([]message.Message, error) {
 	system, reserve := configuredPrompt(name, p.Model())
 	probe := &agent{systemMessage: system, maxOutputTokens: reserve}
@@ -360,12 +376,12 @@ func compactHistoricalPart(part message.ContentPart) (message.ContentPart, bool)
 	return part, false
 }
 
-func (a *agent) compactRequestHistory(_ string, run *generationRun, history []message.Message, status ContextStatus, ts []tools.BaseTool, compact func([]message.Message) ([]message.Message, int)) ([]message.Message, ContextStatus, error) {
+func (a *agent) compactRequestHistory(p provider.Provider, history []message.Message, status ContextStatus, ts []tools.BaseTool, compact func([]message.Message) ([]message.Message, int)) ([]message.Message, ContextStatus, error) {
 	compacted, count := compact(history)
 	if count == 0 {
 		return history, status, nil
 	}
-	next, err := a.estimateProviderContext(runProvider(a, run), compacted, ts)
+	next, err := a.estimateProviderContext(p, compacted, ts)
 	if err != nil {
 		return nil, next, err
 	}

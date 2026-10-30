@@ -20,6 +20,11 @@ type (
 	Event[T any] struct {
 		Type    EventType
 		Payload T
+		// ReconcileRequired means a bounded subscriber overflowed. Consumers
+		// must reload authoritative state before applying further transitions.
+		// It also propagates across repeated saturation because every overflow
+		// marks the newest retained event.
+		ReconcileRequired bool
 	}
 
 	Publisher[T any] interface {

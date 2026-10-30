@@ -63,6 +63,10 @@ func (t *apiTransport) post(ctx context.Context, path string, payload any, strea
 	if err != nil {
 		return nil, fmt.Errorf("encode provider request: %w", err)
 	}
+	return t.postBytes(ctx, path, body, stream)
+}
+
+func (t *apiTransport) postBytes(ctx context.Context, path string, body []byte, stream bool) (*http.Response, error) {
 	endpoint, err := providerRequestURL(t.baseURL + path)
 	if err != nil {
 		return nil, err
@@ -125,44 +129,23 @@ func waitRetry(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-func (p *httpProvider) send(ctx context.Context, messages []message.Message, tools []tools.BaseTool) (*ProviderResponse, error) {
-	path, payload, err := p.protocol.request(messages, tools, false)
+func (p *httpProvider) send(ctx context.Context, messages []message.Message, definitions []tools.BaseTool) (*ProviderResponse, error) {
+	prepared, err := p.prepare(messages, definitions, false)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := p.transport.post(ctx, path, payload, false)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxProviderBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(raw) > maxProviderBytes {
-		return nil, fmt.Errorf("provider response exceeds %d bytes", maxProviderBytes)
-	}
-	if !json.Valid(raw) {
-		return nil, fmt.Errorf("provider returned invalid JSON")
-	}
-	return p.protocol.decodeResponse(raw)
+	return prepared.SendMessages(ctx)
 }
 
-func (p *httpProvider) stream(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent {
+func (p *httpProvider) stream(ctx context.Context, messages []message.Message, definitions []tools.BaseTool) <-chan ProviderEvent {
+	prepared, err := p.prepare(messages, definitions, true)
+	if err == nil {
+		return prepared.StreamResponse(ctx)
+	}
 	events := make(chan ProviderEvent)
 	go func() {
 		defer close(events)
-		path, payload, err := p.protocol.request(messages, tools, true)
-		if err == nil {
-			var resp *http.Response
-			resp, err = p.transport.post(ctx, path, payload, true)
-			if err == nil {
-				defer resp.Body.Close()
-				// Once streaming starts, no layer retries the request.
-				err = p.protocol.readStream(ctx, resp.Body, events)
-			}
-		}
-		if err != nil && !errors.Is(err, context.Canceled) {
+		if !errors.Is(err, context.Canceled) {
 			publishEvent(ctx, events, ProviderEvent{Type: EventError, Error: err})
 		}
 	}()

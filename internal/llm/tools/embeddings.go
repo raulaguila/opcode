@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -28,8 +27,9 @@ func localEmbeddings(ctx context.Context, c config.EmbeddingConfig, texts []stri
 		return nil, fmt.Errorf("embedding batch requires 1–16 inputs")
 	}
 	size := 0
+	redactor := newCredentialRedactor(credentialValues())
 	for i := range texts {
-		texts[i] = RedactCredentials(texts[i])
+		texts[i] = redactor.Redact(texts[i])
 		size += len(texts[i])
 	}
 	if size > 64<<10 {
@@ -77,45 +77,9 @@ func cosine(a, b []float64) float64 {
 	return dot / math.Sqrt(aa*bb)
 }
 
-var errEmbeddingWarmBudget = errors.New("embedding cache warm budget reached")
-
-func embeddingVector(ctx context.Context, db *sql.DB, c config.EmbeddingConfig, text string, budget *int) ([]float64, error) {
-	key := indexDigest(c.Endpoint + "\x00" + c.Model + "\x00" + time.Now().UTC().Format("2006-01-02") + "\x00" + text)
-	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS embeddings(key TEXT PRIMARY KEY, vector TEXT NOT NULL,at INTEGER NOT NULL)`); err != nil {
-		return nil, err
-	}
-	var raw string
-	err := db.QueryRowContext(ctx, `SELECT vector FROM embeddings WHERE key=?`, key).Scan(&raw)
-	if err == nil {
-		var v []float64
-		if json.Unmarshal([]byte(raw), &v) == nil && len(v) > 0 && len(v) <= 4096 {
-			return v, nil
-		}
-		return nil, fmt.Errorf("invalid embedding cache")
-	}
-	if err != sql.ErrNoRows {
-		return nil, err
-	}
-	if budget != nil {
-		if *budget <= 0 {
-			return nil, errEmbeddingWarmBudget
-		}
-		*budget--
-	}
-	values, err := localEmbeddings(ctx, c, []string{text})
-	if err != nil {
-		return nil, err
-	}
-	encoded, _ := json.Marshal(values[0])
-	if _, err := db.ExecContext(ctx, `INSERT INTO embeddings(key,vector,at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET vector=excluded.vector,at=excluded.at`, key, string(encoded), time.Now().Unix()); err != nil {
-		return nil, err
-	}
-	if _, err := db.ExecContext(ctx, `DELETE FROM embeddings WHERE key NOT IN (SELECT key FROM embeddings ORDER BY at DESC,key LIMIT 10000)`); err != nil {
-		return nil, err
-	}
-	return values[0], nil
-}
-func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates []codeIndexHit, scoped bool, kind string) ([]codeIndexHit, string) {
+// The candidate pool is captured under the workspace index lock. HTTP and the
+// embedding cache use this request's DB handle after that lock is released.
+func rankHybridCandidates(ctx context.Context, db *sql.DB, query string, candidates, pool []codeIndexHit, root string) ([]codeIndexHit, string) {
 	cfg := config.Get()
 	if cfg == nil || cfg.Index.Embeddings == nil {
 		return candidates, "lexical (embeddings not configured)"
@@ -123,24 +87,36 @@ func hybridCandidates(ctx context.Context, db *sql.DB, query string, candidates 
 	c := *cfg.Index.Embeddings
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	misses := 16
-	pool, err := embeddingCandidatePool(ctx, db, candidates, scoped, kind)
-	if err != nil {
-		return candidates, "lexical fallback: semantic pool unavailable"
-	}
-	queryVector, err := embeddingVector(ctx, db, c, query, &misses)
-	if err != nil {
+	texts, eligible := semanticInputs(ctx, query, pool, root)
+	vectors, err := embeddingVectors(ctx, db, c, texts)
+	if err != nil || len(vectors[query]) == 0 {
 		return candidates, "lexical fallback: local embeddings unavailable"
 	}
-	root, err := canonicalPath(config.WorkingDirectory())
-	if err != nil {
-		return candidates, "lexical fallback: current workspace unavailable"
-	}
-	scores, err := scoreSemanticPool(ctx, db, c, queryVector, pool, root, &misses)
-	if err != nil {
-		return candidates, "lexical fallback: local embeddings unavailable"
+	scores := make(map[string]float64, len(eligible))
+	for _, candidate := range eligible {
+		if vector := vectors[candidate.text]; len(vector) > 0 {
+			scores[candidate.key] = cosine(vectors[query], vector)
+		}
 	}
 	return fuseSemanticCandidates(query, candidates, pool, scores), "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request"
+}
+
+type semanticInput struct{ key, text string }
+
+func semanticInputs(ctx context.Context, query string, pool []codeIndexHit, root string) ([]string, []semanticInput) {
+	verified := map[string]string{}
+	texts := []string{query}
+	eligible := make([]semanticInput, 0, min(128, len(pool)))
+	for _, hit := range pool[:min(128, len(pool))] {
+		hash, ok := verifiedSemanticHash(ctx, root, hit.Path, verified)
+		if !ok || hash != hit.Hash {
+			continue
+		}
+		text := compactPreview(hit.Path+" "+hit.Symbol+" "+hit.Preview, 2000)
+		texts = append(texts, text)
+		eligible = append(eligible, semanticInput{key: fmt.Sprintf("%s:%d", hit.Path, hit.Start), text: text})
+	}
+	return texts, eligible
 }
 
 func decodeLocalEmbeddings(body []byte, count int) ([][]float64, error) {
@@ -206,37 +182,6 @@ func embeddingCandidatePool(ctx context.Context, db *sql.DB, candidates []codeIn
 	}
 
 	return pool, nil
-}
-
-func scoreSemanticPool(ctx context.Context, db *sql.DB, c config.EmbeddingConfig, queryVector []float64, pool []codeIndexHit, root string, misses *int) (map[string]float64, error) {
-	verified := map[string]string{}
-	scores := map[string]float64{}
-
-	for i := range pool {
-		if i >= 128 {
-			break
-		}
-		h := pool[i]
-		hash, ok := verifiedSemanticHash(ctx, root, h.Path, verified)
-		if !ok {
-			continue
-		}
-		if hash != h.Hash {
-			continue
-		}
-		text := compactPreview(h.Path+" "+h.Symbol+" "+h.Preview, 2000)
-		v, err := embeddingVector(ctx, db, c, text, misses)
-		if errors.Is(err, errEmbeddingWarmBudget) {
-			continue
-		}
-		if err != nil {
-			return nil, err
-		}
-		key := fmt.Sprintf("%s:%d", h.Path, h.Start)
-		scores[key] = cosine(queryVector, v)
-	}
-
-	return scores, nil
 }
 
 func verifiedSemanticHash(ctx context.Context, root, relative string, verified map[string]string) (string, bool) {

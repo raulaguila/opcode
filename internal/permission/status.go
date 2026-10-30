@@ -5,11 +5,21 @@ import "slices"
 // PendingRequests exposes current requests only. Timed-out or cancelled
 // requests disappear even if a client disconnects before seeing their result.
 func (s *permissionService) PendingRequests(session string) []PermissionRequest {
+	return s.pendingSnapshot(session, false)
+}
+
+// PendingRequestsAll lets an interactive client reconcile a saturated event
+// subscription. It grants no access; replies still resolve the original scope.
+func (s *permissionService) PendingRequestsAll() []PermissionRequest {
+	return s.pendingSnapshot("", true)
+}
+
+func (s *permissionService) pendingSnapshot(session string, all bool) []PermissionRequest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	result := []PermissionRequest{}
 	for _, p := range s.pendingRequests {
-		if p.request.SessionID == session && p.ctx.Err() == nil {
+		if (all || p.request.SessionID == session) && p.ctx.Err() == nil {
 			result = append(result, p.request)
 		}
 	}

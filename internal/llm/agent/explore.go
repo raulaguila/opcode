@@ -137,11 +137,7 @@ func (e *explorationState) generate() (*provider.ProviderResponse, error) {
 		}
 		e.provider = next
 	}
-	budgeted, err := auxiliaryBudgetTools(config.AgentTask, e.provider, e.history, e.tool.available)
-	if err != nil {
-		return nil, err
-	}
-	return timedProvider(e.provider).SendMessages(e.ctx, budgeted, e.tool.available)
+	return sendAuxiliaryRequest(e.ctx, config.AgentTask, e.provider, e.history, e.tool.available)
 }
 func (e *explorationState) trackUsage(usage provider.TokenUsage) error {
 	tracker, ok := e.ctx.Value(explorationUsageKey{}).(func(context.Context, string, provider.Provider, provider.TokenUsage) error)

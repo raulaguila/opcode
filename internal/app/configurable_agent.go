@@ -323,7 +323,7 @@ func (p *configurableCoder) relayEvents(ctx context.Context, events <-chan pubsu
 			if !ok {
 				return
 			}
-			p.Publish(event.Type, event.Payload)
+			p.PublishEvent(event)
 		}
 	}
 }

@@ -14,10 +14,10 @@ import (
 	"time"
 )
 
-func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgHistory []message.Message, run *generationRun) ([]message.Message, error) {
+func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgHistory []message.Message, run *generationRun) ([]message.Message, provider.PreparedRequest, error) {
 	requestHistory, requestErr := a.requestHistory(ctx, sessionID, msgHistory, run)
 	if requestErr != nil {
-		return nil, requestErr
+		return nil, nil, requestErr
 	}
 	if controller, ok := runProvider(a, run).(provider.SystemPromptController); ok {
 		names := make([]string, 0)
@@ -27,7 +27,7 @@ func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgH
 		model := runProvider(a, run).Model()
 		next, err := controller.WithSystemPrompt(prompt.RunPrompt(string(run.mode), model.API, model.ContextWindow, names))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		run.provider = next
 	}
@@ -38,16 +38,11 @@ func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgH
 		}
 		next, err := controller.WithSourceCitations(hints)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		run.provider = next
 	}
-	requestHistory, requestErr = a.budgetRequest(sessionID, requestHistory, run)
-	if requestErr != nil {
-		return nil, requestErr
-	}
-
-	return requestHistory, nil
+	return a.budgetPreparedRequest(sessionID, requestHistory, run)
 }
 func (a *agent) preserveInterruptedStream(sessionID string, assistantMsg *message.Message, toolMsg **message.Message, failure *error) {
 
@@ -89,38 +84,77 @@ func (a *agent) toolExecutionContext(ctx context.Context, sessionID, messageID s
 	return ctx
 }
 func (a *agent) readAssistantEvents(ctx context.Context, sessionID string, assistantMsg *message.Message, eventChan <-chan provider.ProviderEvent, providerStarted time.Time, streamUsage *streamUsage) error {
-	completed := false
-	firstGenerated := false
-	// Process each event in the stream.
-	for event := range eventChan {
-		a.observeStreamUsage(streamUsage, event)
-		if !firstGenerated && generatedEvent(event) {
-			a.observePhase(sessionID, "first_token", time.Since(providerStarted))
-			firstGenerated = true
-		}
-		if event.Type == provider.EventComplete {
-			completed = true
-			event = observedProviderDuration(event, providerStarted)
-		}
-
-		if processErr := a.processEvent(ctx, sessionID, assistantMsg, event); processErr != nil {
-			a.finishMessage(ctx, assistantMsg, message.FinishReasonCanceled)
-			return processErr
-		}
-		if ctx.Err() != nil {
-			a.finishMessage(context.Background(), assistantMsg, message.FinishReasonCanceled)
+	reader := assistantStreamReader{agent: a, sessionID: sessionID, assistant: assistantMsg, started: providerStarted, usage: streamUsage, writer: newStreamMessageWriter(a.messages, assistantMsg, time.Now())}
+	// The interruption guard persists this materialized content even if ctx was
+	// canceled or the last checkpoint failed. No timer goroutine owns the message.
+	defer reader.writer.materialize()
+	ticker := time.NewTicker(streamPublishInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
 			return ctx.Err()
+		case now := <-ticker.C:
+			if err := reader.writer.flush(ctx, now, false); err != nil {
+				return err
+			}
+		case event, ok := <-eventChan:
+			if !ok {
+				return reader.ended(ctx)
+			}
+			if err := reader.consume(ctx, event); err != nil {
+				return err
+			}
 		}
 	}
+}
+
+type assistantStreamReader struct {
+	agent                     *agent
+	sessionID                 string
+	assistant                 *message.Message
+	started                   time.Time
+	usage                     *streamUsage
+	writer                    *streamMessageWriter
+	completed, firstGenerated bool
+}
+
+func (r *assistantStreamReader) consume(ctx context.Context, event provider.ProviderEvent) error {
+	r.agent.observeStreamUsage(r.usage, event)
+	if !r.firstGenerated && generatedEvent(event) {
+		r.agent.observePhase(r.sessionID, "first_token", time.Since(r.started))
+		r.firstGenerated = true
+	}
+	if event.Type == provider.EventComplete {
+		r.completed = true
+		event = observedProviderDuration(event, r.started)
+		r.writer.materialize()
+		// Completion replaces tool parts and can move text indexes. All buffered
+		// text is already materialized; discard its old part bindings first.
+		r.writer.buffer = message.NewStreamBuffer(r.assistant)
+	} else if err := r.writer.handle(ctx, event); err != nil {
+		return err
+	}
+	if event.Type == provider.EventContentDelta || event.Type == provider.EventThinkingDelta {
+		return nil
+	}
+	if err := r.agent.processEvent(ctx, r.sessionID, r.assistant, event); err != nil {
+		return err
+	}
+	if event.Type == provider.EventComplete {
+		// Completion's durable update already contains the buffered text.
+		r.writer.unpersisted, r.writer.unpublished = 0, 0
+	}
+	return nil
+}
+
+func (r *assistantStreamReader) ended(ctx context.Context) error {
 	if ctx.Err() != nil {
-		a.finishMessage(context.Background(), assistantMsg, message.FinishReasonCanceled)
 		return ctx.Err()
 	}
-	if !completed {
-		a.finishMessage(ctx, assistantMsg, message.FinishReasonError)
+	if !r.completed {
 		return fmt.Errorf("provider stream ended without a completion event")
 	}
-
 	return nil
 }
 

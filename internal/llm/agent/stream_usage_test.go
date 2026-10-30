@@ -86,9 +86,9 @@ func TestStreamCompatibleTokenizerIsBoundedAndNotInferredForLocalModels(t *testi
 	a := &agent{}
 	start := time.Now()
 	local := a.startStreamUsage("local", "local.gpt", models.Model{Provider: models.ProviderLocal, APIModel: "gpt-4o"})
-	require.Nil(t, local.codec)
+	require.Nil(t, local.sampler.codec)
 	s := a.startStreamUsage("s", "openai.gpt", models.Model{Provider: models.ProviderOpenAI, APIModel: "gpt-4o"})
-	require.NotNil(t, s.codec)
+	require.NotNil(t, s.sampler.codec)
 	first, second := "Olá mundo. ", "Ação e código são exemplos. "
 	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: first}, start)
 	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: second}, start.Add(time.Second))
@@ -103,13 +103,13 @@ func TestStreamCompatibleTokenizerIsBoundedAndNotInferredForLocalModels(t *testi
 	require.Equal(t, float64(total-initial), u.StreamSampleTokens)
 	require.Contains(t, u.StreamCountSource, "compatible")
 	a.observeStreamUsageAt(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: strings.Repeat("x", streamTokenizerLimit)}, start.Add(2*time.Second))
-	require.Nil(t, s.codec)
-	require.Empty(t, s.text)
+	require.Nil(t, s.sampler.codec)
+	require.Zero(t, s.sampler.text.Len())
 	u, err = a.Usage(context.Background(), "s")
 	require.NoError(t, err)
 	require.Equal(t, "bytes/4 estimate", u.StreamCountSource)
 	a.finishStreamUsage("s", s)
-	require.Empty(t, s.text)
+	require.Zero(t, s.sampler.text.Len())
 }
 
 type usageStreamProvider struct {
@@ -150,6 +150,7 @@ func TestStreamUsageAvailableBeforeCompletionAndClearedOnEveryExit(t *testing.T)
 				close(p.events)
 			}
 			result := finishGeneration(t, done)
+			assertSavedStreamText(t, a, "Streaming before completion")
 			if ending == "complete" {
 				require.NoError(t, result.Error)
 			} else {
@@ -169,4 +170,56 @@ func TestStreamUsageAvailableBeforeCompletionAndClearedOnEveryExit(t *testing.T)
 			}
 		})
 	}
+}
+
+func assertSavedStreamText(t *testing.T, a *agent, expected string) {
+	t.Helper()
+	items, err := a.messages.List(context.Background(), "session")
+	require.NoError(t, err)
+	for _, item := range items {
+		if item.Role == message.Assistant {
+			require.Equal(t, expected, item.Content().Text)
+			require.NotNil(t, item.FinishPart(), "all exits must persist a terminal checkpoint")
+			return
+		}
+	}
+	t.Fatal("streamed assistant message was not persisted")
+}
+
+type blockingStreamCodec struct {
+	tokenizer.Codec
+	started, release chan struct{}
+}
+
+func (*blockingStreamCodec) GetName() string { return "blocking-fixture" }
+func (c *blockingStreamCodec) Count(text string) (int, error) {
+	close(c.started)
+	<-c.release
+	return len(text), nil
+}
+
+func TestStreamTokenizationDoesNotHoldContextMutex(t *testing.T) {
+	a := &agent{}
+	s := a.startStreamUsage("s", "local")
+	codec := &blockingStreamCodec{started: make(chan struct{}), release: make(chan struct{})}
+	s.sampler.codec = codec
+	done := make(chan struct{})
+	go func() {
+		a.observeStreamUsage(s, provider.ProviderEvent{Type: provider.EventContentDelta, Content: "first"})
+		close(done)
+	}()
+	<-codec.started
+	read := make(chan UsageMetrics, 1)
+	go func() { usage, _ := a.Usage(context.Background(), "s"); read <- usage }()
+	select {
+	case usage := <-read:
+		require.EqualValues(t, len("first"), usage.StreamOutputBytes)
+	case <-time.After(time.Second):
+		close(codec.release)
+		<-done
+		t.Fatal("usage blocked behind tokenization")
+	}
+	close(codec.release)
+	<-done
+	a.finishStreamUsage("s", s)
 }

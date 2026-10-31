@@ -143,3 +143,29 @@ cargas. Tempo continua informado sem alterar os critérios do gate.
 
 Amostras brutas, hashes das fixtures e resultados completos estão na
 [evidência desta rodada](evidence/2026-10-30-ui-menu-refinement-validation.json).
+
+## Blocos de código, detalhes e legendas — 30/10/2026
+
+Comparação com `a9bfb16`, Go 1.27.3, `GOMAXPROCS=2`, tema Opcode escuro e
+TrueColor. Foram preservadas as 14 fixtures byte a byte, em seis pacotes,
+100 operações por caso e três amostras por revisão. A rodada final inclui as
+legendas do chat; uma rodada anterior, antes desse ajuste, ficou separada.
+
+| Operação | Tempo | Bytes alocados | Quantidade de alocações |
+| --- | --- | --- | --- |
+| Markdown com múltiplos blocos | +10,13% | +7,27% | +3,73% |
+| Chat durante streaming | +0,53% | −1,73% | −3,19% |
+| Chat, último item invalidado | +0,44% | −2,36% | −3,07% |
+
+O Markdown agora desenha superfície, margem e cabeçalho próprios nos blocos de
+código; essa apresentação tem custo. A contagem passou de 15.931 para 16.525
+alocações por operação na fixture. Os **32 casos** passaram no gate original de
+10% para bytes/alocações, sem alterar limiares. O chat aquecido continua com
+zero bytes/zero alocações. O tempo do Markdown merece acompanhamento; estas
+amostras locais não garantem a mesma variação em outras máquinas/conversas.
+
+Os benchmarks medem componentes e não a inferência ou a qualidade do modelo.
+A exploração de uma pergunta ampla pode executar uma busca e até duas leituras
+extras da implementação; seus limites e reutilização ficam descritos em
+[Contexto](context-and-extensions.md#prompts-e-capacidades). Amostras e condições
+na [evidência desta rodada](evidence/2026-10-30-response-polish-validation.json).

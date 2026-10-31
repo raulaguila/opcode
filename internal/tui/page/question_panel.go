@@ -162,7 +162,7 @@ func (c questionContent) visibleRows(height int, divider string) []string {
 		if height >= 5 && divider != "" {
 			tail = append(tail, divider)
 		}
-		tail = append(tail, c.hint)
+		tail = append(tail, styles.PanelHint().Render(c.hint))
 	}
 	remaining := height - len(tail)
 	gap := len(c.intro) > 0 && (len(c.choices) > 0 || c.input != "") && remaining > len(c.intro)+len(c.choices)
@@ -218,7 +218,7 @@ func (p *chatPage) questionDetailsRows(c questionContent, width, height int) []s
 		full = append(full, ansi.Wrap(choice, width, ""))
 	}
 	p.workflow.detailView.SetWidth(width)
-	tail := []string{config.Text("F2/Esc volta · ↑↓/PgUp/PgDn rola", "F2/Esc back · ↑↓/PgUp/PgDn scroll")}
+	tail := []string{styles.PanelHint().Render(config.Text("F2/Esc volta · ↑↓/PgUp/PgDn rola", "F2/Esc back · ↑↓/PgUp/PgDn scroll"))}
 	if height >= 5 {
 		tail = append([]string{styles.PanelDivider(width)}, tail...)
 	}

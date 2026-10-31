@@ -338,7 +338,7 @@ func (p *chatPage) terminalView(full bool) string {
 	t := &p.terminal
 	width := max(1, p.width)
 	style := styles.BaseStyle().Width(width)
-	header := config.Text("Terminal • Ctrl+P volta à conversa", "Terminal • Ctrl+P back to chat")
+	header := "Terminal"
 	if t.snapshot.ID != "" {
 		state := fmt.Sprintf("exit %d", t.snapshot.ExitCode)
 		if t.snapshot.Running {
@@ -361,7 +361,7 @@ func (p *chatPage) terminalView(full bool) string {
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
-	header = ansi.Truncate(header+config.Text(" • Ctrl+P abre", " • Ctrl+P open"), width, "…")
+	header = ansi.Truncate(header+styles.PanelHint().Render(config.Text(" • Ctrl+P abre", " • Ctrl+P open")), width, "…")
 	return style.Foreground(theme.CurrentTheme().TextMuted()).Height(6).MaxHeight(6).Render(lipgloss.JoinVertical(lipgloss.Left, header, strings.Join(lines, "\n")))
 }
 
@@ -389,7 +389,7 @@ func terminalViewFull(p *chatPage, full bool, t *terminalPanel, width int, style
 		}
 		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-2-lipgloss.Height((*header)))).MaxHeight(max(1, p.height-2-lipgloss.Height((*header)))).Render(body)
 		footer := ansi.Truncate(config.Text("Ctrl+P conversa • Ctrl+N novo • Alt+←/→ troca • Ctrl+X encerra • Ctrl+C interrompe", "Ctrl+P chat • Ctrl+N new • Alt+←/→ switch • Ctrl+X stop • Ctrl+C interrupt"), width, "…")
-		return style.Render(lipgloss.JoinVertical(lipgloss.Left, styles.PanelTitle().Width(width).Render((*header)), body, styles.PanelDivider(width), styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary()).Foreground(theme.CurrentTheme().TextMuted()).Render(footer))), true
+		return style.Render(lipgloss.JoinVertical(lipgloss.Left, styles.PanelTitle().Width(width).Render((*header)), body, styles.PanelDivider(width), styles.PanelHint().Render(footer))), true
 	}
 	return extractedResult0, false
 }

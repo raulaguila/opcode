@@ -75,7 +75,7 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 	if cache != nil {
 		markdown = cache.RenderStreaming
 	}
-	parts := []string{styles.ForceReplaceBackgroundWithLipgloss(markdown(msg, contentWidth, measure), t.Background())}
+	parts := []string{markdown(msg, contentWidth, measure)}
 
 	// Remove newline at the end
 	parts[0] = strings.TrimSuffix(parts[0], "\n")

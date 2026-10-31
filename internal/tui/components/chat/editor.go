@@ -301,7 +301,7 @@ func (m *editorCmp) attachmentsContentWidth(width int) string {
 	attachmentStyles := styles.BaseStyle().
 		MarginLeft(1).
 		Background(t.BackgroundSecondary()).
-		Foreground(t.Text())
+		Foreground(styles.ReadableForeground(t.Text(), t.BackgroundSecondary()))
 	for i, attachment := range m.attachments {
 		var filename string
 		filename = fmt.Sprintf(" %s %s", styles.DocumentIcon, ansi.Truncate(ansi.Strip(attachment.FileName), 16, "…"))
@@ -313,7 +313,7 @@ func (m *editorCmp) attachmentsContentWidth(width int) string {
 	content := lipgloss.JoinHorizontal(lipgloss.Left, styledAttachments...)
 	lines := strings.Split(ansi.Hardwrap(content, max(1, width), true), "\n")
 	if len(lines) > 2 {
-		lines = append(lines[:1], ansi.Truncate(fmt.Sprintf(config.Text(" %d anexos · Ctrl+R para remover", " %d attachments · Ctrl+R to remove"), len(m.attachments)), max(1, width), "…"))
+		lines = append(lines[:1], styles.HintOn(t.Background()).Render(ansi.Truncate(fmt.Sprintf(config.Text(" %d anexos · Ctrl+R para remover", " %d attachments · Ctrl+R to remove"), len(m.attachments)), max(1, width), "…")))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -329,18 +329,17 @@ func CreateTextArea(existing *textarea.Model) textarea.Model {
 	t := theme.CurrentTheme()
 	bgColor := t.Background()
 	textColor := t.Text()
-	textMutedColor := t.TextMuted()
 
 	ta := textarea.New()
 	ta.SetVirtualCursor(true)
 	inputStyles := ta.Styles()
 	inputStyles.Blurred.Base = styles.BaseStyle().Background(bgColor).Foreground(textColor)
 	inputStyles.Blurred.CursorLine = styles.BaseStyle().Background(bgColor)
-	inputStyles.Blurred.Placeholder = styles.BaseStyle().Background(bgColor).Foreground(textMutedColor)
+	inputStyles.Blurred.Placeholder = styles.HintOn(bgColor)
 	inputStyles.Blurred.Text = styles.BaseStyle().Background(bgColor).Foreground(textColor)
 	inputStyles.Focused.Base = styles.BaseStyle().Background(bgColor).Foreground(textColor)
 	inputStyles.Focused.CursorLine = styles.BaseStyle().Background(bgColor)
-	inputStyles.Focused.Placeholder = styles.BaseStyle().Background(bgColor).Foreground(textMutedColor)
+	inputStyles.Focused.Placeholder = styles.HintOn(bgColor)
 	inputStyles.Focused.Text = styles.BaseStyle().Background(bgColor).Foreground(textColor)
 
 	ta.SetStyles(inputStyles)

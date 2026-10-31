@@ -234,8 +234,7 @@ func (m *modelDialogCmp) catalogView() string {
 	if m.scrollOffset+g.rows < len(m.filtered) {
 		position += " · ↓"
 	}
-	position += config.Text(" · ✓ atual", " · ✓ current")
-	rows = append(rows, line(position))
+	rows = append(rows, dialogHint(position, g.width))
 	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P edita · Ctrl+D detalhes · Esc", "Enter choose · Tab provider · Ctrl+P edit · Ctrl+D details · Esc")
 	if g.width < 48 {
 		hint = config.Text("Enter · Ctrl+D detalhes · Esc", "Enter · Ctrl+D details · Esc")
@@ -246,13 +245,13 @@ func (m *modelDialogCmp) catalogView() string {
 	if g.height >= 14 {
 		rows = append(rows, styles.PanelDivider(g.width))
 	}
-	rows = append(rows, line(hint))
+	rows = append(rows, dialogHint(hint, g.width))
 	if m.details && g.height >= 18 {
 		if len(m.reasoningModel().ReasoningChoices()) > 0 {
-			rows = append(rows, line(config.Text("Ctrl+E esforço do modelo ativo", "Ctrl+E active model effort")))
+			rows = append(rows, dialogHint(config.Text("Ctrl+E esforço do modelo ativo", "Ctrl+E active model effort"), g.width))
 		}
-		rows = append(rows, line(config.Text("Alt+←/→ ou Tab/Shift+Tab provedor · Ctrl+R atualiza", "Alt+←/→ or Tab/Shift+Tab provider · Ctrl+R refresh")))
-		rows = append(rows, line(config.Text("Ctrl+A função · Ctrl+T testar · Ctrl+P conexão", "Ctrl+A role · Ctrl+T probe · Ctrl+P connection")))
+		rows = append(rows, dialogHint(config.Text("Alt+←/→ ou Tab/Shift+Tab provedor · Ctrl+R atualiza", "Alt+←/→ or Tab/Shift+Tab provider · Ctrl+R refresh"), g.width))
+		rows = append(rows, dialogHint(config.Text("Ctrl+A função · Ctrl+T testar · Ctrl+P conexão", "Ctrl+A role · Ctrl+T probe · Ctrl+P connection"), g.width))
 	}
 	frame := styles.Panel().Padding(g.padY, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 	return lipgloss.NewStyle().MaxWidth(g.width + 6).MaxHeight(g.height).Render(frame)
@@ -304,16 +303,22 @@ func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme,
 		group := ""
 		catalogViewScrollOffsetModelIDActive(active, &model, &prefs, &group)
 		rendered := fmt.Sprintf("%s %s %s", caret, mark, label)
-		if g.width >= 48 && group != "" {
-			rendered = ansi.Truncate(rendered, g.width-12, "…")
-			rendered += strings.Repeat(" ", max(1, g.width-11-ansi.StringWidth(rendered))) + group
-		}
+		rendered = modelRowGroup(rendered, group, g.width, model.ID == active)
 		row := (*base)
 		if i == m.selectedIdx {
 			row = row.Background(t.BorderDim()).Foreground(t.Text()).Bold(true)
 		}
 		(*rows) = append((*rows), row.Render(ansi.Truncate(interfaceCopy(rendered), g.width, "…")))
 	}
+}
+
+func modelRowGroup(row, group string, width int, active bool) string {
+	if group == "" || width < 48 && (!active || width < 18) {
+		return row
+	}
+	groupWidth := ansi.StringWidth(group)
+	row = ansi.Truncate(row, max(1, width-groupWidth-1), "…")
+	return row + strings.Repeat(" ", max(1, width-groupWidth-ansi.StringWidth(row))) + group
 }
 
 func modelDetailLinesActiveContextModelTargetAgentCoder(m *modelDialogCmp, selected *models.Model, effective *string) {
@@ -375,7 +380,7 @@ func modelHostingDetailLines(model models.Model) []string {
 
 func catalogViewScrollOffsetModelIDActive(active models.ModelID, model *models.Model, prefs *config.Preferences, group *string) {
 	if model.ID == active {
-		(*group) = config.Text("Atual", "Current")
+		(*group) = config.Text("Em uso", "In use")
 	} else if containsModel(prefs.FavoriteModels, model.ID) {
 		(*group) = config.Text("Favoritos", "Favorites")
 	} else if containsModel(prefs.RecentModels, model.ID) {

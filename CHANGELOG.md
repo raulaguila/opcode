@@ -2,6 +2,12 @@
 
 ## Em desenvolvimento — 2026-10-30
 
+- Raciocínio da resposta fica em Detalhes antes da mensagem correspondente,
+  sem criar um processo final duplicado. Blocos de código têm superfície própria.
+- Perguntas amplas recebem uma busca limitada na implementação além dos arquivos
+  básicos; prompt distingue documentação e comportamento confirmado no código.
+- Legendas de navegação usam estilo secundário com contraste; modelo em uso é
+  identificado somente na sua linha, separado da posição na lista.
 - Prosa usa a largura interna exata, mantém percentuais decimais na mesma
   palavra e apresenta ênfase incompleta de streaming provisoriamente.
 - Rodapé distingue espera, geração, validação e conclusão; histórico interno

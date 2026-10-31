@@ -66,7 +66,6 @@ func (b *markdownBlockRenderer) renderListItem(item ast.Node, width int) (string
 		if err != nil {
 			return "", err
 		}
-		view = preserveMarkdownListCodePadding(view, child, b.source)
 		if view != "" {
 			separator := "\n\n"
 			if kind == ast.KindList || previous == ast.KindList {
@@ -84,7 +83,7 @@ func (b *markdownBlockRenderer) renderListItem(item ast.Node, width int) (string
 }
 
 // Per-block rendering trims visual padding; fenced source blank rows are content.
-func preserveMarkdownListCodePadding(view string, node ast.Node, source []byte) string {
+func preserveMarkdownCodePadding(view string, node ast.Node, source []byte) string {
 	if node.Kind() != ast.KindCodeBlock && node.Kind() != ast.KindFencedCodeBlock {
 		return view
 	}

@@ -45,7 +45,7 @@ func TestMarkdownCompactSpacingPreservesContent(t *testing.T) {
 	require.Contains(t, view, "second")
 	require.Contains(t, view, "  indented")
 	require.Contains(t, view, "  after")
-	lines := strings.Split(view, "\n")
+	lines := strings.Split(markdownWithoutCodeChrome(view), "\n")
 	for i, line := range lines {
 		if strings.Contains(line, "indented") {
 			require.Empty(t, strings.TrimSpace(lines[i+1]))

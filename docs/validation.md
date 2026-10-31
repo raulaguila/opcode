@@ -1252,3 +1252,44 @@ fixtures e o gate de 10% inalterado. Há ganhos no Markdown/streaming e duas
 regressões locais de tempo documentadas em [Desempenho](performance.md).
 Os resultados e limites estão na
 [evidência desta rodada](evidence/2026-10-30-ui-menu-refinement-validation.json).
+
+## Respostas, exploração inicial e legendas — 30/10/2026
+
+Raciocínio associado a texto público fica em Detalhes antes desse texto, sem
+processo final duplicado. Código direto/em listas tem superfície própria;
+linguagem informada é sanitizada e limitada, e a cópia integral preserva o
+Markdown original. Modelo em uso e posição de navegação ficam separados.
+
+A revisão de legendas cobre os menus, painéis e controles do chat/input. Testes
+verificam contraste mínimo 4,5:1 no fundo realmente pintado, nove temas claros/
+escuros, `NO_COLOR`, atributos de seleção e uma paleta sintética de baixo contraste.
+Decisões de permissão, estados, avisos e conteúdo do modelo mantêm suas funções
+visuais. Os recibos e o mecanismo de validação das citações não foram alterados.
+
+Perguntas amplas recebem a leitura básica e uma consulta limitada ao índice,
+seguida de até duas leituras reais da implementação. A regressão reproduziu a
+ausência da implementação na primeira requisição; após a correção, fixtures Go,
+Python e TypeScript chegam ao provedor com fonte lida e ferramentas disponíveis.
+Os testes anteriores de reutilização, acesso, citações inválidas e tópicos
+específicos continuam exigidos. O prompt informa os limites da inspeção.
+
+Passaram os 14 checks: suítes normal e de integração com `-race -p 1`,
+vet/staticcheck dos dois conjuntos, complexidade máxima 15, módulos, inventário
+de linguagens, workflows, vulnerabilidades e builds Linux amd64, Windows amd64 e
+Darwin arm64. Windows/macOS foram compilados; a execução em PTY é Linux.
+
+Os onze cenários finais de PTY passaram sem skips, incluindo o Nemotron local
+`nemotron-3.5-bolt:e4b`. O pedido amplo não nomeia arquivos: o teste exige busca
+no índice e leitura real de `service.go`, além dos fatos/citações anteriores.
+Também passaram código com fundo distinto nas células VT, detalhes anteriores
+à resposta com expansão/recolhimento, cópia exata do Markdown original sem
+reparo de citação, seleção/cópia, retomada/revisões, perguntas, temas e menus.
+O fluxo real mantém Bubblewrap, aprovação única, saída ao vivo, entrada Unicode,
+instrução durante o comando e verificação de que os fontes não mudaram.
+Os 16k são explícitos da fixture; JSON e modelos do usuário não são alterados.
+
+Os 32 casos de benchmarks passaram no gate original de alocações de 10%, usando
+as mesmas 14 fixtures contra `a9bfb16`. A superfície do código aumenta o custo
+da fixture de Markdown; as variações estão em [Desempenho](performance.md).
+Resultados e condições na
+[evidência desta rodada](evidence/2026-10-30-response-polish-validation.json).

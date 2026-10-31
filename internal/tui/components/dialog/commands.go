@@ -213,13 +213,13 @@ func (c *commandDialogCmp) View() string {
 		rows = append(rows, config.Text("Nenhum comando encontrado", "No commands found"))
 	}
 	for _, detail := range g.details {
-		rows = append(rows, base.Foreground(theme.CurrentTheme().TextMuted()).Render(detail))
+		rows = append(rows, styles.PanelHint().Render(detail))
 	}
 	hint := config.Text("↑↓ escolher · Enter abrir · Esc voltar", "↑↓ select · Enter open · Esc back")
 	if c.activeID != "" {
 		hint = config.Text("↑↓ escolher · Enter aplicar modo · Esc voltar", "↑↓ select · Enter apply mode · Esc back")
 	}
-	rows = append(rows, styles.PanelDivider(g.width), ansi.Truncate(hint, g.width, "…"))
+	rows = append(rows, styles.PanelDivider(g.width), dialogHint(hint, g.width))
 	return styles.Panel().Padding(g.padding, 2).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 }
 

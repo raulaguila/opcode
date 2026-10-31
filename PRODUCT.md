@@ -130,3 +130,11 @@ continuam desconhecidas. Campos opcionais em formatos não reconhecidos não
 descartam o catálogo ou um contexto válido. Fontes citadas ficam agrupadas, com
 caminhos e intervalos completos para cópia e prévia protegida. As referências
 inline não são abreviadas, preservando também a seleção de texto.
+
+Raciocínio associado à resposta fica em Detalhes antes dela. Código direto ou
+em listas tem superfície própria e cabeçalho de linguagem, sem modificar cópia
+ou fonte. A seleção de modelos separa destaque de navegação e marcador Em uso;
+legendas de navegação têm estilo secundário com contraste, preservando estados
+e decisões de permissão. Visões gerais do projeto combinam arquivos básicos e
+busca limitada por implementação; fontes preparadas não significam inspeção
+completa nem dispensam novas ferramentas quando faltam fatos.

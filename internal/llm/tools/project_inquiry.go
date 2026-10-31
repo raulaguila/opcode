@@ -68,6 +68,21 @@ func ProjectInquiry(question string) bool {
 	return projectQuestionWords(words)
 }
 
+// ProjectOverview identifies broad orientation requests, not specific facts or
+// explicit source locators that already have a narrower retrieval route.
+func ProjectOverview(question string) bool {
+	if !ProjectInquiry(question) || ProjectEvidenceQuery(question) != "" || len(ProjectSourcePaths(question)) > 0 {
+		return false
+	}
+	lower := strings.ToLower(question)
+	for _, phrase := range []string{"o que pode", "fale sobre", "falar sobre", "descreva", "explique o projeto", "overview", "what can you tell", "tell me about", "describe this", "explain this project"} {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
 func projectQuestionWords(words []string) bool {
 	for i, word := range words {
 		if i > 0 {

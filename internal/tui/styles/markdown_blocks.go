@@ -27,7 +27,7 @@ func renderMarkdownBlocks(content string, width, proseWidth int, cache *Markdown
 	source := []byte(content)
 	md := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.DefinitionList), goldmark.WithParserOptions(parser.WithAutoHeadingID()))
 	doc := md.Parser().Parse(text.NewReader(source))
-	blocks := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, cache: cache, streaming: streaming, renderers: map[int]renderer.Renderer{}}
+	blocks := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, cache: cache, streaming: streaming, renderers: map[markdownRendererKey]renderer.Renderer{}}
 	var output []string
 	for node := doc.FirstChild(); node != nil; {
 		next := node.NextSibling()
@@ -53,7 +53,12 @@ type markdownBlockRenderer struct {
 	style        ansi.StyleConfig
 	styled       bool
 	streaming    bool
-	renderers    map[int]renderer.Renderer
+	renderers    map[markdownRendererKey]renderer.Renderer
+}
+
+type markdownRendererKey struct {
+	width int
+	code  bool
 }
 
 func (b *markdownBlockRenderer) render(node ast.Node) (string, error) {
@@ -83,14 +88,20 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 	}
 	measure := markdownBlockWidth(node, b.width, b.prose)
 	renderWidth := markdownProseRenderWidth(node, measure)
-	r, ok := b.renderers[renderWidth]
+	code := markdownCodeBlock(node)
+	if code {
+		renderWidth = markdownCodeWidth(measure)
+	}
+	key := markdownRendererKey{renderWidth, code}
+	r, ok := b.renderers[key]
 	if !ok {
 		if !b.styled {
 			b.style = generateMarkdownStyleConfig()
 			b.styled = true
 		}
-		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: renderWidth, Styles: b.style}), 1000)))
-		b.renderers[renderWidth] = r
+		style := markdownBlockStyle(b.style, code)
+		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: renderWidth, Styles: style}), 1000)))
+		b.renderers[key] = r
 	}
 	block := ast.NewDocument()
 	block.AppendChild(block, node)
@@ -99,7 +110,10 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 		return "", err
 	}
 	view := trimMarkdownBlockPadding(out.String())
-	if renderWidth == 0 {
+	if code {
+		view = preserveMarkdownCodePadding(view, node, b.source)
+		view = renderMarkdownCodeSurface(view, node, b.source, measure)
+	} else if renderWidth == 0 {
 		view = wrapMarkdownProse(view, measure)
 	}
 	return view, nil

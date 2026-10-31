@@ -107,6 +107,16 @@ func assertPickerPTYCapabilities(t *testing.T, h *ptyUIHarness) {
 		return strings.Contains(frame, "Choose model") && strings.Contains(frame, "REMOTE_UI_CHAT") && strings.Contains(frame, "Cloud") && strings.Contains(frame, "Local") && strings.Contains(frame, "UNKNOWN_UI_CHAT")
 	})
 	require.NotContains(t, h.frame(), "EMBED_UI_ONLY", "embedding-only entries must not be offered for chat")
+	h.send("\x1b[B")
+	h.wait("navigation moves without changing the active model", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "2 of 3") && strings.Count(frame, "In use") == 1
+	})
+	for _, line := range strings.Split(h.frame(), "\n") {
+		if strings.Contains(line, " of ") {
+			require.NotContains(t, line, "In use", "the position counter is not an active model indicator")
+			require.NotContains(t, line, "current")
+		}
+	}
 	h.clickLabel("Ctrl+D details")
 	h.wait("metadata details", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "Capabilities:") && strings.Contains(frame, "Effective:")

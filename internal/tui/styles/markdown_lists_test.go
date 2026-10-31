@@ -113,7 +113,7 @@ func assertMarkdownListCodeBlankEdges(t *testing.T, code string) {
 	t.Helper()
 	source := "1. Before.\n\n   ```text\n" + code + "   ```\n\n   After.\n"
 	view := ansi.Strip(RenderMarkdownBlocks(source, 80, 80))
-	lines := strings.Split(view, "\n")
+	lines := strings.Split(markdownWithoutCodeChrome(view), "\n")
 	positions := map[string]int{}
 	for i, line := range lines {
 		for _, word := range []string{"Before.", "first", "last", "After."} {

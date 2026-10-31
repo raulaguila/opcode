@@ -159,19 +159,35 @@ func (m statusCmp) ViewFor(state util.FooterState) string {
 		}
 		return style.Render(ansi.Truncate(" "+text, width, "…"))
 	}
-	middle := segment(center, cw, false, false)
-	if m.info.Msg != "" && (m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
-		color := t.Warning()
-		if m.info.Type == util.InfoTypeError {
-			color = t.Error()
-		}
-		middle = styles.BaseStyle().Foreground(color).Background(t.BackgroundSecondary()).Width(cw).MaxWidth(cw).Render(ansi.Truncate(" "+center, cw, "…"))
-	}
+	middle := m.middleSegment(center, cw, state)
 	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, segment(m.metrics(state), mw, false, true), segment(right, rw, true, true))
 	if m.width > 0 {
 		view += styles.BaseStyle().Background(t.BackgroundSecondary()).Render(" ")
 	}
 	return view
+}
+
+func (m statusCmp) middleSegment(text string, width int, state util.FooterState) string {
+	if width == 0 {
+		return ""
+	}
+	t := theme.CurrentTheme()
+	style := styles.BaseStyle().Background(t.BackgroundSecondary())
+	if m.idleHint(state) {
+		style = styles.PanelHint()
+	}
+	if m.info.Msg != "" && (m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
+		color := t.Warning()
+		if m.info.Type == util.InfoTypeError {
+			color = t.Error()
+		}
+		style = style.Foreground(color)
+	}
+	return style.Width(width).MaxWidth(width).Render(ansi.Truncate(" "+text, width, "…"))
+}
+
+func (m statusCmp) idleHint(state util.FooterState) bool {
+	return state.Activity == "" && !state.Busy && state.Pending == 0 && m.info.Msg == "" && m.projectDiagnostics() == ""
 }
 func (m statusCmp) ActionAt(x int, state util.FooterState) string {
 	lw, cw, mw, rw := m.metricWidths(state)

@@ -69,6 +69,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 		"README.md":      "# IgarapeWatch\n\nAplicativo em Go para coletar métricas de sensores via MQTT, armazenar os dados em SQLite e gerar relatórios pela linha de comando.\n",
 		"go.mod":         "module example.test/igarapewatch\n\ngo 1.26\n",
 		"main.go":        "package main\n\n// IgarapeWatch collects sensor data in SQLite.\nfunc main() {}\n",
+		"service.go":     "package main\n\n// Application service receives sensor samples for IgarapeWatch reports.\nfunc collectSamples() string { return \"SQLite\" }\n",
 		"interactive.sh": "[ -t 0 ] || exit 42\nprintf started > .cache/ui-acceptance-artifacts/command-started\nprintf 'LIVE_READY ação 漢字\\n'\nIFS= read -r value\nprintf 'LIVE_INPUT:%s\\n' \"$value\"\n",
 		"lsp-stderr.sh":  "printf ran > .cache/ui-acceptance-artifacts/lsp-stderr-ran\nfor ((i=0;i<4096;i++)); do printf 'UI_LSP_SECRET_SENTINEL_%s\\n' \"$i\" >&2; done\nexit 1\n",
 	}
@@ -234,7 +235,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 	conn.SetMaxOpenConns(1)
-	h.paste(`Explique o projeto atual. Leia README.md e main.go antes de explicar; cite os arquivos e as linhas realmente lidos. Responda em português.`)
+	h.paste(`o que pode me falar sobre esse projeto?`)
 	h.send("\r")
 	for _, size := range [][2]int{{80, 24}, {120, 36}, {180, 40}} {
 		h.resize(size[0], size[1])
@@ -250,6 +251,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.NotContains(t, h.rawOutput(), "UI_LSP_SECRET_SENTINEL", "child stderr must never corrupt the terminal")
 	h.assertComposer()
 	initialHistory := ptyUIMessages(conn)
+	assertPTYOverviewPreparation(t, initialHistory)
 	overview := initialHistory[len(initialHistory)-1].text()
 	require.NoError(t, os.WriteFile("/tmp/opcode-ui-pty-overview.txt", []byte(overview), 0600))
 	t.Logf("overview SHA-256: %x", sha256.Sum256([]byte(overview)))
@@ -327,6 +329,31 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 		require.Equal(t, original, string(current), "source fixture must remain unchanged")
 	}
 	t.Log("real binary PTY: Unicode/paste, 3–8-row composer, resize, model/mode modal focus, Ask evidence, separately approved LSP probe, one approved bash command, live output, terminal input and queued instruction passed")
+}
+
+func assertPTYOverviewPreparation(t *testing.T, history []ptyUIMessage) {
+	t.Helper()
+	var searched, readImplementation bool
+	for _, item := range history {
+		for _, part := range item.Parts {
+			switch part.Type {
+			case "tool_call":
+				var call struct{ Name string }
+				require.NoError(t, json.Unmarshal(part.Data, &call))
+				searched = searched || call.Name == "search_code_index"
+			case "tool_result":
+				var result struct {
+					Name    string
+					Content string
+					IsError bool `json:"is_error"`
+				}
+				require.NoError(t, json.Unmarshal(part.Data, &result))
+				readImplementation = readImplementation || (result.Name == "view" && !result.IsError && strings.Contains(result.Content, "service.go") && strings.Contains(result.Content, "collectSamples"))
+			}
+		}
+	}
+	require.True(t, searched, "a generic overview must inspect beyond the fixed basic files")
+	require.True(t, readImplementation, "index previews must be followed by a real implementation read")
 }
 
 type ptyUIHarness struct {
@@ -962,7 +989,7 @@ func testLiveOllamaPTYUIReturnToOllamaAfterOutage(frame string) bool {
 }
 
 func testLiveOllamaPTYUIModelListPosition(frame string) bool {
-	return strings.Contains(frame, " of ") && strings.Contains(frame, "✓ current")
+	return strings.Contains(frame, " of ") && strings.Contains(frame, "In use") && !strings.Contains(frame, "✓ current")
 }
 
 func testLiveOllamaPTYUILocalModelSearch(frame string) bool {

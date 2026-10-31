@@ -34,7 +34,13 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 			return history, err
 		}
 	}
-	return a.bootstrapBasic(ctx, session, question, history, run, view)
+	history, err := a.bootstrapBasic(ctx, session, question, history, run, view)
+	if err != nil || index == nil || !tools.ProjectOverview(question) {
+		return history, err
+	}
+	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view}
+	_, err = b.readIndex("application service handler run execute", index)
+	return b.history, err
 }
 
 func (a *agent) bootstrapCall(ctx context.Context, session string, tool tools.BaseTool, input string, history []message.Message, run *generationRun) ([]message.Message, tools.ToolResponse, error) {

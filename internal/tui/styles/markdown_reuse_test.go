@@ -37,8 +37,12 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 		block := ast.NewDocument()
 		block.AppendChild(block, node)
 		renderWidth := markdownProseRenderWidth(node, measure)
+		code := markdownCodeBlock(node)
+		if code {
+			renderWidth = markdownCodeWidth(measure)
+		}
 		r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{
-			WordWrap: renderWidth, Styles: generateMarkdownStyleConfig(),
+			WordWrap: renderWidth, Styles: markdownBlockStyle(generateMarkdownStyleConfig(), code),
 		}), 1000)))
 		var out bytes.Buffer
 		if err := r.Render(&out, source, block); err != nil {
@@ -47,7 +51,9 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 			return result
 		}
 		if rendered := trimMarkdownBlockPadding(out.String()); rendered != "" {
-			if renderWidth == 0 {
+			if code {
+				rendered = renderMarkdownCodeSurface(preserveMarkdownCodePadding(rendered, node, source), node, source, measure)
+			} else if renderWidth == 0 {
 				rendered = wrapMarkdownProse(rendered, measure)
 			}
 			blocks = append(blocks, rendered)
@@ -72,7 +78,7 @@ func referenceBlockWidth(node ast.Node, width, proseWidth int) int {
 }
 
 func markdownListReference(list *ast.List, content string, source []byte, width, proseWidth int) string {
-	fresh := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, renderers: map[int]renderer.Renderer{}}
+	fresh := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, renderers: map[markdownRendererKey]renderer.Renderer{}}
 	result, err := fresh.renderList(list)
 	if err != nil {
 		return ""

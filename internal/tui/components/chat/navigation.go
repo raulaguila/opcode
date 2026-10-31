@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/tui/styles"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/rivo/uniseg"
 	"strings"
 	"unicode"
@@ -284,9 +286,9 @@ func (m *messagesCmp) navigationHint() string {
 		if m.find.limited {
 			note += config.Text(" · resultados limitados", " · limited results")
 		}
-		return ansi.Truncate(note, m.width, "…")
+		return styles.HintOn(theme.CurrentTheme().Background()).Render(ansi.Truncate(note, m.width, "…"))
 	}
-	return ansi.Truncate(config.Text("Setas movem · Shift+setas amplia · Ctrl+C copia · Esc", "Arrows move · Shift+arrows extend · Ctrl+C copy · Esc"), m.width, "…")
+	return styles.HintOn(theme.CurrentTheme().Background()).Render(ansi.Truncate(config.Text("Setas movem · Shift+setas amplia · Ctrl+C copia · Esc", "Arrows move · Shift+arrows extend · Ctrl+C copy · Esc"), m.width, "…"))
 }
 
 func transcriptKeyAltF(msg *tea.KeyPressMsg) (extractedResult0 bool, handled bool) {

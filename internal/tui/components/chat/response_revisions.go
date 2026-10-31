@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/tui/styles"
 )
 
 type responseRevision struct {
@@ -94,7 +95,7 @@ func (r *turnRenderer) renderRevisionToggle(id, label string) bool {
 		mark = "⌄"
 	}
 	start := r.position
-	r.appendText(id+":versions", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(mark+" "+label+" · Alt+V", r.messages.width, "…")))
+	r.appendText(id+":versions", styles.HintOn(r.theme.Background()).Render(ansi.Truncate(mark+" "+label+" · Alt+V", r.messages.width, "…")))
 	r.hits = append(r.hits, transcriptHit{start: start, end: start + 1, kind: "revision", id: id, expanded: expanded})
 	return expanded
 }

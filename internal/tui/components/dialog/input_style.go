@@ -4,11 +4,16 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
 func dialogBody() lipgloss.Style { return styles.Panel().UnsetBorderStyle() }
+
+func dialogHint(text string, width int) string {
+	return styles.PanelHint().Width(max(1, width)).Render(ansi.Truncate(interfaceCopy(text), max(1, width), "…"))
+}
 
 func dialogFooter(rows []string, width, height int, controls ...string) []string {
 	if height == 0 || height >= 16 {

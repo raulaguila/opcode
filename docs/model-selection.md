@@ -77,6 +77,9 @@ quando você escolhe um modelo.
 
 - Clique no nome do modelo com `▾`, no rodapé, ou pressione `Ctrl+O`.
 - O seletor começa no provedor do modelo atual e consulta seu catálogo ao vivo.
+- A faixa destacada é a posição de navegação; `Enter` escolhe esse modelo.
+  **Em uso** aparece somente na linha do modelo ativo. O rodapé mostra apenas
+  posição/total e setas de paginação, sem uma legenda fixa de modelo atual.
 - Use `Alt+←`/`Alt+→` para alternar entre os provedores habilitados. `Shift+Tab`/`Tab`
   fazem a mesma navegação quando o terminal ou editor intercepta o atalho Alt.
   Também é possível clicar na metade esquerda/direita do título. Com apenas um

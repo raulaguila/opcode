@@ -34,7 +34,7 @@ func (m *providerDialogCmp) noteUpdate(msg tea.Msg) bool {
 func (m *providerDialogCmp) noteLines(note string) []string {
 	lines := strings.Split(ansi.Wrap(interfaceCopy(note), m.contentWidth(), ""), "\n")
 	if len(lines) > 2 {
-		return []string{lines[0], config.Text("Ctrl+D detalhes completos", "Ctrl+D full details")}
+		return []string{lines[0], dialogHint(config.Text("Ctrl+D detalhes completos", "Ctrl+D full details"), m.contentWidth())}
 	}
 	return lines
 }
@@ -44,7 +44,7 @@ func (m *providerDialogCmp) noteView() string {
 	lines := strings.Split(ansi.Wrap(interfaceCopy(m.note), width, ""), "\n")
 	m.noteOffset = min(m.noteOffset, max(0, len(lines)-rows))
 	body := append([]string{config.Text("Detalhes", "Details")}, lines[m.noteOffset:min(len(lines), m.noteOffset+rows)]...)
-	body = append(body, styles.PanelDivider(width), config.Text("↑↓ rola · Esc volta", "↑↓ scroll · Esc back"))
+	body = append(body, styles.PanelDivider(width), dialogHint(config.Text("↑↓ rola · Esc volta", "↑↓ scroll · Esc back"), width))
 	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(body, "\n"))
 }
 

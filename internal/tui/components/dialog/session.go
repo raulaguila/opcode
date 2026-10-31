@@ -150,10 +150,10 @@ func (s *sessionDialogCmp) View() string {
 	}
 	if s.editing {
 		rows = append(rows, line(config.Text("Novo título: ", "New title: ")+s.rename))
-		rows = dialogFooter(rows, width, s.height, line(config.Text("Enter salva · Esc volta", "Enter save · Esc back")))
+		rows = dialogFooter(rows, width, s.height, dialogHint(config.Text("Enter salva · Esc volta", "Enter save · Esc back"), width))
 	} else {
 		rows = append(rows, line(fmt.Sprintf(config.Text("%d conversas", "%d conversations"), len(s.filtered))))
-		rows = dialogFooter(rows, width, s.height, line(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename")), line(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export")), line(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close")))
+		rows = dialogFooter(rows, width, s.height, dialogHint(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename"), width), dialogHint(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export"), width), dialogHint(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close"), width))
 	}
 	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 }

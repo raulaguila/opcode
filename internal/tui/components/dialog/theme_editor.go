@@ -106,7 +106,9 @@ func (t *themeDialogCmp) editorView() string {
 		e.fields[i].SetWidth(max(1, width-2))
 		lines = append(lines, line(label), line(e.fields[i].View()))
 	}
-	lines = append(lines, styles.PanelDivider(width), line(config.Text("[Salvar] Ctrl+S · [Cancelar] Esc · Tab campo", "[Save] Ctrl+S · [Cancel] Esc · Tab field")), line(e.note))
+	actions := config.Text("[Salvar] Ctrl+S · [Cancelar] Esc · ", "[Save] Ctrl+S · [Cancel] Esc · ")
+	legend := styles.PanelHint().Render(config.Text("Tab campo", "Tab field"))
+	lines = append(lines, styles.PanelDivider(width), line(actions+legend), line(e.note))
 	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
 }
 

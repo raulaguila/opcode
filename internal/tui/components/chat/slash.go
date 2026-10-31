@@ -128,7 +128,7 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 	options, _ := slashOptionsWith(m.textarea.Value(), m.commandPriorities)
 	width = min(width, 76)
 	if len(options) == 0 {
-		return styles.BaseStyle().Foreground(theme.CurrentTheme().TextMuted()).Render(ansi.Truncate(config.Text(" Nenhum comando encontrado · Esc fecha", " No commands found · Esc closes"), width, "…"))
+		return styles.HintOn(theme.CurrentTheme().Background()).Render(ansi.Truncate(config.Text(" Nenhum comando encontrado · Esc fecha", " No commands found · Esc closes"), width, "…"))
 	}
 	selected := min(m.slash.selected, len(options)-1)
 	if width < 20 || maxHeight < 5 {
@@ -153,7 +153,7 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 		rows = append(rows, style.Render(ansi.Truncate(label, rowWidth, "…")))
 	}
 	rows = append(rows, styles.PanelDivider(rowWidth))
-	rows = append(rows, styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text(" ↑/↓ escolhe · Tab completa · Enter seleciona · Esc fecha", " ↑/↓ choose · Tab complete · Enter select · Esc close"), rowWidth, "…")))
+	rows = append(rows, styles.PanelHint().Render(ansi.Truncate(config.Text(" ↑/↓ escolhe · Tab completa · Enter seleciona · Esc fecha", " ↑/↓ choose · Tab complete · Enter select · Esc close"), rowWidth, "…")))
 	return styles.Panel().Width(width).Render(strings.Join(rows, "\n"))
 }
 

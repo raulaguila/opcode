@@ -35,7 +35,7 @@ func (m *providerDialogCmp) providerBodyLines(t theme.Theme, width int, base lip
 		lines = append(lines, line(action))
 	}
 	for _, action := range secondary {
-		lines = append(lines, base.Foreground(t.TextMuted()).Render(action))
+		lines = append(lines, dialogHint(action, width))
 	}
 	return lines
 }
@@ -92,7 +92,11 @@ func (m *providerDialogCmp) providerFormLines(width int, line func(string) strin
 		m.fields[i].SetWidth(max(8, width-2))
 		lines = append(lines, line(choiceView(m.fields[i], fieldOptions(m.labels[i]))))
 	}
-	return append(lines, styles.PanelDivider(width), line(m.providerFormHint()))
+	hint := line(m.providerFormHint())
+	if m.screen != "provider" {
+		hint = dialogHint(m.providerFormHint(), width)
+	}
+	return append(lines, styles.PanelDivider(width), hint)
 }
 
 func (m *providerDialogCmp) providerFormHint() string {

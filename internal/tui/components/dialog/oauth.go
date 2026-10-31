@@ -95,9 +95,15 @@ func (m *integrationDialogCmp) oauthView() string {
 		all = append(all, config.Text("Aguardando servidor…", "Waiting for server…"))
 	}
 	m.resultOffset = min(m.resultOffset, max(0, len(all)-rows))
-	lines := []string{ansi.Truncate(config.Text("Autenticação MCP · ↑↓ rola", "MCP authentication · ↑↓ scrolls"), width, "…")}
+	title := config.Text("Autenticação MCP", "MCP authentication")
+	legend := styles.PanelHint().Render(config.Text(" · ↑↓ rola", " · ↑↓ scrolls"))
+	lines := []string{ansi.Truncate(title+legend, width, "…")}
 	lines = append(lines, all[m.resultOffset:min(len(all), m.resultOffset+rows)]...)
-	lines = append(lines, styles.PanelDivider(width), ansi.Truncate(m.note, width, "…"))
+	note := ansi.Truncate(m.note, width, "…")
+	if !m.testing {
+		note = dialogHint(m.note, width)
+	}
+	lines = append(lines, styles.PanelDivider(width), note)
 	return styles.Panel().Padding(1, 2).Render(joinLines(lines))
 }
 

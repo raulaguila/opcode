@@ -94,6 +94,9 @@ func (m *modelDialogCmp) probeView() string {
 		}
 	}
 	last := len(rendered) - 1
+	if !m.probeRunning {
+		rendered[last] = styles.PanelHint().Render(rendered[last])
+	}
 	rendered = dialogFooter(rendered[:last], width, m.height, rendered[last])
 	frame := styles.Panel().Padding(m.geometry().padY, 2).Border(lipgloss.NormalBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(joinLines(rendered))
 	return lipgloss.NewStyle().MaxWidth(width + 6).MaxHeight(m.geometry().height).Render(frame)

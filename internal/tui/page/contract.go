@@ -133,7 +133,9 @@ func (p *chatPage) contractView() string {
 	if p.workspace.note != "" {
 		lines = append(lines, panelText(p.workspace.note))
 	}
-	lines = append(lines, styles.PanelDivider(max(1, p.width-2)), fmt.Sprintf(config.Text("Modo atual: %s · Enter edita itens · Tab campo · Ctrl+S salva · Esc volta", "Current mode: %s · Enter edit items · Tab field · Ctrl+S save · Esc back"), modeLabel(p.mode())))
+	mode := fmt.Sprintf(config.Text("Modo atual: %s · ", "Current mode: %s · "), modeLabel(p.mode()))
+	legend := styles.PanelHint().Render(config.Text("Enter edita itens · Tab campo · Ctrl+S salva · Esc volta", "Enter edit items · Tab field · Ctrl+S save · Esc back"))
+	lines = append(lines, styles.PanelDivider(max(1, p.width-2)), mode+legend)
 	for i, line := range lines {
 		lines[i] = ansi.Truncate(line, max(1, p.width-2), "…")
 	}

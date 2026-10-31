@@ -82,7 +82,7 @@ func (m *modelDialogCmp) reasoningView() string {
 	if m.width > 0 {
 		width = max(1, min(width, m.width-6))
 	}
-	lines = append(lines, styles.PanelDivider(width), config.Text("↑↓ escolher · Enter salvar · Esc voltar", "↑↓ select · Enter save · Esc back"))
+	lines = append(lines, styles.PanelDivider(width), dialogHint(config.Text("↑↓ escolher · Enter salvar · Esc voltar", "↑↓ select · Enter save · Esc back"), width))
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}

@@ -161,6 +161,22 @@ são os reais. Argumentos vêm dos schemas; o formato plano de plano só é orie
 para Ollama nativo. `contextPaths` é relido, com os limites/redação existentes,
 a cada requisição do agente principal, evitando cache global entre projetos.
 
+A primeira requisição principal já inclui schemas de leitura/busca, sujeitos ao
+modo e ao perfil de contexto; os demais ficam disponíveis por catálogo. Em
+perguntas amplas como “o que pode me falar sobre esse projeto?”, a preparação
+lê arquivos básicos e consulta o índice local por componentes de aplicação.
+São no máximo dois resultados e duas leituras de até 60 linhas, dentro do
+orçamento existente. Resultados do índice são navegação; somente a leitura real
+gera evidência. Fontes inalteradas podem ser reutilizadas após revalidação.
+Perguntas específicas e caminhos explícitos preservam suas rotas de recuperação.
+
+O prompt `opcode-2026-10-v6` trata essas fontes como ponto de partida limitado:
+o modelo deve buscar o que falta, separar capacidades documentadas de
+comportamentos confirmados e informar limites de inspeção. Não precisa repetir
+leituras somente para aumentar o número de ferramentas. Uma busca vazia ou
+indisponível não comprova ausência de funcionalidade nem leitura da implementação.
+As políticas de acesso e a validação das citações permanecem as mesmas.
+
 O catálogo de ferramentas aceita query/category/source/read_only/offset/limit
 (padrão 8, máximo 16). `request_tools` carrega até oito nomes, aceita replace e
 unload; schemas opcionais inativos expiram após oito passos. Nenhuma dessas

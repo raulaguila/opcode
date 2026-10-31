@@ -90,7 +90,7 @@ func (m *providerDialogCmp) deleteView() string {
 		base.Render(cancel + "  " + remove),
 	}
 	lines = append(lines, m.noteLines(m.note)...)
-	lines = dialogFooter(lines, m.contentWidth(), m.height, line(config.Text("←/→ escolhe · Enter · Esc", "←/→ choose · Enter · Esc")))
+	lines = dialogFooter(lines, m.contentWidth(), m.height, dialogHint(config.Text("←/→ escolhe · Enter · Esc", "←/→ choose · Enter · Esc"), m.contentWidth()))
 	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 

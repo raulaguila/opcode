@@ -73,3 +73,14 @@ func completedReasoning(messages []message.Message) bool {
 	}
 	return found
 }
+
+func reasoningOnly(messages []message.Message) bool {
+	found := false
+	for _, item := range messages {
+		if item.Role != message.Assistant || len(item.ToolCalls()) > 0 || item.IsApplication() {
+			return false
+		}
+		found = found || item.ReasoningContent().Thinking != ""
+	}
+	return found
+}

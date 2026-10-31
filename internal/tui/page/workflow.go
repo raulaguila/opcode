@@ -132,7 +132,7 @@ func (p *chatPage) planRows() []string {
 	if task.Summary != "" {
 		rows = append(rows, " "+panelText(task.Summary))
 	}
-	rows = append(rows, config.Text(" Alt+↑/↓ rola · /plan recolhe · /resume continua", " Alt+↑/↓ scroll · /plan collapse · /resume continue"))
+	rows = append(rows, styles.PanelHint().Render(config.Text(" Alt+↑/↓ rola · /plan recolhe · /resume continua", " Alt+↑/↓ scroll · /plan collapse · /resume continue")))
 	return rows
 }
 func (p *chatPage) planOffset() int {

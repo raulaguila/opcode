@@ -30,6 +30,9 @@ Para executar o mesmo fluxo com o Nemotron já instalado, use
 `OPCODE_LIVE_OLLAMA_MODEL=nemotron-3.5-bolt:e4b`. O contexto de 16k é uma condição
 explícita da fixture, não uma alteração do máximo do modelo ou do seu JSON.
 O teste inclui acentos e caracteres CJK na saída e na entrada real do PTY.
+O pedido é “o que pode me falar sobre esse projeto?”, sem ordenar leituras de
+arquivos específicos. Além dos fatos e citações anteriores, o teste exige busca
+no índice e leitura real de `service.go`, fora dos arquivos básicos iniciais.
 
 O teste exige Linux, Bash e Bubblewrap, usa HOME, configuração, banco e projeto
 descartáveis e não herda credenciais. Além da explicação, verifica pergunta ao
@@ -41,6 +44,11 @@ devem permanecer idênticos.
 `TestPTYModelCapabilitiesAndModalNavigation` usa um catálogo local controlado
 para conferir filtro de embeddings, modelos desconhecidos, hospedagem informada,
 detalhes, rascunho e cliques da paleta em três tamanhos, sem gerar tokens.
+Também separa navegação e modelo em uso, sem legenda de estado no contador.
+`TestPTYCodeBlocksAndReasoningDetails` controla somente a saída do provedor:
+confere fundo do código nas células VT, detalhes antes da resposta, expansão/
+recolhimento e cópia exata do Markdown original, sem reparo de citação. O agente,
+os recibos e a validação são os de produção.
 Os testes de fragmentação comparam quadro, cursor, destaque e bytes originais:
 caracteres UTF-8 recebidos em partes não podem corromper a interpretação do VT.
 

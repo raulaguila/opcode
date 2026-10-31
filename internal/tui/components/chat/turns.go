@@ -60,6 +60,7 @@ type turnRenderer struct {
 	hits         []transcriptHit
 	dependencies []string
 	active       bool
+	groupKey     string
 }
 
 func (m *messagesCmp) renderTurns() {
@@ -136,6 +137,7 @@ func (r *turnRenderer) appendText(id, text string) {
 }
 
 func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
+	r.groupKey = group.key
 	r.renderUser(group)
 	r.active = latest && r.messages.IsAgentWorking()
 	revisions := planResponseRevisions(group.messages)
@@ -197,7 +199,7 @@ func publicResponse(item message.Message) bool {
 }
 
 func processEvent(item message.Message) bool {
-	return item.IsApplication() || item.Role == message.Tool || len(item.ToolCalls()) > 0 || item.ReasoningContent().Thinking != ""
+	return item.IsApplication() || item.Role == message.Tool || len(item.ToolCalls()) > 0 || (item.ReasoningContent().Thinking != "" && !publicResponse(item))
 }
 
 func (r *turnRenderer) renderProcessRange(group turnGroup, start, end int, first, active bool) {
@@ -242,13 +244,17 @@ func (r *turnRenderer) renderProcess(group turnGroup, active bool) {
 		mark = "⌄"
 	}
 	label := fmt.Sprintf(config.Text("%s Processo · %s", "%s Process · %s"), mark, processSummary(group.messages))
-	if active && !completedReasoning(group.messages) {
-		label += " · " + config.Text("em andamento", "working")
+	status := ""
+	if reasoningOnly(group.messages) && (!active || completedReasoning(group.messages)) {
+		label = mark + " " + config.Text("Detalhes", "Details")
+	} else if active && !completedReasoning(group.messages) {
+		status = " · " + config.Text("em andamento", "working")
 	} else {
-		label += " · " + config.Text("finalizado", "finished")
+		status = " · " + config.Text("finalizado", "finished")
 	}
+	label = styles.HintOn(r.theme.Background()).Render(label) + r.base.Render(status)
 	start := r.position
-	r.appendText(group.key+":process", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(label, m.width, "…")))
+	r.appendText(group.key+":process", ansi.Truncate(label, m.width, "…"))
 	r.hits = append(r.hits, transcriptHit{start: start, end: start + 1, kind: "process", id: group.key, expanded: expanded})
 	if expanded {
 		for index, item := range group.messages {
@@ -300,7 +306,7 @@ func (r *turnRenderer) renderProcessMessageContent(item message.Message, index i
 	if item.Role != message.Assistant {
 		return
 	}
-	if reasoning := item.ReasoningContent().Thinking; reasoning != "" {
+	if reasoning := item.ReasoningContent().Thinking; reasoning != "" && !publicResponse(item) {
 		label := config.Text("Raciocínio interno", "Internal reasoning")
 		r.appendText(item.ID+":thinking", r.base.Foreground(r.theme.TextMuted()).Render(label+"\n"+toMarkdown(tools.RedactCredentials(reasoning), false, m.width)))
 	}
@@ -329,6 +335,7 @@ func publicMessage(item message.Message) message.Message {
 
 func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool) {
 	m := r.messages
+	r.renderReasoningDetails(item)
 	start := r.position
 	var markdown *styles.MarkdownCache
 	if latest && !item.IsFinished() {
@@ -365,7 +372,7 @@ func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool)
 func (r *turnRenderer) renderActions(item message.Message) {
 	start := r.position
 	text := config.Text("Arraste para selecionar · Ctrl+C copia · Ctrl+Y ações", "Drag to select · Ctrl+C copies · Ctrl+Y actions")
-	r.appendText(item.ID+":actions", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(text, r.messages.width, "…")))
+	r.appendText(item.ID+":actions", styles.HintOn(r.theme.Background()).Render(ansi.Truncate(text, r.messages.width, "…")))
 	r.hits = append(r.hits, transcriptHit{start: start, end: r.position - 1, kind: "actions", id: item.ID})
 }
 

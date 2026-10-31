@@ -330,7 +330,7 @@ func (p *permissionDialogCmp) render() string {
 		contentFinal,
 		buttons,
 		styles.PanelDivider(max(1, p.width-4)),
-		dialogBody().Width(max(1, p.width-4)).Render(p.permissionHint()),
+		p.permissionHintView(max(1, p.width-4)),
 		baseStyle.Render(strings.Repeat(" ", max(0, p.width-4))),
 	)
 
@@ -435,6 +435,16 @@ func (p *permissionDialogCmp) permissionHint() string {
 		return config.Text("T diff · F tela cheia · [ ] arquivo", "T diff · F full screen · [ ] file")
 	default:
 		return config.Text("F tela cheia · escopo exato nesta sessão", "F full screen · exact scope for this session")
+	}
+}
+
+func (p *permissionDialogCmp) permissionHintView(width int) string {
+	switch p.permission.ToolName {
+	case tools.EditToolName, tools.PatchToolName, tools.WriteToolName:
+		return dialogHint(p.permissionHint(), width)
+	default:
+		// The exact-scope statement is consent information, not a muted legend.
+		return dialogBody().Width(width).Render(p.permissionHint())
 	}
 }
 

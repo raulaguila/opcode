@@ -177,7 +177,7 @@ func (t *themeDialogCmp) View() string {
 		baseStyle.Width(maxWidth).Render(""),
 		baseStyle.Width(maxWidth).Render(lipgloss.JoinVertical(lipgloss.Left, themeItems...)),
 		styles.PanelDivider(maxWidth),
-		baseStyle.Width(maxWidth).Render(ansi.Truncate(config.Text("↑↓ prévia · Ctrl+E edita · Enter · Esc", "↑↓ preview · Ctrl+E edit · Enter · Esc"), maxWidth, "…")),
+		dialogHint(config.Text("↑↓ prévia · Ctrl+E edita · Enter · Esc", "↑↓ preview · Ctrl+E edit · Enter · Esc"), maxWidth),
 	)
 
 	return baseStyle.Padding(1, 2).

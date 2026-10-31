@@ -667,7 +667,7 @@ func (p *chatPage) workspaceView() string {
 	p.workspace.view.SetHeight(max(1, h))
 	workspaceViewTurn(p, w)
 	if contextPanel(p.workspace.kind) {
-		lines = append(lines, ansi.Truncate(config.Text("1 Orçamento · 2 Índice · 3 Alocação · 4 Diagnóstico", "1 Budget · 2 Index · 3 Allocation · 4 Diagnostics"), w, "…"))
+		lines = append(lines, styles.PanelHint().Render(ansi.Truncate(config.Text("1 Orçamento · 2 Índice · 3 Alocação · 4 Diagnóstico", "1 Budget · 2 Index · 3 Allocation · 4 Diagnostics"), w, "…")))
 		p.workspace.view.SetHeight(max(1, p.workspace.view.Height()-1))
 	}
 	lines = append(lines, p.workspace.view.View())
@@ -677,7 +677,7 @@ func (p *chatPage) workspaceView() string {
 	if p.workspace.note != "" {
 		lines = append(lines, ansi.Truncate(safePanel(p.workspace.note), w, "…"))
 	}
-	lines = append(lines, styles.PanelDivider(w), ansi.Truncate(help, w, "…"))
+	lines = append(lines, styles.PanelDivider(w), styles.PanelHint().Render(ansi.Truncate(help, w, "…")))
 	return styles.BaseStyle().Background(t.BackgroundSecondary()).Padding(1, 2).Width(max(1, p.width)).Height(max(1, p.height)).MaxWidth(max(1, p.width)).MaxHeight(max(1, p.height)).Render(strings.Join(lines, "\n"))
 }
 

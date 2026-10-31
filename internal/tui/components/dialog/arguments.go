@@ -71,7 +71,7 @@ func NewMultiArgumentsDialogCmp(commandID, content string, argNames []string) Mu
 
 	for i, name := range argNames {
 		ti := newDialogInput()
-		ti.Placeholder = fmt.Sprintf("Enter value for %s...", name)
+		ti.Placeholder = fmt.Sprintf(config.Text("Informe o valor de %s…", "Enter value for %s…"), name)
 		ti.SetWidth(40)
 		ti.Prompt = ""
 
@@ -198,7 +198,7 @@ func (m MultiArgumentsDialogCmp) View() string {
 		m.inputs[i].SetWidth(max(1, width-2))
 		lines = append(lines, mark+m.argNames[i], m.inputs[i].View())
 	}
-	lines = append(lines, styles.PanelDivider(width), config.Text("Tab campo · Enter próxima/envia · Esc cancela", "Tab field · Enter next/send · Esc cancel"))
+	lines = append(lines, styles.PanelDivider(width), dialogHint(config.Text("Tab campo · Enter próxima/envia · Esc cancela", "Tab field · Enter next/send · Esc cancel"), width))
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}

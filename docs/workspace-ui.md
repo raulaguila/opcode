@@ -142,6 +142,9 @@ O resumo distingue leituras e buscas de contexto, fontes reutilizadas, chamadas
 de terminal, outras ferramentas e reparos. Por exemplo, “3 leituras de contexto”
 descreve a preparação inicial; não significa três comandos ou três chamadas ao
 modelo. Detalhes em [perguntas e evidências](question-and-evidence-recovery.md).
+Raciocínio anexado a uma mensagem aparece antes dela, em **Detalhes**, e não
+gera um grupo de processo duplicado depois da resposta. Expandir continua
+permitindo consultar o conteúdo interno; o texto público permanece visível.
 Reparos internos de protocolo, conclusão e citações ficam identificados como
 validação da aplicação dentro do processo. Não aparecem como perguntas suas,
 não entram no histórico de rascunhos e não substituem as validações. O texto da
@@ -595,6 +598,13 @@ Durante o streaming, uma ênfase inicial ainda incompleta é apresentada de form
 provisória; ao fechar o bloco ou terminar a resposta, vale o Markdown completo.
 Nada disso reescreve a mensagem armazenada ou a cópia integral.
 
+Blocos de código cercados ou indentados, diretamente na mensagem ou em listas,
+têm fundo secundário, uma regra lateral e espaçamento interno. Dentro de citações
+em bloco, permanece a apresentação nativa desse contêiner. O cabeçalho mostra a linguagem informada ou Código,
+quando ausente. A estrutura permanece distinguível sem cores. Cabeçalho,
+moldura e espaçamento são apresentação; a ação **Copiar resposta** conserva o
+Markdown original, sem acrescentar a decoração ao conteúdo armazenado.
+
 O rodapé usa a fase da requisição atual: Aguardando modelo, Gerando resposta,
 Validando referências e Concluído. Saída real já define geração, mesmo antes
 de haver amostras suficientes para estimar tok/s. Uma próxima chamada pode
@@ -610,3 +620,16 @@ respostas do modelo e comandos personalizados não são traduzidos. A lista de
 conexões oferece Adicionar, Editar e Excluir por clique e atalho, com navegação
 secundária para Preferências/Integrações. Configurada/desativada descreve a
 configuração; consultar catálogo não comprova disponibilidade para inferência.
+
+As legendas de navegação dos menus usam cor secundária consistente, peso normal
+e contraste mínimo de 4,5:1 nos temas registrados, tanto claros como escuros.
+Em `NO_COLOR`, os atalhos continuam legíveis pelo texto. Botões, seleção ativa,
+erros, resultados de testes e decisões de permissão mantêm seus estilos próprios;
+informações de consentimento não são tratadas como legenda decorativa.
+
+A revisão cobre paleta/modos/ajuda, modelos e esforço, provedores e preferências,
+integrações/OAuth, arquivos/sessões/argumentos/temas, painéis de contexto/tarefa/
+revisão/fila/alterações, perguntas individuais e em lote, planos/contratos,
+terminal e rodapé. Atalhos e instruções usam o estilo secundário; estados de
+carregamento, resultados, links de recuperação e decisões Salvar/Excluir/
+Permitir/Negar continuam diferenciados pelo seu significado.

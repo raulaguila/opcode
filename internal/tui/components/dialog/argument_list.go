@@ -117,7 +117,7 @@ func (a *argumentList) view(width, height int) string {
 	if len(a.fields) == 0 {
 		lines = append(lines, config.Text("Nenhum argumento. Ctrl+N adiciona.", "No arguments. Ctrl+N adds one."))
 	}
-	lines = append(lines, styles.PanelDivider(width), config.Text("Ctrl+N adiciona · Alt+Backspace remove", "Ctrl+N add · Alt+Backspace remove"), config.Text("Tab campo · Ctrl+S aplicar ao formulário · Esc cancelar", "Tab field · Ctrl+S apply to form · Esc cancel"))
+	lines = append(lines, styles.PanelDivider(width), dialogHint(config.Text("Ctrl+N adiciona · Alt+Backspace remove", "Ctrl+N add · Alt+Backspace remove"), width), dialogHint(config.Text("Tab campo · Ctrl+S aplicar ao formulário · Esc cancelar", "Tab field · Ctrl+S apply to form · Esc cancel"), width))
 	if a.note != "" {
 		lines = append(lines, a.note)
 	}

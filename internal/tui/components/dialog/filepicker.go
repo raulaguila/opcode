@@ -217,7 +217,7 @@ func (f *filepickerCmp) View() string {
 		}
 		lines = append(lines, style.Width(listWidth).Render(ansi.Truncate(mark+name, listWidth, "…")))
 	}
-	lines = append(lines, styles.PanelDivider(listWidth), config.Text("Enter anexa/abre · ← volta · I caminho · Esc", "Enter attach/open · ← back · I path · Esc"))
+	lines = append(lines, styles.PanelDivider(listWidth), dialogHint(config.Text("Enter anexa/abre · ← volta · I caminho · Esc", "Enter attach/open · ← back · I path · Esc"), listWidth))
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], listWidth, "…")
 	}

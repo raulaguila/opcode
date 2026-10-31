@@ -96,7 +96,11 @@ func (m *providerDialogCmp) experienceView() string {
 	}
 	title = dialogBody().Foreground(theme.CurrentTheme().Primary()).Bold(true).Render(title)
 	lines = append([]string{line(title)}, lines...)
-	lines = dialogFooter(lines, width, m.height, line(m.note))
+	note := line(m.note)
+	if m.screen == "presets" || m.screen == "settings" || m.screen == "effective" {
+		note = dialogHint(m.note, width)
+	}
+	lines = dialogFooter(lines, width, m.height, note)
 	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 

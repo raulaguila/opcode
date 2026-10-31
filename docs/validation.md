@@ -1362,3 +1362,41 @@ workflow foram repetidas com `-race`, com e sem a tag `integration`. Os resultad
 estão na [evidência desta rodada](evidence/2026-10-31-affected-files-validation.json),
 junto ao fluxo PTY e aos hashes dos fontes preservados de permissões/citações.
 Os builds de Windows/macOS verificam compilação; o PTY executa em Linux.
+
+## Visão geral, seleção de fontes e revisão — 31/10/2026
+
+A regressão reproduziu a busca que escolhia o código de preparação por ele
+conter a própria consulta. Os testes com Go, Python e TypeScript agora exigem
+seguir chamadas do ponto de entrada, ler a implementação real e omitir a
+fonte-isca. O índice tem um teste nativo que verifica esse filtro antes da
+resposta entregue ao modelo. Fontes já fornecidas no turno não são relidas;
+candidatos e leituras adicionais permanecem limitados.
+
+O prompt de orientação inclui finalidade, capacidades, componentes e uma frase
+explícita de escopo/limite, inclusive durante reparo de citações. Manifestos
+fornecem só o cabeçalho quando dependências não foram solicitadas. Os testes
+preservam perguntas específicas e pedidos explícitos de bibliotecas. As
+citações estruturadas do Ollama evitam duplicatas exatas/rodapés soltos, mas
+mantêm referências diferentes ou inválidas para a mesma validação da aplicação.
+A remoção de um intervalo amplo redundante exige que ele pertença às fontes
+inspecionadas da requisição e contenha a referência precisa já escrita.
+Duplicação entre conteúdo normal e `final_answer` tem regressões de streaming,
+igualdade com espaços finais, extensão de prefixo e preservação de conteúdo
+diferente com uma referência não verificada.
+
+A revisão direta reúne versão anterior, motivo e detalhes internos em um
+controle. As regressões mantêm original durante geração/falha, promovem somente
+correções validadas e completas, preservam `Alt+V`, clique e retomada, e não
+recolhem mensagens públicas intermediárias ou de outra pergunta.
+
+A avaliação PTY usa Nemotron local e uma fonte-isca na fixture de sensores,
+exigindo fatos, citação válida, escopo explícito e ausência de referências
+soltas ou descrições dos helpers como produto. A pergunta original também é
+executada em uma cópia isolada do próprio Opcode, com configuração própria,
+modo Perguntar e sandbox; fontes são comparadas antes/depois. Os critérios e
+resultados, incluindo limites da avaliação, estão na
+[evidência desta rodada](evidence/2026-10-31-overview-quality-validation.json).
+
+O verificador de citações continua conferindo origem nativa, linhas entregues
+e hash atual. Esses testes não estabelecem correção semântica geral, nem
+garantem que todas as respostas de um modelo cumprirão as orientações.

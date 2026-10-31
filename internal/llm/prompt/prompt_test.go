@@ -136,6 +136,15 @@ func TestPromptProfilesIdentityAndProtocol(t *testing.T) {
 		require.Contains(t, full, "Mode: "+mode)
 	}
 }
+
+func TestOverviewGuidancePrioritizesUserPurposePreciseReferencesAndInspectionLimits(t *testing.T) {
+	for _, window := range []int64{8192, 16384, 65536} {
+		text := Compose("ask", "ollama", window, []string{"view", "search_code_index"})
+		for _, rule := range []string{"what the software does and who uses it", "Method names, helper functions and search queries are not an overview", "smallest relevant inspected line intervals", "isolated citation-only lines", "what was not evaluated", "never imply a repository-wide audit", "Keep sandboxing, approvals and credential protections intact"} {
+			require.Contains(t, text, rule)
+		}
+	}
+}
 func TestProjectGuidanceReloadsWithoutCrossProjectCache(t *testing.T) {
 	root := t.TempDir()
 	_, err := config.Load(root, false)

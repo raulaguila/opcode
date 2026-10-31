@@ -93,7 +93,7 @@ func (o *ollamaClient) request(history []message.Message, definitions []tools.Ba
 			final = object{"name": ollamaSourceAnswer, "description": "Finish the corrected explanation of the original user's project or code defect. This sends a reply, never executes an operation. Explain the actual finding in the user's language and select the inspected source.",
 				"parameters": object{"type": "object", "additionalProperties": false, "properties": object{
 					"source":      object{"type": "string", "enum": o.opts.sourceCitations, "description": "Select one inspected file and line interval."},
-					"explanation": object{"type": "string", "description": "Answer the ORIGINAL user request in its language. Preserve the project name and requested facts or explain the actual defect. Do not discuss the application validation notice."},
+					"explanation": object{"type": "string", "description": "Return the COMPLETE answer to the ORIGINAL user request in its language. Retain the project name, requested facts, explanation and inspection scope when fixing references; do not replace an overview with a single sourced sentence. Do not discuss the application validation notice."},
 				}, "required": []string{"source", "explanation"}}}
 			instruction = "\nFor this citation correction, finish with answer_with_sources: choose source from its enum and put your corrected answer in explanation. Do not call final_answer for this correction. Do not explain the validation notice or repeat successful reads. Source selection is still verified by the application."
 		}
@@ -131,7 +131,7 @@ func ollamaArgumentsValid(raw json.RawMessage) bool {
 	return strings.HasPrefix(text, "{") && json.Valid(raw)
 }
 
-func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
+func ollamaResult(value ollamaResponse, sources []string) (*ProviderResponse, error) {
 	if len(value.Error) > 0 && string(value.Error) != "null" {
 		return nil, ollamaFailure(value.Error)
 	}
@@ -148,16 +148,26 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 	} else if value.DoneReason != "" && value.DoneReason != "stop" {
 		return nil, fmt.Errorf("provider Ollama returned an unexpected completion reason")
 	}
-	finalAnswer, err := appendOllamaCalls(response, value.Message.ToolCalls)
+	finalAnswer, err := appendOllamaCalls(response, value.Message.ToolCalls, sources)
 	if err != nil {
 		return nil, err
 	}
 	if len(response.ToolCalls) > 0 {
 		response.FinishReason = message.FinishReasonToolUse
 	} else {
-		response.Content += finalAnswer
+		response.Content = mergeOllamaFinalContent(response.Content, finalAnswer)
 	}
 	return response, nil
+}
+
+func mergeOllamaFinalContent(content, final string) string {
+	if final == "" || strings.TrimSpace(content) == strings.TrimSpace(final) {
+		return content
+	}
+	if strings.HasPrefix(final, content) {
+		return final
+	}
+	return content + final
 }
 
 func (o *ollamaClient) decodeResponse(raw json.RawMessage) (*ProviderResponse, error) {
@@ -165,13 +175,13 @@ func (o *ollamaClient) decodeResponse(raw json.RawMessage) (*ProviderResponse, e
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return nil, err
 	}
-	return ollamaResult(value)
+	return ollamaResult(value, o.opts.sourceCitations)
 }
 
 func (o *ollamaClient) readStream(ctx context.Context, reader io.Reader, events chan<- ProviderEvent) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 4096), maxProviderBytes)
-	s := ollamaStreamState{ctx: ctx, events: events}
+	s := ollamaStreamState{ctx: ctx, events: events, sources: o.opts.sourceCitations}
 	for scanner.Scan() {
 		done, err := s.line(scanner.Bytes())
 		if err != nil || done {
@@ -200,14 +210,14 @@ func ollamaFailure(raw json.RawMessage) error {
 	return fmt.Errorf("provider Ollama returned an error")
 }
 
-func appendOllamaCalls(response *ProviderResponse, calls []ollamaCall) (string, error) {
+func appendOllamaCalls(response *ProviderResponse, calls []ollamaCall, sources []string) (string, error) {
 	finalAnswer := ""
 	for _, call := range calls {
 		if err := validateOllamaCall(call, response.FinishReason); err != nil {
 			return "", err
 		}
 		if call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer {
-			answer, err := ollamaFinalText(call, finalAnswer)
+			answer, err := ollamaFinalText(call, finalAnswer, sources)
 			if err != nil {
 				return "", err
 			}
@@ -227,7 +237,7 @@ func validateOllamaCall(call ollamaCall, finish message.FinishReason) error {
 	}
 	return fmt.Errorf("provider Ollama returned an incomplete tool call")
 }
-func ollamaFinalText(call ollamaCall, previous string) (string, error) {
+func ollamaFinalText(call ollamaCall, previous string, sources []string) (string, error) {
 	var args struct {
 		Answer      string `json:"answer"`
 		Citations   string `json:"citations_text"`
@@ -249,10 +259,25 @@ func ollamaFinalText(call ollamaCall, previous string) (string, error) {
 	if len(args.Citations) > 2048 {
 		return "", fmt.Errorf("%w: Ollama final answer citations exceed limit", ErrInvalidFinalAnswer)
 	}
-	if strings.TrimSpace(args.Citations) != "" {
-		args.Answer += "\n\n" + strings.TrimSpace(args.Citations)
+	return appendOllamaCitations(args.Answer, args.Citations, sources), nil
+}
+
+// Preserve every selected source for the agent's guard; only exact displayed
+// duplicates are redundant. Avoid breaking a trailing Markdown code fence.
+func appendOllamaCitations(answer, citations string, sources []string) string {
+	for citation := range strings.SplitSeq(citations, "\n") {
+		citation = strings.TrimSpace(citation)
+		if citation == "" || strings.Contains(answer, "("+citation+")") || strings.Contains(answer, "`"+citation+"`") || coveredOllamaCitation(answer, citation, sources) {
+			continue
+		}
+		separator := " "
+		trimmed := strings.TrimSpace(answer)
+		if strings.HasSuffix(trimmed, "```") || strings.HasSuffix(trimmed, "~~~") {
+			separator = "\n\n"
+		}
+		answer += separator + "(" + citation + ")"
 	}
-	return args.Answer, nil
+	return answer
 }
 
 type ollamaStreamState struct {
@@ -261,6 +286,7 @@ type ollamaStreamState struct {
 	content strings.Builder
 	calls   []ollamaCall
 	total   int
+	sources []string
 }
 
 func (s *ollamaStreamState) line(raw []byte) (bool, error) {
@@ -302,7 +328,7 @@ func (s *ollamaStreamState) publishDeltas(value ollamaResponse) error {
 func (s *ollamaStreamState) complete(value ollamaResponse) error {
 	value.Message.Content = s.content.String()
 	value.Message.ToolCalls = s.calls
-	response, err := ollamaResult(value)
+	response, err := ollamaResult(value, s.sources)
 	if err != nil {
 		return err
 	}

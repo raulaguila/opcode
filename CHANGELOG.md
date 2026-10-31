@@ -2,6 +2,14 @@
 
 ## Em desenvolvimento — 2026-10-31
 
+- Visões gerais usam chamadas do ponto de entrada como pistas e ranking próprio
+  do índice para priorizar símbolos/caminhos, reduzindo resultados que só repetem
+  uma consulta no corpo do código. Leituras adicionais continuam limitadas.
+- Respostas gerais priorizam finalidade, funcionalidades e limites da inspeção,
+  com referências junto às afirmações. O Ollama evita rodapés de fontes repetidas.
+- Correções diretas reúnem versão anterior, motivo e detalhes internos em um
+  controle de revisão, preservando avisos de falha e mensagens públicas.
+
 - Criação, edição e patch verificam os conteúdos instalados e registram recibos
   dos arquivos afetados, separados dos recibos de testes. A conclusão de uma
   escrita simples não depende do limite global do workspace.

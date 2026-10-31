@@ -103,10 +103,11 @@ func assertPTYVerifiedRevision(t *testing.T, h *ptyUIHarness, p *ptyRevisionProv
 		return strings.Contains(frame, revisionCandidate) && strings.Contains(frame, "README.md:1-2") && strings.Contains(frame, "View previous version") && !strings.Contains(frame, "REVISION_ORIGINAL") && !strings.Contains(frame, "Revising references") && ptyUIIdleFooter(frame)
 	})
 	require.Equal(t, 1, strings.Count(h.frame(), "REVISION_CORRECTED"))
+	require.NotContains(t, h.frame(), "Process · 1 repair")
 	require.EqualValues(t, 2, p.generation.Load())
 	h.clickLabel("View previous version")
 	h.wait("previous answer is available on explicit request", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, revisionOriginal) && strings.Contains(frame, revisionCandidate)
+		return strings.Contains(frame, revisionOriginal) && strings.Contains(frame, revisionCandidate) && strings.Contains(frame, "Reason:")
 	})
 	require.EqualValues(t, 2, p.generation.Load())
 }

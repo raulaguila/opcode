@@ -43,7 +43,7 @@ func (*codeIndexTool) Info() ToolInfo {
 	params := scopeParameters()
 	params["query"] = map[string]any{"type": "string", "maxLength": 512}
 	params["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 12}
-	params["intent"] = map[string]any{"type": "string", "enum": []string{"implementation", "tests", "documentation"}}
+	params["intent"] = map[string]any{"type": "string", "enum": []string{"implementation", "overview", "tests", "documentation"}}
 	params["strategy"] = map[string]any{"type": "string", "enum": []string{"lexical", "hybrid"}, "description": "Hybrid requires explicitly configured local embeddings; lexical fallback remains available."}
 	params["kind"] = map[string]any{"type": "string", "description": "Structural declaration kind, or text."}
 	return ToolInfo{Name: "search_code_index", Description: "Search a private local FTS5/BM25 index with scope filters. Returns 6 short previews by default, maximum 12; refine the query when more=true. Selected languages use local syntax parsers; others use text windows. Refreshes ignore rules each call and reuses unchanged metadata for at most 60 seconds. Verifies current file hashes before returning hits. Previews are navigation, not edit-read evidence; use view/read_symbol for source. Requires rg; maximum 20000 files, 256 KiB/file, 20 MiB text and 128 MiB scanned per refresh; binary assets do not consume the text allowance.", Parameters: params, Required: []string{"query"}}
@@ -95,6 +95,9 @@ func runCodeIndexSearch(ctx context.Context, root, relativeScope string, input c
 	candidates, strategy := snapshot.candidates, snapshot.strategy
 	if snapshot.hybrid {
 		candidates, strategy = rankHybridCandidates(ctx, db, input.Query, candidates, snapshot.pool, root)
+	}
+	if input.Intent == "overview" {
+		candidates = overviewIndexCandidates(candidates, input.Query)
 	}
 	items, more, err := verifiedCodeIndexHits(ctx, root, candidates, input.Limit)
 	if err != nil {
@@ -265,7 +268,7 @@ func parseCodeIndexInput(raw string) (codeIndexInput, error) {
 	return input, nil
 }
 func validIndexIntent(intent string) bool {
-	return intent == "" || intent == "implementation" || intent == "tests" || intent == "documentation"
+	return intent == "" || intent == "implementation" || intent == "overview" || intent == "tests" || intent == "documentation"
 }
 func validIndexStrategy(strategy string) bool {
 	return strategy == "" || strategy == "lexical" || strategy == "hybrid"
@@ -294,7 +297,7 @@ func buildCodeIndexQuery(input codeIndexInput, scoped bool) (string, []any, erro
 		preference = " (path NOT LIKE '%test%' AND path NOT LIKE '%spec%'),"
 	case "documentation":
 		preference = " (path NOT LIKE '%.md' AND path NOT LIKE 'docs/%'),"
-	case "implementation":
+	case "implementation", "overview":
 		preference = " (path LIKE '%.md' OR path LIKE '%test%'),"
 	}
 	query += ` ORDER BY (lower(symbol)=? OR lower(path)=?) DESC, ` + preference + ` (kind='text'), bm25(chunks,3,8,4,1,1,0,0,0,0,0),path,start_line LIMIT 120`

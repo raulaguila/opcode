@@ -145,11 +145,37 @@ func TestOllamaFinalAnswerPublishesTextWithoutAnExecutableToolCall(t *testing.T)
 	require.Empty(t, last.Response.ToolCalls)
 }
 
+func TestOllamaDoesNotRepeatAnAnswerSentAsBothContentAndFinalTool(t *testing.T) {
+	for _, tc := range []struct{ content, final, want string }{
+		{"Resposta (source.go:1).", "Resposta (source.go:1).", "Resposta (source.go:1)."},
+		{"Resposta (source.go:1).\n", "Resposta (source.go:1).", "Resposta (source.go:1).\n"},
+		{"Resposta", "Resposta (source.go:1).", "Resposta (source.go:1)."},
+		{"Introdução (unread.go:9). ", "Conclusão (source.go:1).", "Introdução (unread.go:9). Conclusão (source.go:1)."},
+	} {
+		first, err := json.Marshal(map[string]any{"message": map[string]any{"content": tc.content}, "done": false})
+		require.NoError(t, err)
+		last, err := json.Marshal(map[string]any{"message": map[string]any{"tool_calls": []any{map[string]any{"function": map[string]any{"name": "final_answer", "arguments": map[string]any{"answer": tc.final}}}}}, "done": true, "done_reason": "stop"})
+		require.NoError(t, err)
+		c := newOllamaClient(testOptions(models.ProviderLocal), "http://local.invalid/v1")
+		c.transport.client = wireHTTP(t, 200, "application/x-ndjson", string(first)+"\n"+string(last), nil)
+		events := collectEvents(t, c.stream(context.Background(), userMessages(), nil))
+		var text strings.Builder
+		for _, event := range events {
+			if event.Type == EventContentDelta {
+				text.WriteString(event.Content)
+			}
+		}
+		require.Equal(t, tc.want, text.String())
+		require.Equal(t, tc.want, events[len(events)-1].Response.Content)
+		require.Empty(t, events[len(events)-1].Response.ToolCalls)
+	}
+}
+
 func TestOllamaFinalAnswerCarriesModelCitationsForAgentValidation(t *testing.T) {
 	c := newOllamaClient(testOptions(models.ProviderLocal), "http://local.invalid/v1")
 	response, err := c.decodeResponse(json.RawMessage(`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"A função subtrai os argumentos.","citations_text":"counter.py:2"}}}]},"done":true,"done_reason":"stop"}`))
 	require.NoError(t, err)
-	require.Equal(t, "A função subtrai os argumentos.\n\ncounter.py:2", response.Content)
+	require.Equal(t, "A função subtrai os argumentos. (counter.py:2)", response.Content)
 	require.Empty(t, response.ToolCalls, "citation rendering must not become an executable tool")
 	// The adapter does not certify these model claims: the agent's strict guard
 	// must reject this reference when it lacks an actual current read receipt.
@@ -160,6 +186,31 @@ func TestOllamaFinalAnswerCarriesModelCitationsForAgentValidation(t *testing.T) 
 	require.Error(t, err)
 	_, err = c.decodeResponse(json.RawMessage(`{"message":{"tool_calls":[{"function":{"name":"final_answer","arguments":{"answer":"Too large.","citations_text":"` + strings.Repeat("a", 2049) + `"}}}]},"done":true,"done_reason":"stop"}`))
 	require.Error(t, err)
+}
+
+func TestOllamaCitationPresentationRetainsUnverifiedSelectionsWithoutDuplicateFooters(t *testing.T) {
+	for _, tc := range []struct{ answer, citations, want string }{
+		{"Explicação (source.go:1-2).", "source.go:1-2", "Explicação (source.go:1-2)."},
+		{"Explicação `source.go:1-2`.", "source.go:1-2", "Explicação `source.go:1-2`."},
+		{"Explicação (source.go:10).", "source.go:1", "Explicação (source.go:10). (source.go:1)"},
+		{"Explicação (source.go:1).", "source.go:1\ninvented.go:999", "Explicação (source.go:1). (invented.go:999)"},
+		{"```go\nrun()\n```", "source.go:2", "```go\nrun()\n```\n\n(source.go:2)"},
+	} {
+		require.Equal(t, tc.want, appendOllamaCitations(tc.answer, tc.citations, nil))
+	}
+}
+
+func TestOllamaCoveredCitationsRequireAnInspectedRequestScopedRange(t *testing.T) {
+	inspected := []string{"source.go:1-44"}
+	require.Equal(t, "Fato (source.go:3-5).", appendOllamaCitations("Fato (source.go:3-5).", "source.go:1-44", inspected))
+	for _, tc := range []struct{ answer, source string }{
+		{"Fato (source.go:3).", "source.go:1-999"},
+		{"Fato (source.go:30-99).", "source.go:1-44"},
+		{"Fato (other-source.go:3).", "source.go:1-44"},
+		{"Fato (invented.go:3).", "invented.go:1-44"},
+	} {
+		require.Contains(t, appendOllamaCitations(tc.answer, tc.source, inspected), "("+tc.source+")", "unknown/outside selections must reach the ordinary citation guard")
+	}
 }
 
 func TestOllamaRepairSchemaUsesOnlyRequestScopedCitationChoices(t *testing.T) {

@@ -10,6 +10,7 @@ import (
 type responseRevision struct {
 	original, primary int
 	attempts          []int
+	details           []int
 }
 type responseRevisionPlan struct {
 	roots  map[int]*responseRevision
@@ -42,7 +43,34 @@ func planResponseRevisions(items []message.Message) responseRevisionPlan {
 			r.primary = i
 		}
 	}
+	p.foldRevisionDetails(items)
 	return p
+}
+
+func (p responseRevisionPlan) foldRevisionDetails(items []message.Message) {
+	for root, revision := range p.roots {
+		end := revision.attempts[len(revision.attempts)-1]
+		if !p.directRevision(items, root, end) {
+			continue
+		}
+		for i := root + 1; i < end; i++ {
+			if processEvent(items[i]) && !publicResponse(items[i]) {
+				revision.details = append(revision.details, i)
+				p.hidden[i] = root
+			}
+		}
+	}
+}
+
+func (p responseRevisionPlan) directRevision(items []message.Message, root, end int) bool {
+	for i := root + 1; i < end; i++ {
+		if publicResponse(items[i]) {
+			if owner, ok := p.hidden[i]; !ok || owner != root {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func revisionOriginal(items []message.Message, index int) int {
@@ -70,14 +98,15 @@ func (p responseRevisionPlan) latest(items []message.Message) int {
 func (r *turnRenderer) renderRevision(items []message.Message, revision *responseRevision, latest bool) {
 	r.renderFinal(items[revision.primary], revision.primary, latest)
 	root := items[revision.original]
-	label := config.Text("Ver tentativa de correção", "View correction attempt")
+	label := config.Text("Revisão · Ver tentativa de correção", "Revision · View correction attempt")
 	if revision.primary != revision.original {
-		label = config.Text("Ver versão anterior", "View previous version")
+		label = config.Text("Revisão · Ver versão anterior", "Revision · View previous version")
 	}
 	expanded := r.renderRevisionToggle(root.ID, label)
 	if !expanded {
 		return
 	}
+	r.appendText(root.ID+":revision-reason", styles.HintOn(r.theme.Background()).Render(config.Text("Motivo: as referências da resposta precisaram de verificação.", "Reason: the response references needed verification.")))
 	if revision.primary != revision.original {
 		r.renderFinal(root, revision.original, false)
 	}
@@ -85,6 +114,9 @@ func (r *turnRenderer) renderRevision(items []message.Message, revision *respons
 		if index != revision.primary {
 			r.renderFinal(items[index], index, false)
 		}
+	}
+	for _, index := range revision.details {
+		r.renderProcessMessage(items[index], index)
 	}
 }
 

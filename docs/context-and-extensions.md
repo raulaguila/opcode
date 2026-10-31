@@ -188,3 +188,36 @@ um schema específico, ainda sujeito à autorização de conexão.
 projeções ficam em `data.directory/memory-index/<hash>.sqlite`, modo 0600; são
 reconstruíveis. Originais continuam no histórico/findings existentes. A projeção
 retém no máximo 100 mil documentos de até 8 KiB e omite raciocínio/anexos.
+
+### Seleção de fontes para visões gerais
+
+Perguntas amplas usam a documentação e o ponto de entrada existentes como
+início. Em uma visão geral sem pedido sobre dependências, os manifestos usam
+somente as primeiras seis linhas para identificação de linguagem/projeto,
+evitando que uma lista de SDKs seja interpretada como funcionalidades. Pedidos
+explícitos sobre dependências preservam a leitura usual. Chamadas observadas
+nas linhas entregues do ponto de entrada fornecem
+pistas de navegação; chamadas comuns de logging/utilidades são descartadas.
+Sem uma pista útil, uma consulta genérica limitada busca serviços/aplicação.
+
+A consulta usa `intent: "overview"` no índice. Símbolos declarados e caminhos
+de implementação têm preferência sobre ocorrências incidentais no corpo,
+como uma string que contém a própria consulta. Havendo pistas em identificadores,
+as ocorrências que só correspondem ao corpo são omitidas antes de fornecer
+contexto ao modelo. Sem esse sinal, a busca lexical permanece disponível.
+São retornados no máximo quatro candidatos na preparação e lidos no máximo
+dois caminhos adicionais, sem repetir fontes já entregues no turno. Resultados
+de busca têm orçamento de até 6.000 bytes, dentro do orçamento de ferramentas
+existente; truncamento ou falta de resultados não são apresentados como inspeção
+completa. O modelo pode continuar explorando pelas ferramentas autorizadas.
+
+Essas pistas não resolvem vínculos semânticos nem provam que um componente é
+central. A explicação deve distinguir capacidades documentadas de comportamentos
+confirmados no código e declarar o escopo/limites da inspeção. Citações continuam
+exigindo leitura real, linhas entregues e hash atual; o ranking não concede
+permissões e não transforma previews em evidências de leitura.
+
+A orientação de resposta também acompanha a pergunta original durante reparos
+de citações: preservar os fatos pedidos, explicar o produto e terminar com
+escopo/limites explícitos. Isso não adiciona tentativas de reparo nem altera a
+validação; a qualidade da interpretação continua dependendo do modelo.

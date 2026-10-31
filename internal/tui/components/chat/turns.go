@@ -153,7 +153,7 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 			}
 			r.renderTimelineItem(group.messages, index, latest && index == lastPublic, answer, revisions)
 		}
-		if len(answer) == 0 && processEvent(item) && start < 0 {
+		if !hidden && len(answer) == 0 && processEvent(item) && start < 0 {
 			start = index
 		}
 	}

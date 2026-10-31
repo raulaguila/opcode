@@ -649,3 +649,37 @@ revisão/fila/alterações, perguntas individuais e em lote, planos/contratos,
 terminal e rodapé. Atalhos e instruções usam o estilo secundário; estados de
 carregamento, resultados, links de recuperação e decisões Salvar/Excluir/
 Permitir/Negar continuam diferenciados pelo seu significado.
+
+### Visão geral e revisão de referências
+
+Uma apresentação geral prioriza o que o software faz, suas funcionalidades e
+alguns componentes, usando nomes de métodos somente quando ajudam a responder
+a pergunta. O prompt pede intervalos específicos junto às afirmações e uma
+breve indicação do que foi inspecionado e não avaliado. Isso orienta o modelo;
+a validação de referências comprova proveniência/atualidade, não interpretação
+semântica ou qualidade geral.
+
+No protocolo Ollama, fontes selecionadas em respostas estruturadas são mantidas
+para validação e apresentadas junto ao texto. Duplicatas exatas já incluídas em
+parênteses ou código inline não viram um rodapé extra; referências diferentes
+continuam presentes e podem ser rejeitadas normalmente. Um intervalo amplo
+selecionado na lista de fontes já inspecionadas da requisição também é
+redundante quando o texto contém uma citação mais precisa do mesmo caminho,
+inteiramente dentro desse intervalo. Seleções desconhecidas ou fora do
+intervalo continuam expostas à validação; toda citação do texto mantém a
+verificação de origem, linhas e hash atual. Uma referência após
+um bloco de código mantém sua cerca Markdown intacta. O texto livre do modelo
+não é reescrito para esconder fontes ou fabricar citações.
+
+Uma correção direta usa um único controle **Revisão · Ver versão anterior**
+(ou **Ver tentativa de correção** quando não validada). Ao expandir, aparecem o
+motivo, as versões e os detalhes internos associados. `Alt+V` e clique
+continuam disponíveis após reabrir a sessão, com a revisão recolhida. A tentativa só vira
+principal após a mesma validação e término completo; falhas mantêm o original
+e seu aviso. Mensagens públicas intermediárias não são recolhidas nessa revisão
+e preservam a cronologia dos processos.
+
+Quando o Ollama entrega o mesmo texto no conteúdo normal e em `final_answer`,
+a resposta é publicada uma vez. Uma extensão exata acrescenta somente seu
+sufixo. Conteúdos diferentes, inclusive referências inválidas, são preservados
+para a validação normal; a interface não apaga parágrafos por semelhança.

@@ -66,12 +66,13 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	// Instrumentation is derived cache, not a source edit requiring project checks.
 	// Every source fixture is still compared byte-for-byte at the end.
 	fixtures := map[string]string{
-		"README.md":      "# IgarapeWatch\n\nAplicativo em Go para coletar métricas de sensores via MQTT, armazenar os dados em SQLite e gerar relatórios pela linha de comando.\n",
-		"go.mod":         "module example.test/igarapewatch\n\ngo 1.26\n",
-		"main.go":        "package main\n\n// IgarapeWatch collects sensor data in SQLite.\nfunc main() {}\n",
-		"service.go":     "package main\n\n// Application service receives sensor samples for IgarapeWatch reports.\nfunc collectSamples() string { return \"SQLite\" }\n",
-		"interactive.sh": "[ -t 0 ] || exit 42\nprintf started > .cache/ui-acceptance-artifacts/command-started\nprintf 'LIVE_READY ação 漢字\\n'\nIFS= read -r value\nprintf 'LIVE_INPUT:%s\\n' \"$value\"\n",
-		"lsp-stderr.sh":  "printf ran > .cache/ui-acceptance-artifacts/lsp-stderr-ran\nfor ((i=0;i<4096;i++)); do printf 'UI_LSP_SECRET_SENTINEL_%s\\n' \"$i\" >&2; done\nexit 1\n",
+		"README.md":            "# IgarapeWatch\n\nAplicativo em Go para coletar métricas de sensores via MQTT, armazenar os dados em SQLite e gerar relatórios pela linha de comando.\n",
+		"go.mod":               "module example.test/igarapewatch\n\ngo 1.26\n",
+		"main.go":              "package main\n\n// IgarapeWatch collects sensor data in SQLite.\nfunc main() {}\n",
+		"service.go":           "package main\n\n// Application service receives sensor samples for IgarapeWatch reports.\nfunc collectSamples() string { return \"SQLite\" }\n",
+		"context_bootstrap.go": "package main\nfunc bootstrap() string { return \"application service handler run execute DECOY_QUERY_LITERAL\" }\n",
+		"interactive.sh":       "[ -t 0 ] || exit 42\nprintf started > .cache/ui-acceptance-artifacts/command-started\nprintf 'LIVE_READY ação 漢字\\n'\nIFS= read -r value\nprintf 'LIVE_INPUT:%s\\n' \"$value\"\n",
+		"lsp-stderr.sh":        "printf ran > .cache/ui-acceptance-artifacts/lsp-stderr-ran\nfor ((i=0;i<4096;i++)); do printf 'UI_LSP_SECRET_SENTINEL_%s\\n' \"$i\" >&2; done\nexit 1\n",
 	}
 	for name, contents := range fixtures {
 		require.NoError(t, os.WriteFile(filepath.Join(workspace, name), []byte(contents), 0600))
@@ -253,6 +254,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	initialHistory := ptyUIMessages(conn)
 	assertPTYOverviewPreparation(t, initialHistory)
 	overview := initialHistory[len(initialHistory)-1].text()
+	assertPTYOverviewQuality(t, overview)
 	require.NoError(t, os.WriteFile("/tmp/opcode-ui-pty-overview.txt", []byte(overview), 0600))
 	t.Logf("overview SHA-256: %x", sha256.Sum256([]byte(overview)))
 	t.Log("real Ollama project overview finished with factual content and no raw LSP stderr")
@@ -331,6 +333,16 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	t.Log("real binary PTY: Unicode/paste, 3–8-row composer, resize, model/mode modal focus, Ask evidence, separately approved LSP probe, one approved bash command, live output, terminal input and queued instruction passed")
 }
 
+func assertPTYOverviewQuality(t *testing.T, overview string) {
+	t.Helper()
+	lower := strings.ToLower(overview)
+	require.NotContains(t, lower, "bootstrap", "an overview must explain the product, not the context helper")
+	require.NotContains(t, lower, "readindex")
+	require.NotRegexp(t, `(?m)^\s*[\x60]?[\p{L}\p{N}_./-]+\.(?:md|go|py|ts):[1-9][0-9]*(?:-[1-9][0-9]*)?[\x60]?\s*$`, overview, "citations belong beside claims, not in isolated footers")
+	require.Regexp(t, `(?i)(analisei|analisad|inspe[cç]|consultei|examin|leitura|arquivos lidos|basead|não (executei|avaliei|testei)|sem (executar|avaliar|testar)|inspected|reviewed|based on|not (run|tested|evaluated))`, overview, "state the actual inspection scope or a concrete evaluation limit")
+	require.NotRegexp(t, `(?i)\b(robust[oa]|production-ready)\b`, overview, "do not present an unmeasured quality judgment as a project fact")
+}
+
 func assertPTYOverviewPreparation(t *testing.T, history []ptyUIMessage) {
 	t.Helper()
 	var searched, readImplementation bool
@@ -348,6 +360,7 @@ func assertPTYOverviewPreparation(t *testing.T, history []ptyUIMessage) {
 					IsError bool `json:"is_error"`
 				}
 				require.NoError(t, json.Unmarshal(part.Data, &result))
+				require.NotContains(t, result.Content, "DECOY_QUERY_LITERAL", "overview preparation must filter incidental query literals before exposing context")
 				readImplementation = readImplementation || (result.Name == "view" && !result.IsError && strings.Contains(result.Content, "service.go") && strings.Contains(result.Content, "collectSamples"))
 			}
 		}

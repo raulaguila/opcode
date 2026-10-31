@@ -49,7 +49,7 @@ func TestCompatibleProviderTLSOptInCoversCompletionAndStreaming(t *testing.T) {
 }
 
 func TestOllamaCarriesReportedGenerationDuration(t *testing.T) {
-	response, err := ollamaResult(ollamaResponse{Done: true, DoneReason: "stop", EvalCount: 50, EvalDuration: 2_000_000_000})
+	response, err := ollamaResult(ollamaResponse{Done: true, DoneReason: "stop", EvalCount: 50, EvalDuration: 2_000_000_000}, nil)
 	require.NoError(t, err)
 	require.EqualValues(t, 2_000_000_000, response.Usage.OutputDurationNS)
 	require.Equal(t, "provider", response.Usage.DurationSource)

@@ -38,13 +38,16 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 	if err != nil || index == nil || !tools.ProjectOverview(question) {
 		return history, err
 	}
-	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view}
-	_, err = b.readIndex("application service handler run execute", index)
+	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, overview: true}
+	_, err = b.readIndex(overviewQuery(history), index)
 	return b.history, err
 }
 
 func (a *agent) bootstrapCall(ctx context.Context, session string, tool tools.BaseTool, input string, history []message.Message, run *generationRun) ([]message.Message, tools.ToolResponse, error) {
 	remaining := min(2400, max(0, run.limits.ToolBudget-run.toolBytes))
+	if tool.Info().Name == "search_code_index" {
+		remaining = min(6000, max(0, run.limits.ToolBudget-run.toolBytes))
+	}
 	if remaining == 0 {
 		return history, tools.NewTextErrorResponse("Context preparation budget exhausted; inspect sources progressively."), nil
 	}
@@ -163,13 +166,14 @@ type projectEvidenceHit struct {
 	Hash   string `json:"file_hash"`
 }
 type evidenceBootstrap struct {
-	agent   *agent
-	ctx     context.Context
-	session string
-	run     *generationRun
-	history []message.Message
-	view    tools.BaseTool
-	read    bool
+	agent    *agent
+	ctx      context.Context
+	session  string
+	run      *generationRun
+	history  []message.Message
+	view     tools.BaseTool
+	read     bool
+	overview bool
 }
 
 func (b *evidenceBootstrap) topicQuery(query string, inventory tools.BaseTool) (string, error) {
@@ -185,7 +189,13 @@ func (b *evidenceBootstrap) topicQuery(query string, inventory tools.BaseTool) (
 	return query, err
 }
 func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool) (bool, error) {
-	input, _ := json.Marshal(map[string]any{"query": query, "limit": 2, "intent": "implementation", "strategy": "lexical"})
+	limit := 2
+	intent := "implementation"
+	if b.overview {
+		limit = 4
+		intent = "overview"
+	}
+	input, _ := json.Marshal(map[string]any{"query": query, "limit": limit, "intent": intent, "strategy": "lexical"})
 	history, response, err := b.agent.bootstrapCall(b.ctx, b.session, index, string(input), b.history, b.run)
 	b.history = history
 	if err != nil {
@@ -197,17 +207,27 @@ func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool) (bool,
 	if response.IsError || json.Unmarshal([]byte(response.Content), &result) != nil {
 		return false, nil
 	}
+	return b.readIndexHits(query, result.Results[:min(limit, len(result.Results))])
+}
+
+func (b *evidenceBootstrap) readIndexHits(query string, hits []projectEvidenceHit) (bool, error) {
 	seen := map[string]bool{}
-	for _, hit := range result.Results[:min(2, len(result.Results))] {
-		if !filepath.IsLocal(hit.Path) || hit.Start < 1 || seen[hit.Path] {
+	if b.overview {
+		seen = overviewReadPaths(b.run, b.history)
+	}
+	attempts := 0
+	for _, hit := range hits {
+		key := normalizedToolPath(hit.Path)
+		if !filepath.IsLocal(hit.Path) || hit.Start < 1 || seen[key] {
 			continue
 		}
-		seen[hit.Path] = true
+		seen[key] = true
+		attempts++
 		complete, err := b.readHit(query, hit)
 		if err != nil {
 			return false, err
 		}
-		if complete {
+		if complete && !b.overview || attempts == 2 {
 			break
 		}
 	}
@@ -240,7 +260,11 @@ func (a *agent) bootstrapBasic(ctx context.Context, session, question string, hi
 		if run.toolBytes >= run.limits.ToolBudget {
 			break
 		}
-		input, _ := json.Marshal(tools.ViewParams{FilePath: path, Limit: 80})
+		limit := 80
+		if tools.ProjectOverview(question) {
+			limit = overviewSourceLimit(path, question)
+		}
+		input, _ := json.Marshal(tools.ViewParams{FilePath: path, Limit: limit})
 		next, response, err := a.bootstrapCall(ctx, session, view, string(input), history, run)
 		history = next
 		if err != nil {

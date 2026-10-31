@@ -202,3 +202,10 @@ preview_id sem escrever ou aprovar. Reenviar preview_id ao aplicar rejeita mudan
 na fonte ou no patch. A aplicação continua pedindo as aprovações normais e usa a
 transação existente; o recibo inclui hashes e receipt_id. O identificador não é
 um token de autorização nem garantia contra queda da máquina durante multiwrite.
+
+O índice também aceita `intent: "overview"` para orientação inicial: prioriza
+nomes de símbolos/caminhos e reduz ocorrências que apenas repetem a consulta
+em strings ou comentários quando existem pistas nos identificadores. O modo
+`implementation` e seus critérios permanecem disponíveis. Ambos preservam
+exclusões, filtros de escopo e verificação dos hashes atuais; os resultados
+continuam sendo navegação e requerem `view`/`read_symbol` para citar código.

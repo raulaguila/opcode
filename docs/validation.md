@@ -1293,3 +1293,41 @@ as mesmas 14 fixtures contra `a9bfb16`. A superfície do código aumenta o custo
 da fixture de Markdown; as variações estão em [Desempenho](performance.md).
 Resultados e condições na
 [evidência desta rodada](evidence/2026-10-30-response-polish-validation.json).
+
+## Alocações e restauração de fundos no Markdown — 30/10/2026
+
+A regressão reproduziu o fundo padrão do terminal após resets de negrito e
+código inline. Agora o fundo da prosa é restaurado após a quebra das linhas,
+inclusive no preenchimento à direita, e o código mantém a superfície secundária.
+Os testes inspecionam cores reais das células; o cenário PTY inclui uma lista
+com código inline seguida por texto, além do bloco de código e da cópia exata.
+
+O scanner preserva cores de texto e sublinhado RGB/indexadas como grupos
+atômicos. Um oráculo congelado compara a compatibilidade fora dessas correções.
+O parser compartilha somente tabelas imutáveis, com 16 requisições concorrentes
+comparadas ao renderizador novo por chamada, mantendo referências e ASTs isolados.
+A formatação interna RGB evita empates não determinísticos da quantização
+antecipada para 256 cores; a saída continua adaptando a capacidade do terminal.
+
+O preenchimento rápido do código é comparado ao nativo em **288 casos**, com
+células, atributos e geometria exatos. Tabs, controles, UTF-8 inválido e linhas
+longas mantêm o caminho nativo. A moldura rápida de mensagens com um único
+fragmento conserva a quebra ANSI nativa e tem equivalência célula a célula,
+inclusive espaços e estado após a mensagem, em papéis, temas e perfis variados.
+Fragmentos de metadados e dimensões especiais preservam o caminho original.
+
+Passaram os 14 checks: suítes normal e de integração com `-race -p 1`,
+vet/staticcheck dos dois conjuntos, complexidade máxima 15, módulos, inventário
+de linguagens, workflows, vulnerabilidades e builds Linux amd64, Windows amd64
+e Darwin arm64. Os onze cenários PTY passaram sem skips com o binário final,
+incluindo o Nemotron local `nemotron-3.5-bolt:e4b`: busca/leitura e citações,
+pergunta/resposta, aprovação única, saída ao vivo, entrada Unicode e nova
+instrução durante o comando. Configurações do usuário não foram alteradas;
+Windows/macOS foram compilados, sem execução nativa nesta rodada.
+
+Os fontes de produção das permissões e da validação das citações estão
+byte a byte iguais à base `c60aeb8`. Os **32 benchmarks** passaram no gate
+original de 10% para bytes/alocações, com 14 fixtures idênticas, três amostras
+e 100 operações por caso. Ganhos e variações locais de tempo estão em
+[Desempenho](performance.md). Logs, condições e hashes constam na
+[evidência desta rodada](evidence/2026-10-30-markdown-cost-validation.json).

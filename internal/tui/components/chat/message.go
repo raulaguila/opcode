@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -82,6 +83,11 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 	if len(info) > 0 {
 		parts = append(parts, info...)
 	}
+	if len(parts) == 1 {
+		if framed, ok := renderLaidOutMessage(parts[0], width, pipe); ok {
+			return framed
+		}
+	}
 
 	rendered := style.Render(
 		lipgloss.JoinVertical(
@@ -91,6 +97,44 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 	)
 
 	return rendered
+}
+
+// The single Markdown fragment already owns its layout. Keep native ANSI/link
+// wrapping, but reuse fixed frame tags instead of rebuilding them for every row.
+func renderLaidOutMessage(content string, width int, pipe color.Color) (string, bool) {
+	if width < 2 || strings.IndexFunc(content, func(r rune) bool { return unicode.IsControl(r) && r != '\n' && r != '\x1b' }) >= 0 {
+		return "", false
+	}
+	palette := theme.CurrentTheme()
+	inner := width - 1
+	content = lipgloss.Wrap(content, inner, "")
+	border := ansi.Style{}.ForegroundColor(pipe).Styled("│")
+	text := ansi.Style{}.ForegroundColor(palette.TextMuted()).BackgroundColor(palette.Background()).String()
+	pad := ansi.Style{}.BackgroundColor(palette.Background()).String()
+	spaces := strings.Repeat(" ", inner)
+	var out strings.Builder
+	out.Grow(len(content) + (strings.Count(content, "\n")+1)*(len(border)+len(text)+len(pad)+inner+8))
+	first := true
+	for line := range strings.SplitSeq(content, "\n") {
+		remaining := inner - ansi.StringWidth(line)
+		if remaining < 0 {
+			return "", false
+		}
+		if !first {
+			out.WriteByte('\n')
+		}
+		first = false
+		out.WriteString(border)
+		out.WriteString(text)
+		out.WriteString(line)
+		out.WriteString(ansi.ResetStyle)
+		if remaining > 0 {
+			out.WriteString(pad)
+			out.WriteString(spaces[:remaining])
+			out.WriteString(ansi.ResetStyle)
+		}
+	}
+	return out.String(), true
 }
 
 func renderUserMessage(msg message.Message, isFocused bool, width int, position int) uiMessage {

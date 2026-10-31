@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const codeDetailsAnswer = "O projeto coleta sensores em SQLite (README.md:1-2).\n\n```bash\nprintf 'ação 漢字\\n'\n```\n\nFim da explicação."
+const codeDetailsAnswer = "O projeto coleta sensores em SQLite (README.md:1-2).\n\n**Ferramentas:**\n\n- `view`: leitura dos arquivos.\n\n```bash\nprintf 'ação 漢字\\n'\n```\n\nFim da explicação."
 const codeDetailsThinking = "CODE_DETAILS_INTERNAL_TRACE"
 
 func TestPTYCodeBlocksAndReasoningDetails(t *testing.T) {
@@ -106,7 +106,7 @@ func assertPTYCodeDetails(t *testing.T, h *ptyUIHarness) {
 	require.NotContains(t, frame, "Citations not validated")
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	var codeBG, proseBG uint32
+	var codeBG, proseBG, inlineSuffixBG uint32
 	for y, line := range strings.Split(frame, "\n") {
 		if x := strings.Index(line, "printf"); x >= 0 {
 			codeBG = uint32(h.screen.Cell(ansi.StringWidth(line[:x]), y).BG)
@@ -114,6 +114,10 @@ func assertPTYCodeDetails(t *testing.T, h *ptyUIHarness) {
 		if x := strings.Index(line, "Fim da explicação."); x >= 0 {
 			proseBG = uint32(h.screen.Cell(ansi.StringWidth(line[:x]), y).BG)
 		}
+		if x := strings.Index(line, ": leitura dos arquivos."); x >= 0 {
+			inlineSuffixBG = uint32(h.screen.Cell(ansi.StringWidth(line[:x]), y).BG)
+		}
 	}
 	require.NotEqual(t, proseBG, codeBG, "code needs a distinct surface from surrounding prose")
+	require.Equal(t, proseBG, inlineSuffixBG, "inline resets must not expose the terminal's default background")
 }

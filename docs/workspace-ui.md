@@ -605,6 +605,22 @@ quando ausente. A estrutura permanece distinguível sem cores. Cabeçalho,
 moldura e espaçamento são apresentação; a ação **Copiar resposta** conserva o
 Markdown original, sem acrescentar a decoração ao conteúdo armazenado.
 
+Resets de cor dentro de negrito, links e código inline restauram o fundo da
+prosa, inclusive no preenchimento ao final da linha. Assim o fundo padrão do
+terminal não aparece em faixas após um trecho formatado. Blocos de código
+continuam com seu fundo próprio. A renderização interna conserva cores RGB;
+a adaptação para a capacidade do terminal e `NO_COLOR` acontece na saída.
+
+Nas linhas de código que já cabem na largura interna, o preenchimento é feito
+em lote. A aparência, inclusive os atributos dos espaços, é comparada com o
+renderizador nativo. Linhas longas, tabs, controles e UTF-8 inválido continuam
+usando o caminho nativo de quebra e preenchimento.
+
+Mensagens com um único fragmento já diagramado reutilizam as tags da moldura
+durante o desenho, mantendo a quebra ANSI nativa. Fragmentos de informações,
+controles, tabs e dimensões fora do caminho seguro preservam o renderizador
+nativo. A equivalência inclui células vazias e o estado final dos atributos.
+
 O rodapé usa a fase da requisição atual: Aguardando modelo, Gerando resposta,
 Validando referências e Concluído. Saída real já define geração, mesmo antes
 de haver amostras suficientes para estimar tok/s. Uma próxima chamada pode

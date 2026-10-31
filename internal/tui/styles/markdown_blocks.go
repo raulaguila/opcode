@@ -6,6 +6,7 @@ import (
 
 	"charm.land/glamour/v2/ansi"
 	terminalansi "github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -16,6 +17,9 @@ import (
 	"github.com/yuin/goldmark/util"
 )
 
+// Goldmark initializes immutable parser tables once; contexts and ASTs are per parse.
+var sharedMarkdownParser = goldmark.New(goldmark.WithExtensions(extension.GFM, extension.DefinitionList), goldmark.WithParserOptions(parser.WithAutoHeadingID())).Parser()
+
 // Parse once so reference links, citations and list numbering survive rendering
 // at different widths. Containers with code/tables retain their full structure.
 // This changes presentation only; stored and copied source remains untouched.
@@ -25,8 +29,7 @@ func RenderMarkdownBlocks(content string, width, proseWidth int) string {
 
 func renderMarkdownBlocks(content string, width, proseWidth int, cache *MarkdownCache, streaming bool) string {
 	source := []byte(content)
-	md := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.DefinitionList), goldmark.WithParserOptions(parser.WithAutoHeadingID()))
-	doc := md.Parser().Parse(text.NewReader(source))
+	doc := sharedMarkdownParser.Parse(text.NewReader(source))
 	blocks := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, cache: cache, streaming: streaming, renderers: map[markdownRendererKey]renderer.Renderer{}}
 	var output []string
 	for node := doc.FirstChild(); node != nil; {
@@ -87,11 +90,8 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 		return b.renderList(list)
 	}
 	measure := markdownBlockWidth(node, b.width, b.prose)
-	renderWidth := markdownProseRenderWidth(node, measure)
 	code := markdownCodeBlock(node)
-	if code {
-		renderWidth = markdownCodeWidth(measure)
-	}
+	renderWidth := markdownNodeRenderWidth(node, b.source, measure)
 	key := markdownRendererKey{renderWidth, code}
 	r, ok := b.renderers[key]
 	if !ok {
@@ -100,7 +100,7 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 			b.styled = true
 		}
 		style := markdownBlockStyle(b.style, code)
-		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: renderWidth, Styles: style}), 1000)))
+		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: renderWidth, Styles: style, ChromaFormatter: "terminal16m"}), 1000)))
 		b.renderers[key] = r
 	}
 	block := ast.NewDocument()
@@ -111,12 +111,30 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 	}
 	view := trimMarkdownBlockPadding(out.String())
 	if code {
+		if renderWidth == 0 {
+			view = padMarkdownCode(view, markdownCodeWidth(measure))
+		}
 		view = preserveMarkdownCodePadding(view, node, b.source)
 		view = renderMarkdownCodeSurface(view, node, b.source, measure)
-	} else if renderWidth == 0 {
-		view = wrapMarkdownProse(view, measure)
+	} else {
+		if renderWidth == 0 {
+			view = wrapMarkdownProse(view, measure)
+		}
+		// Restore the surface after wrapping to avoid reflowing expanded SGR codes.
+		view = restoreBackground(view, theme.CurrentTheme().Background())
 	}
 	return view, nil
+}
+
+func markdownNodeRenderWidth(node ast.Node, source []byte, measure int) int {
+	if markdownCodeBlock(node) {
+		width := markdownCodeWidth(measure)
+		if markdownCodeFitsWithoutWrap(node, source, width) {
+			return 0
+		}
+		return width
+	}
+	return markdownProseRenderWidth(node, measure)
 }
 
 func markdownProseRenderWidth(node ast.Node, width int) int {

@@ -2,6 +2,10 @@
 
 ## Em desenvolvimento — 2026-10-30
 
+- Corrigido o vazamento do fundo padrão do terminal após negrito/código inline;
+  prosa e blocos de código preservam seus fundos distintos.
+- Conversão de cores usa um único buffer e preserva grupos RGB completos;
+  parser Markdown compartilha tabelas imutáveis, mantendo árvores por chamada.
 - Raciocínio da resposta fica em Detalhes antes da mensagem correspondente,
   sem criar um processo final duplicado. Blocos de código têm superfície própria.
 - Perguntas amplas recebem uma busca limitada na implementação além dos arquivos

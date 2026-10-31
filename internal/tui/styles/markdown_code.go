@@ -3,6 +3,7 @@ package styles
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	markdownansi "charm.land/glamour/v2/ansi"
 	"charm.land/lipgloss/v2"
@@ -28,6 +29,33 @@ func markdownCodeWidth(width int) int {
 	return max(1, width-defaultMargin-frame.GetHorizontalFrameSize())
 }
 
+// Keep native wrapping for controls and long lines; only its padding is redundant.
+func markdownCodeFitsWithoutWrap(node ast.Node, source []byte, width int) bool {
+	for i := range node.Lines().Len() {
+		segment := node.Lines().At(i)
+		line := strings.TrimSuffix(string(segment.Value(source)), "\n")
+		if !utf8.ValidString(line) || strings.IndexFunc(line, unicode.IsControl) >= 0 || ansi.StringWidth(line) > width {
+			return false
+		}
+	}
+	return true
+}
+
+func padMarkdownCode(view string, width int) string {
+	padding := lipgloss.NewStyle().Foreground(theme.CurrentTheme().MarkdownText())
+	var out strings.Builder
+	for line := range strings.SplitSeq(view, "\n") {
+		if out.Len() > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(line)
+		if missing := width - ansi.StringWidth(line); missing > 0 {
+			out.WriteString(padding.Render(strings.Repeat(" ", missing)))
+		}
+	}
+	return out.String()
+}
+
 func markdownBlockStyle(style markdownansi.StyleConfig, code bool) markdownansi.StyleConfig {
 	if code {
 		style.Document.Margin = uintPtr(0)
@@ -43,7 +71,7 @@ func renderMarkdownCodeSurface(view string, node ast.Node, source []byte, width 
 	label := markdownCodeLanguage(node, source)
 	header := BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.TextMuted()).
 		Render(ansi.Truncate(label, max(1, width-defaultMargin-frame.GetHorizontalFrameSize()), "…"))
-	body := ForceReplaceBackgroundWithLipgloss(view, t.BackgroundSecondary())
+	body := restoreBackground(view, t.BackgroundSecondary())
 	surface := frame.Render(header + "\n" + body)
 	margin := strings.Repeat(" ", defaultMargin)
 	return margin + strings.ReplaceAll(surface, "\n", "\n"+margin)

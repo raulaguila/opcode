@@ -169,3 +169,37 @@ A exploração de uma pergunta ampla pode executar uma busca e até duas leitura
 extras da implementação; seus limites e reutilização ficam descritos em
 [Contexto](context-and-extensions.md#prompts-e-capacidades). Amostras e condições
 na [evidência desta rodada](evidence/2026-10-30-response-polish-validation.json).
+
+## Custo do Markdown e fundos das mensagens — 30/10/2026
+
+Comparação com `c60aeb8`, Go 1.27.3, `GOMAXPROCS=2`, tema Opcode escuro e
+TrueColor nos dois lados. As 14 fixtures permaneceram idênticas byte a byte:
+seis pacotes, 100 operações por caso e três amostras por revisão, sem inferência
+ou testes concorrentes. A tabela usa as medianas da matriz final.
+
+| Operação | Tempo | Bytes alocados | Quantidade de alocações |
+| --- | --- | --- | --- |
+| Markdown com múltiplos blocos | −10,96% | −5,83% | −9,21% |
+| Chat com blocos crescentes | −16,32% | −11,78% | −16,56% |
+| Chat durante streaming | −5,76% | −22,93% | −23,08% |
+| Chat, último item invalidado | −6,31% | −23,00% | −23,28% |
+| Carga SQLite com 1.000 mensagens | −13,34% | −28,29% | −27,86% |
+
+O Markdown passou de 16.511 para 14.990 alocações/op, mantendo cabeçalho,
+superfície e margem dos blocos de código. As tabelas imutáveis do parser são
+compartilhadas; contexto, referências e AST continuam separados por chamada.
+O scanner de cores usa um buffer, preserva grupos RGB e restaura o fundo após
+resets de prosa. Código curto e mensagens já diagramadas evitam trabalho de
+preenchimento repetido, com comparação exata das células e fallback nativo para
+entradas fora desses casos. Não foi adicionado cache de fontes ou ASTs.
+
+O chat aquecido mantém zero bytes/zero alocações. Os **32 casos** passaram no
+gate original de 10% para bytes e alocações, sem mudar fixtures ou critérios.
+Há variações de tempo superiores a 10% em projeção da conversa (+26,50%),
+reconciliação periódica do índice (+10,93%) e atualização de política (+11,60%);
+esses caminhos não foram modificados e suas contagens de alocações não mudaram.
+As amostras locais não demonstram a causa dessas variações nem garantem ganhos
+em todas as cargas. O tempo é informado, sem mudar o limiar do gate.
+
+Amostras brutas, condições e hashes estão na
+[evidência desta rodada](evidence/2026-10-30-markdown-cost-validation.json).

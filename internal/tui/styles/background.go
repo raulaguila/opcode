@@ -3,11 +3,8 @@ package styles
 import (
 	"fmt"
 	"image/color"
-	"regexp"
 	"strings"
 )
-
-var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
 func getColorRGB(c color.Color) (uint8, uint8, uint8) {
 	r, g, b, a := c.RGBA()
@@ -26,38 +23,133 @@ func getColorRGB(c color.Color) (uint8, uint8, uint8) {
 // ForceReplaceBackgroundWithLipgloss replaces any ANSI background color codes
 // in `input` with a single 24‑bit background (48;2;R;G;B).
 func ForceReplaceBackgroundWithLipgloss(input string, newBgColor color.Color) string {
-	// Precompute our new-bg sequence once
+	count := 0
+	for offset := 0; ; {
+		_, end := nextBackgroundSGR(input, offset)
+		if end < 0 {
+			break
+		}
+		count++
+		offset = end
+	}
+	if count == 0 {
+		return input
+	}
 	r, g, b := getColorRGB(newBgColor)
 	newBg := fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
-
-	return ansiEscape.ReplaceAllStringFunc(input, func(seq string) string {
-		const (
-			escPrefixLen = 2 // "\x1b["
-			escSuffixLen = 1 // "m"
-		)
-
-		raw := seq
-		start := escPrefixLen
-		end := len(raw) - escSuffixLen
-
-		var sb strings.Builder
-		// reserve enough space: original content minus bg codes + our newBg
-		sb.Grow((end - start) + len(newBg) + 2)
-
-		// scan from start..end, token by token
-		rewriteBackgroundParameters(raw, start, end, &sb)
-
-		// append our new background
-		if sb.Len() > 0 {
-			sb.WriteByte(';')
+	var out strings.Builder
+	// One buffer replaces per-SGR callback strings; the bound includes ESC[m's 0.
+	out.Grow(len(input) + count*(len(newBg)+2))
+	offset := 0
+	for {
+		start, end := nextBackgroundSGR(input, offset)
+		if start < 0 {
+			break
 		}
-		sb.WriteString(newBg)
+		out.WriteString(input[offset:start])
+		writeBackgroundSGR(&out, input, start, end, newBg)
+		offset = end
+	}
+	out.WriteString(input[offset:])
+	return out.String()
+}
 
-		return "\x1b[" + sb.String() + "m"
-	})
+// Restore only changes that can disturb the surrounding surface background.
+func restoreBackground(input string, bg color.Color) string {
+	if input == "" {
+		return ""
+	}
+	count := 0
+	for offset := 0; ; {
+		start, end := nextBackgroundSGR(input, offset)
+		if end < 0 {
+			break
+		}
+		if backgroundSGRAffects(input, start+2, end-1) {
+			count++
+		}
+		offset = end
+	}
+	r, g, b := getColorRGB(bg)
+	newBg := fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
+	var out strings.Builder
+	out.Grow(len(input) + len(newBg) + 3 + count*(len(newBg)+2))
+	out.WriteString("\x1b[")
+	out.WriteString(newBg)
+	out.WriteByte('m')
+	offset := 0
+	for {
+		start, end := nextBackgroundSGR(input, offset)
+		if start < 0 {
+			break
+		}
+		out.WriteString(input[offset:start])
+		if backgroundSGRAffects(input, start+2, end-1) {
+			writeBackgroundSGR(&out, input, start, end, newBg)
+		} else {
+			out.WriteString(input[start:end])
+		}
+		offset = end
+	}
+	out.WriteString(input[offset:])
+	return out.String()
+}
+
+func writeBackgroundSGR(out *strings.Builder, input string, start, end int, bg string) {
+	out.WriteString("\x1b[")
+	parameters := out.Len()
+	rewriteBackgroundParameters(input, start+2, end-1, out)
+	if out.Len() > parameters {
+		out.WriteByte(';')
+	}
+	out.WriteString(bg)
+	out.WriteByte('m')
+}
+
+func backgroundSGRAffects(raw string, start, end int) bool {
+	if start == end || raw[end-1] == ';' {
+		return true
+	}
+	for i := start; i < end; {
+		parameterEnd := i
+		advanceANSIParameter(raw, end, &parameterEnd)
+		next, keep := backgroundSGRParameter(raw, i, parameterEnd, end)
+		if !keep {
+			return true
+		}
+		code, _, _ := strings.Cut(raw[i:parameterEnd], ":")
+		isNum, value := true, 0
+		parseANSIParameter(raw, i, i+len(code), &isNum, &value)
+		if isNum && value == 0 {
+			return true
+		}
+		i = next + 1
+	}
+	return false
+}
+
+// Recognize numeric SGR parameters, including colon color subparameters.
+func nextBackgroundSGR(input string, offset int) (int, int) {
+	for offset < len(input) {
+		i := strings.Index(input[offset:], "\x1b[")
+		if i < 0 {
+			break
+		}
+		start := offset + i
+		end := start + 2
+		for end < len(input) && (input[end] == ';' || input[end] == ':' || input[end] >= '0' && input[end] <= '9') {
+			end++
+		}
+		if end < len(input) && input[end] == 'm' {
+			return start, end + 1
+		}
+		offset = start + 2
+	}
+	return -1, -1
 }
 
 func rewriteBackgroundParameters(raw string, start int, end int, sb *strings.Builder) {
+	base := sb.Len()
 	// An empty SGR parameter means reset, including the compact ESC[m form.
 	if start == end {
 		sb.WriteByte('0')
@@ -66,36 +158,13 @@ func rewriteBackgroundParameters(raw string, start int, end int, sb *strings.Bui
 		// find the next ';' or end
 		j := i
 		advanceANSIParameter(raw, end, &j)
-		token := raw[i:j]
-
-		if next, ok := skipExtendedBackground(raw, token, j, end); ok {
-			i = next
-			continue
-		}
-
-		// decide whether to keep this token
-		// manually parse ASCII digits to int
-		isNum := true
-		val := 0
-		parseANSIParameter(raw, i, j, &isNum, &val)
-		keep := !isNum ||
-			((val < 40 || val > 47) && (val < 100 || val > 107) && val != 49)
-
-		appendANSIParameter(sb, token, keep)
+		parameterEnd, keep := backgroundSGRParameter(raw, i, j, end)
+		appendANSIParameter(sb, raw[i:parameterEnd], keep, base)
 		// advance past this token (and the semicolon)
-		i = j + 1
+		i = parameterEnd + 1
 	}
 	if end > start && raw[end-1] == ';' {
-		appendANSIParameter(sb, "0", true)
-	}
-}
-
-func skipANSIRGBChannels(raw string, end int, m *int) {
-	for count := 0; count < 3 && (*m) < end; count++ {
-		for (*m) < end && raw[(*m)] != ';' {
-			(*m)++
-		}
-		(*m)++
+		appendANSIParameter(sb, "0", true, base)
 	}
 }
 
@@ -116,45 +185,56 @@ func advanceANSIParameter(raw string, end int, j *int) {
 	}
 }
 
-func advanceANSIToken(raw string, end int, l *int) {
-	for (*l) < end && raw[(*l)] != ';' {
-		(*l)++
-	}
-}
-
-func advanceANSIColorIndex(raw string, end int, m *int) {
-	for (*m) < end && raw[(*m)] != ';' {
-		(*m)++
-	}
-}
-
-func appendANSIParameter(sb *strings.Builder, token string, keep bool) {
+func appendANSIParameter(sb *strings.Builder, token string, keep bool, base int) {
 	if keep {
 		if token == "" {
 			token = "0"
 		}
-		if sb.Len() > 0 {
+		if sb.Len() > base {
 			sb.WriteByte(';')
 		}
 		sb.WriteString(token)
 	}
 }
 
-func skipExtendedBackground(raw, token string, j, end int) (int, bool) {
-	if token != "48" || j+1 >= end {
-		return 0, false
+func backgroundSGRParameter(raw string, start, parameterEnd, end int) (int, bool) {
+	code, _, colon := strings.Cut(raw[start:parameterEnd], ":")
+	if !colon && (code == "38" || code == "48" || code == "58") {
+		if next, ok := extendedSGRColorEnd(raw, parameterEnd, end); ok {
+			return next, code != "48"
+		}
 	}
-	k, l := j+1, j+1
-	advanceANSIToken(raw, end, &l)
-	switch raw[k:l] {
-	case "5":
-		m := l + 1
-		advanceANSIColorIndex(raw, end, &m)
-		return m + 1, true
+	if colon && code == "48" {
+		return parameterEnd, false
+	}
+	isNum, value := true, 0
+	parseANSIParameter(raw, start, start+len(code), &isNum, &value)
+	keep := !isNum || ((value < 40 || value > 47) && (value < 100 || value > 107) && value != 49)
+	return parameterEnd, keep
+}
+
+// A color's channel/index values are not independent background SGR parameters.
+func extendedSGRColorEnd(raw string, separator, end int) (int, bool) {
+	if separator+1 >= end {
+		return separator, false
+	}
+	modeEnd := separator + 1
+	advanceANSIParameter(raw, end, &modeEnd)
+	channels := 0
+	switch raw[separator+1 : modeEnd] {
 	case "2":
-		m := l + 1
-		skipANSIRGBChannels(raw, end, &m)
-		return m, true
+		channels = 3
+	case "5":
+		channels = 1
+	default:
+		return separator, false
 	}
-	return 0, false
+	for range channels {
+		if modeEnd >= end {
+			break
+		}
+		modeEnd++
+		advanceANSIParameter(raw, end, &modeEnd)
+	}
+	return modeEnd, true
 }

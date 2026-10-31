@@ -16,6 +16,7 @@ func GetMarkdownRenderer(width int) *markdownRenderer {
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(generateMarkdownStyleConfig()),
 		glamour.WithWordWrap(width),
+		glamour.WithChromaFormatter("terminal16m"),
 	)
 	return &markdownRenderer{renderer: r}
 }

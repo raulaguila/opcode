@@ -1,0 +1,1031 @@
+{
+  "date": "2026-10-30",
+  "baseline": "c60aeb8829319575332de5b309792440db997ed6",
+  "scope": "Markdown allocation reduction, isolated parser contexts, correct SGR foreground groups and prose background restoration",
+  "go": "1.27.3",
+  "source_sha256": {
+    "internal/tui/components/chat/code_surface_test.go": "63119f7d8ed9bc3f110b9f7407c6e90d55e84e0cc9c226e8268cd5ed832ad369",
+    "internal/tui/components/chat/message.go": "22d7f204dae8a9b76c5d8035d2ce49d0b2c46413db04f6fd80acba1af1dba7dc",
+    "internal/tui/pty_code_details_test.go": "b2965c048a65f83168aa31bb3da6b0bb863a8b3aaa5aeed329bcf1049fe3f63a",
+    "internal/tui/styles/background.go": "f6c48338258d24ef4c7c480e8e94dfd613453321d0183756022dc60d7dd12661",
+    "internal/tui/styles/markdown.go": "48fac7f41cfb2ecfa9fa256cb626a87e75532eab7704a56f6d294f2d1ea66d07",
+    "internal/tui/styles/markdown_blocks.go": "df7742a7719c7ffdfe7c1a8bac88327093d47f03242f7d568eb78e9f508f2ef7",
+    "internal/tui/styles/markdown_code.go": "246bdfb9392a89003b0ee0b0903d22dab396aaa2072f6f08bc74d815c3dc736b",
+    "internal/tui/styles/markdown_reuse_test.go": "2b629551652e4a15fdfa52b1d2d626124aacd34d6752c8a4f2c4cb9026e13dc4",
+    "internal/tui/components/chat/message_frame_test.go": "3ad2007a11a29c454c16bbd3fbf349820393fecd5719f4a6bf58786148999e6c",
+    "internal/tui/styles/background_compat_test.go": "82a2335086b29840316d72dc2cd602d3c6f75cb075ac76587accd86174790f36",
+    "internal/tui/styles/background_restore_test.go": "bc1f5915c88126968b92e58ca5e4ab7ced26c5eba4ca1bcc960836032d70917b",
+    "internal/tui/styles/markdown_code_padding_test.go": "76fcda56a27d40e43f0c1018679f651fcfac0d188d200da02a33e048ab3d901d",
+    "internal/tui/styles/markdown_concurrent_test.go": "8867b1505a056b1b695804c58582ef7a073a8f9c7d6c0fe488ea22c7afa9005b"
+  },
+  "binary_sha256": "9e2c1e9899ec43a6ca817b3839d8f15c0405a45594d4c1ca5fff8bee529b5971",
+  "protected_source_unchanged": [
+    {
+      "path": "internal/permission/status.go",
+      "sha256": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944"
+    },
+    {
+      "path": "internal/permission/permission.go",
+      "sha256": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14"
+    },
+    {
+      "path": "internal/llm/agent/citations.go",
+      "sha256": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c"
+    },
+    {
+      "path": "internal/llm/agent/citation_revision.go",
+      "sha256": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c"
+    },
+    {
+      "path": "internal/llm/agent/citations_messages.go",
+      "sha256": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7"
+    }
+  ],
+  "message_frame": "Single laid-out fragment reuses fixed frame tags while retaining native Wrap; exact-cell and post-render-state parity across roles/themes/profiles, complex inputs retain native fallback",
+  "code_padding": "Fast padding checked against native renderer in 288 exact cell/style/geometry cases; long/tab/control/invalid-UTF8 inputs keep native behavior",
+  "regressions": {
+    "background": "Reproduced DefaultBG after an inline code reset; test now requires actual theme background on text and line padding across dark/light palettes",
+    "colors": "Foreground and underline RGB/index parameters are atomic even when components equal background SGR numbers",
+    "parser": "Shared immutable tables; each request retains its own context, references and AST; exact fresh-renderer oracle and race concurrency tests retained",
+    "formatter": "Full RGB formatting internally avoids nondeterministic terminal256 nearest-color ties; existing TerminalOutput adapts actual terminal capability"
+  },
+  "checks": [
+    {
+      "check": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 112.896
+    },
+    {
+      "check": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 129.826
+    },
+    {
+      "check": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.143
+    },
+    {
+      "check": "vet-integration",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.906
+    },
+    {
+      "check": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.395
+    },
+    {
+      "check": "staticcheck-integration",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.127
+    },
+    {
+      "check": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.285
+    },
+    {
+      "check": "modules",
+      "command": [
+        "go",
+        "mod",
+        "verify"
+      ],
+      "exit_code": 0,
+      "seconds": 1.526
+    },
+    {
+      "check": "language-docs",
+      "command": [
+        "go",
+        "run",
+        "./scripts/language-docs",
+        "-check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.168
+    },
+    {
+      "check": "workflows",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/actionlint"
+      ],
+      "exit_code": 0,
+      "seconds": 0.021
+    },
+    {
+      "check": "vulnerabilities",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/govulncheck",
+        "-show",
+        "verbose",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 3.312
+    },
+    {
+      "check": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-markdown-cost/opcode",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 1.311
+    },
+    {
+      "check": "windows",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-markdown-cost/opcode-windows.exe",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 2.789
+    },
+    {
+      "check": "darwin",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-markdown-cost/opcode-darwin",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 3.108
+    }
+  ],
+  "check_logs": {
+    "race": "?   \tgithub.com/raulaguila/opcode\t[no test files]\nok  \tgithub.com/raulaguila/opcode/cmd\t12.197s\n?   \tgithub.com/raulaguila/opcode/cmd/schema\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/app\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/artifact\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/clipboard\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/completions\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/config\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/db\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diagnostic\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diff\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/evaluation\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/extensions\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/fileutil\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/format\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/history\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/httpclient\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/interaction\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/models\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/prompt\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider/integration\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools\t27.128s\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools/shell\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/localstate\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/logging\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/lsp/protocol\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/lsp/util\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp/watcher\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/memoryindex\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/message\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/permission\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/pubsub\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/review\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/server\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/session\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/transcript\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui\t18.248s\nok  \tgithub.com/raulaguila/opcode/internal/tui/commands\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/chat\t24.775s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/core\t1.087s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/dialog\t4.499s\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/logs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/util\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/image\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/tui/layout\t1.086s\nok  \tgithub.com/raulaguila/opcode/internal/tui/page\t3.279s\nok  \tgithub.com/raulaguila/opcode/internal/tui/styles\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/theme\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/util\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/version\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/workflow\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/bench-compare\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/build-release\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/db-prepared\t(cached)\n?   \tgithub.com/raulaguila/opcode/scripts/language-docs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/scripts/platform-smoke\t[no test files]\n",
+    "integration": "?   \tgithub.com/raulaguila/opcode\t[no test files]\nok  \tgithub.com/raulaguila/opcode/cmd\t12.134s\n?   \tgithub.com/raulaguila/opcode/cmd/schema\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/app\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/artifact\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/clipboard\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/completions\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/config\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/db\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diagnostic\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diff\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/evaluation\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/extensions\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/fileutil\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/format\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/history\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/httpclient\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/interaction\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/models\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/prompt\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider/integration\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools\t27.860s\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools/shell\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/localstate\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/logging\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/lsp/protocol\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/lsp/util\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp/watcher\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/memoryindex\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/message\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/permission\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/pubsub\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/review\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/server\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/session\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/transcript\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui\t18.724s\nok  \tgithub.com/raulaguila/opcode/internal/tui/commands\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/chat\t25.612s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/core\t1.094s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/dialog\t4.430s\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/logs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/util\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/image\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/tui/layout\t1.087s\nok  \tgithub.com/raulaguila/opcode/internal/tui/page\t3.177s\nok  \tgithub.com/raulaguila/opcode/internal/tui/styles\t19.758s\nok  \tgithub.com/raulaguila/opcode/internal/tui/theme\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/util\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/version\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/workflow\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/bench-compare\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/build-release\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/db-prepared\t(cached)\n?   \tgithub.com/raulaguila/opcode/scripts/language-docs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/scripts/platform-smoke\t[no test files]\n",
+    "vet": "",
+    "vet-integration": "",
+    "staticcheck": "",
+    "staticcheck-integration": "",
+    "complexity": "gocognit: note: some calls could not be resolved from the source alone; recursion may be under-counted. Re-run with -exact-recursion for exact results\n",
+    "modules": "all modules verified\n",
+    "language-docs": "",
+    "workflows": "",
+    "vulnerabilities": "Fetching vulnerabilities from the database...\n\nChecking the code against the vulnerabilities...\n\nThe package pattern matched the following 59 root packages:\n  github.com/raulaguila/opcode/internal/httpclient\n  github.com/raulaguila/opcode/internal/llm/models\n  github.com/raulaguila/opcode/internal/localstate\n  github.com/raulaguila/opcode/internal/pubsub\n  github.com/raulaguila/opcode/internal/logging\n  github.com/raulaguila/opcode/internal/config\n  github.com/raulaguila/opcode/internal/db\n  github.com/raulaguila/opcode/internal/artifact\n  github.com/raulaguila/opcode/internal/tui/theme\n  github.com/raulaguila/opcode/internal/diff\n  github.com/raulaguila/opcode/internal/history\n  github.com/raulaguila/opcode/internal/llm/tools/shell\n  github.com/raulaguila/opcode/internal/lsp/protocol\n  github.com/raulaguila/opcode/internal/lsp/util\n  github.com/raulaguila/opcode/internal/lsp\n  github.com/raulaguila/opcode/internal/permission\n  github.com/raulaguila/opcode/internal/workflow\n  github.com/raulaguila/opcode/internal/llm/tools\n  github.com/raulaguila/opcode/internal/extensions\n  github.com/raulaguila/opcode/internal/format\n  github.com/raulaguila/opcode/internal/interaction\n  github.com/raulaguila/opcode/internal/llm/prompt\n  github.com/raulaguila/opcode/internal/memoryindex\n  github.com/raulaguila/opcode/internal/message\n  github.com/raulaguila/opcode/internal/llm/provider\n  github.com/raulaguila/opcode/internal/review\n  github.com/raulaguila/opcode/internal/session\n  github.com/raulaguila/opcode/internal/version\n  github.com/raulaguila/opcode/internal/llm/agent\n  github.com/raulaguila/opcode/internal/lsp/watcher\n  github.com/raulaguila/opcode/internal/app\n  github.com/raulaguila/opcode/internal/diagnostic\n  github.com/raulaguila/opcode/internal/evaluation\n  github.com/raulaguila/opcode/internal/server\n  github.com/raulaguila/opcode/internal/clipboard\n  github.com/raulaguila/opcode/internal/transcript\n  github.com/raulaguila/opcode/internal/tui/commands\n  github.com/raulaguila/opcode/internal/tui/styles\n  github.com/raulaguila/opcode/internal/tui/util\n  github.com/raulaguila/opcode/internal/tui/layout\n  github.com/raulaguila/opcode/internal/tui/components/util\n  github.com/raulaguila/opcode/internal/tui/image\n  github.com/raulaguila/opcode/internal/tui/components/dialog\n  github.com/raulaguila/opcode/internal/tui/components/chat\n  github.com/raulaguila/opcode/internal/tui/components/core\n  github.com/raulaguila/opcode/internal/fileutil\n  github.com/raulaguila/opcode/internal/completions\n  github.com/raulaguila/opcode/internal/tui/components/logs\n  github.com/raulaguila/opcode/internal/tui/page\n  github.com/raulaguila/opcode/internal/tui\n  github.com/raulaguila/opcode/cmd\n  github.com/raulaguila/opcode\n  github.com/raulaguila/opcode/cmd/schema\n  github.com/raulaguila/opcode/internal/llm/provider/integration\n  github.com/raulaguila/opcode/scripts/bench-compare\n  github.com/raulaguila/opcode/scripts/build-release\n  github.com/raulaguila/opcode/scripts/db-prepared\n  github.com/raulaguila/opcode/scripts/language-docs\n  github.com/raulaguila/opcode/scripts/platform-smoke\nGovulncheck scanned the following 105 modules and the go1.27.3 standard library:\n  github.com/raulaguila/opcode\n  charm.land/bubbles/v2@v2.2.1\n  charm.land/bubbletea/v2@v2.1.1\n  charm.land/glamour/v2@v2.0.1\n  charm.land/lipgloss/v2@v2.0.7-0.20261009092946-19f011f1cc57\n  cloud.google.com/go/auth@v0.24.2\n  cloud.google.com/go/compute/metadata@v0.10.0\n  github.com/Azure/azure-sdk-for-go/sdk/azcore@v1.23.3\n  github.com/Azure/azure-sdk-for-go/sdk/azidentity@v1.15.0\n  github.com/Azure/azure-sdk-for-go/sdk/internal@v1.13.0\n  github.com/AzureAD/microsoft-authentication-library-for-go@v1.10.1\n  github.com/JohannesKaufmann/dom@v0.3.1\n  github.com/JohannesKaufmann/html-to-markdown/v2@v2.5.2\n  github.com/PuerkitoBio/goquery@v1.13.0\n  github.com/alecthomas/chroma/v2@v2.27.0\n  github.com/andybalholm/cascadia@v1.3.5\n  github.com/atotto/clipboard@v0.1.4\n  github.com/aws/aws-sdk-go-v2@v1.47.5\n  github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream@v1.7.25\n  github.com/aws/aws-sdk-go-v2/config@v1.33.13\n  github.com/aws/aws-sdk-go-v2/credentials@v1.20.13\n  github.com/aws/aws-sdk-go-v2/feature/ec2/imds@v1.20.5\n  github.com/aws/aws-sdk-go-v2/internal/configsources@v1.5.8\n  github.com/aws/aws-sdk-go-v2/internal/endpoints/v2@v2.8.8\n  github.com/aws/aws-sdk-go-v2/internal/v4a@v1.5.8\n  github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding@v1.13.23\n  github.com/aws/aws-sdk-go-v2/service/internal/presigned-url@v1.14.8\n  github.com/aws/aws-sdk-go-v2/service/signin@v1.12.1\n  github.com/aws/aws-sdk-go-v2/service/sso@v1.39.1\n  github.com/aws/aws-sdk-go-v2/service/ssooidc@v1.44.1\n  github.com/aws/aws-sdk-go-v2/service/sts@v1.51.6\n  github.com/aws/smithy-go@v1.28.7\n  github.com/aymanbagabas/go-osc52/v2@v2.0.1\n  github.com/aymanbagabas/go-udiff@v0.4.1\n  github.com/aymerick/douceur@v0.2.0\n  github.com/bmatcuk/doublestar/v4@v4.10.4\n  github.com/catppuccin/go@v0.3.0\n  github.com/charmbracelet/colorprofile@v0.4.3\n  github.com/charmbracelet/ultraviolet@v0.0.0-20261023060817-a45b7c86333f\n  github.com/charmbracelet/x/ansi@v0.11.9\n  github.com/charmbracelet/x/exp/slice@v0.1.0\n  github.com/charmbracelet/x/term@v0.2.2\n  github.com/charmbracelet/x/termios@v0.1.1\n  github.com/charmbracelet/x/windows@v0.2.2\n  github.com/clipperhouse/displaywidth@v0.11.0\n  github.com/clipperhouse/uax29/v2@v2.7.0\n  github.com/creack/pty@v1.1.24\n  github.com/disintegration/imaging@v1.6.2\n  github.com/dlclark/regexp2/v2@v2.12.0\n  github.com/fsnotify/fsnotify@v1.10.1\n  github.com/go-logfmt/logfmt@v0.6.1\n  github.com/go-viper/mapstructure/v2@v2.5.0\n  github.com/godbus/dbus/v5@v5.2.4\n  github.com/golang-jwt/jwt/v5@v5.3.1\n  github.com/google/jsonschema-go@v0.4.3\n  github.com/google/uuid@v1.6.0\n  github.com/googleapis/enterprise-certificate-proxy@v0.3.24\n  github.com/googleapis/gax-go/v2@v2.27.0\n  github.com/gorilla/css@v1.0.1\n  github.com/hinshun/vt10x@v0.0.0-20220301184237-5011da428d02\n  github.com/kylelemons/godebug@v1.1.0\n  github.com/lithammer/fuzzysearch@v1.1.8\n  github.com/lucasb-eyer/go-colorful@v1.4.1\n  github.com/mark3labs/mcp-go@v1.5.0\n  github.com/mattn/go-isatty@v0.0.24\n  github.com/mattn/go-runewidth@v0.0.31\n  github.com/mfridman/interpolate@v0.0.2\n  github.com/microcosm-cc/bluemonday@v1.0.27\n  github.com/muesli/ansi@v0.0.0-20230316100256-276c6243b2f6\n  github.com/muesli/cancelreader@v0.2.2\n  github.com/muesli/reflow@v0.3.0\n  github.com/muesli/termenv@v0.16.0\n  github.com/ncruces/go-sqlite3@v0.36.0\n  github.com/ncruces/go-sqlite3-wasm/v6@v6.4.35401\n  github.com/ncruces/julianday@v1.0.0\n  github.com/odvcencio/gotreesitter@v0.56.0\n  github.com/pelletier/go-toml/v2@v2.4.3\n  github.com/pkg/browser@v0.0.0-20240102092130-5ac0b6a4141c\n  github.com/pressly/goose/v3@v3.29.0\n  github.com/rivo/uniseg@v0.4.7\n  github.com/sabhiram/go-gitignore@v0.0.0-20210923224102-525f6e181f06\n  github.com/sagikazarmark/locafero@v0.12.0\n  github.com/santhosh-tekuri/jsonschema/v6@v6.0.3\n  github.com/sergi/go-diff@v1.4.0\n  github.com/sethvargo/go-retry@v0.5.0\n  github.com/spf13/afero@v1.15.0\n  github.com/spf13/cast@v1.10.0\n  github.com/spf13/cobra@v1.10.2\n  github.com/spf13/pflag@v1.0.10\n  github.com/spf13/viper@v1.21.0\n  github.com/subosito/gotenv@v1.6.0\n  github.com/tiktoken-go/tokenizer@v0.10.0\n  github.com/xo/terminfo@v1.3.0\n  github.com/yosida95/uritemplate/v3@v3.0.2\n  github.com/yuin/goldmark@v1.8.7\n  github.com/yuin/goldmark-emoji@v1.0.6\n  github.com/zalando/go-keyring@v0.2.8\n  go.uber.org/multierr@v1.11.0\n  go.yaml.in/yaml/v3@v3.0.5\n  golang.org/x/crypto@v0.58.0\n  golang.org/x/image@v0.47.0\n  golang.org/x/net@v0.62.0\n  golang.org/x/sync@v0.24.0\n  golang.org/x/sys@v0.49.0\n  golang.org/x/text@v0.43.0\n\n=== Symbol Results ===\n\nNo vulnerabilities found.\n\n=== Package Results ===\n\nNo other vulnerabilities found.\n\n=== Module Results ===\n\nVulnerability #1: GO-2026-5932\n    The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design,\n    and has known security issues\n  More info: https://pkg.go.dev/vuln/GO-2026-5932\n  Module: golang.org/x/crypto\n    Found in: golang.org/x/crypto@v0.58.0\n    Fixed in: N/A\n\nYour code is affected by 0 vulnerabilities.\nThis scan also found 0 vulnerabilities in packages you import and 1\nvulnerability in modules you require, but your code doesn't appear to call these\nvulnerabilities.\n",
+    "build": "",
+    "windows": "",
+    "darwin": ""
+  },
+  "pty": {
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "-tags",
+      "integration",
+      "./internal/tui",
+      "-run",
+      "^(TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUITerminalStartupQueries|TestPTYStreamingSpeedBeforeCompletion|TestPTYTranscriptSearchAndKeyboardSelection|TestPTYConversationChronologyQuitAndResume|TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer|TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures|TestPTYMarkdownProposalAndQuestionDivider|TestPTYModelCapabilitiesAndModalNavigation|TestPTYCodeBlocksAndReasoningDetails)$",
+      "-count=1",
+      "-v"
+    ],
+    "exit_code": 0,
+    "seconds": 59.017,
+    "parent_passes": [
+      "--- PASS: TestPTYCodeBlocksAndReasoningDetails (0.68s)",
+      "--- PASS: TestPTYConversationChronologyQuitAndResume (1.67s)",
+      "--- PASS: TestPTYMarkdownProposalAndQuestionDivider (1.45s)",
+      "--- PASS: TestPTYModelCapabilitiesAndModalNavigation (1.36s)",
+      "--- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer (13.20s)",
+      "--- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures (1.52s)",
+      "--- PASS: TestPTYStreamingSpeedBeforeCompletion (2.60s)",
+      "--- PASS: TestPTYTranscriptSearchAndKeyboardSelection (2.45s)",
+      "--- PASS: TestLiveOllamaPTYUI (29.27s)",
+      "--- PASS: TestPTYUICompactThemes (2.42s)",
+      "--- PASS: TestPTYUITerminalStartupQueries (0.01s)"
+    ],
+    "no_skips": true,
+    "model": "nemotron-3.5-bolt:e4b",
+    "runtime_context": 16384,
+    "log": "=== RUN   TestPTYCodeBlocksAndReasoningDetails\n--- PASS: TestPTYCodeBlocksAndReasoningDetails (0.68s)\n=== RUN   TestPTYConversationChronologyQuitAndResume\n    pty_conversation_test.go:65: question panel at 60x20:\n        Opcode · project                                            \n                                                                    \n         │ (README.md:1-2).                                         \n                                                                    \n         › Process · 1 tool call · working                          \n                                                                    \n                                                                    \n        ┌──────────────────────────────────────────────────────────┐\n        │ Question for you                                         │\n        │ Quer implementar as melhorias?                           │\n        │                                                          │\n        │   ○ Sim                                                  │\n        │   ○ Agora não                                            │\n        │   ○ Other answer:                                        │\n        │ ──────────────────────────────────────────────────────── │\n        │ ↑↓ choose or type another answer · F2 · Esc cancel       │\n        └──────────────────────────────────────────────────────────┘\n        ────────────────────────────────────────────────────────────\n         >                                                          \n         Ask ▾       Waiting for your answer · … conversation-fi… ▾ \n--- PASS: TestPTYConversationChronologyQuitAndResume (1.67s)\n=== RUN   TestPTYMarkdownProposalAndQuestionDivider\n--- PASS: TestPTYMarkdownProposalAndQuestionDivider (1.45s)\n=== RUN   TestPTYModelCapabilitiesAndModalNavigation\n--- PASS: TestPTYModelCapabilitiesAndModalNavigation (1.36s)\n=== RUN   TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer\n=== RUN   TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/custom_row\n=== RUN   TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/suggested_choice_ignores_inactive_custom_draft\n--- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer (13.20s)\n    --- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/custom_row (6.56s)\n    --- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/suggested_choice_ignores_inactive_custom_draft (6.63s)\n=== RUN   TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures\n=== RUN   TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/verified_correction_replaces_primary_and_keeps_history\n=== RUN   TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/failed_correction_preserves_original\n--- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures (1.52s)\n    --- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/verified_correction_replaces_primary_and_keeps_history (0.72s)\n    --- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/failed_correction_preserves_original (0.79s)\n=== RUN   TestPTYStreamingSpeedBeforeCompletion\n=== RUN   TestPTYStreamingSpeedBeforeCompletion/dark\n=== RUN   TestPTYStreamingSpeedBeforeCompletion/light\n=== RUN   TestPTYStreamingSpeedBeforeCompletion/no-color\n--- PASS: TestPTYStreamingSpeedBeforeCompletion (2.60s)\n    --- PASS: TestPTYStreamingSpeedBeforeCompletion/dark (0.83s)\n    --- PASS: TestPTYStreamingSpeedBeforeCompletion/light (0.87s)\n    --- PASS: TestPTYStreamingSpeedBeforeCompletion/no-color (0.90s)\n=== RUN   TestPTYTranscriptSearchAndKeyboardSelection\n--- PASS: TestPTYTranscriptSearchAndKeyboardSelection (2.45s)\n=== RUN   TestLiveOllamaPTYUI\n    pty_ui_live_test.go:60: local model ready: elapsed=5.874s load=5.661s context=16384\n    pty_ui_live_test.go:170: PTY failed catalog is empty, retry recovers, delete defaults to Cancel and explicit deletion removes connection\n    pty_ui_live_test.go:176: PTY draft, Unicode paste, three resizes, model catalog/search and mode chooser passed\n    pty_ui_live_test.go:231: separate LSP probe explicitly approved in UI; stderr burst suppressed and Ask mode preserved\n    pty_ui_live_test.go:257: overview SHA-256: e11b35276768af3c10a36624684b7bc28ba08e47a3926e4f3c58595f4a1a54ad\n    pty_ui_live_test.go:258: real Ollama project overview finished with factual content and no raw LSP stderr\n    pty_ui_live_test.go:301: one exact PTY bash command approved through UI; live output appeared before process exit\n    pty_ui_live_test.go:331: real binary PTY: Unicode/paste, 3–8-row composer, resize, model/mode modal focus, Ask evidence, separately approved LSP probe, one approved bash command, live output, terminal input and queued instruction passed\n--- PASS: TestLiveOllamaPTYUI (29.27s)\n=== RUN   TestPTYUICompactThemes\n=== RUN   TestPTYUICompactThemes/dark\n=== RUN   TestPTYUICompactThemes/light\n=== RUN   TestPTYUICompactThemes/no-color\n--- PASS: TestPTYUICompactThemes (2.42s)\n    --- PASS: TestPTYUICompactThemes/dark (0.80s)\n    --- PASS: TestPTYUICompactThemes/light (0.79s)\n    --- PASS: TestPTYUICompactThemes/no-color (0.83s)\n=== RUN   TestPTYUITerminalStartupQueries\n--- PASS: TestPTYUITerminalStartupQueries (0.01s)\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/tui\t57.733s\n",
+    "isolated_home": true,
+    "user_config_changed": false,
+    "enterprise_provider_accessed": false,
+    "sandbox": "bubblewrap, no auto-approval",
+    "context_note": "16384 is an explicit local test fixture, not the advertised model maximum",
+    "generic_overview": "o que pode me falar sobre esse projeto?",
+    "additional_requirements": [
+      "index search and actual service.go read",
+      "code surface differs in VT cells; prose after inline code retains root background",
+      "reasoning details before public response, expandable without duplication",
+      "exact raw Markdown copy including Unicode",
+      "active model marker independent of list navigation",
+      "same prior permissions, citations, source immutability, steering and terminal input checks"
+    ]
+  },
+  "benchmarks": {
+    "cases": 32,
+    "samples": 3,
+    "operations": 100,
+    "GOMAXPROCS": 2,
+    "theme": "opcode",
+    "dark": true,
+    "profile": "TrueColor",
+    "allocation_threshold_percent": 10,
+    "fixtures": [
+      {
+        "path": "internal/llm/tools/allocation_benchmark_test.go",
+        "sha256": "a6a5cab91b27d31d86187703ce25d69f5a750e8921c6e98ad5386570a9a4ba20",
+        "exact": true
+      },
+      {
+        "path": "internal/llm/tools/full_search_benchmark_test.go",
+        "sha256": "2228bc4d70b220bc6f13f19f120ed2dcf5ebc5d2c59b3177dda9b735fd0977f0",
+        "exact": true
+      },
+      {
+        "path": "internal/llm/tools/index_refresh_benchmark_test.go",
+        "sha256": "bd6d1e5a9785b886e3e3056159e41ed52b9651b28cfc94c3728cfe2972585d0c",
+        "exact": true
+      },
+      {
+        "path": "internal/llm/agent/context_allocation_test.go",
+        "sha256": "8ad44c4cf8ba50482c171847a5dffc6328a62ffb02ef65a7a22d88bef93793e5",
+        "exact": true
+      },
+      {
+        "path": "internal/llm/provider/image_benchmark_test.go",
+        "sha256": "fe2f1e9b26750eabec8f9adba2c578d30a4d5ea71420b0594cef1b84a172943e",
+        "exact": true
+      },
+      {
+        "path": "internal/llm/provider/allocation_benchmark_test.go",
+        "sha256": "376caf401685618daa9797b0394992ea05002e2af24038a7edc6e4b885955e2a",
+        "exact": true
+      },
+      {
+        "path": "internal/message/search_index_bench_test.go",
+        "sha256": "ccac468b0b7c9b153615d5aa10f453327ccdeb37acee4c1ed861f92348dc4a70",
+        "exact": true
+      },
+      {
+        "path": "internal/tui/components/chat/render_cache_test.go",
+        "sha256": "7313600ad08e83dfcc2de2af2bc36ab19495fbd5dd140f1f5f8f55a197462426",
+        "exact": true
+      },
+      {
+        "path": "internal/tui/components/chat/event_benchmark_test.go",
+        "sha256": "681c9b7def9473bf6c850a43bb32bf4f31ae88c7db60af9e64c5d3debda4ce16",
+        "exact": true
+      },
+      {
+        "path": "internal/tui/components/chat/session_benchmark_test.go",
+        "sha256": "3ec3f36deb2143d57896c3ada7d976fbbd6a07a32eda7ff6290ca83bdaff8221",
+        "exact": true
+      },
+      {
+        "path": "internal/tui/components/chat/sqlite_history_benchmark_test.go",
+        "sha256": "1f0adb9876b872152c64be1b0786b4d90bcde417e52bd52b70106681e5a93415",
+        "exact": true
+      },
+      {
+        "path": "internal/tui/components/chat/streaming_benchmark_test.go",
+        "sha256": "e600a3a2ccc59d140c31674347dd16827d6a112cf8100f6236a00b6f466c7684",
+        "exact": true
+      },
+      {
+        "path": "internal/tui/components/chat/streaming_blocks_benchmark_test.go",
+        "sha256": "9f566796dc77f97e2b95c3dedbe178fba51a638fa3667b0a581ae73da6fa9d1a",
+        "exact": true
+      },
+      {
+        "path": "internal/tui/styles/markdown_benchmark_test.go",
+        "sha256": "a3ea2a0e1b8ba9b93b2bcd72aa99b7168c5f3ae8820f97397caa9660789ffd4d",
+        "exact": true
+      }
+    ],
+    "runs": [
+      {
+        "side": "before",
+        "command": [
+          "go",
+          "test",
+          "-p",
+          "1",
+          "-overlay",
+          "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-markdown-cost/benchmarks/before-overlay.json",
+          "-run",
+          "^$",
+          "-bench",
+          "Benchmark(WorkspaceDigest|WarmCodeIndexSearch|FullWarmCodeIndexSearch|CitationCurrent|IndexRefreshChanges|ContextPreparation|PreparedImageBudget|AuditKnownTokenizer|ConversationProjection|AuditChat|SQLiteChatSessionLoad|TranscriptRender|AuditMarkdown)",
+          "-benchmem",
+          "-benchtime=100x",
+          "-count=3",
+          "./internal/llm/tools",
+          "./internal/llm/agent",
+          "./internal/llm/provider",
+          "./internal/message",
+          "./internal/tui/components/chat",
+          "./internal/tui/styles"
+        ],
+        "exit_code": 0,
+        "seconds": 100.0525553226471
+      },
+      {
+        "side": "after",
+        "command": [
+          "go",
+          "test",
+          "-p",
+          "1",
+          "-overlay",
+          "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-markdown-cost/benchmarks/after-overlay.json",
+          "-run",
+          "^$",
+          "-bench",
+          "Benchmark(WorkspaceDigest|WarmCodeIndexSearch|FullWarmCodeIndexSearch|CitationCurrent|IndexRefreshChanges|ContextPreparation|PreparedImageBudget|AuditKnownTokenizer|ConversationProjection|AuditChat|SQLiteChatSessionLoad|TranscriptRender|AuditMarkdown)",
+          "-benchmem",
+          "-benchtime=100x",
+          "-count=3",
+          "./internal/llm/tools",
+          "./internal/llm/agent",
+          "./internal/llm/provider",
+          "./internal/message",
+          "./internal/tui/components/chat",
+          "./internal/tui/styles"
+        ],
+        "exit_code": 0,
+        "seconds": 91.29682970046997
+      }
+    ],
+    "results": [
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/agent_estimate",
+        "before": {
+          "ns_per_op": 263030,
+          "bytes_per_op": 207937,
+          "allocs_per_op": 455
+        },
+        "after": {
+          "ns_per_op": 264306,
+          "bytes_per_op": 200773,
+          "allocs_per_op": 455
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 0.4851157662624006,
+          "bytes_per_op": -3.4452742898089306,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/agent/BenchmarkContextPreparation/prepare_only",
+        "before": {
+          "ns_per_op": 377423,
+          "bytes_per_op": 199513,
+          "allocs_per_op": 444
+        },
+        "after": {
+          "ns_per_op": 299598,
+          "bytes_per_op": 213838,
+          "allocs_per_op": 444
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -20.620099993906038,
+          "bytes_per_op": 7.179983259236233,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/changing",
+        "before": {
+          "ns_per_op": 266395,
+          "bytes_per_op": 208244,
+          "allocs_per_op": 448
+        },
+        "after": {
+          "ns_per_op": 266769,
+          "bytes_per_op": 215229,
+          "allocs_per_op": 448
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 0.14039302539461396,
+          "bytes_per_op": 3.3542382973819063,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/fixture/stable",
+        "before": {
+          "ns_per_op": 270886,
+          "bytes_per_op": 213813,
+          "allocs_per_op": 444
+        },
+        "after": {
+          "ns_per_op": 264806,
+          "bytes_per_op": 206665,
+          "allocs_per_op": 444
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -2.2444866106037242,
+          "bytes_per_op": -3.3431082300889092,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/changing",
+        "before": {
+          "ns_per_op": 5284049,
+          "bytes_per_op": 9819548,
+          "allocs_per_op": 65111
+        },
+        "after": {
+          "ns_per_op": 5203700,
+          "bytes_per_op": 9783246,
+          "allocs_per_op": 65109
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -1.5205952859256189,
+          "bytes_per_op": -0.3696911507535816,
+          "allocs_per_op": -0.003071677596722111
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkAuditKnownTokenizer/gpt-4o/stable",
+        "before": {
+          "ns_per_op": 337919,
+          "bytes_per_op": 206617,
+          "allocs_per_op": 443
+        },
+        "after": {
+          "ns_per_op": 334474,
+          "bytes_per_op": 206618,
+          "allocs_per_op": 443
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -1.0194750813064646,
+          "bytes_per_op": 0.00048398728080822906,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/provider/BenchmarkPreparedImageBudget",
+        "before": {
+          "ns_per_op": 1394685,
+          "bytes_per_op": 2925055,
+          "allocs_per_op": 122
+        },
+        "after": {
+          "ns_per_op": 1407585,
+          "bytes_per_op": 3037175,
+          "allocs_per_op": 123
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 0.9249400402241426,
+          "bytes_per_op": 3.833090317959842,
+          "allocs_per_op": 0.8196721311475308
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkCitationCurrent",
+        "before": {
+          "ns_per_op": 559412,
+          "bytes_per_op": 71056,
+          "allocs_per_op": 420
+        },
+        "after": {
+          "ns_per_op": 577302,
+          "bytes_per_op": 71120,
+          "allocs_per_op": 420
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 3.1980007579387015,
+          "bytes_per_op": 0.09006980409818066,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/200",
+        "before": {
+          "ns_per_op": 3279775,
+          "bytes_per_op": 640006,
+          "allocs_per_op": 4965
+        },
+        "after": {
+          "ns_per_op": 3464080,
+          "bytes_per_op": 641440,
+          "allocs_per_op": 4966
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 5.6194403579513885,
+          "bytes_per_op": 0.22406039943374534,
+          "allocs_per_op": 0.020140986908367964
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkFullWarmCodeIndexSearch/2000",
+        "before": {
+          "ns_per_op": 19686640,
+          "bytes_per_op": 638106,
+          "allocs_per_op": 4964
+        },
+        "after": {
+          "ns_per_op": 20249038,
+          "bytes_per_op": 638094,
+          "allocs_per_op": 4963
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 2.856749551980431,
+          "bytes_per_op": -0.0018805652979292375,
+          "allocs_per_op": -0.020145044319097583
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/one-file",
+        "before": {
+          "ns_per_op": 1053987,
+          "bytes_per_op": 60228,
+          "allocs_per_op": 606
+        },
+        "after": {
+          "ns_per_op": 990600,
+          "bytes_per_op": 60307,
+          "allocs_per_op": 607
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -6.014021045800377,
+          "bytes_per_op": 0.13116822740253387,
+          "allocs_per_op": 0.16501650165017256
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/periodic",
+        "before": {
+          "ns_per_op": 18562779,
+          "bytes_per_op": 2961819,
+          "allocs_per_op": 38088
+        },
+        "after": {
+          "ns_per_op": 20592361,
+          "bytes_per_op": 2961840,
+          "allocs_per_op": 38088
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 10.933610748692324,
+          "bytes_per_op": 0.00070902374520454,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkIndexRefreshChanges/policy",
+        "before": {
+          "ns_per_op": 19982346,
+          "bytes_per_op": 3041912,
+          "allocs_per_op": 38442
+        },
+        "after": {
+          "ns_per_op": 22299409,
+          "bytes_per_op": 3042580,
+          "allocs_per_op": 38442
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 11.595550392331312,
+          "bytes_per_op": 0.021959872606447384,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/200",
+        "before": {
+          "ns_per_op": 1960371,
+          "bytes_per_op": 256257,
+          "allocs_per_op": 1193
+        },
+        "after": {
+          "ns_per_op": 1874640,
+          "bytes_per_op": 257004,
+          "allocs_per_op": 1193
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -4.373202827423994,
+          "bytes_per_op": 0.29150423207950915,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWarmCodeIndexSearch/2000",
+        "before": {
+          "ns_per_op": 16301489,
+          "bytes_per_op": 257386,
+          "allocs_per_op": 1193
+        },
+        "after": {
+          "ns_per_op": 16501139,
+          "bytes_per_op": 257010,
+          "allocs_per_op": 1193
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 1.224734746623457,
+          "bytes_per_op": -0.1460840915978312,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/200",
+        "before": {
+          "ns_per_op": 1276511,
+          "bytes_per_op": 298184,
+          "allocs_per_op": 5027
+        },
+        "after": {
+          "ns_per_op": 1273857,
+          "bytes_per_op": 298120,
+          "allocs_per_op": 5027
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -0.20791046845659578,
+          "bytes_per_op": -0.021463257585918605,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/llm/tools/BenchmarkWorkspaceDigest/2000",
+        "before": {
+          "ns_per_op": 13193699,
+          "bytes_per_op": 2681925,
+          "allocs_per_op": 50036
+        },
+        "after": {
+          "ns_per_op": 13286207,
+          "bytes_per_op": 2681604,
+          "allocs_per_op": 50036
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 0.7011528760812347,
+          "bytes_per_op": -0.011969014793478117,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/message/BenchmarkConversationProjection",
+        "before": {
+          "ns_per_op": 446818,
+          "bytes_per_op": 15820,
+          "allocs_per_op": 204
+        },
+        "after": {
+          "ns_per_op": 565217,
+          "bytes_per_op": 15905,
+          "allocs_per_op": 204
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 26.49826103693227,
+          "bytes_per_op": 0.537294563843238,
+          "allocs_per_op": 0.0
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatCacheOverflow",
+        "before": {
+          "ns_per_op": 2799400,
+          "bytes_per_op": 1625949,
+          "allocs_per_op": 4017
+        },
+        "after": {
+          "ns_per_op": 2615722,
+          "bytes_per_op": 1579684,
+          "allocs_per_op": 3478
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -6.5613345716939335,
+          "bytes_per_op": -2.845415200599777,
+          "allocs_per_op": -13.417973612148371
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/100",
+        "before": {
+          "ns_per_op": 99811,
+          "bytes_per_op": 83709,
+          "allocs_per_op": 726
+        },
+        "after": {
+          "ns_per_op": 91890,
+          "bytes_per_op": 65167,
+          "allocs_per_op": 558
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -7.935999038182162,
+          "bytes_per_op": -22.15054534160007,
+          "allocs_per_op": -23.140495867768596
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatEvent/1000",
+        "before": {
+          "ns_per_op": 110619,
+          "bytes_per_op": 83700,
+          "allocs_per_op": 726
+        },
+        "after": {
+          "ns_per_op": 101819,
+          "bytes_per_op": 64455,
+          "allocs_per_op": 558
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -7.955233730191013,
+          "bytes_per_op": -22.99283154121864,
+          "allocs_per_op": -23.140495867768596
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingBlocks",
+        "before": {
+          "ns_per_op": 798383,
+          "bytes_per_op": 545702,
+          "allocs_per_op": 2234
+        },
+        "after": {
+          "ns_per_op": 668115,
+          "bytes_per_op": 481404,
+          "allocs_per_op": 1864
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -16.316479684562424,
+          "bytes_per_op": -11.78262128414409,
+          "allocs_per_op": -16.562220232766332
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/100",
+        "before": {
+          "ns_per_op": 1632427,
+          "bytes_per_op": 899449,
+          "allocs_per_op": 2576
+        },
+        "after": {
+          "ns_per_op": 1386506,
+          "bytes_per_op": 759408,
+          "allocs_per_op": 1857
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -15.064747152552616,
+          "bytes_per_op": -15.569643192665728,
+          "allocs_per_op": -27.91149068322981
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatGrowingReply/1000",
+        "before": {
+          "ns_per_op": 1670578,
+          "bytes_per_op": 897324,
+          "allocs_per_op": 2575
+        },
+        "after": {
+          "ns_per_op": 1402469,
+          "bytes_per_op": 757272,
+          "allocs_per_op": 1857
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -16.04887649663769,
+          "bytes_per_op": -15.607740347967958,
+          "allocs_per_op": -27.883495145631066
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/100",
+        "before": {
+          "ns_per_op": 9953947,
+          "bytes_per_op": 9325438,
+          "allocs_per_op": 78583
+        },
+        "after": {
+          "ns_per_op": 9590536,
+          "bytes_per_op": 7623108,
+          "allocs_per_op": 63028
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -3.6509235984479305,
+          "bytes_per_op": -18.254692165665563,
+          "allocs_per_op": -19.794357558250507
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkAuditChatSessionLoad/1000",
+        "before": {
+          "ns_per_op": 12719314,
+          "bytes_per_op": 12177408,
+          "allocs_per_op": 100551
+        },
+        "after": {
+          "ns_per_op": 12951432,
+          "bytes_per_op": 10008787,
+          "allocs_per_op": 80643
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 1.8249254637474843,
+          "bytes_per_op": -17.80855991685587,
+          "allocs_per_op": -19.798908016827276
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/100",
+        "before": {
+          "ns_per_op": 6267112,
+          "bytes_per_op": 7142690,
+          "allocs_per_op": 61664
+        },
+        "after": {
+          "ns_per_op": 5388411,
+          "bytes_per_op": 5129636,
+          "allocs_per_op": 44499
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -14.02082809434393,
+          "bytes_per_op": -28.183415491922513,
+          "allocs_per_op": -27.836338868707834
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkSQLiteChatSessionLoad/1000",
+        "before": {
+          "ns_per_op": 7956564,
+          "bytes_per_op": 9131040,
+          "allocs_per_op": 78900
+        },
+        "after": {
+          "ns_per_op": 6895092,
+          "bytes_per_op": 6547869,
+          "allocs_per_op": 56915
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -13.340834058520734,
+          "bytes_per_op": -28.28999763444252,
+          "allocs_per_op": -27.864385297845374
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderStreaming",
+        "before": {
+          "ns_per_op": 112167,
+          "bytes_per_op": 84305,
+          "allocs_per_op": 728
+        },
+        "after": {
+          "ns_per_op": 105710,
+          "bytes_per_op": 64978,
+          "allocs_per_op": 560
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -5.756595076983428,
+          "bytes_per_op": -22.92509341082972,
+          "allocs_per_op": -23.076923076923073
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderTailInvalidated",
+        "before": {
+          "ns_per_op": 110322,
+          "bytes_per_op": 85148,
+          "allocs_per_op": 726
+        },
+        "after": {
+          "ns_per_op": 103364,
+          "bytes_per_op": 65562,
+          "allocs_per_op": 557
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -6.3069922590235805,
+          "bytes_per_op": -23.002301874383424,
+          "allocs_per_op": -23.278236914600548
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/components/chat/BenchmarkTranscriptRenderWarm",
+        "before": {
+          "ns_per_op": 50.83,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        "after": {
+          "ns_per_op": 51.43,
+          "bytes_per_op": 0,
+          "allocs_per_op": 0
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": 1.180405272476892,
+          "bytes_per_op": null,
+          "allocs_per_op": null
+        }
+      },
+      {
+        "name": "github.com/raulaguila/opcode/internal/tui/styles/BenchmarkAuditMarkdownManyBlocks",
+        "before": {
+          "ns_per_op": 2108003,
+          "bytes_per_op": 1571021,
+          "allocs_per_op": 16511
+        },
+        "after": {
+          "ns_per_op": 1877069,
+          "bytes_per_op": 1479405,
+          "allocs_per_op": 14990
+        },
+        "allocation_regression": false,
+        "delta_percent": {
+          "ns_per_op": -10.955107748897886,
+          "bytes_per_op": -5.831621601493553,
+          "allocs_per_op": -9.212040457876569
+        }
+      }
+    ],
+    "before_raw": "goos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/llm/tools\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkWorkspaceDigest/200-2       \t     100\t   1276511 ns/op\t  298184 B/op\t    5027 allocs/op\nBenchmarkWorkspaceDigest/200-2       \t     100\t   1224727 ns/op\t  298118 B/op\t    5027 allocs/op\nBenchmarkWorkspaceDigest/200-2       \t     100\t   1278478 ns/op\t  298294 B/op\t    5027 allocs/op\nBenchmarkWorkspaceDigest/2000-2      \t     100\t  13133077 ns/op\t 2681350 B/op\t   50036 allocs/op\nBenchmarkWorkspaceDigest/2000-2      \t     100\t  13268674 ns/op\t 2681925 B/op\t   50036 allocs/op\nBenchmarkWorkspaceDigest/2000-2      \t     100\t  13193699 ns/op\t 2682008 B/op\t   50036 allocs/op\nBenchmarkWarmCodeIndexSearch/200-2   \t     100\t   1960371 ns/op\t  256257 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/200-2   \t     100\t   1927979 ns/op\t  256245 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/200-2   \t     100\t   1990216 ns/op\t  256973 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/2000-2  \t     100\t  16424514 ns/op\t  256638 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/2000-2  \t     100\t  16301489 ns/op\t  257392 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/2000-2  \t     100\t  16073342 ns/op\t  257386 B/op\t    1193 allocs/op\nBenchmarkCitationCurrent-2           \t     100\t    570761 ns/op\t   71056 B/op\t     420 allocs/op\nBenchmarkCitationCurrent-2           \t     100\t    557956 ns/op\t   71056 B/op\t     420 allocs/op\nBenchmarkCitationCurrent-2           \t     100\t    559412 ns/op\t   71120 B/op\t     420 allocs/op\nBenchmarkFullWarmCodeIndexSearch/200-2         \t     100\t   3279775 ns/op\t  639813 B/op\t    4965 allocs/op\nBenchmarkFullWarmCodeIndexSearch/200-2         \t     100\t   3169287 ns/op\t  640006 B/op\t    4964 allocs/op\nBenchmarkFullWarmCodeIndexSearch/200-2         \t     100\t   3321565 ns/op\t  640685 B/op\t    4965 allocs/op\nBenchmarkFullWarmCodeIndexSearch/2000-2        \t     100\t  19686640 ns/op\t  638106 B/op\t    4964 allocs/op\nBenchmarkFullWarmCodeIndexSearch/2000-2        \t     100\t  19665436 ns/op\t  637833 B/op\t    4963 allocs/op\nBenchmarkFullWarmCodeIndexSearch/2000-2        \t     100\t  19832429 ns/op\t  638803 B/op\t    4964 allocs/op\nBenchmarkIndexRefreshChanges/one-file-2        \t     100\t   1013849 ns/op\t   59399 B/op\t     600 allocs/op\nBenchmarkIndexRefreshChanges/one-file-2        \t     100\t   1098979 ns/op\t   60228 B/op\t     607 allocs/op\nBenchmarkIndexRefreshChanges/one-file-2        \t     100\t   1053987 ns/op\t   60231 B/op\t     606 allocs/op\nBenchmarkIndexRefreshChanges/policy-2          \t     100\t  19909144 ns/op\t 3041912 B/op\t   38442 allocs/op\nBenchmarkIndexRefreshChanges/policy-2          \t     100\t  19982346 ns/op\t 3040316 B/op\t   38440 allocs/op\nBenchmarkIndexRefreshChanges/policy-2          \t     100\t  23012544 ns/op\t 3043043 B/op\t   38442 allocs/op\nBenchmarkIndexRefreshChanges/periodic-2        \t     100\t  18544943 ns/op\t 2961865 B/op\t   38088 allocs/op\nBenchmarkIndexRefreshChanges/periodic-2        \t     100\t  18562779 ns/op\t 2955424 B/op\t   38088 allocs/op\nBenchmarkIndexRefreshChanges/periodic-2        \t     100\t  18629844 ns/op\t 2961819 B/op\t   38087 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools\t60.196s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/llm/agent\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkContextPreparation/prepare_only-2         \t     100\t    442967 ns/op\t  199507 B/op\t     444 allocs/op\nBenchmarkContextPreparation/prepare_only-2         \t     100\t    310925 ns/op\t  199513 B/op\t     444 allocs/op\nBenchmarkContextPreparation/prepare_only-2         \t     100\t    377423 ns/op\t  213819 B/op\t     444 allocs/op\nBenchmarkContextPreparation/agent_estimate-2       \t     100\t    264114 ns/op\t  207937 B/op\t     455 allocs/op\nBenchmarkContextPreparation/agent_estimate-2       \t     100\t    263030 ns/op\t  200773 B/op\t     455 allocs/op\nBenchmarkContextPreparation/agent_estimate-2       \t     100\t    262663 ns/op\t  207950 B/op\t     455 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t0.228s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/llm/provider\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkAuditKnownTokenizer/fixture/stable-2         \t     100\t    270886 ns/op\t 590.65 MB/s\t  206673 B/op\t     444 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/stable-2         \t     100\t    264472 ns/op\t 604.98 MB/s\t  213831 B/op\t     444 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/stable-2         \t     100\t    279003 ns/op\t 573.47 MB/s\t  213813 B/op\t     444 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/changing-2       \t     100\t    266395 ns/op\t 600.61 MB/s\t  208412 B/op\t     448 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/changing-2       \t     100\t    269973 ns/op\t 592.65 MB/s\t  208244 B/op\t     448 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/changing-2       \t     100\t    264370 ns/op\t 605.21 MB/s\t  208003 B/op\t     448 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/stable-2          \t     100\t    341961 ns/op\t 467.89 MB/s\t  199464 B/op\t     443 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/stable-2          \t     100\t    337919 ns/op\t 473.49 MB/s\t  206617 B/op\t     443 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/stable-2          \t     100\t    334449 ns/op\t 478.40 MB/s\t  206618 B/op\t     443 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/changing-2        \t     100\t   5284049 ns/op\t  30.28 MB/s\t 9833954 B/op\t   65111 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/changing-2        \t     100\t   5162310 ns/op\t  30.99 MB/s\t 9797733 B/op\t   65110 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/changing-2        \t     100\t   5319572 ns/op\t  30.08 MB/s\t 9819548 B/op\t   65111 allocs/op\nBenchmarkPreparedImageBudget-2                        \t     100\t   1407857 ns/op\t 745.55 MB/s\t 2925055 B/op\t     123 allocs/op\nBenchmarkPreparedImageBudget-2                        \t     100\t   1381625 ns/op\t 759.70 MB/s\t 2967064 B/op\t     122 allocs/op\nBenchmarkPreparedImageBudget-2                        \t     100\t   1394685 ns/op\t 752.59 MB/s\t 2925033 B/op\t     122 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t2.429s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/message\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkConversationProjection-2   \t     100\t    446818 ns/op\t   16118 B/op\t     204 allocs/op\nBenchmarkConversationProjection-2   \t     100\t    348212 ns/op\t   15818 B/op\t     204 allocs/op\nBenchmarkConversationProjection-2   \t     100\t    476613 ns/op\t   15820 B/op\t     204 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/message\t0.171s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/tui/components/chat\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkAuditChatEvent/100-2                \t     100\t    100607 ns/op\t   83709 B/op\t     726 allocs/op\nBenchmarkAuditChatEvent/100-2                \t     100\t     99811 ns/op\t   83707 B/op\t     726 allocs/op\nBenchmarkAuditChatEvent/100-2                \t     100\t     98722 ns/op\t   83710 B/op\t     726 allocs/op\nBenchmarkAuditChatEvent/1000-2               \t     100\t    109634 ns/op\t   83701 B/op\t     726 allocs/op\nBenchmarkAuditChatEvent/1000-2               \t     100\t    111509 ns/op\t   83700 B/op\t     726 allocs/op\nBenchmarkAuditChatEvent/1000-2               \t     100\t    110619 ns/op\t   83698 B/op\t     726 allocs/op\nBenchmarkTranscriptRenderWarm-2              \t     100\t        50.83 ns/op\t       0 B/op\t       0 allocs/op\nBenchmarkTranscriptRenderWarm-2              \t     100\t        50.71 ns/op\t       0 B/op\t       0 allocs/op\nBenchmarkTranscriptRenderWarm-2              \t     100\t        51.51 ns/op\t       0 B/op\t       0 allocs/op\nBenchmarkTranscriptRenderTailInvalidated-2   \t     100\t    118171 ns/op\t   85853 B/op\t     726 allocs/op\nBenchmarkTranscriptRenderTailInvalidated-2   \t     100\t    108676 ns/op\t   85144 B/op\t     726 allocs/op\nBenchmarkTranscriptRenderTailInvalidated-2   \t     100\t    110322 ns/op\t   85148 B/op\t     726 allocs/op\nBenchmarkTranscriptRenderStreaming-2         \t     100\t    112167 ns/op\t   84307 B/op\t     728 allocs/op\nBenchmarkTranscriptRenderStreaming-2         \t     100\t    113587 ns/op\t   84305 B/op\t     728 allocs/op\nBenchmarkTranscriptRenderStreaming-2         \t     100\t    109901 ns/op\t   83602 B/op\t     728 allocs/op\nBenchmarkAuditChatSessionLoad/100-2          \t     100\t  10077656 ns/op\t 9329694 B/op\t   78583 allocs/op\nBenchmarkAuditChatSessionLoad/100-2          \t     100\t   9953947 ns/op\t 9324799 B/op\t   78583 allocs/op\nBenchmarkAuditChatSessionLoad/100-2          \t     100\t   9750741 ns/op\t 9325438 B/op\t   78583 allocs/op\nBenchmarkAuditChatSessionLoad/1000-2         \t     100\t  12719314 ns/op\t12176033 B/op\t  100551 allocs/op\nBenchmarkAuditChatSessionLoad/1000-2         \t     100\t  12734403 ns/op\t12187313 B/op\t  100552 allocs/op\nBenchmarkAuditChatSessionLoad/1000-2         \t     100\t  12696639 ns/op\t12177408 B/op\t  100551 allocs/op\nBenchmarkSQLiteChatSessionLoad/100-2         \t     100\t   6232390 ns/op\t 7142690 B/op\t   61668 allocs/op\nBenchmarkSQLiteChatSessionLoad/100-2         \t     100\t   6539443 ns/op\t 7140197 B/op\t   61664 allocs/op\nBenchmarkSQLiteChatSessionLoad/100-2         \t     100\t   6267112 ns/op\t 7144199 B/op\t   61662 allocs/op\nBenchmarkSQLiteChatSessionLoad/1000-2        \t     100\t   7856814 ns/op\t 9132076 B/op\t   78902 allocs/op\nBenchmarkSQLiteChatSessionLoad/1000-2        \t     100\t   8096315 ns/op\t 9131040 B/op\t   78900 allocs/op\nBenchmarkSQLiteChatSessionLoad/1000-2        \t     100\t   7956564 ns/op\t 9127477 B/op\t   78899 allocs/op\nBenchmarkAuditChatGrowingReply/100-2         \t     100\t   1622938 ns/op\t  900855 B/op\t    2576 allocs/op\nBenchmarkAuditChatGrowingReply/100-2         \t     100\t   1632427 ns/op\t  896640 B/op\t    2576 allocs/op\nBenchmarkAuditChatGrowingReply/100-2         \t     100\t   1687632 ns/op\t  899449 B/op\t    2576 allocs/op\nBenchmarkAuditChatGrowingReply/1000-2        \t     100\t   1670578 ns/op\t  897324 B/op\t    2575 allocs/op\nBenchmarkAuditChatGrowingReply/1000-2        \t     100\t   1643331 ns/op\t  898015 B/op\t    2575 allocs/op\nBenchmarkAuditChatGrowingReply/1000-2        \t     100\t   1715568 ns/op\t  896613 B/op\t    2575 allocs/op\nBenchmarkAuditChatCacheOverflow-2            \t     100\t   2830041 ns/op\t 1627355 B/op\t    4017 allocs/op\nBenchmarkAuditChatCacheOverflow-2            \t     100\t   2799400 ns/op\t 1625949 B/op\t    4017 allocs/op\nBenchmarkAuditChatCacheOverflow-2            \t     100\t   2769052 ns/op\t 1625948 B/op\t    4017 allocs/op\nBenchmarkAuditChatGrowingBlocks-2            \t     100\t    796707 ns/op\t  545702 B/op\t    2234 allocs/op\nBenchmarkAuditChatGrowingBlocks-2            \t     100\t    798383 ns/op\t  544301 B/op\t    2234 allocs/op\nBenchmarkAuditChatGrowingBlocks-2            \t     100\t    815275 ns/op\t  545704 B/op\t    2234 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/chat\t24.445s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/tui/styles\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkAuditMarkdownManyBlocks-2   \t     100\t   2233539 ns/op\t 1581128 B/op\t   16532 allocs/op\nBenchmarkAuditMarkdownManyBlocks-2   \t     100\t   2108003 ns/op\t 1568492 B/op\t   16501 allocs/op\nBenchmarkAuditMarkdownManyBlocks-2   \t     100\t   2015064 ns/op\t 1571021 B/op\t   16511 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/tui/styles\t0.667s\n",
+    "after_raw": "goos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/llm/tools\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkWorkspaceDigest/200-2       \t     100\t   1370442 ns/op\t  298509 B/op\t    5028 allocs/op\nBenchmarkWorkspaceDigest/200-2       \t     100\t   1259814 ns/op\t  298120 B/op\t    5027 allocs/op\nBenchmarkWorkspaceDigest/200-2       \t     100\t   1273857 ns/op\t  298037 B/op\t    5027 allocs/op\nBenchmarkWorkspaceDigest/2000-2      \t     100\t  14131775 ns/op\t 2681604 B/op\t   50036 allocs/op\nBenchmarkWorkspaceDigest/2000-2      \t     100\t  13276595 ns/op\t 2681187 B/op\t   50036 allocs/op\nBenchmarkWorkspaceDigest/2000-2      \t     100\t  13286207 ns/op\t 2681840 B/op\t   50036 allocs/op\nBenchmarkWarmCodeIndexSearch/200-2   \t     100\t   1874640 ns/op\t  257377 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/200-2   \t     100\t   1651864 ns/op\t  256606 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/200-2   \t     100\t   1881323 ns/op\t  257004 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/2000-2  \t     100\t  16415098 ns/op\t  256256 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/2000-2  \t     100\t  16532372 ns/op\t  257010 B/op\t    1193 allocs/op\nBenchmarkWarmCodeIndexSearch/2000-2  \t     100\t  16501139 ns/op\t  257386 B/op\t    1193 allocs/op\nBenchmarkCitationCurrent-2           \t     100\t    563875 ns/op\t   71120 B/op\t     420 allocs/op\nBenchmarkCitationCurrent-2           \t     100\t    577302 ns/op\t   71056 B/op\t     420 allocs/op\nBenchmarkCitationCurrent-2           \t     100\t    587523 ns/op\t   71120 B/op\t     420 allocs/op\nBenchmarkFullWarmCodeIndexSearch/200-2         \t     100\t   3460874 ns/op\t  643047 B/op\t    4967 allocs/op\nBenchmarkFullWarmCodeIndexSearch/200-2         \t     100\t   3557259 ns/op\t  641440 B/op\t    4966 allocs/op\nBenchmarkFullWarmCodeIndexSearch/200-2         \t     100\t   3464080 ns/op\t  641223 B/op\t    4966 allocs/op\nBenchmarkFullWarmCodeIndexSearch/2000-2        \t     100\t  21680930 ns/op\t  638107 B/op\t    4963 allocs/op\nBenchmarkFullWarmCodeIndexSearch/2000-2        \t     100\t  20249038 ns/op\t  637961 B/op\t    4963 allocs/op\nBenchmarkFullWarmCodeIndexSearch/2000-2        \t     100\t  19791710 ns/op\t  638094 B/op\t    4963 allocs/op\nBenchmarkIndexRefreshChanges/one-file-2        \t     100\t    998070 ns/op\t   60612 B/op\t     607 allocs/op\nBenchmarkIndexRefreshChanges/one-file-2        \t     100\t    990600 ns/op\t   60307 B/op\t     612 allocs/op\nBenchmarkIndexRefreshChanges/one-file-2        \t     100\t    957760 ns/op\t   59855 B/op\t     606 allocs/op\nBenchmarkIndexRefreshChanges/policy-2          \t     100\t  20794550 ns/op\t 3040884 B/op\t   38441 allocs/op\nBenchmarkIndexRefreshChanges/policy-2          \t     100\t  22299409 ns/op\t 3043287 B/op\t   38442 allocs/op\nBenchmarkIndexRefreshChanges/policy-2          \t     100\t  22534926 ns/op\t 3042580 B/op\t   38442 allocs/op\nBenchmarkIndexRefreshChanges/periodic-2        \t     100\t  20592361 ns/op\t 2955469 B/op\t   38088 allocs/op\nBenchmarkIndexRefreshChanges/periodic-2        \t     100\t  17089516 ns/op\t 2961840 B/op\t   38088 allocs/op\nBenchmarkIndexRefreshChanges/periodic-2        \t     100\t  20659525 ns/op\t 2961862 B/op\t   38088 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools\t62.015s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/llm/agent\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkContextPreparation/prepare_only-2         \t     100\t    299598 ns/op\t  220978 B/op\t     444 allocs/op\nBenchmarkContextPreparation/prepare_only-2         \t     100\t    300663 ns/op\t  213838 B/op\t     444 allocs/op\nBenchmarkContextPreparation/prepare_only-2         \t     100\t    293618 ns/op\t  213835 B/op\t     444 allocs/op\nBenchmarkContextPreparation/agent_estimate-2       \t     100\t    264306 ns/op\t  207939 B/op\t     455 allocs/op\nBenchmarkContextPreparation/agent_estimate-2       \t     100\t    262297 ns/op\t  200766 B/op\t     455 allocs/op\nBenchmarkContextPreparation/agent_estimate-2       \t     100\t    293275 ns/op\t  200773 B/op\t     455 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t0.214s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/llm/provider\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkAuditKnownTokenizer/fixture/stable-2         \t     100\t    275683 ns/op\t 580.38 MB/s\t  206671 B/op\t     444 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/stable-2         \t     100\t    264806 ns/op\t 604.22 MB/s\t  206665 B/op\t     444 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/stable-2         \t     100\t    262892 ns/op\t 608.62 MB/s\t  199513 B/op\t     444 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/changing-2       \t     100\t    265147 ns/op\t 603.44 MB/s\t  208077 B/op\t     448 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/changing-2       \t     100\t    267892 ns/op\t 597.26 MB/s\t  215391 B/op\t     448 allocs/op\nBenchmarkAuditKnownTokenizer/fixture/changing-2       \t     100\t    266769 ns/op\t 599.77 MB/s\t  215229 B/op\t     448 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/stable-2          \t     100\t    343787 ns/op\t 465.40 MB/s\t  206612 B/op\t     443 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/stable-2          \t     100\t    332454 ns/op\t 481.27 MB/s\t  206621 B/op\t     443 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/stable-2          \t     100\t    334474 ns/op\t 478.36 MB/s\t  206618 B/op\t     443 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/changing-2        \t     100\t   5266148 ns/op\t  30.38 MB/s\t 9783246 B/op\t   65109 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/changing-2        \t     100\t   5177893 ns/op\t  30.90 MB/s\t 9740046 B/op\t   65108 allocs/op\nBenchmarkAuditKnownTokenizer/gpt-4o/changing-2        \t     100\t   5203700 ns/op\t  30.75 MB/s\t 9790711 B/op\t   65110 allocs/op\nBenchmarkPreparedImageBudget-2                        \t     100\t   1456557 ns/op\t 720.62 MB/s\t 2967086 B/op\t     123 allocs/op\nBenchmarkPreparedImageBudget-2                        \t     100\t   1407585 ns/op\t 745.69 MB/s\t 3037175 B/op\t     123 allocs/op\nBenchmarkPreparedImageBudget-2                        \t     100\t   1388186 ns/op\t 756.11 MB/s\t 3037202 B/op\t     124 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t2.426s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/message\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkConversationProjection-2   \t     100\t    561323 ns/op\t   16106 B/op\t     204 allocs/op\nBenchmarkConversationProjection-2   \t     100\t    565217 ns/op\t   15905 B/op\t     204 allocs/op\nBenchmarkConversationProjection-2   \t     100\t    639652 ns/op\t   15822 B/op\t     204 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/message\t0.228s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/tui/components/chat\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkAuditChatEvent/100-2                \t     100\t     88485 ns/op\t   65169 B/op\t     558 allocs/op\nBenchmarkAuditChatEvent/100-2                \t     100\t     92051 ns/op\t   64467 B/op\t     558 allocs/op\nBenchmarkAuditChatEvent/100-2                \t     100\t     91890 ns/op\t   65167 B/op\t     558 allocs/op\nBenchmarkAuditChatEvent/1000-2               \t     100\t    102127 ns/op\t   65158 B/op\t     558 allocs/op\nBenchmarkAuditChatEvent/1000-2               \t     100\t    101819 ns/op\t   64454 B/op\t     558 allocs/op\nBenchmarkAuditChatEvent/1000-2               \t     100\t    101801 ns/op\t   64455 B/op\t     558 allocs/op\nBenchmarkTranscriptRenderWarm-2              \t     100\t        51.43 ns/op\t       0 B/op\t       0 allocs/op\nBenchmarkTranscriptRenderWarm-2              \t     100\t        44.08 ns/op\t       0 B/op\t       0 allocs/op\nBenchmarkTranscriptRenderWarm-2              \t     100\t        56.27 ns/op\t       0 B/op\t       0 allocs/op\nBenchmarkTranscriptRenderTailInvalidated-2   \t     100\t    112679 ns/op\t   66267 B/op\t     557 allocs/op\nBenchmarkTranscriptRenderTailInvalidated-2   \t     100\t    103364 ns/op\t   65555 B/op\t     557 allocs/op\nBenchmarkTranscriptRenderTailInvalidated-2   \t     100\t    102365 ns/op\t   65562 B/op\t     557 allocs/op\nBenchmarkTranscriptRenderStreaming-2         \t     100\t    101283 ns/op\t   64266 B/op\t     560 allocs/op\nBenchmarkTranscriptRenderStreaming-2         \t     100\t    105710 ns/op\t   64978 B/op\t     560 allocs/op\nBenchmarkTranscriptRenderStreaming-2         \t     100\t    107303 ns/op\t   64979 B/op\t     560 allocs/op\nBenchmarkAuditChatSessionLoad/100-2          \t     100\t   9650229 ns/op\t 7623108 B/op\t   63028 allocs/op\nBenchmarkAuditChatSessionLoad/100-2          \t     100\t   9590536 ns/op\t 7625923 B/op\t   63028 allocs/op\nBenchmarkAuditChatSessionLoad/100-2          \t     100\t   9499086 ns/op\t 7616062 B/op\t   63028 allocs/op\nBenchmarkAuditChatSessionLoad/1000-2         \t     100\t  12367084 ns/op\t10008787 B/op\t   80643 allocs/op\nBenchmarkAuditChatSessionLoad/1000-2         \t     100\t  13671535 ns/op\t10014374 B/op\t   80643 allocs/op\nBenchmarkAuditChatSessionLoad/1000-2         \t     100\t  12951432 ns/op\t10000278 B/op\t   80642 allocs/op\nBenchmarkSQLiteChatSessionLoad/100-2         \t     100\t   5312861 ns/op\t 5129636 B/op\t   44499 allocs/op\nBenchmarkSQLiteChatSessionLoad/100-2         \t     100\t   5409847 ns/op\t 5123498 B/op\t   44492 allocs/op\nBenchmarkSQLiteChatSessionLoad/100-2         \t     100\t   5388411 ns/op\t 5132535 B/op\t   44509 allocs/op\nBenchmarkSQLiteChatSessionLoad/1000-2        \t     100\t   7292841 ns/op\t 6547869 B/op\t   56915 allocs/op\nBenchmarkSQLiteChatSessionLoad/1000-2        \t     100\t   6728149 ns/op\t 6549787 B/op\t   56912 allocs/op\nBenchmarkSQLiteChatSessionLoad/1000-2        \t     100\t   6895092 ns/op\t 6547537 B/op\t   56919 allocs/op\nBenchmarkAuditChatGrowingReply/100-2         \t     100\t   1375516 ns/op\t  759408 B/op\t    1857 allocs/op\nBenchmarkAuditChatGrowingReply/100-2         \t     100\t   1386506 ns/op\t  762224 B/op\t    1857 allocs/op\nBenchmarkAuditChatGrowingReply/100-2         \t     100\t   1432399 ns/op\t  759407 B/op\t    1857 allocs/op\nBenchmarkAuditChatGrowingReply/1000-2        \t     100\t   1401429 ns/op\t  756562 B/op\t    1856 allocs/op\nBenchmarkAuditChatGrowingReply/1000-2        \t     100\t   1402469 ns/op\t  757272 B/op\t    1857 allocs/op\nBenchmarkAuditChatGrowingReply/1000-2        \t     100\t   1405918 ns/op\t  758670 B/op\t    1857 allocs/op\nBenchmarkAuditChatCacheOverflow-2            \t     100\t   2560371 ns/op\t 1579684 B/op\t    3478 allocs/op\nBenchmarkAuditChatCacheOverflow-2            \t     100\t   2615722 ns/op\t 1580392 B/op\t    3478 allocs/op\nBenchmarkAuditChatCacheOverflow-2            \t     100\t   2626272 ns/op\t 1578980 B/op\t    3477 allocs/op\nBenchmarkAuditChatGrowingBlocks-2            \t     100\t    665576 ns/op\t  479997 B/op\t    1864 allocs/op\nBenchmarkAuditChatGrowingBlocks-2            \t     100\t    668115 ns/op\t  482106 B/op\t    1864 allocs/op\nBenchmarkAuditChatGrowingBlocks-2            \t     100\t    737890 ns/op\t  481404 B/op\t    1864 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/chat\t21.926s\ngoos: linux\ngoarch: amd64\npkg: github.com/raulaguila/opcode/internal/tui/styles\ncpu: 12th Gen Intel(R) Core(TM) i9-12900K\nBenchmarkAuditMarkdownManyBlocks-2   \t     100\t   1937257 ns/op\t 1481792 B/op\t   14993 allocs/op\nBenchmarkAuditMarkdownManyBlocks-2   \t     100\t   1874577 ns/op\t 1478413 B/op\t   14990 allocs/op\nBenchmarkAuditMarkdownManyBlocks-2   \t     100\t   1877069 ns/op\t 1479405 B/op\t   14988 allocs/op\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/tui/styles\t0.594s\n",
+    "no_concurrent_inference_or_tests": true,
+    "earlier_candidate_excluded": "Initial candidates excluded after bounded native-equivalent code-padding and frame optimizations; preserved baseline and final candidate measured serially"
+  },
+  "limits": [
+    "Code nested inside Markdown blockquotes retains the native container renderer; direct and list code blocks get the new surface",
+    "Benchmarks do not measure inference quality/speed; component timing variations are documented in docs/performance.md",
+    "Overview search is bounded and may find no relevant hits; the prompt requires further tools or an honest inspection limit",
+    "Windows amd64 and Darwin arm64 cross-built, not run natively",
+    "Private company providers were not accessed"
+  ]
+}

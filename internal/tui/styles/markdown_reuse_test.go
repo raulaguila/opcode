@@ -36,13 +36,10 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 		measure := referenceBlockWidth(node, width, proseWidth)
 		block := ast.NewDocument()
 		block.AppendChild(block, node)
-		renderWidth := markdownProseRenderWidth(node, measure)
+		renderWidth := markdownNodeRenderWidth(node, source, measure)
 		code := markdownCodeBlock(node)
-		if code {
-			renderWidth = markdownCodeWidth(measure)
-		}
 		r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{
-			WordWrap: renderWidth, Styles: markdownBlockStyle(generateMarkdownStyleConfig(), code),
+			WordWrap: renderWidth, Styles: markdownBlockStyle(generateMarkdownStyleConfig(), code), ChromaFormatter: "terminal16m",
 		}), 1000)))
 		var out bytes.Buffer
 		if err := r.Render(&out, source, block); err != nil {
@@ -51,16 +48,24 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 			return result
 		}
 		if rendered := trimMarkdownBlockPadding(out.String()); rendered != "" {
-			if code {
-				rendered = renderMarkdownCodeSurface(preserveMarkdownCodePadding(rendered, node, source), node, source, measure)
-			} else if renderWidth == 0 {
-				rendered = wrapMarkdownProse(rendered, measure)
-			}
-			blocks = append(blocks, rendered)
+			blocks = append(blocks, referenceSurface(rendered, node, source, measure, renderWidth))
 		}
 		node = next
 	}
 	return TerminalOutput(strings.Join(blocks, "\n\n"))
+}
+
+func referenceSurface(rendered string, node ast.Node, source []byte, measure, renderWidth int) string {
+	if markdownCodeBlock(node) {
+		if renderWidth == 0 {
+			rendered = padMarkdownCode(rendered, markdownCodeWidth(measure))
+		}
+		return renderMarkdownCodeSurface(preserveMarkdownCodePadding(rendered, node, source), node, source, measure)
+	}
+	if renderWidth == 0 {
+		rendered = wrapMarkdownProse(rendered, measure)
+	}
+	return restoreBackground(rendered, theme.CurrentTheme().Background())
 }
 
 func referenceBlockWidth(node ast.Node, width, proseWidth int) int {

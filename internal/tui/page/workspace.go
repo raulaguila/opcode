@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/raulaguila/opcode/internal/tui/commands"
 	"github.com/raulaguila/opcode/internal/workflow"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -533,7 +532,7 @@ func (p *chatPage) exportConversation() tea.Cmd {
 	if err = localstate.WriteBytes(path, data); err != nil {
 		return util.ReportError(err)
 	}
-	return util.ReportInfo("Conversa exportada: " + path)
+	return util.ReportInfo(config.Text("Conversa exportada: ", "Conversation exported: ") + path)
 }
 func safeExportName(id string) string {
 	return regexp.MustCompile(`[^a-zA-Z0-9_-]`).ReplaceAllString(id, "_")
@@ -548,8 +547,7 @@ func (p *chatPage) openResponseActions(text string) tea.Cmd {
 	for i, match := range regexp.MustCompile("(?s)```[^\\n]*\\n(.*?)```").FindAllStringSubmatch(text, 10) {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf(config.Text("Copiar código %d", "Copy code %d"), i+1), kind: "copy", text: match[1]})
 	}
-	seen := map[string]bool{}
-	appendCitationActions(p, text, seen)
+	appendCitationActions(p, text)
 	p.workspace.body = config.Text("Escolha uma ação. Prévia de arquivo é leitura local e não libera alterações para o agente.", "Choose an action. File preview is a local read and does not authorize agent edits.")
 	return nil
 }
@@ -604,6 +602,10 @@ func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 	case "text":
 		p.showWorkspace("text", config.Text("Texto para seleção", "Selectable text"), item.text)
 		return nil
+	case "sources":
+		return p.openCitationSources(item.text)
+	case "source":
+		return p.openCitationSource(item.text, item.path)
 	case "file":
 		return p.openFile(item.path, item.line)
 	case "copy":
@@ -961,38 +963,6 @@ func workspaceMouseContract(p *chatPage, msg *tea.MouseMsg) (extractedResult0 te
 		return nil, true
 	}
 	return extractedResult0, false
-}
-
-func appendCitationActions(p *chatPage, text string, seen map[string]bool) {
-	for _, match := range regexp.MustCompile("`([^`\\n]+)`|([[:alnum:]_./-]+\\.[[:alnum:]]+:[0-9]+)").FindAllStringSubmatch(text, 40) {
-		path := match[1]
-		if path == "" {
-			path = match[2]
-		}
-		line := 1
-		splitCitationLine(&path, &line)
-		if strings.ContainsAny(path, "\n\x00") || strings.Contains(path, "://") || seen[path] {
-			continue
-		}
-		absolute := path
-		if !filepath.IsAbs(absolute) {
-			absolute = filepath.Join(config.WorkingDirectory(), path)
-		}
-		info, err := os.Lstat(absolute)
-		if err != nil || info.IsDir() {
-			continue
-		}
-		seen[path] = true
-		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: config.Text("Abrir fonte · ", "Open source · ") + path, kind: "file", path: absolute, line: line})
-	}
-}
-
-func splitCitationLine(path *string, line *int) {
-	if ix := strings.LastIndex((*path), ":"); ix > 0 {
-		if _, err := fmt.Sscanf((*path)[ix+1:], "%d", line); err == nil {
-			(*path) = (*path)[:ix]
-		}
-	}
 }
 
 func workspaceViewTurn(p *chatPage, w int) {

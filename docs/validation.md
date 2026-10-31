@@ -1213,3 +1213,42 @@ imports da base Charm v1, e passou nos 32 gates de alocação originais de 10%.
 Há regressões locais de tempo em quatro casos; ver [Desempenho](performance.md).
 Condições, amostras brutas, hashes e resultados estão na
 [evidência da atualização](evidence/2026-10-30-dependency-upgrade-validation.json).
+
+## Menus, leitura e estados da conversa — 30/10/2026
+
+Os menus agora atenuam o fundo, compartilham a geometria de desenho/clique e
+priorizam ações. O seletor distingue capacidade desconhecida de modelo apenas
+de embeddings, mostra hospedagem somente quando informada e reúne limites de
+contexto iguais. O chat mantém comentários públicos fora dos processos,
+perguntas respondidas compactas, recuos e referências completas para cópia.
+
+A bateria passou nos 14 checks: testes normais e integração com `-race -p 1`,
+vet/staticcheck dos dois conjuntos, complexidade máxima 15, módulos, inventário
+de linguagens, workflows, vulnerabilidades e builds Linux amd64, Windows amd64 e
+Darwin arm64. Após extrair a medição de largura da função de referência de um
+teste, a suíte de estilos foi repetida com `-race`; a comparação exata dos bytes
+renderizados foi preservada. Windows/macOS têm cobertura de compilação nesta
+rodada; o PTY executa em Linux.
+
+O PTY identifica um cuidado importante com `vt10x`: fragmentos de um caractere
+UTF-8 de três ou quatro bytes podiam ser consumidos incompletos. Produção e os
+dois harnesses agora retêm o fragmento antes de atualizar a tela virtual. Os
+testes comparam cada divisão de bytes, texto cru, células, cursor e atributos;
+a saída original não é normalizada nem descartada.
+
+Os dez cenários finais de PTY passaram com o binário de produção, sem skips.
+O fluxo real usou `nemotron-3.5-bolt:e4b` no Ollama local: explicação com citação,
+pergunta e resposta, comando exato aprovado na UI, saída antes do término,
+entrada `ação 漢字` e nova instrução durante o comando, sem repetição de efeitos.
+Também passaram seleção/cópia, revisões verificadas e falhas de citação,
+catálogo indisponível/retentativa, cancelamento/exclusão de conexão, modos,
+rascunho, resize e temas claro/escuro/NO_COLOR. O teste de temas passou a exigir
+o rótulo novo e exato `Context in use: 16k`, com uma única linha; os critérios de
+segurança e citações não mudaram. Os 16k são uma opção explícita da fixture,
+não o máximo anunciado do modelo. Nenhum provedor privado foi acessado.
+
+A matriz de benchmarks contra `abdf380` passou nos 32 casos, com as mesmas 14
+fixtures e o gate de 10% inalterado. Há ganhos no Markdown/streaming e duas
+regressões locais de tempo documentadas em [Desempenho](performance.md).
+Os resultados e limites estão na
+[evidência desta rodada](evidence/2026-10-30-ui-menu-refinement-validation.json).

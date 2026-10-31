@@ -74,8 +74,8 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	}
 	if state.Terminal {
 		center = config.Shortcut("terminal") + config.Text(" conversa", " chat")
-	} else if state.Activity != "" {
-		center = state.Activity
+	} else if state.Activity != "" || state.Busy {
+		center = footerActivityLabel(state)
 		if state.Busy {
 			center += config.Text(" · Esc cancela", " · Esc cancels")
 		}
@@ -241,11 +241,8 @@ func labelsTypeUtilInfoTypeError(m *statusCmp, state *util.FooterState, center *
 
 func metricsWidth(m *statusCmp, state *util.FooterState, text *string) (extractedResult0 string, handled bool) {
 	if m.width >= 110 {
-		if state.Busy && state.AwaitingModel {
-			return (*text) + " · " + config.Text("Aguardando modelo…", "Awaiting model…"), true
-		}
-		if state.Busy && state.SpeedLive && state.TokensPerSecond <= 0 {
-			return (*text) + " · " + config.Text("Gerando…", "Generating…"), true
+		if state.Busy && (state.AwaitingModel || state.SpeedLive && state.TokensPerSecond <= 0) {
+			return *text, true
 		}
 		rate := "—"
 		metricsWidthIsInfStateTokensPerSecond(state, &rate)
@@ -275,4 +272,17 @@ func labelsGet(right *string) {
 			}
 		}
 	}
+}
+
+func footerActivityLabel(state util.FooterState) string {
+	if state.Activity != "" {
+		return state.Activity
+	}
+	if state.AwaitingModel {
+		return config.Text("Aguardando modelo…", "Awaiting model…")
+	}
+	if state.SpeedLive {
+		return config.Text("Gerando…", "Generating…")
+	}
+	return config.Text("Trabalhando…", "Working…")
 }

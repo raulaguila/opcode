@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/hinshun/vt10x"
@@ -144,9 +145,24 @@ func (w terminalOutput) Write(data []byte) (int, error) {
 	p.screenMu.Lock()
 	defer p.screenMu.Unlock()
 	combined := append(p.partialRune, data...)
-	n, _ := p.screen.Write(combined)
+	n, _ := p.screen.Write(combined[:completeTerminalUTF8Prefix(combined)])
 	p.partialRune = append(p.partialRune[:0], combined[n:]...)
 	return len(data), nil
+}
+
+// vt10x can consume the leading byte of an incomplete 3/4-byte rune.
+// Inspect only the last four bytes and retain the unfinished rune intact.
+func completeTerminalUTF8Prefix(data []byte) int {
+	end := len(data)
+	for start := end - 1; start >= 0 && end-start <= utf8.UTFMax; start-- {
+		if utf8.RuneStart(data[start]) {
+			if !utf8.FullRune(data[start:]) {
+				return start
+			}
+			return end
+		}
+	}
+	return end
 }
 
 func terminalSize(cols, rows int) (int, int) {

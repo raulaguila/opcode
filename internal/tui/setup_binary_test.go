@@ -295,23 +295,9 @@ func testBinaryFirstRunStateCaseCase(t *testing.T, lines []string, previous *int
 }
 
 func testBinaryFirstRunStateNBufferNPending(controls []string, pending *[]byte, display *[]byte) {
-	for len((*pending)) > 0 {
-		prefix := false
-		for _, control := range controls {
-			if strings.HasPrefix(control, string((*pending))) {
-				prefix = true
-				if control == string((*pending)) {
-					(*pending) = nil
-				}
-				break
-			}
-		}
-		if prefix {
-			break
-		}
-		(*display) = append((*display), (*pending)[0])
-		(*pending) = (*pending)[1:]
-	}
+	filter := ptyUIControlFilter{pending: *pending}
+	writeFPending(&filter, controls, display)
+	*pending = filter.pending
 }
 
 func testBinaryFirstRunNoCredentials(t *testing.T, configuration map[string]json.RawMessage) {

@@ -2,6 +2,15 @@
 
 ## Em desenvolvimento — 2026-10-30
 
+- Prosa usa a largura interna exata, mantém percentuais decimais na mesma
+  palavra e apresenta ênfase incompleta de streaming provisoriamente.
+- Rodapé distingue espera, geração, validação e conclusão; histórico interno
+  informa finalização. Perguntas respondidas ficam compactas e legíveis.
+- Seletor distingue embeddings informados, hospedagem e limites de contexto;
+  paleta e conexões têm ações consistentes e cliques alinhados ao desenho.
+- Fontes citadas são agrupadas por arquivo, preservando intervalos e cópia
+  integral; a prévia continua protegida pelas permissões normais.
+- UTF-8 fragmentado é preservado no painel de terminal e nos simuladores PTY.
 - Interface migrada para Bubble Tea/Bubbles/Lip Gloss/Glamour v2, com eventos
   nativos de teclado, mouse e colagem e compatibilidade dos temas existentes.
 - Menus e formulários alinhados ao painel de pergunta: bordas retas, seleção

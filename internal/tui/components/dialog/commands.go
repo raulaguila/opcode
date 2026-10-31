@@ -131,55 +131,121 @@ func (c *commandDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	return c, tea.Batch(cmds...)
 }
 
-func (c *commandDialogCmp) View() string {
-	t := theme.CurrentTheme()
-	baseStyle := dialogBody()
+type commandGeometry struct {
+	width, start, count, firstRow, padding int
+	details                                []string
+}
 
-	maxWidth := 64
+func (c *commandDialogCmp) geometry() commandGeometry {
+	g := commandGeometry{width: 64, padding: 1}
 	if c.width > 0 {
-		maxWidth = max(8, min(maxWidth, c.width-8))
+		g.width = max(8, min(g.width, c.width-8))
 	}
-	c.search.SetWidth(maxWidth - 2)
-
-	title := baseStyle.
-		Foreground(t.Primary()).
-		Bold(true).
-		Width(maxWidth).
-		Padding(0, 1).
-		Render(c.dialogTitle())
-
-	rows := []string{title, baseStyle.Width(maxWidth).Render(c.search.View()), ""}
+	headers := 3
 	if c.activeID != "" {
-		rows = []string{title}
+		headers = 1
+	}
+	if c.height > 0 && c.height < 10 {
+		g.padding = 0
+		if headers == 3 {
+			headers = 2
+		}
+	}
+	g.firstRow = 1 + g.padding + headers
+	g.details = c.detailLines(g.width)
+	available := 8 + len(g.details)
+	if c.height > 0 {
+		available = max(1, c.height-(2+2*g.padding)-headers-2)
+	}
+	g.details = g.details[:min(len(g.details), max(0, available-1))]
+	g.count = max(1, min(8, available-len(g.details)))
+	_, selected := c.listView.GetSelectedItem()
+	g.start = max(0, selected-g.count+1)
+	return g
+}
+
+func (c *commandDialogCmp) detailLines(width int) []string {
+	item, index := c.listView.GetSelectedItem()
+	if index < 0 {
+		return nil
+	}
+	_, description := commands.Presentation(item.ID, item.Title, item.Description)
+	if c.activeID != "" {
+		description = modeConsequence(item.ID)
+	} else {
+		description = "/" + item.ID + " · " + description
+	}
+	if c.activeID == "" {
+		return []string{ansi.Truncate(description, width, "…")}
+	}
+	return strings.Split(ansi.Wrap(description, width, ""), "\n")
+}
+
+func modeConsequence(id string) string {
+	switch id {
+	case "mode-ask":
+		return config.Text("Lê e explica o projeto, sem alterar arquivos.", "Reads and explains the project without changing files.")
+	case "mode-plan":
+		return config.Text("Prepara um plano, sem comandos ou edições.", "Prepares a plan without commands or edits.")
+	case "mode-execute":
+		return config.Text("Permite alterações e solicita as permissões necessárias.", "Allows changes and requests the required permissions.")
+	}
+	return ""
+}
+
+func (c *commandDialogCmp) View() string {
+	g := c.geometry()
+	base := dialogBody()
+	c.search.SetWidth(g.width - 2)
+	rows := []string{styles.PanelTitle().Width(g.width).Render(c.dialogTitle())}
+	if c.activeID == "" {
+		rows = append(rows, base.Width(g.width).Render(c.search.View()))
+		if g.padding > 0 {
+			rows = append(rows, "")
+		}
 	}
 	items := c.listView.GetItems()
 	_, selected := c.listView.GetSelectedItem()
-	count := 8
-	if c.height > 0 {
-		count = max(1, min(count, c.height-11))
+	for i := g.start; i < min(len(items), g.start+g.count); i++ {
+		rows = append(rows, c.commandRow(items[i], i == selected, g.width))
 	}
-	start := max(0, selected-count+1)
-	viewStart(c, t, &baseStyle, maxWidth, &rows, items, selected, count, start)
 	if len(items) == 0 {
 		rows = append(rows, config.Text("Nenhum comando encontrado", "No commands found"))
 	}
-	if selected >= 0 && selected < len(items) && (c.height == 0 || c.height >= 12) {
-		item := items[selected]
-		_, description := commands.Presentation(item.ID, item.Title, item.Description)
-		rows = append(rows, baseStyle.Foreground(t.TextMuted()).Render(ansi.Truncate("/"+item.ID+" · "+description, maxWidth, "…")))
+	for _, detail := range g.details {
+		rows = append(rows, base.Foreground(theme.CurrentTheme().TextMuted()).Render(detail))
 	}
 	hint := config.Text("↑↓ escolher · Enter abrir · Esc voltar", "↑↓ select · Enter open · Esc back")
 	if c.activeID != "" {
 		hint = config.Text("↑↓ escolher · Enter aplicar modo · Esc voltar", "↑↓ select · Enter apply mode · Esc back")
 	}
-	rows = append(rows, styles.PanelDivider(maxWidth), ansi.Truncate(hint, maxWidth, "…"))
-	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
+	rows = append(rows, styles.PanelDivider(g.width), ansi.Truncate(hint, g.width, "…"))
+	return styles.Panel().Padding(g.padding, 2).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+}
 
-	return baseStyle.Padding(1, 2).
-		Border(lipgloss.NormalBorder()).
-		BorderBackground(t.BackgroundSecondary()).
-		BorderForeground(t.TextMuted()).
-		Render(content)
+func (c *commandDialogCmp) commandRow(item Command, selected bool, width int) string {
+	name, _ := commands.Presentation(item.ID, item.Title, item.Description)
+	if localized := modeActionTitle(item.ID); localized != "" {
+		name = localized
+	}
+	if item.ID == c.activeID {
+		name = "✓ " + name
+	}
+	mark := "  "
+	style := dialogBody()
+	if selected {
+		mark = "› "
+		style = styles.SelectedRow().Bold(true)
+	}
+	if c.activeID != "" || width < 48 {
+		return style.Width(width).Render(ansi.Truncate(mark+name, width, "…"))
+	}
+	category := commands.Category(item.ID)
+	titleWidth := max(1, width-ansi.StringWidth(category)-3)
+	title := ansi.Truncate(mark+name, titleWidth, "…")
+	title += strings.Repeat(" ", max(0, width-ansi.StringWidth(title)-ansi.StringWidth(category)))
+	quiet := style.Foreground(theme.CurrentTheme().TextMuted()).Bold(false).Render(category)
+	return style.Width(width).Render(title + quiet)
 }
 
 func (c *commandDialogCmp) BindingKeys() []key.Binding {
@@ -245,25 +311,17 @@ func NewCommandDialogCmp() CommandDialog {
 	}
 }
 
-func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
-	if leftClick(msg) {
-		items := c.listView.GetItems()
-		_, selected := c.listView.GetSelectedItem()
-		count := 8
-		if c.height > 0 {
-			count = max(1, min(8, c.height-10))
-		}
-		start := max(0, selected-count+1)
-		row := msg.Mouse().Y - 5
-		if c.activeID != "" {
-			row = msg.Mouse().Y - 3
-		}
-		if msg.Mouse().X >= 3 && row >= 0 && row < count && start+row < len(items) {
-			return c, util.CmdHandler(CommandSelectedMsg{Command: items[start+row]})
-		}
+func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg tea.MouseMsg) (util.Model, tea.Cmd) {
+	if !leftClick(msg) {
+		return c, nil
+	}
+	g := c.geometry()
+	row := msg.Mouse().Y - g.firstRow
+	items := c.listView.GetItems()
+	if msg.Mouse().X >= 3 && msg.Mouse().X < 3+g.width && row >= 0 && row < g.count && g.start+row < len(items) {
+		return c, util.CmdHandler(CommandSelectedMsg{Command: items[g.start+row]})
 	}
 	return c, nil
-
 }
 
 func updateCaseTeaKeyMsgCase(c *commandDialogCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
@@ -290,22 +348,14 @@ func updateCaseTeaKeyMsgCase(c *commandDialogCmp, msg *tea.KeyPressMsg) (extract
 	return extractedResult0, extractedResult1, false
 }
 
-func viewStart(c *commandDialogCmp, t theme.Theme, baseStyle *lipgloss.Style, maxWidth int, rows *[]string, items []Command, selected int, count int, start int) {
-	for i := start; i < min(len(items), start+count); i++ {
-		item := items[i]
-		name, _ := commands.Presentation(item.ID, item.Title, item.Description)
-		if c.activeID == "" && maxWidth >= 48 {
-			name = commands.Category(item.ID) + " · " + name
-		}
-		if item.ID == c.activeID {
-			name = "✓ " + name
-		}
-		style := baseStyle.Width(maxWidth)
-		mark := "  "
-		if i == selected {
-			mark = "› "
-			style = style.Foreground(t.Text()).Background(t.BorderDim()).Bold(true)
-		}
-		(*rows) = append((*rows), style.Render(ansi.Truncate(mark+name, maxWidth, "…")))
+func modeActionTitle(id string) string {
+	switch id {
+	case "mode-ask":
+		return config.Text("Perguntar", "Ask")
+	case "mode-plan":
+		return config.Text("Planejar", "Plan")
+	case "mode-execute":
+		return config.Text("Executar", "Execute")
 	}
+	return ""
 }

@@ -298,6 +298,12 @@ func (snapshot providerCatalogSnapshot) discoveredModel(p Provider, model models
 }
 
 func (snapshot providerCatalogSnapshot) refreshAutomaticModel(existing, model models.Model, overridden bool) models.Model {
+	if model.SupportsChat != nil {
+		existing.SupportsChat = model.SupportsChat
+	}
+	if model.Hosting != "" {
+		existing.Hosting = model.Hosting
+	}
 	if existing.ContextAuto || !overridden {
 		existing.ContextAuto = true
 		if !model.ContextEstimated || existing.ContextEstimated {

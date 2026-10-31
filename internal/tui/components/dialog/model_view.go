@@ -177,6 +177,7 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 		return result0
 	}
 	rows := []string{"ID: " + selected.APIModel, context, effective, tools}
+	rows = append(rows, modelHostingDetailLines(selected)...)
 	if m.height > 0 && m.height < 18 {
 		return rows
 	}
@@ -235,9 +236,9 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	position += config.Text(" · ✓ atual", " · ✓ current")
 	rows = append(rows, line(position))
-	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P edita · Ctrl+D · Esc", "Enter choose · Tab provider · Ctrl+P edit · Ctrl+D · Esc")
+	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P edita · Ctrl+D detalhes · Esc", "Enter choose · Tab provider · Ctrl+P edit · Ctrl+D details · Esc")
 	if g.width < 48 {
-		hint = config.Text("↑↓ · Enter · Esc · Ctrl+D", "↑↓ · Enter · Esc · Ctrl+D")
+		hint = config.Text("Enter · Ctrl+D detalhes · Esc", "Enter · Ctrl+D details · Esc")
 	}
 	if len(m.filtered) == 0 && !m.loading {
 		hint = config.Text("Tab provedor · Ctrl+R tenta · Ctrl+P edita · Esc", "Tab provider · Ctrl+R retry · Ctrl+P edit · Esc")
@@ -291,6 +292,9 @@ func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme,
 			mark = "✓"
 		}
 		label := m.modelLabel(model)
+		if hosting := modelHostingLabel(model); hosting != "" {
+			label += " · " + hosting
+		}
 		prefs := config.Get().Preferences
 		if containsModel(prefs.FavoriteModels, model.ID) {
 			label = "★ " + label
@@ -329,12 +333,44 @@ func modelDetailLinesActiveContextModelTargetAgentCoder(m *modelDialogCmp, selec
 
 func modelDetailLinesDetails(m *modelDialogCmp, context string, effective string, tools string) (extractedResult0 []string, handled bool) {
 	if !m.details {
+		selected := m.filtered[m.selectedIdx]
+		if selected.ContextWindow > 0 && selected.ID == m.activeContextModel && m.target == config.AgentCoder && selected.ContextWindow == m.activeContextWindow {
+			context = fmt.Sprintf(config.Text("Contexto em uso: %s", "Context in use: %s"), compactModelTokens(selected.ContextWindow))
+			if m.height > 0 && m.height < 18 {
+				return []string{context}, true
+			}
+			return []string{context, tools}, true
+		}
 		if m.height > 0 && m.height < 18 {
 			return []string{context, effective}, true
 		}
 		return []string{context, effective, tools}, true
 	}
 	return extractedResult0, false
+}
+
+func compactModelTokens(n int64) string {
+	if n >= 1024 && n%1024 == 0 {
+		return fmt.Sprintf("%dk", n/1024)
+	}
+	return fmt.Sprint(n)
+}
+
+func modelHostingLabel(model models.Model) string {
+	switch model.Hosting {
+	case "local":
+		return "Local"
+	case "cloud":
+		return config.Text("Nuvem", "Cloud")
+	}
+	return ""
+}
+
+func modelHostingDetailLines(model models.Model) []string {
+	if hosting := modelHostingLabel(model); hosting != "" {
+		return []string{config.Text("Execução: ", "Hosting: ") + hosting + config.Text(" · informada pelo provedor", " · reported by provider")}
+	}
+	return nil
 }
 
 func catalogViewScrollOffsetModelIDActive(active models.ModelID, model *models.Model, prefs *config.Preferences, group *string) {

@@ -29,6 +29,7 @@ func (m *providerDialogCmp) handleProviderMessage(msg tea.Msg) connectionAction 
 
 func (m *providerDialogCmp) finishCatalogTest(result providerTestMsg) {
 	m.testing, m.cancel = false, nil
+	m.catalogTested = true
 	if result.err != nil {
 		m.note = config.Text("Falha na consulta: ", "Connection test failed: ") + result.err.Error()
 	} else {
@@ -154,7 +155,7 @@ func (m *providerDialogCmp) toggleAdvancedFields() {
 }
 
 func (m *providerDialogCmp) invalidateCatalogTest() {
-	if m.testing {
+	if m.testing || m.catalogTested {
 		m.Close()
 		m.note = "Edited; test again to validate these settings."
 	}
@@ -219,15 +220,7 @@ func (m *providerDialogCmp) providerRowClick(msg tea.MouseMsg) connectionAction 
 
 func (m *providerDialogCmp) providerFooterClick(msg tea.MouseMsg) connectionAction {
 	if m.screen == "list" {
-		if clickedLabel(m.View(), config.Text("[Excluir]", "[Delete]"), msg) {
-			return connectionHandled(m.startDelete())
-		}
-		if clickedLabel(m.View(), config.Text("[Preferências]", "[Preferences]"), msg) {
-			return connectionHandled(m.settings())
-		}
-		if clickedLabel(m.View(), config.Text("[Integrações]", "[Integrations]"), msg) {
-			return connectionHandled(util.CmdHandler(OpenIntegrationDialogMsg{}))
-		}
+		return m.providerListFooterClick(msg)
 	}
 	if m.screen == "provider" {
 		for _, action := range []struct {
@@ -238,6 +231,24 @@ func (m *providerDialogCmp) providerFooterClick(msg tea.MouseMsg) connectionActi
 				_, cmd := m.Update(action.key)
 				return connectionHandled(cmd)
 			}
+		}
+	}
+	return connectionAction{}
+}
+
+func (m *providerDialogCmp) providerListFooterClick(msg tea.MouseMsg) connectionAction {
+	for _, action := range []struct {
+		label string
+		key   tea.KeyPressMsg
+	}{
+		{config.Text("[Adicionar]", "[Add]"), tea.KeyPressMsg{Text: "n"}},
+		{config.Text("[Editar]", "[Edit]"), tea.KeyPressMsg{Code: tea.KeyEnter}},
+		{config.Text("[Excluir]", "[Delete]"), tea.KeyPressMsg{Text: "d"}},
+		{config.Text("[Preferências]", "[Preferences]"), tea.KeyPressMsg{Text: "p"}},
+		{config.Text("[Integrações]", "[Integrations]"), tea.KeyPressMsg{Text: "i"}},
+	} {
+		if clickedLabel(m.View(), action.label, msg) {
+			return connectionHandled(m.handleProviderListKey(action.key))
 		}
 	}
 	return connectionAction{}

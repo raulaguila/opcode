@@ -10,15 +10,15 @@ import (
 type ActivityMsg struct{ SessionID, State string }
 
 func ActivityForMessage(m message.Message) string {
-	if m.IsApplication() {
-		return config.Text("Conferindo resposta e fontes", "Checking answer and sources")
+	if m.IsApplication() || m.CitationValidation() == message.CitationPending || m.CitationValidation() == message.CitationRevising {
+		return config.Text("Validando referências", "Validating references")
 	}
 	calls := m.ToolCalls()
 	if len(calls) == 0 {
 		if m.Content().Text != "" {
-			return config.Text("Preparando resposta", "Writing response")
+			return config.Text("Gerando resposta", "Generating response")
 		}
-		return config.Text("Consultando modelo", "Contacting model")
+		return config.Text("Aguardando modelo", "Awaiting model")
 	}
 	name := calls[len(calls)-1].Name
 	switch {

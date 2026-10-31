@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty"
@@ -68,7 +69,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 		"README.md":      "# IgarapeWatch\n\nAplicativo em Go para coletar métricas de sensores via MQTT, armazenar os dados em SQLite e gerar relatórios pela linha de comando.\n",
 		"go.mod":         "module example.test/igarapewatch\n\ngo 1.26\n",
 		"main.go":        "package main\n\n// IgarapeWatch collects sensor data in SQLite.\nfunc main() {}\n",
-		"interactive.sh": "[ -t 0 ] || exit 42\nprintf started > .cache/ui-acceptance-artifacts/command-started\nprintf 'LIVE_READY\\n'\nIFS= read -r value\nprintf 'LIVE_INPUT:%s\\n' \"$value\"\n",
+		"interactive.sh": "[ -t 0 ] || exit 42\nprintf started > .cache/ui-acceptance-artifacts/command-started\nprintf 'LIVE_READY ação 漢字\\n'\nIFS= read -r value\nprintf 'LIVE_INPUT:%s\\n' \"$value\"\n",
 		"lsp-stderr.sh":  "printf ran > .cache/ui-acceptance-artifacts/lsp-stderr-ran\nfor ((i=0;i<4096;i++)); do printf 'UI_LSP_SECRET_SENTINEL_%s\\n' \"$i\" >&2; done\nexit 1\n",
 	}
 	for name, contents := range fixtures {
@@ -294,7 +295,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	}
 	h.send("a") // approve once, through the actual permission dialog.
 	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow (a)") })
-	h.wait("live command output before process exit", 15*time.Second, func(frame string) bool { return strings.Contains(frame, "LIVE_READY") })
+	h.wait("live command output before process exit", 15*time.Second, func(frame string) bool { return strings.Contains(frame, "LIVE_READY ação 漢字") })
 	t.Log("one exact PTY bash command approved through UI; live output appeared before process exit")
 	steering := "Nova instrução: quando o comando atual terminar, responda apenas LIVE_STEERING_OK. Não execute mais ferramentas."
 	h.paste(steering)
@@ -306,8 +307,8 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.wait("terminal focus", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "Terminal") && strings.Contains(frame, "running")
 	})
-	h.send("HUMAN_PTY_OK\r")
-	h.wait("human input delivered to PTY", 15*time.Second, func(frame string) bool { return strings.Contains(frame, "LIVE_INPUT:HUMAN_PTY_OK") })
+	h.send("HUMAN_PTY_OK ação 漢字\r")
+	h.wait("human input delivered to PTY", 15*time.Second, func(frame string) bool { return strings.Contains(frame, "LIVE_INPUT:HUMAN_PTY_OK ação 漢字") })
 	h.send("\x10")
 	h.wait("steered response and persisted tool result", 180*time.Second, func(callbackArg0 string) bool {
 		return testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(&conn, callbackArg0)
@@ -781,8 +782,15 @@ func writeFPending(f *ptyUIControlFilter, controls []string, output *[]byte) {
 		if prefix {
 			break
 		}
-		(*output) = append((*output), f.pending[0])
-		f.pending = f.pending[1:]
+		// vt10x does not retain split UTF-8 runes between Write calls. A
+		// partial three/four-byte rune can even consume its leading byte,
+		// so honoring its returned byte count alone cannot recover it.
+		if !utf8.FullRune(f.pending) {
+			break
+		}
+		_, size := utf8.DecodeRune(f.pending)
+		(*output) = append((*output), f.pending[:size]...)
+		f.pending = f.pending[size:]
 	}
 }
 
@@ -876,8 +884,9 @@ func testPTYUICompactThemesStructCallback(binary **string, variant *struct {
 	h.wait("compact draft typed", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "compact draft ação") })
 	h.send("\x0f")
 	h.wait("compact model selector", 10*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Choose model") && strings.Contains(frame, "Context:") && strings.Contains(frame, "Tools:")
+		return strings.Contains(frame, "Choose model") && strings.Contains(frame, "Context in use: 16k") && strings.Contains(frame, "Tools:")
 	})
+	require.Equal(t, 1, strings.Count(h.frame(), "Context in use:"), "equal context limits must use one compact row")
 	require.Contains(t, h.frame(), "›")
 	h.send("\x1b")
 	h.wait("draft restored", 5*time.Second, func(frame string) bool {

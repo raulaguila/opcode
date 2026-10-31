@@ -28,6 +28,14 @@ type MarkdownCache struct {
 
 func (c *MarkdownCache) Reset() { *c = MarkdownCache{} }
 func (c *MarkdownCache) Render(content string, width, prose int) string {
+	return c.render(content, width, prose, false)
+}
+
+func (c *MarkdownCache) RenderStreaming(content string, width, prose int) string {
+	return c.render(content, width, prose, true)
+}
+
+func (c *MarkdownCache) render(content string, width, prose int, streaming bool) string {
 	identity := markdownIdentity{width: width, prose: prose, profile: int(theme.ColorProfile()), dark: theme.HasDarkBackground(), name: theme.CurrentThemeName()}
 	value := reflect.ValueOf(theme.CurrentTheme())
 	if value.Kind() == reflect.Pointer {
@@ -37,7 +45,7 @@ func (c *MarkdownCache) Render(content string, width, prose int) string {
 		c.Reset()
 		c.identity = identity
 	}
-	return renderMarkdownBlocks(content, width, prose, c)
+	return renderMarkdownBlocks(content, width, prose, c, streaming)
 }
 func stableMarkdownKey(node ast.Node, content string) (string, bool) {
 	if node.NextSibling() == nil || node.Kind() != ast.KindParagraph || node.Lines().Len() == 0 {

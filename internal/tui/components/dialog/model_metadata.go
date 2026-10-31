@@ -69,6 +69,7 @@ func (m *modelDialogCmp) acceptMetadata(msg modelMetadataLoadedMsg) tea.Cmd {
 		return nil
 	}
 	m.metadataCancel = nil
+	m.selecting = false
 	if msg.err != nil {
 		m.metadataNote = config.Text("Metadados indisponíveis; valores anteriores preservados.", "Metadata unavailable; previous values preserved.")
 		m.keepVisible()
@@ -84,9 +85,15 @@ func (m *modelDialogCmp) acceptMetadata(msg modelMetadataLoadedMsg) tea.Cmd {
 			m.filtered[i] = msg.model
 		}
 	}
+	var focus tea.Cmd
+	if msg.model.EmbeddingOnly() {
+		m.filter()
+		m.note = config.Text("Modelo exclusivo de embeddings omitido; escolha um modelo de conversa.", "Embedding-only model hidden; choose a chat model.")
+		focus = m.search.Focus()
+	}
 	m.metadataNote = ""
 	m.keepVisible()
-	return nil
+	return focus
 }
 
 // Matching is Unicode-aware and bounded by the input/catalog limits. Exact

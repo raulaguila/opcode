@@ -89,21 +89,25 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 }
 
 type localModel struct {
-	Digest              string `json:"digest,omitempty"`
-	ID                  string `json:"id"`
-	Object              string `json:"object"`
-	Type                string `json:"type"`
-	Publisher           string `json:"publisher"`
-	Arch                string `json:"arch"`
-	CompatibilityType   string `json:"compatibility_type"`
-	Quantization        string `json:"quantization"`
-	State               string `json:"state"`
-	MaxContextLength    int64  `json:"max_context_length"`
-	LoadedContextLength int64  `json:"loaded_context_length"`
-	ReportedContext     int64  `json:"context_length"`
-	ReportedOutput      int64  `json:"max_tokens"`
-	ContextSource       string `json:"-"`
-	SupportsTools       *bool  `json:"supports_tools,omitempty"`
+	Digest              string          `json:"digest,omitempty"`
+	ID                  string          `json:"id"`
+	Object              string          `json:"object"`
+	Type                string          `json:"type"`
+	Publisher           string          `json:"publisher"`
+	Arch                string          `json:"arch"`
+	CompatibilityType   string          `json:"compatibility_type"`
+	Quantization        string          `json:"quantization"`
+	State               string          `json:"state"`
+	MaxContextLength    int64           `json:"max_context_length"`
+	LoadedContextLength int64           `json:"loaded_context_length"`
+	ReportedContext     int64           `json:"context_length"`
+	ReportedOutput      int64           `json:"max_tokens"`
+	ContextSource       string          `json:"-"`
+	SupportsTools       *bool           `json:"supports_tools,omitempty"`
+	Capabilities        json.RawMessage `json:"capabilities,omitempty"`
+	RemoteHost          json.RawMessage `json:"remote_host,omitempty"`
+	SupportsChat        *bool           `json:"-"`
+	Hosting             string          `json:"-"`
 }
 
 func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey string, lmStudio bool) ([]localModel, error) {
@@ -168,7 +172,52 @@ func convertLocalModel(model localModel) Model {
 		CanReason:           false,
 		SupportsAttachments: false,
 		SupportsTools:       model.SupportsTools,
+		SupportsChat:        cmp.Or(model.SupportsChat, chatCapability(reportedCapabilities(model.Capabilities))),
+		Hosting:             cmp.Or(model.Hosting, reportedHosting(model.RemoteHost)),
 	}
+}
+
+func chatCapability(capabilities *[]string) *bool {
+	if capabilities == nil {
+		return nil
+	}
+	completion := slices.Contains(*capabilities, "completion")
+	// Missing or unfamiliar capabilities do not rule out chat.
+	if completion || slices.Contains(*capabilities, "embedding") {
+		return &completion
+	}
+	return nil
+}
+
+func reportedCapabilities(raw json.RawMessage) *[]string {
+	var values []any
+	if json.Unmarshal(raw, &values) != nil || values == nil {
+		return nil
+	}
+	capabilities := make([]string, 0, len(values))
+	for _, value := range values {
+		text, ok := value.(string)
+		if !ok {
+			return nil
+		}
+		capabilities = append(capabilities, text)
+	}
+	return &capabilities
+}
+
+func reportedHosting(raw json.RawMessage) string {
+	var remoteHost *string
+	if json.Unmarshal(raw, &remoteHost) != nil || remoteHost == nil {
+		return ""
+	}
+	if *remoteHost == "" {
+		return "local"
+	}
+	u, err := url.Parse(*remoteHost)
+	if err == nil && u.Hostname() == "ollama.com" {
+		return "cloud"
+	}
+	return ""
 }
 
 var modelInfoRegex = regexp.MustCompile(`(?i)^([a-z0-9]+)(?:[-_]?([rv]?\d[\.\d]*))?(?:[-_]?([a-z]+))?.*`)

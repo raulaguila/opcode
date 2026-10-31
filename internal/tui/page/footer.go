@@ -14,12 +14,7 @@ import (
 func (p *chatPage) FooterState() util.FooterState {
 	state := util.FooterState{Mode: string(p.mode()), Terminal: p.terminal.focused}
 	applyAgentFooterState(p, &state)
-	if state.Busy || p.workflow.question.ID != "" || p.outcome == "blocked" || p.outcome == "partial" {
-		state.Activity = p.activityLabel()
-		if state.Busy && p.progress == "" {
-			state.Activity = config.Text("Trabalhando…", "Working…")
-		}
-	}
+	state.Activity = p.footerActivity(state)
 	if state.Activity == "" && p.terminal.snapshot.Running && !state.Terminal {
 		state.Activity = config.Text("Terminal ativo · ", "Terminal running · ") + config.Shortcut("terminal")
 	}
@@ -75,4 +70,27 @@ func applyFooterUsageMetrics(p *chatPage, state *util.FooterState, model *models
 			state.SpeedEstimated = metrics.LastDurationSource != "provider"
 		}
 	}
+}
+
+// A live request owns the phase; a prior message cannot label newer deltas.
+func (p *chatPage) footerActivity(state util.FooterState) string {
+	if p.workflow.question.ID != "" {
+		return config.Text("Aguardando sua resposta", "Waiting for your answer")
+	}
+	if state.Busy {
+		if state.AwaitingModel {
+			return config.Text("Aguardando modelo", "Awaiting model")
+		}
+		if state.SpeedLive {
+			return config.Text("Gerando resposta", "Generating response")
+		}
+		if p.progress != "" {
+			return p.progress
+		}
+		return config.Text("Trabalhando…", "Working…")
+	}
+	if p.outcome != "" {
+		return p.activityLabel()
+	}
+	return ""
 }

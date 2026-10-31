@@ -35,7 +35,7 @@ func InspectLocalModelMetadata(ctx context.Context, endpoint, key, id string) (M
 	if err := ctx.Err(); err != nil {
 		return Model{}, err
 	}
-	if found[0].MaxContextLength <= 0 {
+	if found[0].MaxContextLength <= 0 && found[0].SupportsTools == nil && found[0].Hosting == "" {
 		return Model{}, fmt.Errorf("model metadata unavailable")
 	}
 	return convertLocalModel(found[0]), nil

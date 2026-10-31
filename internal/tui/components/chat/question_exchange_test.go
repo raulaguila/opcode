@@ -62,7 +62,9 @@ func TestQuestionExchangeKeepsJSONFreeTextAsTheActualAnswer(t *testing.T) {
 	m := exchangeFixture(`{"question":"Which JSON should I use?"}`, response)
 	view := timelineText(m)
 	require.Contains(t, view, "Which JSON should I use?")
-	require.Contains(t, questionAnswer(m.messages[1], m.renderCache.toolOwners, m.messages), response)
+	pairs := answeredQuestions(m.messages[1], m.renderCache.toolOwners, m.messages)
+	require.Len(t, pairs, 1)
+	require.Equal(t, response, pairs[0].answer)
 }
 
 func TestQuestionExchangeMissingOrMalformedSourceDoesNotInventQuestion(t *testing.T) {

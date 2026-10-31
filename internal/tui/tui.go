@@ -749,7 +749,7 @@ func New(app *app.App, initial ...session.Session) tea.Model {
 	}
 	newCommandsBuiltins(model)
 
-	for _, mode := range []struct{ id, title string }{{"ask", config.Text("Perguntar — somente leitura", "Ask — read only")}, {"plan", config.Text("Planejar — sem comandos ou edições", "Plan — no commands or edits")}, {"execute", config.Text("Executar — com permissões", "Execute — with permissions")}} {
+	for _, mode := range []struct{ id, title string }{{"ask", config.Text("Perguntar", "Ask")}, {"plan", config.Text("Planejar", "Plan")}, {"execute", config.Text("Executar", "Execute")}} {
 		model.RegisterCommand(dialog.Command{ID: "mode-" + mode.id, Title: mode.title, Description: config.Text("Trocar o modo da sessão", "Change the session mode"), Handler: func(dialog.Command) tea.Cmd {
 			return util.CmdHandler(page.WorkflowCommandMsg{Command: "mode", Value: mode.id})
 		}})

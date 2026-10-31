@@ -113,6 +113,8 @@ type ollamaStaticMetadata struct {
 	context                    int64
 	source                     string
 	toolsKnown, toolsSupported bool
+	chatKnown, chatSupported   bool
+	hosting                    string
 	observed                   time.Time
 }
 
@@ -142,6 +144,11 @@ func cachedOllamaMetadata(identity ollamaMetadataCacheKey, model *localModel) bo
 		return false
 	}
 	model.MaxContextLength = cached.context
+	model.Hosting = cached.hosting
+	if cached.chatKnown {
+		supported := cached.chatSupported
+		model.SupportsChat = &supported
+	}
 	if cached.source != "" {
 		model.ContextSource = cached.source
 	}
@@ -156,6 +163,10 @@ func cacheOllamaMetadata(identity ollamaMetadataCacheKey, model localModel) {
 	// Store only static normalized scalars, never the up-to-1MiB response or
 	// /api/ps allocation; loaded context and placement must stay current.
 	cached := ollamaStaticMetadata{context: model.MaxContextLength, source: model.ContextSource, observed: time.Now()}
+	cached.hosting = model.Hosting
+	if model.SupportsChat != nil {
+		cached.chatKnown, cached.chatSupported = true, *model.SupportsChat
+	}
 	if model.SupportsTools != nil {
 		cached.toolsKnown = true
 		cached.toolsSupported = *model.SupportsTools
@@ -172,7 +183,8 @@ func cacheOllamaMetadata(identity ollamaMetadataCacheKey, model localModel) {
 }
 
 type ollamaMetadata struct {
-	Capabilities *[]string                  `json:"capabilities"`
+	Capabilities json.RawMessage            `json:"capabilities"`
+	RemoteHost   json.RawMessage            `json:"remote_host"`
 	Parameters   string                     `json:"parameters"`
 	Info         map[string]json.RawMessage `json:"model_info"`
 }
@@ -213,9 +225,12 @@ func readOllamaMetadata(ctx context.Context, client *http.Client, endpoint, key,
 	return details, ok
 }
 func applyOllamaMetadata(model *localModel, details ollamaMetadata) {
-	if details.Capabilities != nil {
+	capabilities := reportedCapabilities(details.Capabilities)
+	model.SupportsChat = chatCapability(capabilities)
+	model.Hosting = reportedHosting(details.RemoteHost)
+	if capabilities != nil {
 		supported := false
-		for _, capability := range *details.Capabilities {
+		for _, capability := range *capabilities {
 			if capability == "tools" {
 				supported = true
 			}

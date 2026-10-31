@@ -32,7 +32,10 @@ func Localized(c Command) Command {
 // Presentation localizes only known built-in labels, never custom command text.
 func Presentation(id, title, description string) (string, string) {
 	for _, entry := range Builtins {
-		if strings.TrimSpace(entry.ID) == id && entry.Title == title && entry.Description == description {
+		pair := english[strings.TrimSpace(entry.ID)]
+		canonical := entry.Title == title && entry.Description == description
+		localized := pair[0] == title && pair[1] == description
+		if strings.TrimSpace(entry.ID) == id && (canonical || localized) {
 			entry = Localized(entry)
 			return entry.Title, entry.Description
 		}

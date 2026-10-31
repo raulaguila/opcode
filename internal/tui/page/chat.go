@@ -238,7 +238,7 @@ func (p *chatPage) submitAgentMessage(text string, attachments []message.Attachm
 	}
 	p.outcome = ""
 	if !queued {
-		p.progress = config.Text("Consultando modelo", "Contacting model")
+		p.progress = config.Text("Aguardando modelo", "Awaiting model")
 		p.activityStarted = time.Now()
 	}
 	p.lastRequest = chat.SendMsg{Text: text, Attachments: cloneUserAttachments(attachments)}
@@ -452,7 +452,7 @@ func updateChatPageDefault(p *chatPage, msg *AgentOutcomeMsg) (extractedResult0 
 
 func updateChatPageCommandRunCustomMsg(p *chatPage, msg *dialog.CommandRunCustomMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if p.app.CoderAgent.IsBusy() {
-		return p, util.ReportWarn("Agent is busy, please wait before executing a command..."), true
+		return p, util.ReportWarn(config.Text("O agente está trabalhando; aguarde antes de executar um comando.", "Agent is busy; wait before running a command.")), true
 	}
 
 	// Process the command content with arguments if any

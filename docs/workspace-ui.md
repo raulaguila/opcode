@@ -8,6 +8,12 @@ workspace não ganham bordas externas que desloquem suas coordenadas.
 Temas claros, escuros e `NO_COLOR` preservam rótulos e marcadores de seleção.
 As adaptações do conjunto Charm v2 estão no [guia de dependências](dependencies.md).
 
+Diálogos atenuam a conversa ao fundo sem alterar seu rascunho, seleção ou
+coordenadas. `NO_COLOR` usa atributos sem cores. A paleta apresenta a ação
+primeiro, com categoria secundária, e usa a mesma geometria para desenho e
+cliques em tamanhos compactos. O seletor de modo explica o efeito da opção;
+Executar continua solicitando as permissões necessárias.
+
 Digite `/` no começo do campo para ver os comandos. Use `↑`/`↓` para escolher,
 `Tab` para completar, `Enter` para executar e `Esc` para fechar as sugestões.
 `Ctrl+K` abre a paleta. Os painéis mantêm o rascunho enquanto você consulta o
@@ -204,13 +210,19 @@ nativa nos terminais que oferecem esse gesto; nesse caso, use a cópia do própr
 terminal, como `Ctrl+Shift+C`.
 
 Use `Ctrl+Y` ou `/actions` para abrir ações: copiar texto, copiar blocos
-de código, selecionar texto e abrir arquivos citados quando encontrados. A
+de código, selecionar texto e consultar as fontes citadas quando encontradas. A
 prévia de arquivo usa as permissões normais e não conta como leitura do agente
 para permitir uma edição. Quando o clipboard gráfico local não está disponível
 ou falha, a cópia solicita o clipboard do terminal via OSC 52 e informa que o
 recebimento não é confirmado. Em SSH, usa somente essa rota, sem executar helpers
 no servidor. Se o terminal também bloquear a cópia, use a seleção nativa com
 `Shift+arrastar` ou a opção de selecionar texto.
+As fontes ficam agrupadas por arquivo, com todos os intervalos distintos.
+Nomes iguais em pastas diferentes mostram o caminho para evitar ambiguidade.
+O subpainel mantém o caminho completo, permite abrir cada intervalo e copiar
+as referências. Essa lista identifica referências presentes no texto; não é
+uma nova validação da resposta. Citações inline e cópia integral continuam com
+os caminhos completos, sem substituir o texto por marcadores abreviados.
 Uma indicação discreta abaixo da última resposta concluída torna essas ações
 visíveis. Blocos de prosa usam a largura disponível da conversa por padrão;
 `tui.proseWidth` permite limitar a leitura de 1 a 240 colunas (por exemplo, 80
@@ -572,3 +584,29 @@ streaming são removidas ao concluir, cancelar ou falhar e reiniciadas a cada
 chamada, inclusive nas correções de resposta. Em terminais estreitos, primeiro a
 velocidade e depois o contexto são ocultados para preservar os controles. O input
 mantém sua altura.
+
+
+## Leitura e estados da conversa
+
+A moldura desconta sua borda antes de medir a prosa; o texto não recebe uma
+segunda quebra de linha. Percentuais como `+173,5%` permanecem juntos quando
+cabem na largura. Código, tabelas e citações em bloco preservam sua formatação.
+Durante o streaming, uma ênfase inicial ainda incompleta é apresentada de forma
+provisória; ao fechar o bloco ou terminar a resposta, vale o Markdown completo.
+Nada disso reescreve a mensagem armazenada ou a cópia integral.
+
+O rodapé usa a fase da requisição atual: Aguardando modelo, Gerando resposta,
+Validando referências e Concluído. Saída real já define geração, mesmo antes
+de haver amostras suficientes para estimar tok/s. Uma próxima chamada pode
+aguardar novamente, sem manter o estado da anterior. A taxa continua baseada
+nos eventos de uso, sem inventar velocidade para o primeiro bloco acumulado.
+O histórico de processos distingue em andamento/finalizado; mensagens públicas
+continuam fora dos grupos recolhíveis. Perguntas respondidas usam bloco compacto
+com a resposta destacada, preservando a associação entre pergunta e resposta.
+
+O idioma da interface é escolhido nas preferências existentes. Rótulos e
+ações seguem português/inglês, inclusive ao mudar o idioma; texto do usuário,
+respostas do modelo e comandos personalizados não são traduzidos. A lista de
+conexões oferece Adicionar, Editar e Excluir por clique e atalho, com navegação
+secundária para Preferências/Integrações. Configurada/desativada descreve a
+configuração; consultar catálogo não comprova disponibilidade para inferência.

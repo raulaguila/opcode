@@ -250,6 +250,9 @@ func (m *modelDialogCmp) choose() tea.Cmd {
 		return nil
 	}
 	selected := m.filtered[m.selectedIdx]
+	if selected.EmbeddingOnly() {
+		return nil
+	}
 	lookup := config.ModelMetadata(selected)
 	agent := m.target
 	m.Close()
@@ -258,6 +261,7 @@ func (m *modelDialogCmp) choose() tea.Cmd {
 		m.note = config.Text("Selecionando modelo… Esc cancela", "Selecting model… Esc cancels")
 		ctx, cancel := context.WithCancel(context.Background())
 		m.metadataCancel = cancel
+		request := m.metadataRequest
 		return func() tea.Msg {
 			defer cancel()
 			if found, err := lookup(ctx); err == nil {
@@ -265,6 +269,9 @@ func (m *modelDialogCmp) choose() tea.Cmd {
 			}
 			if ctx.Err() != nil {
 				return nil
+			}
+			if selected.EmbeddingOnly() {
+				return modelMetadataLoadedMsg{request: request, model: selected}
 			}
 			return ModelSelectedMsg{Model: selected, Agent: agent}
 		}
@@ -421,6 +428,11 @@ func NewModelDialogCmp() ModelDialog {
 func (m *modelDialogCmp) SetSetup(enabled bool) { m.setup = enabled }
 
 func updateModelDialogCmpMouseMsg(m *modelDialogCmp, msg tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
+	if clickedLabel(m.View(), config.Text("Ctrl+D detalhes", "Ctrl+D details"), msg) {
+		m.details = !m.details
+		m.keepVisible()
+		return m, m.scheduleMetadata(), true
+	}
 	if msg.Mouse().Button == tea.MouseWheelUp {
 		m.move(-1)
 	}
@@ -548,6 +560,9 @@ func filterSelectedIdxSelectedIdxFiltered(m *modelDialogCmp, previous *models.Mo
 
 func filterModels(m *modelDialogCmp) {
 	for _, model := range m.models {
+		if model.EmbeddingOnly() {
+			continue
+		}
 		if _, ok := modelMatchScore(m.query, model.Name+" "+model.APIModel); ok {
 			m.filtered = append(m.filtered, model)
 		}

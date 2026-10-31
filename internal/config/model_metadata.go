@@ -34,6 +34,12 @@ func ModelMetadata(model models.Model) func(context.Context) (models.Model, erro
 			model.DefaultMaxTokens = min(model.DefaultMaxTokens, model.ContextWindow/2)
 		}
 		model.SupportsTools = found.SupportsTools
+		if found.SupportsChat != nil {
+			model.SupportsChat = found.SupportsChat
+		}
+		if found.Hosting != "" {
+			model.Hosting = found.Hosting
+		}
 		return providerModelDefaults(p, model), nil
 	}
 }

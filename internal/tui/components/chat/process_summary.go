@@ -57,3 +57,19 @@ func processSummaryMessages(messages []message.Message, reads *int, searches *in
 		}
 	}
 }
+
+func completedReasoning(messages []message.Message) bool {
+	found := false
+	for _, item := range messages {
+		if item.Role != message.Assistant || len(item.ToolCalls()) > 0 || item.IsApplication() {
+			return false
+		}
+		if item.ReasoningContent().Thinking != "" {
+			found = true
+			if !item.IsFinished() {
+				return false
+			}
+		}
+	}
+	return found
+}

@@ -2,7 +2,6 @@ package dialog
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -16,10 +15,10 @@ func (m *providerDialogCmp) fieldValue(index int) string {
 
 func (m *providerDialogCmp) validateProfileIdentity(id string, profile config.ProviderProfile) error {
 	if m.originalID != "" && id != m.originalID {
-		return fmt.Errorf("profile ID cannot be changed; add a new connection instead")
+		return errors.New(config.Text("O ID da conexão não pode ser alterado; adicione outra conexão", "profile ID cannot be changed; add a new connection instead"))
 	}
 	if m.legacy && profile.Backend != models.ModelProvider(id) {
-		return fmt.Errorf("legacy backend cannot be changed; add a named profile instead")
+		return errors.New(config.Text("O provedor legado não pode ser alterado; adicione uma conexão nomeada", "legacy backend cannot be changed; add a named profile instead"))
 	}
 	return nil
 }
@@ -28,20 +27,20 @@ func (m *providerDialogCmp) readProfileLimits(profile config.ProviderProfile) (c
 	var err error
 	profile.ContextWindow, err = strconv.ParseInt(m.fieldValue(providerContextField), 10, 64)
 	if err != nil || profile.ContextWindow < 0 {
-		return profile, fmt.Errorf("context window must be a nonnegative integer")
+		return profile, errors.New(config.Text("A janela de contexto deve ser um inteiro não negativo", "context window must be a nonnegative integer"))
 	}
 	profile.DefaultMaxTokens, err = strconv.ParseInt(m.fieldValue(providerOutputField), 10, 64)
 	if err != nil || profile.DefaultMaxTokens < 0 {
-		return profile, fmt.Errorf("output tokens must be a nonnegative integer")
+		return profile, errors.New(config.Text("Os tokens de saída devem ser um inteiro não negativo", "output tokens must be a nonnegative integer"))
 	}
 	active, err := strconv.ParseBool(m.fieldValue(providerActiveField))
 	profile.Disabled = !active
 	if err != nil {
-		return profile, fmt.Errorf("connection active must be true or false")
+		return profile, errors.New(config.Text("Conexão ativa deve ser true ou false", "connection active must be true or false"))
 	}
 	profile.TLSInsecure, err = strconv.ParseBool(m.fieldValue(providerTLSField))
 	if err != nil {
-		return profile, fmt.Errorf("TLS insecure must be true or false")
+		return profile, errors.New(config.Text("TLS inseguro deve ser true ou false", "TLS insecure must be true or false"))
 	}
 	return profile, nil
 }
@@ -65,7 +64,7 @@ func (m *providerDialogCmp) readProfileAuthentication(profile config.ProviderPro
 		}
 	case "none":
 	default:
-		return profile, fmt.Errorf("invalid authentication method")
+		return profile, errors.New(config.Text("Método de autenticação inválido", "invalid authentication method"))
 	}
 	return profile, nil
 }

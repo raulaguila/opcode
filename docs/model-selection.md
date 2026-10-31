@@ -90,6 +90,16 @@ quando você escolhe um modelo.
   O contador informa a posição e a quantidade de resultados; setas indicam mais linhas.
 - Nomes longos são abreviados na lista. `Ctrl+D` mostra ID, contexto/origem,
   protocolo e capacidades; ausência de metadados aparece como não informada.
+- Modelos explicitamente informados como somente embeddings não são oferecidos
+  para conversa. Ausência de capacidade ou de suporte a ferramentas não é prova
+  de incompatibilidade: modelos desconhecidos continuam disponíveis. Esses
+  metadados não alteram a configuração salva nem impedem seu uso em embeddings.
+- Marcadores Local/Nuvem usam informação explícita do provedor; nomes ou sufixos
+  não determinam a hospedagem. Metadados opcionais em formatos desconhecidos
+  são ignorados sem descartar o catálogo ou o contexto reconhecido.
+- Quando o contexto máximo e o efetivo são iguais, o resumo mostra apenas uma
+  linha. Se diferirem, ambos aparecem. `Ctrl+D detalhes` (também clicável)
+  conserva contagens exatas e origem; catálogo informado não é teste de saúde.
 - `Ctrl+R` atualiza a lista; `Esc` fecha sem mudar o modelo.
 
 A interface continua respondendo durante a consulta. Fechar, atualizar ou trocar

@@ -104,6 +104,7 @@ type providerDialogCmp struct {
 	noteFull                       bool
 	noteOffset                     int
 	testing                        bool
+	catalogTested                  bool
 	request                        uint64
 	cancel                         context.CancelFunc
 	settingsFilter                 textinput.Model
@@ -171,6 +172,7 @@ func (m *providerDialogCmp) Close() {
 	}
 	m.request++
 	m.testing = false
+	m.catalogTested = false
 }
 func (m *providerDialogCmp) setFields(labels, values []string) {
 	m.baseline = append([]string(nil), values...)
@@ -388,14 +390,15 @@ func (m *providerDialogCmp) View() string {
 	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 func (m *providerDialogCmp) BindingKeys() []key.Binding {
-	return []key.Binding{key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")), key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "test connection")), key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))}
+	return []key.Binding{key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", config.Text("salvar", "save"))), key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", config.Text("consultar catálogo", "query catalog"))), key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", config.Text("voltar", "back")))}
 }
 
 func (m *providerDialogCmp) listRows() int {
 	if m.height == 0 {
 		return 10
 	}
-	return max(1, min(10, m.height-9))
+	primary, secondary := m.providerListActions()
+	return max(1, min(10, m.height-7-len(primary)-len(secondary)))
 }
 func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {

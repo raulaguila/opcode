@@ -102,7 +102,8 @@ expõe parâmetros em permissões genéricas, reserva diagnósticos técnicos pa
 favoritos e recentes; a paleta usa o estado da tarefa. Formulários oferecem
 opções tipadas e argumentos por linha. `/task` reúne o trabalho e `/context`
 oferece acesso ao orçamento, índice, alocação e diagnóstico. A apresentação tem
-prosa limitada, ações visíveis, tempo decorrido, prévia de temas e notificações
+prosa com largura configurável (total por padrão), ações visíveis, tempo
+decorrido, prévia de temas e notificações
 optativas. Essas mudanças não concedem capacidades nem alteram os gates de
 citação, conclusão ou permissão. Ver [interface](docs/workspace-ui.md).
 
@@ -119,3 +120,13 @@ Os diagnósticos avançados registram preparação, reutilização de fontes e l
 até o primeiro conteúdo sem guardar os textos. Conversas com o mesmo modelo local
 para título e resposta recebem um título curto da primeira mensagem, evitando uma
 inferência auxiliar. O usuário pode selecionar um modelo separado para títulos.
+
+
+A revisão dos menus usa geometria única para desenho/cliques e ações antes das
+categorias. Limites de contexto iguais têm apresentação compacta, mantendo
+origem e limite efetivo nos detalhes. Apenas evidência explícita de embeddings
+exclui um modelo da seleção de conversa; capacidades/hospedagem desconhecidas
+continuam desconhecidas. Campos opcionais em formatos não reconhecidos não
+descartam o catálogo ou um contexto válido. Fontes citadas ficam agrupadas, com
+caminhos e intervalos completos para cópia e prévia protegida. As referências
+inline não são abreviadas, preservando também a seleção de texto.

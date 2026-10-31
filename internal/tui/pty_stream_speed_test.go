@@ -82,11 +82,12 @@ func runPTYStreamingSpeedBeforeCompletion(t *testing.T, env ...string) {
 	})
 	h.paste("Responda somente SPEED_DONE sem ferramentas.")
 	h.send("\r")
+	liveRate := regexp.MustCompile(`~[0-9]+(?:\.[0-9]+)? tok/s`)
 	h.wait("awaiting first generated data", 15*time.Second, func(frame string) bool {
-		return strings.Contains(ptyUIFooter(frame), "Awaiting model…")
+		footer := ptyUIFooter(frame)
+		return strings.Contains(footer, "Awaiting model") && strings.Contains(footer, "Esc cancels") && !strings.Contains(footer, "Generating") && !liveRate.MatchString(footer)
 	})
 	releaseFirst()
-	liveRate := regexp.MustCompile(`~[0-9]+(?:\.[0-9]+)? tok/s`)
 	h.wait("first generated data received", 5*time.Second, func(frame string) bool {
 		return strings.Contains(ptyUIFooter(frame), "Generating") && !liveRate.MatchString(ptyUIFooter(frame))
 	})

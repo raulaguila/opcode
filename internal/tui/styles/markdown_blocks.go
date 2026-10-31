@@ -20,14 +20,14 @@ import (
 // at different widths. Containers with code/tables retain their full structure.
 // This changes presentation only; stored and copied source remains untouched.
 func RenderMarkdownBlocks(content string, width, proseWidth int) string {
-	return renderMarkdownBlocks(content, width, proseWidth, nil)
+	return renderMarkdownBlocks(content, width, proseWidth, nil, false)
 }
 
-func renderMarkdownBlocks(content string, width, proseWidth int, cache *MarkdownCache) string {
+func renderMarkdownBlocks(content string, width, proseWidth int, cache *MarkdownCache, streaming bool) string {
 	source := []byte(content)
 	md := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.DefinitionList), goldmark.WithParserOptions(parser.WithAutoHeadingID()))
 	doc := md.Parser().Parse(text.NewReader(source))
-	blocks := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, cache: cache, renderers: map[int]renderer.Renderer{}}
+	blocks := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, cache: cache, streaming: streaming, renderers: map[int]renderer.Renderer{}}
 	var output []string
 	for node := doc.FirstChild(); node != nil; {
 		next := node.NextSibling()
@@ -52,6 +52,7 @@ type markdownBlockRenderer struct {
 	cache        *MarkdownCache
 	style        ansi.StyleConfig
 	styled       bool
+	streaming    bool
 	renderers    map[int]renderer.Renderer
 }
 
@@ -72,18 +73,24 @@ func (b *markdownBlockRenderer) render(node ast.Node) (string, error) {
 	return rendered, err
 }
 func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
+	if b.streaming {
+		if text, pending := pendingStreamingEmphasis(node, b.source); pending {
+			return restrainedStreamingText(text, markdownBlockWidth(node, b.width, b.prose)), nil
+		}
+	}
 	if list, ok := node.(*ast.List); ok {
 		return b.renderList(list)
 	}
 	measure := markdownBlockWidth(node, b.width, b.prose)
-	r, ok := b.renderers[measure]
+	renderWidth := markdownProseRenderWidth(node, measure)
+	r, ok := b.renderers[renderWidth]
 	if !ok {
 		if !b.styled {
 			b.style = generateMarkdownStyleConfig()
 			b.styled = true
 		}
-		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: measure, Styles: b.style}), 1000)))
-		b.renderers[measure] = r
+		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: renderWidth, Styles: b.style}), 1000)))
+		b.renderers[renderWidth] = r
 	}
 	block := ast.NewDocument()
 	block.AppendChild(block, node)
@@ -91,7 +98,32 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 	if err := r.Render(&out, b.source, block); err != nil {
 		return "", err
 	}
-	return trimMarkdownBlockPadding(out.String()), nil
+	view := trimMarkdownBlockPadding(out.String())
+	if renderWidth == 0 {
+		view = wrapMarkdownProse(view, measure)
+	}
+	return view, nil
+}
+
+func markdownProseRenderWidth(node ast.Node, width int) int {
+	switch node.Kind() {
+	case ast.KindParagraph, ast.KindTextBlock, ast.KindHeading:
+		return 0
+	default:
+		return width
+	}
+}
+
+// Wrap prose once after styling. Glamour's nested margin wrapping otherwise
+// breaks decimal commas and reapplies indentation to an already wrapped line.
+func wrapMarkdownProse(view string, width int) string {
+	if view == "" {
+		return ""
+	}
+	margin := strings.Repeat(" ", defaultMargin)
+	body := removeMarkdownListMargin(view)
+	wrapped := terminalansi.Wrap(body, max(1, width-defaultMargin), " ")
+	return margin + strings.ReplaceAll(wrapped, "\n", "\n"+margin)
 }
 
 // Glamour's padding may contain spaces or color resets, not just newlines.

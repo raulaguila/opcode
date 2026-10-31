@@ -142,16 +142,16 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	start, first := -1, true
 	lastPublic := revisions.latest(group.messages)
 	for index, item := range group.messages {
-		answer := questionAnswer(item, r.messages.renderCache.toolOwners, r.messages.messages)
+		answer := answeredQuestions(item, r.messages.renderCache.toolOwners, r.messages.messages)
 		_, hidden := revisions.hidden[index]
-		if !hidden && (publicResponse(item) || answer != "") {
+		if !hidden && (publicResponse(item) || len(answer) > 0) {
 			if start >= 0 {
 				r.renderProcessRange(group, start, index, first, false)
 				first, start = false, -1
 			}
 			r.renderTimelineItem(group.messages, index, latest && index == lastPublic, answer, revisions)
 		}
-		if answer == "" && processEvent(item) && start < 0 {
+		if len(answer) == 0 && processEvent(item) && start < 0 {
 			start = index
 		}
 	}
@@ -160,7 +160,7 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	}
 }
 
-func (r *turnRenderer) renderTimelineItem(items []message.Message, index int, latest bool, answer string, revisions responseRevisionPlan) {
+func (r *turnRenderer) renderTimelineItem(items []message.Message, index int, latest bool, answer []answeredQuestion, revisions responseRevisionPlan) {
 	if revision := revisions.roots[index]; revision != nil {
 		r.renderRevision(items, revision, latest)
 		return
@@ -184,12 +184,12 @@ func lastPublicIndex(items []message.Message) int {
 	return last
 }
 
-func (r *turnRenderer) renderPublicItem(item message.Message, index int, latest bool, answer string) {
-	if answer == "" {
+func (r *turnRenderer) renderPublicItem(item message.Message, index int, latest bool, answer []answeredQuestion) {
+	if len(answer) == 0 {
 		r.renderFinal(item, index, latest)
 		return
 	}
-	r.appendItem(uiMessage{ID: item.ID + ":answer", messageType: userMessageType, content: renderMessageWithPipe(answer, r.messages.width, nil, r.theme.Accent())})
+	r.appendItem(uiMessage{ID: item.ID + ":answer", messageType: userMessageType, content: renderAnsweredQuestions(answer, r.messages.width)})
 }
 
 func publicResponse(item message.Message) bool {
@@ -242,8 +242,10 @@ func (r *turnRenderer) renderProcess(group turnGroup, active bool) {
 		mark = "⌄"
 	}
 	label := fmt.Sprintf(config.Text("%s Processo · %s", "%s Process · %s"), mark, processSummary(group.messages))
-	if active {
+	if active && !completedReasoning(group.messages) {
 		label += " · " + config.Text("em andamento", "working")
+	} else {
+		label += " · " + config.Text("finalizado", "finished")
 	}
 	start := r.position
 	r.appendText(group.key+":process", r.base.Foreground(r.theme.TextMuted()).Render(ansi.Truncate(label, m.width, "…")))
@@ -299,7 +301,8 @@ func (r *turnRenderer) renderProcessMessageContent(item message.Message, index i
 		return
 	}
 	if reasoning := item.ReasoningContent().Thinking; reasoning != "" {
-		r.appendText(item.ID+":thinking", r.base.Foreground(r.theme.TextMuted()).Render(toMarkdown(tools.RedactCredentials(reasoning), false, m.width)))
+		label := config.Text("Raciocínio interno", "Internal reasoning")
+		r.appendText(item.ID+":thinking", r.base.Foreground(r.theme.TextMuted()).Render(label+"\n"+toMarkdown(tools.RedactCredentials(reasoning), false, m.width)))
 	}
 	copy := processMessage(item)
 	if len(copy.ToolCalls()) == 0 && copy.Content().String() == "" {

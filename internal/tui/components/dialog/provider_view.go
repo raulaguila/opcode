@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"slices"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -28,8 +29,34 @@ func (m *providerDialogCmp) providerBodyLines(t theme.Theme, width int, base lip
 		}
 		lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+m.providerRowLabel(m.rows[i]), width, "…")))
 	}
-	lines = append(lines, styles.PanelDivider(width), line(config.Text("N Adicionar · Enter Editar · [Excluir] D · Esc", "N Add · Enter Edit · [Delete] D · Esc")))
-	return append(lines, line(config.Text("[Preferências] P · [Integrações] I", "[Preferences] P · [Integrations] I")))
+	lines = append(lines, styles.PanelDivider(width))
+	primary, secondary := m.providerListActions()
+	for _, action := range primary {
+		lines = append(lines, line(action))
+	}
+	for _, action := range secondary {
+		lines = append(lines, base.Foreground(t.TextMuted()).Render(action))
+	}
+	return lines
+}
+
+func (m *providerDialogCmp) providerListActions() (primary, secondary []string) {
+	primary = wrapDialogActions(config.Text("[Adicionar] N · [Editar] Enter · [Excluir] D · Esc", "[Add] N · [Edit] Enter · [Delete] D · Esc"), m.contentWidth())
+	secondary = wrapDialogActions(config.Text("[Preferências] P · [Integrações] I", "[Preferences] P · [Integrations] I"), m.contentWidth())
+	return primary, secondary
+}
+
+func wrapDialogActions(actions string, width int) []string {
+	var rows []string
+	for _, action := range strings.Split(actions, " · ") {
+		last := len(rows) - 1
+		if last < 0 || ansi.StringWidth(rows[last]+" · "+action) > width {
+			rows = append(rows, ansi.Truncate(action, width, "…"))
+		} else {
+			rows[last] += " · " + action
+		}
+	}
+	return rows
 }
 
 func (m *providerDialogCmp) providerRowLabel(row providerRow) string {
@@ -45,6 +72,8 @@ func (m *providerDialogCmp) providerRowLabel(row providerRow) string {
 	}
 	if disabled {
 		label += config.Text(" · desativada", " · disabled")
+	} else {
+		label += config.Text(" · configurada", " · configured")
 	}
 	return label
 }

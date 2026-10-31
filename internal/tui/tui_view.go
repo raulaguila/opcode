@@ -3,6 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -37,13 +38,7 @@ func (a appModel) View() tea.View {
 	if a.showFilepicker {
 		overlay := a.filepicker.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 
 	}
 
@@ -51,15 +46,9 @@ func (a appModel) View() tea.View {
 	if a.isCompacting {
 		style := styles.Panel().Padding(1, 2)
 
-		overlay := style.Render("Summarizing\n" + a.compactingMessage)
+		overlay := style.Render(config.Text("Resumindo", "Summarizing") + "\n" + a.compactingMessage)
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	viewShowHelp(&a, &appView)
@@ -67,96 +56,60 @@ func (a appModel) View() tea.View {
 	if a.showSessionDialog {
 		overlay := a.sessionDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	if a.showModelDialog {
 		overlay := a.modelDialog.View()
 		col, row := a.modelDialogOrigin()
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	if a.showCommandDialog {
 		overlay := a.commandDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	if a.showInitDialog {
 		overlay := a.initDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	if a.showThemeDialog {
 		overlay := a.themeDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	if a.showMultiArgumentsDialog {
 		overlay := a.multiArgumentsDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			false,
-		)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	if a.showProviderDialog {
 		overlay := a.providerDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
+		appView = placeModal(col, row, overlay, appView)
 	}
 	if a.showIntegrationDialog {
 		overlay := a.integrationDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
+		appView = placeModal(col, row, overlay, appView)
 	}
 	// Authorization always appears above settings/probes that requested it.
 	if a.showPermissions {
 		overlay := a.permissions.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
+		appView = placeModal(col, row, overlay, appView)
 	}
 
 	if a.showQuit {
 		overlay := a.quit.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
+		appView = placeModal(col, row, overlay, appView)
 	}
 	if a.width > 0 {
 		appView = lipgloss.NewStyle().MaxWidth(a.width).MaxHeight(a.height + 1).Render(appView)
@@ -189,12 +142,6 @@ func viewShowHelp(a *appModel, appView *string) {
 
 		overlay := a.help.View()
 		col, row := a.dialogOrigin(overlay)
-		(*appView) = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			(*appView),
-			false,
-		)
+		(*appView) = placeModal(col, row, overlay, (*appView))
 	}
 }

@@ -32,7 +32,12 @@ type Model struct {
 	// Nil means the provider did not report tool capability. Metadata is not an
 	// inference test and never changes tool authorization.
 	SupportsTools *bool `json:"supports_tools,omitempty" mapstructure:"supports_tools"`
+	// Runtime metadata only; missing provider evidence leaves both unknown.
+	SupportsChat *bool  `json:"-" mapstructure:"-"`
+	Hosting      string `json:"-" mapstructure:"-"`
 }
+
+func (m Model) EmbeddingOnly() bool { return m.SupportsChat != nil && !*m.SupportsChat }
 
 // A missing context is a request for provider metadata. ContextAuto also accepts
 // snapshots written by older versions, which included the discovered window.

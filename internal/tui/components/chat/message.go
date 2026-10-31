@@ -40,9 +40,7 @@ type uiMessage struct {
 }
 
 func toMarkdown(content string, _ bool, width int) string {
-	r := styles.GetMarkdownRenderer(width)
-	rendered, _ := r.Render(content)
-	return rendered
+	return styles.RenderMarkdownBlocks(content, width, width)
 }
 
 func renderMessage(msg string, isUser bool, _ bool, width int, info ...string) string {
@@ -62,21 +60,22 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 	t := theme.CurrentTheme()
 
 	style := styles.BaseStyle().
-		Width(width - 1).
+		Width(max(1, width)).
 		BorderLeft(true).
 		Foreground(t.TextMuted()).
 		BorderForeground(pipe).
 		BorderStyle(lipgloss.NormalBorder())
 
-	measure := width
+	contentWidth := max(1, width-style.GetHorizontalFrameSize())
+	measure := contentWidth
 	if c := config.Get(); c != nil && c.TUI.ProseWidth > 0 {
 		measure = c.TUI.ProseWidth
 	}
 	markdown := styles.RenderMarkdownBlocks
 	if cache != nil {
-		markdown = cache.Render
+		markdown = cache.RenderStreaming
 	}
-	parts := []string{styles.ForceReplaceBackgroundWithLipgloss(markdown(msg, width, measure), t.Background())}
+	parts := []string{styles.ForceReplaceBackgroundWithLipgloss(markdown(msg, contentWidth, measure), t.Background())}
 
 	// Remove newline at the end
 	parts[0] = strings.TrimSuffix(parts[0], "\n")

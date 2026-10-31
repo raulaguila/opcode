@@ -115,3 +115,31 @@ Ver [evidência](evidence/2026-10-30-dependency-upgrade-validation.json).
 O workflow permite comparar com uma base Charm v1: copia as mesmas fixtures,
 verifica sua igualdade e normaliza somente os dois imports visuais no baseline.
 Os corpos dos benchmarks, contagem de amostras e critérios não são relaxados.
+
+## Menus e fluxo de conversa — 30/10/2026
+
+Comparação com `abdf380`, já usando Charm v2 nos dois lados: Go 1.27.3,
+`GOMAXPROCS=2`, tema Opcode escuro e TrueColor. As 14 fixtures são idênticas,
+sem adaptação de imports. Foram medidas 100 operações, três amostras por revisão,
+em seis pacotes, sem inferência ou testes concorrentes.
+
+| Operação | Tempo | Bytes alocados | Quantidade de alocações |
+| --- | --- | --- | --- |
+| Markdown com múltiplos blocos | −41,26% | −31,16% | −49,38% |
+| Chat com blocos crescentes | −75,45% | −80,07% | −79,59% |
+| Chat durante streaming | −41,82% | −38,01% | −35,62% |
+| Chat, último item invalidado | −20,87% | −19,66% | −16,13% |
+| Overflow do cache do chat | −34,60% | −48,35% | −64,73% |
+
+O chat aquecido manteve zero bytes/zero alocações. Os **32 casos** passaram no
+gate original de 10% para bytes e alocações. A renderização de prosa agora quebra
+as linhas uma única vez, mantendo recuos, largura e referências originais.
+
+Há duas regressões de tempo superiores a 10% nesta amostragem: preparação de
+contexto (`prepare_only`, +11,58%) e projeção de conversa (+15,40%). Suas contagens
+de alocações não mudaram; bytes variaram +0,002% e −0,013%, respectivamente.
+As medições locais não estabelecem causalidade nem garantem melhora em todas as
+cargas. Tempo continua informado sem alterar os critérios do gate.
+
+Amostras brutas, hashes das fixtures e resultados completos estão na
+[evidência desta rodada](evidence/2026-10-30-ui-menu-refinement-validation.json).

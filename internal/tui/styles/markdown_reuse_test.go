@@ -33,21 +33,12 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 			node = next
 			continue
 		}
-		wide := false
-		_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-			if entering && (n.Kind() == ast.KindFencedCodeBlock || n.Kind() == ast.KindCodeBlock || n.Kind() == extast.KindTable) {
-				wide = true
-			}
-			return ast.WalkContinue, nil
-		})
-		measure := max(1, min(width, proseWidth))
-		if wide {
-			measure = max(1, width)
-		}
+		measure := referenceBlockWidth(node, width, proseWidth)
 		block := ast.NewDocument()
 		block.AppendChild(block, node)
+		renderWidth := markdownProseRenderWidth(node, measure)
 		r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{
-			WordWrap: measure, Styles: generateMarkdownStyleConfig(),
+			WordWrap: renderWidth, Styles: generateMarkdownStyleConfig(),
 		}), 1000)))
 		var out bytes.Buffer
 		if err := r.Render(&out, source, block); err != nil {
@@ -56,11 +47,28 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 			return result
 		}
 		if rendered := trimMarkdownBlockPadding(out.String()); rendered != "" {
+			if renderWidth == 0 {
+				rendered = wrapMarkdownProse(rendered, measure)
+			}
 			blocks = append(blocks, rendered)
 		}
 		node = next
 	}
 	return TerminalOutput(strings.Join(blocks, "\n\n"))
+}
+
+func referenceBlockWidth(node ast.Node, width, proseWidth int) int {
+	wide := false
+	_ = ast.Walk(node, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering && (n.Kind() == ast.KindFencedCodeBlock || n.Kind() == ast.KindCodeBlock || n.Kind() == extast.KindTable) {
+			wide = true
+		}
+		return ast.WalkContinue, nil
+	})
+	if wide {
+		return max(1, width)
+	}
+	return max(1, min(width, proseWidth))
 }
 
 func markdownListReference(list *ast.List, content string, source []byte, width, proseWidth int) string {

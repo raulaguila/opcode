@@ -88,6 +88,37 @@ func TestQuestionPanelFocusedChoiceAndFullDetailsRemainReachable(t *testing.T) {
 	require.Zero(t, p.app.CoderAgent.(*workflowProbe).canceled, "Esc in details only returns to the question")
 }
 
+func TestQuestionLongChoicesKeepDistinctEndingsAndFullDetails(t *testing.T) {
+	p := workflowPage(t)
+	p.SetSize(70, 24)
+	prefix := strings.Repeat("Same implementation path ", 6)
+	p.workflow.question = interaction.Question{ID: "q", Question: "Choose the next change", Choices: []string{
+		prefix + "FIRST_END", prefix + "SECOND_END",
+	}}
+	p.workflow.choice = 0
+	view := ansi.Strip(p.workflowView())
+	require.Contains(t, view, "FIRST_END")
+	require.Contains(t, view, "SECOND_END")
+	require.Contains(t, view, config.Text("F2 detalhes", "F2 details"))
+	require.LessOrEqual(t, lipgloss.Width(view), 70)
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeyF2})
+	content := p.questionPanelContent(66)
+	require.Contains(t, ansi.Strip(content.choices[0]), prefix+"FIRST_END", "details retain the original choice, not the compact label")
+	require.Equal(t, prefix+"FIRST_END", p.selectedQuestionAnswer(interaction.QuestionItem{Choices: p.workflow.question.Choices}).Choices[0], "display compaction never changes the submitted answer")
+}
+
+func TestQuestionChoiceLabelsRespectUnicodeCellWidths(t *testing.T) {
+	for _, choice := range []string{"unchanged", strings.Repeat("漢字 ação ", 15) + "ENDING"} {
+		for width := range 30 {
+			label := questionChoiceLabel(choice, width, false)
+			require.LessOrEqual(t, ansi.StringWidth(label), width)
+			if ansi.StringWidth(choice) <= width {
+				require.Equal(t, choice, label)
+			}
+		}
+	}
+}
+
 func TestQuestionBatchReviewsEditsAndPreservesComposer(t *testing.T) {
 	p := workflowPage(t)
 	p.editor.Update(chat.RestoreDraftMsg{Text: "rascunho da próxima tarefa"})

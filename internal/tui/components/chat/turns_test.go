@@ -36,6 +36,7 @@ func TestTurnProcessCanCollapseWithoutHidingResponse(t *testing.T) {
 	action, ok := cmd().(ResponseActionsMsg)
 	require.True(t, ok)
 	require.Equal(t, "visible response", action.Text)
+	require.Equal(t, "final", action.MessageID)
 }
 func TestUnreadIndicatorAndJumpToLatest(t *testing.T) {
 	m := scrollableMessages(t)

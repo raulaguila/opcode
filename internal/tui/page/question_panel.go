@@ -51,8 +51,7 @@ func (p *chatPage) questionPanelContent(width int) questionContent {
 	c := questionContent{intro: questionWrapped(item.Question, width), focus: p.workflow.choice}
 	if item.Explanation != "" {
 		for _, line := range questionWrapped(item.Explanation, width) {
-			t := theme.CurrentTheme()
-			c.intro = append(c.intro, styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.TextMuted()).Render(line))
+			c.intro = append(c.intro, styles.PanelHint().Render(line))
 		}
 	}
 	c.choices = p.questionChoiceRows(item, width)
@@ -89,7 +88,7 @@ func (p *chatPage) questionAnswerField(item interaction.QuestionItem, width int)
 
 func (p *chatPage) questionAnswerHint(item interaction.QuestionItem, batch bool) string {
 	if len(item.Choices) > 0 && p.workflow.choice < 0 {
-		return config.Text("↑↓ escolha ou escreva outra resposta · F2 · Esc cancela", "↑↓ choose or type another answer · F2 · Esc cancel")
+		return config.Text("↑↓ escolha ou escreva · F2 detalhes · Esc cancela", "↑↓ choose or type · F2 details · Esc cancel")
 	}
 	target := config.Text("opção", "choice")
 	if p.customQuestionAnswer(len(item.Choices)) {
@@ -99,11 +98,11 @@ func (p *chatPage) questionAnswerHint(item interaction.QuestionItem, batch bool)
 	}
 	if batch {
 		if item.Type == "multi_choice" && !p.customQuestionAnswer(len(item.Choices)) {
-			return config.Text("Espaço marca · Enter próxima: opções · F2 · Esc", "Space select · Enter next: choices · F2 · Esc")
+			return config.Text("Espaço marca · Enter próxima: opções · F2 detalhes · Esc", "Space select · Enter next: choices · F2 details · Esc")
 		}
-		return fmt.Sprintf(config.Text("Enter próxima: %s · Shift+Tab volta · F2 · Esc", "Enter next: %s · Shift+Tab back · F2 · Esc"), target)
+		return fmt.Sprintf(config.Text("Enter próxima: %s · Shift+Tab volta · F2 detalhes · Esc", "Enter next: %s · Shift+Tab back · F2 details · Esc"), target)
 	}
-	return fmt.Sprintf(config.Text("Enter envia %s · ↑↓ escolhe · F2 · Esc", "Enter sends %s · ↑↓ choose · F2 · Esc"), target)
+	return fmt.Sprintf(config.Text("Enter envia %s · ↑↓ escolhe · F2 detalhes · Esc", "Enter sends %s · ↑↓ choose · F2 details · Esc"), target)
 }
 
 func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) []string {
@@ -126,13 +125,34 @@ func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) 
 		if p.workflow.choice == i {
 			cursor = "›"
 		}
-		line := fmt.Sprintf("%s %s %s", cursor, mark, panelText(choice))
+		prefix := fmt.Sprintf("%s %s ", cursor, mark)
+		choice = questionChoiceLabel(panelText(choice), max(0, width-ansi.StringWidth(prefix)), p.workflow.details)
+		line := prefix + choice
 		if cursor == "›" {
 			line = styles.SelectedRow().Bold(true).PaddingRight(max(0, width-ansi.StringWidth(line))).Render(line)
 		}
 		rows = append(rows, line)
 	}
 	return rows
+}
+
+func questionChoiceLabel(choice string, width int, details bool) string {
+	length := ansi.StringWidth(choice)
+	if details || length <= width {
+		return choice
+	}
+	if width < 3 {
+		return ansi.Truncate(choice, width, "…")
+	}
+	head := (width - 1) / 2
+	tail := width - 1 - head
+	suffix := ansi.Cut(choice, length-tail, length)
+	// A cut through a wide grapheme can retain its full cell width.
+	for ansi.StringWidth(suffix) > tail {
+		cluster, _ := ansi.FirstGraphemeCluster(suffix, ansi.GraphemeWidth)
+		suffix = suffix[len(cluster):]
+	}
+	return ansi.Cut(choice, 0, head) + "…" + suffix
 }
 
 func (p *chatPage) questionReviewContent(width int) questionContent {

@@ -27,6 +27,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/ansi/parser"
 	"github.com/creack/pty"
 	"github.com/hinshun/vt10x"
 	_ "github.com/ncruces/go-sqlite3/driver"
@@ -375,6 +376,7 @@ type ptyUIHarness struct {
 	t          *testing.T
 	terminal   *os.File
 	screen     vt10x.Terminal
+	parser     *ansi.Parser
 	mu         sync.Mutex
 	raw        strings.Builder
 	stderrSeen bool
@@ -392,7 +394,7 @@ func newPTYUIHarnessWithArgs(t *testing.T, binary, home, workspace string, cols,
 	command.Env = append(command.Env, extraEnv...)
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: uint16(rows), Cols: uint16(cols)})
 	require.NoError(t, err)
-	h := &ptyUIHarness{t: t, terminal: terminal, screen: vt10x.New(vt10x.WithSize(cols, rows), vt10x.WithWriter(terminal))}
+	h := &ptyUIHarness{t: t, terminal: terminal, screen: vt10x.New(vt10x.WithSize(cols, rows), vt10x.WithWriter(terminal)), parser: ansi.NewParser()}
 	done := make(chan struct{})
 	h.command, h.exited = command, done
 	go func() {
@@ -411,7 +413,9 @@ func newPTYUIHarnessWithArgs(t *testing.T, binary, home, workspace string, cols,
 				}
 				h.raw.Write(buffer[:n])
 				h.stderrSeen = h.stderrSeen || strings.Contains(h.raw.String(), "UI_LSP_SECRET_SENTINEL")
-				_, _ = h.screen.Write(filter.write(buffer[:n]))
+				output := filter.write(buffer[:n])
+				h.parser.Parse(output)
+				_, _ = h.screen.Write(output)
 				h.mu.Unlock()
 			}
 			if err != nil {
@@ -482,14 +486,36 @@ func (h *ptyUIHarness) rawOutput() string {
 }
 func (h *ptyUIHarness) resize(cols, rows int) {
 	h.t.Helper()
-	h.mu.Lock()
-	h.screen.Resize(cols, rows)
-	h.mu.Unlock()
-	require.NoError(h.t, pty.Setsize(h.terminal, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}))
+	h.wait("terminal parser boundary before resize", 5*time.Second, func(string) bool {
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		if h.parser.State() != parser.GroundState {
+			return false
+		}
+		resizePTYUIScreen(h.screen, cols, rows)
+		require.NoError(h.t, pty.Setsize(h.terminal, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)}))
+		return true
+	})
 	h.wait(fmt.Sprintf("terminal resize %dx%d", cols, rows), 5*time.Second, func(frame string) bool {
 		lines := strings.Split(frame, "\n")
 		return len(lines) >= rows && strings.Count(lines[rows-1], "▾") == 2
 	})
+}
+
+// vt10x expands its tab-stop slice without initializing the new columns.
+func resizePTYUIScreen(screen vt10x.Terminal, cols, rows int) {
+	previous, _ := screen.Size()
+	screen.Resize(cols, rows)
+	if cols <= previous {
+		return
+	}
+	cursor := screen.Cursor()
+	var controls strings.Builder
+	for column := ((previous + 7) / 8) * 8; column < cols; column += 8 {
+		fmt.Fprintf(&controls, "\x1b[%dG\x1bH", column+1)
+	}
+	fmt.Fprintf(&controls, "\x1b[%dG", cursor.X+1)
+	_, _ = screen.Write([]byte(controls.String()))
 }
 func (h *ptyUIHarness) clickMode() {
 	h.t.Helper()

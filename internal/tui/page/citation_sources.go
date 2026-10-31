@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
 )
 
@@ -20,57 +21,49 @@ type citedSource struct {
 	unavailable bool
 }
 
-var responseReferencePattern = regexp.MustCompile("`([^`\\n]+)`|([[:alnum:]_./-]+\\.[[:alnum:]]+:[0-9]+(?:-[0-9]+)?)")
-var responseRangePattern = regexp.MustCompile(`^(.+):([1-9][0-9]*)(?:-([1-9][0-9]*))?$`)
+var responseFilePattern = regexp.MustCompile("`([^`\\n]+)`")
 
 // These are references present in the response, not proof of validated reads.
 func responseSources(text string) []citedSource {
 	var sources []citedSource
 	groups := map[string]int{}
 	seen := map[string]bool{}
-	for _, match := range responseReferencePattern.FindAllStringSubmatch(text, -1) {
-		token := match[1]
-		if token == "" {
-			token = match[2]
-		}
-		path, span, start, ok := responseReference(token)
-		if !ok || seen[path+":"+span] || span == "" && sourceUnavailable(path) {
+	// Bare file mentions remain navigable, without inventing a cited line.
+	for _, match := range responseFilePattern.FindAllStringSubmatch(text, 64) {
+		path := match[1]
+		if strings.ContainsAny(path, ":#\n\x00") || strings.HasPrefix(path, "//") || sourceUnavailable(path) {
 			continue
 		}
-		seen[path+":"+span] = true
-		group, exists := groups[path]
-		if !exists {
-			group = len(sources)
-			groups[path] = group
-			sources = append(sources, citedSource{path: path, unavailable: sourceUnavailable(path)})
+		appendCitedSource(&sources, groups, seen, path, "", 1)
+	}
+	for _, ref := range agent.SourceCitations(text) {
+		if ref.StartLine < 1 || ref.EndLine < ref.StartLine || strings.HasPrefix(ref.Path, "//") {
+			continue
 		}
-		sources[group].ranges = append(sources[group].ranges, span)
-		sources[group].starts = append(sources[group].starts, start)
+		span := strconv.Itoa(ref.StartLine)
+		if ref.EndLine != ref.StartLine {
+			span += "-" + strconv.Itoa(ref.EndLine)
+		}
+		appendCitedSource(&sources, groups, seen, ref.Path, span, ref.StartLine)
 	}
 	return sources
 }
 
-func responseReference(token string) (path, span string, start int, ok bool) {
-	if strings.ContainsAny(token, "\n\x00") || strings.Contains(token, "://") || strings.HasPrefix(token, "//") {
-		return "", "", 0, false
+func appendCitedSource(sources *[]citedSource, groups map[string]int, seen map[string]bool, path, span string, start int) {
+	path = filepath.Clean(path)
+	key := path + ":" + span
+	if seen[key] {
+		return
 	}
-	path, span, start = token, "", 1
-	if match := responseRangePattern.FindStringSubmatch(token); match != nil {
-		path, span = match[1], match[2]
-		var err error
-		start, err = strconv.Atoi(match[2])
-		if err != nil {
-			return "", "", 0, false
-		}
-		if match[3] != "" {
-			end, err := strconv.Atoi(match[3])
-			if err != nil || end < start {
-				return "", "", 0, false
-			}
-			span += "-" + match[3]
-		}
+	seen[key] = true
+	group, exists := groups[path]
+	if !exists {
+		group = len(*sources)
+		groups[path] = group
+		*sources = append(*sources, citedSource{path: path, unavailable: sourceUnavailable(path)})
 	}
-	return filepath.Clean(path), span, start, true
+	(*sources)[group].ranges = append((*sources)[group].ranges, span)
+	(*sources)[group].starts = append((*sources)[group].starts, start)
 }
 
 func sourceReferences(sources []citedSource) string {

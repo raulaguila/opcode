@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -431,6 +432,13 @@ func validateCriterion(id string, criterion Criterion) error {
 		return fmt.Errorf("case %s: criterion value exceeds 2000 bytes", id)
 	}
 	switch criterion.Kind {
+	case "response_matches", "response_not_matches":
+		if criterion.Value == "" {
+			return fmt.Errorf("case %s: response pattern is required", id)
+		}
+		if _, err := regexp.Compile(criterion.Value); err != nil {
+			return fmt.Errorf("case %s: invalid response pattern", id)
+		}
 	case "response_cites":
 		if !safePath(criterion.Path) || citationAnchor(criterion.Value) < 1 {
 			return fmt.Errorf("case %s: citation criterion requires a safe path and positive line anchor", id)

@@ -95,7 +95,7 @@ func (p *chatPage) Update(msg tea.Msg) (updated util.Model, result tea.Cmd) {
 	case WorkspaceResultMsg:
 		return p, p.workspaceResult(msg)
 	case chat.ResponseActionsMsg:
-		return p, p.openResponseActions(msg.Text)
+		return p, p.openResponseActions(msg.Text, msg.MessageID)
 	case ActivityMsg:
 		return updateChatPageDefaultCase(p, &msg)
 	case pubsub.Event[session.Session]:

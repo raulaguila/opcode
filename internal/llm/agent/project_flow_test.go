@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
@@ -48,10 +50,62 @@ func assertFlowBootstrap(t *testing.T, question string) {
 	require.NoError(t, finishGeneration(t, done).Error)
 }
 
-func TestFlowCallHintSkipsDeclarationsAndComments(t *testing.T) {
-	require.Equal(t, "dispatchBatch", flowCallHint("1|// fakeCall()\n2|func chatTools() string { return dispatchBatch() }\n"))
-	require.Equal(t, "dispatch_batch", flowCallHint("1|def chat_tools():\n2|    return dispatch_batch()\n"))
-	require.Equal(t, "dispatchBatch", flowCallHint("1|export function chatTools() {\n2| return dispatchBatch();\n"))
+func TestFlowCallHintsSkipDeclarationsAndComments(t *testing.T) {
+	require.Equal(t, []string{"dispatchBatch"}, slices.Collect(flowCallHints("1|// fakeCall()\n2|func chatTools() string { return dispatchBatch() }\n")))
+	require.Equal(t, []string{"dispatch_batch"}, slices.Collect(flowCallHints("1|def chat_tools():\n2|    return dispatch_batch()\n")))
+	require.Equal(t, []string{"dispatchBatch"}, slices.Collect(flowCallHints("1|export function chatTools() {\n2| return dispatchBatch();\n")))
+}
+
+type flowIndexProbe struct {
+	tools.BaseTool
+	queries []string
+}
+
+func (p *flowIndexProbe) Run(_ context.Context, call tools.ToolCall) (tools.ToolResponse, error) {
+	var input struct{ Query string }
+	if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
+		return tools.ToolResponse{}, err
+	}
+	p.queries = append(p.queries, input.Query)
+	content := `{"results":[]}`
+	switch input.Query {
+	case "alreadyRead":
+		content = `{"results":[{"path":"chat.go","start_line":1}]}`
+	case "dispatchBatch":
+		content = `{"results":[{"path":"dispatch.go","start_line":1}]}`
+	case "unavailableOne", "unavailableTwo":
+		content = `{"results":[{"path":"` + input.Query + `.go","start_line":1}]}`
+	}
+	return tools.NewTextResponse(content), nil
+}
+
+func TestFlowFollowupSkipsCoveredAndMissingCluesWithinExistingReadBound(t *testing.T) {
+	for _, tc := range []struct {
+		name, calls string
+		queries     []string
+		reads       int32
+	}{
+		{"covered and missing", "alreadyRead(); missing(); dispatchBatch()", []string{"alreadyRead", "missing", "dispatchBatch"}, 2},
+		{"duplicate", "alreadyRead(); alreadyRead(); dispatchBatch()", []string{"alreadyRead", "dispatchBatch"}, 2},
+		{"first useful", "dispatchBatch(); missing()", []string{"dispatchBatch"}, 2},
+		{"three query bound", "one(); two(); three(); dispatchBatch()", []string{"one", "two", "three"}, 1},
+		{"failed reads consume budget", "unavailableOne(); unavailableTwo(); dispatchBatch()", []string{"unavailableOne", "unavailableTwo"}, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _, _, root := runtimeAgent(t, workflow.Ask)
+			require.NoError(t, os.WriteFile(filepath.Join(root, "chat.go"), []byte("package fixture\nfunc chat() { "+tc.calls+" }\n"), 0600))
+			require.NoError(t, os.WriteFile(filepath.Join(root, "dispatch.go"), []byte("package fixture\nfunc dispatchBatch() string { return \"ACTUAL_RESULT\" }\n"), 0600))
+			view := &citationReadTool{BaseTool: tools.NewViewTool(nil)}
+			b := evidenceBootstrap{agent: a, ctx: context.Background(), session: "s", run: &generationRun{limits: config.RuntimeConfig{ToolBudget: 16000}}, view: view, flow: true, flowReadsRemaining: 2}
+			read, _, err := b.readHit("chat", projectEvidenceHit{Path: "chat.go", Start: 1})
+			require.NoError(t, err)
+			require.True(t, read)
+			index := &flowIndexProbe{BaseTool: tools.NewCodeIndexTool()}
+			require.NoError(t, b.followFlowCalls(index))
+			require.Equal(t, tc.queries, index.queries)
+			require.Equal(t, tc.reads, view.count.Load())
+		})
+	}
 }
 
 func TestFlowGuidancePreservesExecutableEvidenceAndEveryRequestedBranchDuringRepair(t *testing.T) {
@@ -61,7 +115,7 @@ func TestFlowGuidancePreservesExecutableEvidenceAndEveryRequestedBranchDuringRep
 		{ID: "repair", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Application validation: fix references", Origin: "application"}}},
 	}
 	guidance := flowResponseGuidance(run, history)
-	for _, phrase := range []string{"executable call/return statement lines", "not only a declaration header", "every input/result explicitly requested", "all requested branches when repairing", "complete original answer"} {
+	for _, phrase := range []string{"executable call/return statement lines", "not only a declaration header", "every input/result explicitly requested", "all requested branches when repairing", "complete original answer", "separate input → result pairs", "citation beside each pair"} {
 		require.Contains(t, guidance, phrase)
 	}
 	require.Empty(t, flowResponseGuidance(&generationRun{turnMessageID: "repair"}, history))

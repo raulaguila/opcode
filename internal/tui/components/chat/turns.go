@@ -15,7 +15,7 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
-type ResponseActionsMsg struct{ Text string }
+type ResponseActionsMsg struct{ Text, MessageID string }
 type ToggleProcessMsg struct{}
 type ProcessPreferencesChangedMsg struct{}
 type ReadingWidthChangedMsg struct{}
@@ -251,7 +251,11 @@ func (r *turnRenderer) renderProcess(group turnGroup, active bool) {
 	} else if active && !completedReasoning(group.messages) {
 		status = " · " + config.Text("em andamento", "working")
 	} else {
-		status = " · " + processOutcome(group.messages)
+		outcome := processOutcome(group.messages)
+		status = " · " + outcome
+		if outcome == config.Text("finalizado", "finished") {
+			status = styles.HintOn(r.theme.Background()).Render(status)
+		}
 	}
 	label = styles.HintOn(r.theme.Background()).Render(label) + r.base.Render(status)
 	start := r.position

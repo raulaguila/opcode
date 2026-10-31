@@ -327,7 +327,7 @@ func updateMessagesCmpKeyMsg(m *messagesCmp, cmds *[]tea.Cmd, msg *tea.KeyPressM
 		return m, nil, true
 	}
 	if msg.String() == "ctrl+y" {
-		return m, util.CmdHandler(ResponseActionsMsg{m.LatestResponse()}), true
+		return m, util.CmdHandler(ResponseActionsMsg{Text: m.LatestResponse(), MessageID: m.LatestResponseID()}), true
 	}
 	if key.Matches((*msg), messageKeys.PageUp) || key.Matches((*msg), messageKeys.PageDown) ||
 		key.Matches((*msg), messageKeys.HalfPageUp) || key.Matches((*msg), messageKeys.HalfPageDown) {

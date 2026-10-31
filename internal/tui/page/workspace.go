@@ -69,6 +69,8 @@ type workspacePanel struct {
 	showDetails             bool
 	allActions              bool
 	diffMode                string
+	previewPath             string
+	previewLine             int
 	selected                int
 	actions                 []workspaceAction
 	view                    viewport.Model
@@ -538,13 +540,22 @@ func (p *chatPage) exportConversation() tea.Cmd {
 func safeExportName(id string) string {
 	return regexp.MustCompile(`[^a-zA-Z0-9_-]`).ReplaceAllString(id, "_")
 }
-func (p *chatPage) openResponseActions(text string) tea.Cmd {
+func (p *chatPage) openResponseActions(text string, messageIDs ...string) tea.Cmd {
 	if text == "" {
 		return util.ReportWarn(config.Text("Nenhuma resposta disponível", "No response available"))
 	}
 	state := ""
-	if transcript, ok := p.transcript.(interface{ ResponseCitationStatus(string) string }); ok {
-		state = transcript.ResponseCitationStatus(text)
+	if transcript, ok := p.transcript.(interface {
+		LatestResponseID() string
+		ResponseCitationStatus(string) string
+	}); ok {
+		id := ""
+		if len(messageIDs) > 0 {
+			id = messageIDs[0]
+		} else if text == p.transcript.LatestResponse() {
+			id = transcript.LatestResponseID()
+		}
+		state = transcript.ResponseCitationStatus(id)
 	}
 	text = tools.RedactCredentials(text)
 	p.showWorkspace("actions", config.Text("Ações da resposta", "Response actions"), "")
@@ -559,6 +570,7 @@ func (p *chatPage) openResponseActions(text string) tea.Cmd {
 }
 func (p *chatPage) openFile(path string, line int) tea.Cmd {
 	p.showWorkspace("file", config.Text("Arquivo · ", "File · ")+filepath.Base(path), "")
+	p.workspace.previewPath, p.workspace.previewLine = path, line
 	id := p.session.ID
 	perms := p.app.Permissions
 	return p.workspaceAsync(func(ctx context.Context) (string, bool, error) {
@@ -1079,6 +1091,9 @@ func (p *chatPage) workspaceActionKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 
 	case "ctrl+r":
+		if p.workspace.kind == "file" {
+			return p.openFile(p.workspace.previewPath, p.workspace.previewLine), true
+		}
 		return p.workspaceCommand(p.workspace.kind, ""), true
 	}
 	return nil, false

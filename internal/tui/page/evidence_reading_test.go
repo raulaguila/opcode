@@ -18,8 +18,10 @@ type evidenceTranscript struct {
 	state string
 }
 
-func (e *evidenceTranscript) ResponseCitationStatus(text string) string {
-	if text == e.text {
+func (e *evidenceTranscript) LatestResponseID() string { return "evidence-response" }
+
+func (e *evidenceTranscript) ResponseCitationStatus(messageID string) string {
+	if messageID == e.LatestResponseID() {
 		return e.state
 	}
 	return ""

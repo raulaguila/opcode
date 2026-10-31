@@ -21,7 +21,7 @@ func TestPTYCompactListsPreserveDensityOnResize(t *testing.T) {
 	if os.Getenv("OPCODE_LIVE_TESTS") != "1" || runtime.GOOS != "linux" {
 		t.Skip("explicit Linux PTY acceptance opt-in required")
 	}
-	answer := "Lista de sensores (README.md:1-2).\n\n1. ITEM_ONE " + strings.Repeat("coleta de sensores ", 10) + "\n2. ITEM_TWO SQLite.\n\nFim da lista."
+	answer := "Lista de sensores (README.md#L1-L2).\n\n1. ITEM_ONE " + strings.Repeat("coleta de sensores ", 10) + "\n2. ITEM_TWO SQLite.\n\nFim da lista."
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct{ Stream bool }
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
@@ -52,7 +52,7 @@ func TestPTYCompactListsPreserveDensityOnResize(t *testing.T) {
 		})
 		assertPTYCompactList(t, h.frame())
 	}
-	assertPTYSourceAndReadingActions(t, h)
+	assertPTYSourceAndReadingActions(t, h, workspace)
 	raw, err := os.ReadFile(filepath.Join(home, ".opcode", "config.json"))
 	require.NoError(t, err)
 	var saved struct {
@@ -80,7 +80,7 @@ func assertPTYCompactList(t *testing.T, frame string) {
 	t.Fatal("second list item is not visible")
 }
 
-func assertPTYSourceAndReadingActions(t *testing.T, h *ptyUIHarness) {
+func assertPTYSourceAndReadingActions(t *testing.T, h *ptyUIHarness, workspace string) {
 	t.Helper()
 	h.paste("KEEP_READING_DRAFT")
 	h.send("\x19")
@@ -91,6 +91,7 @@ func assertPTYSourceAndReadingActions(t *testing.T, h *ptyUIHarness) {
 	h.wait("recorded source validation", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "answer was generated") && strings.Contains(frame, "not been revalidated now")
 	})
+	assertPTYSourcePreviewRefresh(t, h, workspace)
 	h.send("\x1b")
 	h.wait("back to response actions", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Copy response") })
 	h.send("m")
@@ -102,5 +103,33 @@ func assertPTYSourceAndReadingActions(t *testing.T, h *ptyUIHarness) {
 	h.send("\x1b")
 	h.wait("draft survives reflow", 5*time.Second, func(frame string) bool {
 		return !strings.Contains(frame, "Copy response") && strings.Contains(frame, "KEEP_READING_DRAFT")
+	})
+}
+
+func assertPTYSourcePreviewRefresh(t *testing.T, h *ptyUIHarness, workspace string) {
+	t.Helper()
+	h.clickLabel("README.md · 1 reference(s)")
+	h.wait("native hash citation opens source", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Source · README.md") && strings.Contains(frame, "Open range 1-2")
+	})
+	h.clickLabel("Open range 1-2")
+	h.wait("protected file preview", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "File · README.md") && strings.Contains(frame, "SensorStore")
+	})
+	path := filepath.Join(workspace, "README.md")
+	original, err := os.ReadFile(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.WriteFile(path, original, 0600)) })
+	require.NoError(t, os.WriteFile(path, []byte("# REFRESHED_PREVIEW_ONLY\nLocal preview changed by the test, not the agent.\n"), 0600))
+	h.send("\x12")
+	h.wait("preview refresh rereads file", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "REFRESHED_PREVIEW_ONLY") && !strings.Contains(frame, "SensorStore")
+	})
+	require.NoError(t, os.WriteFile(path, original, 0600))
+	h.send("\x1b")
+	h.wait("back to source ranges", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Open range 1-2") })
+	h.send("\x1b")
+	h.wait("back to source list", 5*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "README.md · 1 reference(s)") && !strings.Contains(frame, "Open range 1-2")
 	})
 }

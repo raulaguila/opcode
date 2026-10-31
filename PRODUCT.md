@@ -140,8 +140,8 @@ busca limitada por implementação; fontes preparadas não significam inspeção
 completa nem dispensam novas ferramentas quando faltam fatos.
 
 
-A investigação de fluxos usa os termos da tarefa e uma etapa adicional limitada
-para seguir chamadas textuais. O índice favorece identificadores dentro de
+A investigação de fluxos usa os termos da tarefa e até três pistas distintas
+para obter uma nova fonte, sem aumentar o limite de leituras. O índice favorece identificadores dentro de
 perguntas naturais. Preparação automática resume apenas arquivos lidos no turno;
 referências de símbolos completos exigem intervalo entregue e hash coincidente.
 O histórico bruto, leituras nativas, recibos e a validação das citações permanecem
@@ -151,3 +151,9 @@ expõem largura total/leitura confortável. Fontes mostram o estado registrado
 na geração e mantêm referências indisponíveis; isso não é revalidação atual nem
 prova de interpretação. Processos recolhidos resumem falhas e saídas parciais
 quando registradas nos resultados reais.
+As avaliações de explicação acrescentam relações explícitas entrada/retorno e
+recusam inversões na fixture, sem juiz por modelo ou custo adicional no chat.
+Consulta de fontes compartilha o reconhecimento do validador, mantém estado por
+ID da mensagem e relê a prévia por Ctrl+R nas mesmas permissões. Opções longas
+mostram início e final e identificam F2 detalhes; processos concluídos sem falhas
+usam estilo secundário. Não há novas dependências, painéis ou configurações.

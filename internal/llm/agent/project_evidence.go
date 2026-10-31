@@ -23,7 +23,7 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 	}
 	query := tools.ProjectEvidenceQuery(question)
 	if query != "" && tools.ProjectInquiry(question) && index != nil && len(tools.ProjectSourcePaths(question)) == 0 {
-		b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, flow: tools.ProjectFlowQuery(question) != ""}
+		b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, flow: tools.ProjectFlowQuery(question) != "", flowReadsRemaining: 4}
 		read, err := b.prepareTopic(query, index, inventory)
 		history = b.history
 		if err != nil || read {
@@ -34,7 +34,7 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 	if err != nil || index == nil {
 		return history, err
 	}
-	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view}
+	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, flowReadsRemaining: 2}
 	if tools.ProjectFlowQuery(question) != "" {
 		b.flow = true
 		err = b.followFlowCalls(index)
@@ -171,15 +171,15 @@ type projectEvidenceHit struct {
 	Hash   string `json:"file_hash"`
 }
 type evidenceBootstrap struct {
-	agent    *agent
-	ctx      context.Context
-	session  string
-	run      *generationRun
-	history  []message.Message
-	view     tools.BaseTool
-	read     bool
-	overview bool
-	flow     bool
+	agent              *agent
+	ctx                context.Context
+	session            string
+	run                *generationRun
+	history            []message.Message
+	view               tools.BaseTool
+	overview           bool
+	flow               bool
+	flowReadsRemaining int
 }
 
 func (b *evidenceBootstrap) topicQuery(query string, inventory tools.BaseTool) (string, error) {
@@ -225,24 +225,40 @@ func (b *evidenceBootstrap) readIndexHits(query string, hits []projectEvidenceHi
 		seen = overviewReadPaths(b.run, b.history)
 	}
 	attempts := 0
+	read := false
 	for _, hit := range hits {
-		key := normalizedToolPath(hit.Path)
-		if !filepath.IsLocal(hit.Path) || hit.Start < 1 || seen[key] {
+		if !b.reserveIndexRead(hit, seen) {
 			continue
 		}
-		seen[key] = true
 		attempts++
-		complete, err := b.readHit(query, hit)
+		visible, complete, err := b.readHit(query, hit)
 		if err != nil {
 			return false, err
 		}
+		read = read || visible
 		if complete && !b.overview && !b.flow || attempts == 2 {
 			break
 		}
 	}
-	return b.read, nil
+	return read, nil
 }
-func (b *evidenceBootstrap) readHit(query string, hit projectEvidenceHit) (bool, error) {
+
+func (b *evidenceBootstrap) reserveIndexRead(hit projectEvidenceHit, seen map[string]bool) bool {
+	key := normalizedToolPath(hit.Path)
+	if !filepath.IsLocal(hit.Path) || hit.Start < 1 || seen[key] {
+		return false
+	}
+	if b.flow {
+		if b.flowReadsRemaining == 0 {
+			return false
+		}
+		b.flowReadsRemaining--
+	}
+	seen[key] = true
+	return true
+}
+
+func (b *evidenceBootstrap) readHit(query string, hit projectEvidenceHit) (bool, bool, error) {
 	limit := 60
 	if hit.End >= hit.Start {
 		limit = min(60, hit.End-hit.Start+3)
@@ -251,18 +267,17 @@ func (b *evidenceBootstrap) readHit(query string, hit projectEvidenceHit) (bool,
 	history, response, err := b.agent.bootstrapCall(b.ctx, b.session, b.view, string(input), b.history, b.run)
 	b.history = history
 	if err != nil {
-		return false, err
+		return false, false, err
 	}
 	receipt, visible := tools.VisibleSourceReadReceipt("view", response.Content, response.Metadata)
 	if response.IsError || !visible {
-		return false, nil
+		return false, false, nil
 	}
 	if b.run.primaryEvidence == nil {
 		b.run.primaryEvidence = map[string]bool{}
 	}
 	b.run.primaryEvidence[normalizedToolPath(hit.Path)] = true
-	b.read = true
-	return hit.Symbol == query && hit.Hash != "" && receipt.Hash == hit.Hash && receipt.StartLine <= hit.Start && receipt.EndLine >= hit.End, nil
+	return true, hit.Symbol == query && hit.Hash != "" && receipt.Hash == hit.Hash && receipt.StartLine <= hit.Start && receipt.EndLine >= hit.End, nil
 }
 func (a *agent) bootstrapBasic(ctx context.Context, session, question string, history []message.Message, run *generationRun, view tools.BaseTool) ([]message.Message, error) {
 	for _, path := range tools.ProjectContextPaths(question) {

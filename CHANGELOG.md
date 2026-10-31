@@ -2,6 +2,15 @@
 
 ## Em desenvolvimento — 2026-10-31
 
+- Preparação de fluxos tenta até três pistas distintas quando a primeira não
+  entrega uma nova fonte, mantendo o limite de leituras e orçamento existentes.
+- Prévia de fontes atualiza o mesmo intervalo com Ctrl+R; formatos de referências
+  acompanham o validador e o estado registrado pertence ao ID da resposta.
+- Avaliações de explicação detectam pares entrada/retorno invertidos, mantendo
+  os critérios de citações e sem chamadas adicionais ao modelo na conversa.
+- Processos concluídos com sucesso ficam em segundo plano; opções longas de
+  perguntas mostram início/final e identificam o atalho F2 para detalhes.
+
 - Investigação de fluxos usa pistas da tarefa e orienta leitura de implementações,
   relações e resultados, preservando limites, recibos e validação de citações.
 - Busca favorece identificadores dentro de perguntas naturais; avaliações

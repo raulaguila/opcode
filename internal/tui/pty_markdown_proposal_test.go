@@ -59,10 +59,11 @@ func TestPTYMarkdownProposalAndQuestionDivider(t *testing.T) {
 	require.Contains(t, frame, "1. Coleta de sensores")
 	require.Contains(t, frame, "2. Armazenamento")
 	require.EqualValues(t, 2, generations.Load(), "formatting must not trigger citation repair")
-	require.Contains(t, frame, "choose or type another answer")
+	require.Contains(t, frame, "choose or type")
+	require.Contains(t, frame, "F2 details")
 	lines := strings.Split(frame, "\n")
 	for i, line := range lines {
-		if strings.Contains(line, "choose or type another answer") {
+		if strings.Contains(line, "choose or type") {
 			require.Greater(t, i, 0)
 			require.Contains(t, lines[i-1], strings.Repeat("─", 50), "divider must directly precede controls")
 		}

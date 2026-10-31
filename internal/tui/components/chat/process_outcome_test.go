@@ -34,8 +34,24 @@ func TestProcessOutcomeUsesRecordedFlagsNotProseAndDeduplicatesResults(t *testin
 
 func TestCitationStatusFollowsSelectedRevisionWithoutBorrowingAnotherText(t *testing.T) {
 	m := revisionFixture(message.CitationValid)
-	require.Equal(t, message.CitationValid, m.ResponseCitationStatus("CORRECTED_TEXT README.md:1"))
-	require.Empty(t, m.ResponseCitationStatus("ORIGINAL_TEXT"))
+	require.Equal(t, message.CitationValid, m.ResponseCitationStatus("correction"))
+	require.Equal(t, message.CitationRevising, m.ResponseCitationStatus("original"))
 	m = revisionFixture(message.CitationInvalid)
-	require.NotEqual(t, message.CitationValid, m.ResponseCitationStatus(m.LatestResponse()))
+	require.NotEqual(t, message.CitationValid, m.ResponseCitationStatus(m.LatestResponseID()))
+}
+
+func TestCitationStatusUsesMessageIdentityAcrossTurnsAndDuplicateText(t *testing.T) {
+	m := renderFixture(0)
+	m.messages = []message.Message{
+		{ID: "u1", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "First question"}}},
+		{ID: "a1", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "Same answer", CitationStatus: message.CitationValid}}},
+		{ID: "u2", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Second question"}}},
+		{ID: "a2", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "Same answer", CitationStatus: message.CitationInvalid}}},
+	}
+	require.Equal(t, "a2", m.LatestResponseID())
+	require.Equal(t, message.CitationValid, m.ResponseCitationStatus("a1"))
+	require.Equal(t, message.CitationInvalid, m.ResponseCitationStatus("a2"))
+	require.Empty(t, m.ResponseCitationStatus("Same answer"))
+	require.Empty(t, m.ResponseCitationStatus("u1"))
+	require.Empty(t, m.ResponseCitationStatus("missing"))
 }

@@ -164,10 +164,15 @@ func latestRevisionResponse(groups []turnGroup) string {
 	return item.Content().String()
 }
 
-func (m *messagesCmp) ResponseCitationStatus(text string) string {
-	item := latestRevisionMessage(m.groups())
-	if item.Content().String() == text {
-		return item.CitationValidation()
+func (m *messagesCmp) LatestResponseID() string {
+	return latestRevisionMessage(m.groups()).ID
+}
+
+func (m *messagesCmp) ResponseCitationStatus(messageID string) string {
+	for _, item := range m.messages {
+		if item.ID == messageID && publicResponse(item) {
+			return item.CitationValidation()
+		}
 	}
 	return ""
 }

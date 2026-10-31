@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/stretchr/testify/require"
@@ -99,4 +101,44 @@ func TestSourceReferencesDoNotInventALineForBareFileNames(t *testing.T) {
 	sources := responseSources("See `a/main.go` and `a/main.go:6-8`.")
 	require.Len(t, sources, 1)
 	require.Equal(t, "a/main.go\na/main.go:6-8", sourceReferences(sources))
+}
+
+func TestSourceBrowserRecognizesNativeCitationFormats(t *testing.T) {
+	_, root := citationSourceWorkspace(t)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "a", "spaced file.go"), []byte("line\n"), 0600))
+	sources := responseSources("See `a/main.go#L1-L2`, a/main.go:L6–L8, [source](<a/spaced file.go#L1>) and https://example.test/remote.go#L4.")
+	require.Len(t, sources, 2)
+	references := sourceReferences(sources)
+	for _, ref := range []string{"a/main.go:1-2", "a/main.go:6-8", "a/spaced file.go:1"} {
+		require.Contains(t, references, ref)
+	}
+	require.NotContains(t, references, "remote")
+}
+
+func TestFilePreviewRefreshRereadsSameRangeAndKeepsPermissions(t *testing.T) {
+	p, root := citationSourceWorkspace(t)
+	first := p.openFile("a/main.go", 6)().(WorkspaceResultMsg)
+	require.NoError(t, first.err)
+	p.workspaceResult(first)
+	require.Contains(t, p.workspace.body, "6|")
+	require.NoError(t, os.WriteFile(filepath.Join(root, "a", "main.go"), []byte(strings.Repeat("changed\n", 10)), 0600))
+	refresh, handled := p.workspaceActionKey(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	require.True(t, handled)
+	require.NotNil(t, refresh)
+	refreshed := refresh().(WorkspaceResultMsg)
+	require.NoError(t, refreshed.err)
+	p.workspaceResult(refreshed)
+	require.Contains(t, p.workspace.body, "6|changed")
+	require.NotContains(t, p.workspace.body, "5|changed")
+	require.Equal(t, "a/main.go", p.workspace.previewPath)
+	require.Equal(t, 6, p.workspace.previewLine)
+	// Refresh uses the same protected preview path, including external files.
+	external := filepath.Join(t.TempDir(), "outside.go")
+	require.NoError(t, os.WriteFile(external, []byte("private-preview-marker"), 0600))
+	p.openFile(external, 1)
+	refresh, handled = p.workspaceActionKey(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	require.True(t, handled)
+	denied := refresh().(WorkspaceResultMsg)
+	require.Error(t, denied.err)
+	require.NotContains(t, denied.body, "private-preview-marker")
 }

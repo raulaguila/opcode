@@ -5,6 +5,39 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Melhorias pontuais de fontes e leitura — 31/10/2026
+
+A preparação de fluxos ignora pistas que não entregam novas fontes e tenta até
+três consultas distintas, com o mesmo orçamento e limite de tentativas de
+leitura. Atualizar a prévia relê o arquivo nas permissões existentes; os formatos
+reconhecidos acompanham o validador e o estado registrado pertence ao ID da
+mensagem. Opções longas e processos concluídos ganharam ajustes de apresentação,
+sem novas dependências ou configurações.
+
+As quatro fixtures de explicação preservam seus oito critérios originais e
+acrescentam três verificações conservadoras de relações entrada/retorno. Na
+rodada local com `nemotron-3.5-bolt:e4b`, os 32 critérios anteriores passaram.
+Com os padrões adicionais, passaram 40/44 critérios e 1/4 casos completos.
+As falhas restantes estão nos padrões explícitos, sem erros reportados pelo
+agente; isso sozinho não prova interpretação incorreta. Esses padrões não constituem
+um avaliador semântico geral; respostas narrativas válidas podem não corresponder
+aos formatos aceitos. As rodadas anteriores e os falsos negativos corrigidos
+ficaram registrados, sem substituir a medição por uma taxa geral de qualidade.
+
+O fluxo completo em PTY com o Nemotron passou, incluindo permissões explícitas,
+perguntas, rascunhos, cópia, fontes e retomada. O teste adicional de prévia abre
+uma referência `#L`, modifica somente uma fixture de teste e confirma a releitura
+por Ctrl+R e a navegação de volta. A prévia não cria evidência para o agente.
+Uma falha inicial do emulador foi reproduzida: vt10x não estende suas paradas de
+tabulação ao aumentar a largura, embora os bytes do aplicativo enderecem o
+rodapé corretamente. O diagnóstico e as tentativas iniciais foram preservados.
+O harness repõe apenas as tabulações das novas colunas em limites seguros do
+parser ANSI existente, preservando cursor, atributos e captura bruta. A regressão
+determinística cobre expansão, redução e nova expansão; o aplicativo não mudou
+para contornar esse defeito do emulador.
+
+Resultados detalhados: [evidência desta revisão](evidence/2026-10-31-focused-improvements-validation.json).
+
 ## Revisões de respostas sem duplicação — 30/10/2026
 
 Após `279850c`, correções diretas de citações recebem um vínculo explícito com a

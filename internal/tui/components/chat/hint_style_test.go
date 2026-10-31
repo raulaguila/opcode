@@ -62,6 +62,18 @@ func assertChatHintSurfaces(t *testing.T) {
 	}
 	body := chatHintGlyph(t, styles.BaseStyle().Render("body"), "body")
 	require.Equal(t, body.FG, chatHintGlyph(t, view, "working").FG, "live status remains primary")
+	for _, failed := range []bool{false, true} {
+		result := message.Message{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: "read", IsError: failed}}}
+		completed := turnRenderer{messages: m, base: styles.BaseStyle(), theme: palette}
+		completed.renderProcess(turnGroup{key: "done", messages: []message.Message{result}}, false)
+		completedView := strings.Join(completed.rendered, "\n")
+		want := root.FG
+		if failed {
+			want = body.FG
+			require.Equal(t, body.FG, chatHintGlyph(t, completedView, "failure(s)").FG, "recorded failures remain primary")
+		}
+		require.Equal(t, want, chatHintGlyph(t, completedView, "finished").FG, "successful completion stays secondary without demoting failures")
+	}
 	require.Equal(t, root.FG, chatHintGlyph(t, m.navigationHint(), "Arrows move").FG)
 	m.find = transcriptFind{open: true, query: "query"}
 	require.Equal(t, root.FG, chatHintGlyph(t, m.navigationHint(), "Find:").FG)

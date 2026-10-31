@@ -703,3 +703,15 @@ O painel de fontes distingue referências presentes no texto da validação feit
 na geração; essa informação não representa uma nova conferência do arquivo nem
 uma garantia de interpretação. Arquivos indisponíveis continuam identificados,
 com abertura sujeita às mesmas permissões.
+
+A consulta de fontes reconhece os mesmos formatos do validador de citações,
+incluindo `arquivo.go#L10-L20` e destinos Markdown com espaços. O estado registrado
+é consultado pelo ID da resposta, inclusive para textos repetidos ou antigos.
+Na prévia, Ctrl+R relê o mesmo caminho/intervalo pelas permissões existentes;
+isso não adiciona uma leitura ao contexto do agente. O limite continua em
+200 linhas por prévia.
+
+Processos concluídos sem falhas usam o estilo secundário; atividade, falhas,
+interrupções e saídas parciais mantêm destaque. Opções longas de pergunta mostram
+o início e o final, enquanto F2 detalhes apresenta o texto integral. A redução
+visual não altera o texto enviado ao agente.

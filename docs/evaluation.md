@@ -60,6 +60,8 @@ a proteção.
 Critérios aceitos:
 
 - `response_contains`, `response_not_contains`: texto da **última** resposta.
+- `response_matches`, `response_not_matches`: padrão RE2 explícito sobre a última
+  resposta, com até 2000 bytes e validado antes da execução.
 - `file_contains`, `file_not_contains`: arquivo regular dentro da fixture.
 - `tool_called`: chamada real registrada pelo agente.
 - `expect_error`: erro real do turno, comparado sem incluí-lo no relatório.
@@ -71,6 +73,22 @@ correção semântica geral. O comando retorna erro quando qualquer caso live
 falha, mantendo o relatório com os critérios aprovados/reprovados. Falhas de
 configuração, limite de tempo e relatório inválido também são diferenciadas sem
 copiar payloads de provedores. Workspaces temporários são removidos ao final.
+
+A suíte adicional `explanation_quality.json` mantém os critérios de termos,
+citações e arquivos e exige pares explícitos `blocked` → `TOOL_DENIED` e
+`ping` → `TOOL_OK`, recusando também pares invertidos explícitos no começo
+de uma linha ou oração da mesma resposta.
+Os padrões aceitam conectores curtos em português/inglês, listas, tabelas e código.
+Também aceitam cabeçalhos explícitos `For/Para entrada:` e
+`Behavior of/Comportamento de entrada:` no começo de uma linha, com até 512
+caracteres de explicação antes do resultado nessa mesma linha, até um separador
+`;` ou quebra de linha. Nesse formato,
+o cabeçalho estabelece a entrada; uma menção negada a outra entrada no texto
+não muda essa associação. Cabeçalhos com resultados invertidos também falham.
+Menções incidentais negadas, como “not blocked”, não são tratadas como um mapa
+explícito de entrada/retorno. Menções distantes ou implícitas não estabelecem a
+relação. É um teste conservador das expectativas desta fixture, sem juiz por
+modelo e sem custo na conversa.
 
 Relatórios live também registram `task_status`, necessidade/observação de
 alterações, presença de justificativa sem mudança e nomes limitados/redigidos de

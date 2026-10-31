@@ -226,13 +226,18 @@ validação; a qualidade da interpretação continua dependendo do modelo.
 ### Perguntas sobre fluxos e evidência de comportamento
 
 Perguntas de fluxo em português/inglês usam termos da própria tarefa para
-localizar implementações. A preparação pode seguir uma chamada textual encontrada
-em uma leitura real, em uma etapa adicional limitada pelo orçamento existente.
+localizar implementações. A preparação tenta até três chamadas textuais distintas
+encontradas em leituras reais, parando ao obter uma nova fonte. Pistas sem nova
+leitura não encerram a busca; tentativas de leitura que falham também consomem o
+limite existente: quatro leituras indexadas no preparo temático ou duas depois
+da leitura básica. O orçamento de bytes permanece o mesmo.
 Essas pistas não resolvem símbolos nem comprovam relações; o agente deve ler os
 trechos relevantes e usar definição/referências/hierarquia LSP quando disponíveis.
 Declarações de interface e campos descrevem contratos/dependências, não provam
 execução, tratamento de erros ou cancelamento. A orientação pede distinguir
 implementação observada, documentação e inferência, indicando elos não verificados.
+Quando a pergunta pede resultados para entradas específicas, a orientação pede
+pares curtos entrada → resultado com referência, antes da explicação das condições.
 
 O índice favorece identificadores reconhecíveis dentro da pergunta, além da
 consulta inteira, com parâmetros SQL e os filtros normais. Busca textual continua

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -193,7 +194,14 @@ func TestHybridRetrievalRecoversAControlledSemanticOnlyMatch(t *testing.T) {
 	root := productivityV2Workspace(t)
 	retrievalFixture(t, root, "a.py", "def archive_invoice(): return 0\n")
 	retrievalFixture(t, root, "b.py", "def calculate_total(): return 37\n")
+	var calls atomic.Int32
+	var unavailable atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if unavailable.Load() {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		var in struct{ Input []string }
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&in))
 		vectors := [][]float64{}
@@ -214,9 +222,26 @@ func TestHybridRetrievalRecoversAControlledSemanticOnlyMatch(t *testing.T) {
 	tool := SecureTool(NewCodeIndexTool(), nil)
 	lexical := searchPage(t, tool, map[string]any{"query": "somar faturamento", "strategy": "lexical"})
 	require.Empty(t, lexical.Results)
+	require.Zero(t, calls.Load(), "explicit lexical search must never contact embeddings")
 	hybrid := searchPage(t, tool, map[string]any{"query": "somar faturamento", "strategy": "hybrid"})
 	require.NotEmpty(t, hybrid.Results)
 	require.Equal(t, "b.py", hybrid.Results[0].Path)
+	automatic := searchPage(t, tool, map[string]any{"query": "somar faturamento"})
+	require.NotEmpty(t, automatic.Results)
+	require.Equal(t, "b.py", automatic.Results[0].Path)
+	require.Contains(t, automatic.Strategy, "hybrid")
+
+	unavailable.Store(true)
+	fallback := searchPage(t, tool, map[string]any{"query": "archive_invoice"})
+	require.NotEmpty(t, fallback.Results)
+	require.Equal(t, "a.py", fallback.Results[0].Path)
+	require.Contains(t, fallback.Strategy, "lexical fallback")
+	before := calls.Load()
+	cfg.Index.Embeddings = nil
+	unconfigured := searchPage(t, tool, map[string]any{"query": "somar faturamento"})
+	require.Empty(t, unconfigured.Results)
+	require.Contains(t, unconfigured.Strategy, "lexical")
+	require.Equal(t, before, calls.Load(), "unconfigured embeddings must never make HTTP requests")
 	t.Log("Controlled vectors: lexical target recall@1=0; hybrid target recall@1=1. This tests ranking/fallback, not real embedding-model quality.")
 }
 

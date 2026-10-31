@@ -18,6 +18,9 @@ type EventType string
 // execution. Retrying generation must never replay previous completed effects.
 var ErrInvalidFinalAnswer = errors.New("invalid final answer protocol")
 
+// ErrOutputLimit never permits executing an incomplete call or replaying tools.
+var ErrOutputLimit = errors.New("model output token limit reached")
+
 const maxRetries = 8
 
 const (

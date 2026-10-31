@@ -26,6 +26,8 @@ func publicProviderFailure(cause error, model models.Model) error {
 		message = httpError.Error()
 	case errors.Is(cause, context.DeadlineExceeded):
 		message = "provider response timed out"
+	case errors.Is(cause, provider.ErrOutputLimit):
+		message = "model output token limit reached; incomplete call rejected; increase output tokens in provider settings before retrying"
 	case errors.Is(cause, provider.ErrInvalidFinalAnswer):
 		message = "provider returned an invalid final reply"
 	case contextFailure(cause, model):

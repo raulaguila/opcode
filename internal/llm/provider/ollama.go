@@ -229,10 +229,13 @@ func appendOllamaCalls(response *ProviderResponse, calls []ollamaCall, sources [
 	return finalAnswer, nil
 }
 func validateOllamaCall(call ollamaCall, finish message.FinishReason) error {
-	if finish != message.FinishReasonMaxTokens && call.Function.Name != "" && ollamaArgumentsValid(call.Function.Arguments) {
+	if finish == message.FinishReasonMaxTokens {
+		return fmt.Errorf("%w: incomplete Ollama tool call; increase the output token budget before retrying", ErrOutputLimit)
+	}
+	if call.Function.Name != "" && ollamaArgumentsValid(call.Function.Arguments) {
 		return nil
 	}
-	if finish != message.FinishReasonMaxTokens && (call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer) {
+	if call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer {
 		return fmt.Errorf("%w: incomplete Ollama reply arguments", ErrInvalidFinalAnswer)
 	}
 	return fmt.Errorf("provider Ollama returned an incomplete tool call")

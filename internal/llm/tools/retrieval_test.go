@@ -112,11 +112,12 @@ type indexedResult struct {
 	End                                              int `json:"end_line"`
 }
 type indexedPage struct {
-	Results []indexedResult
-	More    bool
-	Reused  int `json:"reused_files"`
-	Reads   int `json:"scan_reads"`
-	Updated int `json:"updated_files"`
+	Results  []indexedResult
+	Strategy string
+	More     bool
+	Reused   int `json:"reused_files"`
+	Reads    int `json:"scan_reads"`
+	Updated  int `json:"updated_files"`
 }
 
 func searchPage(t *testing.T, tool BaseTool, input map[string]any) indexedPage {

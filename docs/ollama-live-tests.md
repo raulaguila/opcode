@@ -60,6 +60,15 @@ faz uma primeira pergunta sobre o projeto e verifica a janela realmente alocada
 em `/api/ps`, a resposta concluída e a preservação dos arquivos. Não usa
 `--auto-approve`; o modo ask permanece ativo. Há inferência real, sem downloads.
 
+A fixture usa saída de 2.048 tokens, como os demais testes nativos: o orçamento
+de saída inclui raciocínio e resposta. A janela continua descoberta pela API,
+sem limite manual. O orçamento anterior de 256 interrompia `final_answer` no
+Nemotron com `done_reason=length`, apesar da janela correta de 65.536. As asserções
+de alocação, conteúdo e preservação dos arquivos não mudaram. Um limite explícito
+de 256 continua sendo respeitado pelo runtime: chamadas incompletas são rejeitadas,
+sem nova geração automática, com “Limite de saída atingido” e acesso a `/settings`,
+sem aprender uma janela menor nem tratar a falha como erro de citações.
+
 ```sh
 go build -o /tmp/opcode-context-capacity .
 OPCODE_LIVE_TESTS=1 OPCODE_LIVE_OLLAMA=1 \

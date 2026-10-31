@@ -102,7 +102,7 @@ func saveContextCalibration(model models.Model, window int64) error {
 	return localstate.Write(path, entries, calibrationLimit)
 }
 func contextFailure(err error, model models.Model) bool {
-	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrContextLimit) {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrContextLimit) || errors.Is(err, provider.ErrOutputLimit) {
 		return false
 	}
 	err = privateProviderCause(err)

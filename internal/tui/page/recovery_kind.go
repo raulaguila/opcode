@@ -21,11 +21,15 @@ const (
 	recoveryUnavailable
 	recoveryConflict
 	recoveryBudget
+	recoveryOutput
 )
 
 func classifyRecovery(err error) recoveryKind {
 	if errors.Is(err, agent.ErrSourceCitation) {
 		return recoveryCitation
+	}
+	if errors.Is(err, provider.ErrOutputLimit) {
+		return recoveryOutput
 	}
 	if errors.Is(err, agent.ErrContextLimit) {
 		return recoveryCapacity
@@ -56,6 +60,8 @@ func classifyRecoveryText(text string) recoveryKind {
 	switch {
 	case recoveryContains(text, "source citation", "invalid source citations"):
 		return recoveryCitation
+	case recoveryContains(text, "model output token limit reached"):
+		return recoveryOutput
 	case recoveryContains(text, "401 unauthorized", "provider http 401", "provider http 403", "api key", "unauthorized", "authentication"):
 		return recoveryAuthentication
 	case recoveryContains(text, "out of memory", "insufficient memory", "requires more system memory"):

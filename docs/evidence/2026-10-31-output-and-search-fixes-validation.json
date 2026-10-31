@@ -1,0 +1,767 @@
+{
+  "date": "2026-10-31",
+  "baseline": "e34363ac1c7d1a2265f52a0e7b173375ef009f96",
+  "production_binary_sha256": "f1887280b3ba7519f1abb1470591ff0e39007cb47e9767b3da4a44fc1e02906e",
+  "source_sha256": {
+    "CHANGELOG.md": "48b9ed6f961a7ccbab2d4d120461848eff979e89ece3a5000d7416ea4a8225e5",
+    "docs/ollama-live-tests.md": "19ec098372936e714399c95e0eccf9191d9e96f95f00a39514bfbe12d023bf65",
+    "docs/retrieval-runtime.md": "767797c2cd01c13a01e072e3b77b19ec39b4424d066c112925666e795f343a7b",
+    "docs/validation.md": "3d0494cd4cdc8be36ee080d0f4d6d97b1cccf317b10244a84568fdd24a6edb17",
+    "internal/evaluation/live_context_test.go": "1850a5087e8ef6b7b3e61af9f3d389319647e064f2b222f0fcaa303a5359c01f",
+    "internal/evaluation/testdata/synonym_navigation.json": "c39b929d82928ec4fc9767da83c1b6c14588aa48f776c93864986c28860082c9",
+    "internal/llm/agent/calibration.go": "195656bcc8d66ace6a3e86854cdf2b6a24bcb61fab87b96c38a27254969bf661",
+    "internal/llm/agent/final_protocol_test.go": "a3b472bdf4921f8574ea6cf70d1f1cfd86942a3fccaf01afddb457db3bab21ac",
+    "internal/llm/agent/provider_error_test.go": "91676c8b0175501b89d8aca0ebd4d303dd49179fc46506d83dd5a0100619ecf0",
+    "internal/llm/agent/provider_failure.go": "6aa96dca2a0d4569aeccf11b936f1ec4a10d743391e3deebc03b44cf8f64c209",
+    "internal/llm/provider/ollama.go": "c846dd0b4ec236b5b3c410f4abfae35a720d9431937a1e347c0045050c1be0cb",
+    "internal/llm/provider/ollama_output_limit_test.go": "7c49f0985a94dcda3e71c9945b30b3e25144ad324d9df3b5380c56139d1e8ac8",
+    "internal/llm/provider/provider.go": "a20b2bba2b689219cdbdfce04be94f6db9a4968a89e5ccb100521508059f01f6",
+    "internal/llm/tools/index_search.go": "8f8529b9cf3ff00fad8548ff74b8578231c057c68bb27117b26caa47539d56b3",
+    "internal/llm/tools/retrieval_runtime_test.go": "a9fb1f27427caaf5a1b79fbdcfc1c2d08749ae384b79b9e7f435d92eccf05188",
+    "internal/llm/tools/retrieval_test.go": "ba47ced57935a24079c73ab86ce042ab5c3692e7abcec3539882a12f607a6e11",
+    "internal/tui/page/recovery.go": "e22c13bd4068216eb4af6ed2344948f74e287e5773c368ac98532b4deea0e249",
+    "internal/tui/page/recovery_citations_test.go": "a5a13eb9e9e4c84a3da229f3b120ea7b4482315d743c816fc7edcc10c089e95d",
+    "internal/tui/page/recovery_kind.go": "b7812debe14fdced8f57e9867a210ab28c39c634ca315bd9f41caff3681948b0",
+    "internal/tui/pty_output_limit_test.go": "5e3f7c4313884287fdd5d9ac21992afec480816c3c09790e2422a4035c5fd851"
+  },
+  "protected_unchanged_sha256": {
+    "go.mod": "b69606c07b1eb3ed19aae4c407554a7857bcf58e27ce859d77522b07225b1425",
+    "go.sum": "659d9fea2397880cc3968a56605298ebc5d7f8f5751308aa426cfbfa0ecaa74c",
+    "internal/llm/tools/access.go": "473cd65951c14b446ce6212e040e06495406536b83e09a6fdd6529972ea0f731",
+    "internal/llm/tools/source_receipt.go": "9d577433546bcacb83064f026d2e935361ddba021a14088f0759de699ec7da9e",
+    "internal/evaluation/testdata/cases.json": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+    "internal/evaluation/testdata/retrieval.json": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "internal/evaluation/testdata/explanation_quality.json": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7",
+    "internal/evaluation/testdata/review_evidence.json": "e1f3e5ba75c2f893f41c8b7265ca0271cb418e5c808df494802f6bf89b07bbde",
+    "internal/evaluation/testdata/project_questions.json": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600",
+    "internal/llm/prompt/coder.go": "560709d80d9cdc03579070d67ac310e3ddb009f64dab3d6ecdbdea6357841867",
+    "internal/llm/prompt/prompt_test.go": "5302d8b0779765126fbc3b6137963130a1b81487164cc9248588d5a210901de7",
+    "internal/llm/tools/code_index.go": "48e7c6f85bc9624df97b5d1837b36fe98850403db822aaf245e7e331b6839be2",
+    "internal/llm/agent/citation_revision.go": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c",
+    "internal/llm/agent/citations.go": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c",
+    "internal/llm/agent/citations_compatible_test.go": "025b95246be61b68975754bb39e1dc83cdb638480eb84f48f0475101ae7fa040",
+    "internal/llm/agent/citations_history_test.go": "57d8c448fe462e3b4eb2d4bb9be0ccf4117087701e04b45a6fe856acf1657896",
+    "internal/llm/agent/citations_messages.go": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7",
+    "internal/llm/agent/citations_native_test.go": "e92178934ecb76c4accffbeda9104d620f4a403f53a72ddb4e52323c6245ee63",
+    "internal/llm/agent/citations_question_test.go": "f763658c9236b03e9bb99b6557734dbb841a898d5f12dea28d747e8a9b84c44a",
+    "internal/llm/agent/citations_test.go": "3383197df6623bdfd8a5bff85ea75c02072bf724c3a8c719bd682de125974b4e",
+    "internal/permission/exact_params_test.go": "50c801eb517d8cc1c2a2043d38a4cc367d94dca6be1b02d88b8cb49a6006256e",
+    "internal/permission/permission.go": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14",
+    "internal/permission/permission_test.go": "fa4d5da4ae2c63908c15520fc06039277e17c0dd738624c1f056b74164b6ae7d",
+    "internal/permission/status.go": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944"
+  },
+  "checks": [
+    {
+      "name": "focused",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "./internal/llm/provider",
+        "./internal/llm/agent",
+        "./internal/llm/prompt",
+        "./internal/llm/tools",
+        "./internal/tui/page",
+        "-run",
+        "Test(OllamaOutputLimit|OutputLimitDoesNotRetry|ProviderPublicFailure|OutputFailure|HybridRetrievalRecovers|RecommendationsAndPlans)",
+        "-count=1"
+      ],
+      "exit_code": 0,
+      "seconds": 4.25
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 263.64
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.29
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.65
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.17
+    }
+  ],
+  "final_provider_regression_log": "ok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t1.077s\n",
+  "offline": {
+    "parents_passed": 1141,
+    "test_nodes_passed": 2461,
+    "package_passes": 45,
+    "skips": "Explicit live opt-ins run separately; intentional disabled-tool subtest remains skipped."
+  },
+  "live": [
+    {
+      "name": "pty-output-and-regressions",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestPTY|TestLiveBinary|TestLiveOllamaPTYUI)$|^TestPTY|^TestLiveBinary",
+        "-count=1",
+        "-json",
+        "-timeout=12m"
+      ],
+      "exit_code": 0,
+      "seconds": 75.12
+    },
+    {
+      "name": "context-auto",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/evaluation",
+        "-run",
+        "^TestLiveOllamaFirstQuestionUsesAdvertisedContext$",
+        "-count=1",
+        "-json",
+        "-timeout=5m"
+      ],
+      "exit_code": 0,
+      "seconds": 15.19
+    },
+    {
+      "name": "project_questions",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/opcode",
+        "evaluate",
+        "--live",
+        "--cases",
+        "internal/evaluation/testdata/project_questions.json",
+        "--provider-config",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/provider.json",
+        "--output",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/project_questions-report.json",
+        "--allow-execution"
+      ],
+      "exit_code": 0,
+      "seconds": 27.93
+    },
+    {
+      "name": "explanation_quality",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/opcode",
+        "evaluate",
+        "--live",
+        "--cases",
+        "internal/evaluation/testdata/explanation_quality.json",
+        "--provider-config",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/provider.json",
+        "--output",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/explanation_quality-report.json"
+      ],
+      "exit_code": 0,
+      "seconds": 48.9
+    },
+    {
+      "name": "review_evidence",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/opcode",
+        "evaluate",
+        "--live",
+        "--cases",
+        "internal/evaluation/testdata/review_evidence.json",
+        "--provider-config",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/provider.json",
+        "--output",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/review_evidence-report.json"
+      ],
+      "exit_code": 0,
+      "seconds": 23.92
+    },
+    {
+      "name": "synonym_navigation",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/opcode",
+        "evaluate",
+        "--live",
+        "--cases",
+        "internal/evaluation/testdata/synonym_navigation.json",
+        "--provider-config",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/provider.json",
+        "--output",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/synonym_navigation-report.json"
+      ],
+      "exit_code": 0,
+      "seconds": 9.73
+    },
+    {
+      "name": "ranking-lexical",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/opcode",
+        "evaluate",
+        "retrieval",
+        "--output",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/ranking-lexical.json"
+      ],
+      "exit_code": 0,
+      "seconds": 0.4
+    },
+    {
+      "name": "ranking-embeddings",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/opcode",
+        "evaluate",
+        "retrieval",
+        "--output",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/ranking-embeddings.json",
+        "--embedding-config",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/embedding.json"
+      ],
+      "exit_code": 0,
+      "seconds": 1.95
+    }
+  ],
+  "pty_parents_passed": [
+    "TestPTYCodeBlocksAndReasoningDetails",
+    "TestPTYCompactListsPreserveDensityOnResize",
+    "TestPTYConversationChronologyQuitAndResume",
+    "TestPTYMarkdownProposalAndQuestionDivider",
+    "TestPTYModelCapabilitiesAndModalNavigation",
+    "TestPTYOutputLimitKeepsContextAndRejectsIncompleteCalls",
+    "TestPTYPlanPanelSharedStyleAndResizePreserveDraft",
+    "TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer",
+    "TestPTYClearDraftRequiresEmptyComposerInsteadOfDraftMarker",
+    "TestPTYCancelConnectionRequiresClosedConfirmation",
+    "TestPTYSteeredFinalRequiresPersistedOrderAndIdleUI",
+    "TestPTYResizeExpandsTabStopsWithoutMovingCursorOrScrollingFooter",
+    "TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures",
+    "TestPTYStreamingSpeedBeforeCompletion",
+    "TestPTYTranscriptSearchAndKeyboardSelection",
+    "TestLiveOllamaPTYUI",
+    "TestPTYUIControlFilterFragmentedUnicode",
+    "TestPTYUIVTLastColumnErase",
+    "TestPTYUICompactThemes",
+    "TestPTYUILSPFormWaitsForAllFields",
+    "TestPTYUITerminalStartupQueries",
+    "TestPTYUTF8ReadBoundariesPreserveFrameAndRaw",
+    "TestLiveBinaryFirstRunContractAndWorkspace",
+    "TestLiveBinaryResetConfigurationAndWorkspace"
+  ],
+  "response_evaluation": {
+    "project_questions": {
+      "cases_passed": 3,
+      "criteria_passed": 16,
+      "criteria_total": 16,
+      "suite_sha256": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600"
+    },
+    "explanation_quality": {
+      "cases_passed": 4,
+      "criteria_passed": 44,
+      "criteria_total": 44,
+      "suite_sha256": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7"
+    },
+    "review_evidence": {
+      "cases_passed": 2,
+      "criteria_passed": 16,
+      "criteria_total": 16,
+      "suite_sha256": "e1f3e5ba75c2f893f41c8b7265ca0271cb418e5c808df494802f6bf89b07bbde"
+    },
+    "synonym_navigation": {
+      "cases_passed": 1,
+      "criteria_passed": 7,
+      "criteria_total": 7,
+      "suite_sha256": "c39b929d82928ec4fc9767da83c1b6c14588aa48f776c93864986c28860082c9"
+    }
+  },
+  "compound_comparison": [
+    {
+      "name": "baseline",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/retrieval-overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/evaluation",
+        "-run",
+        "^TestLiveOllamaCompoundRetrievalRequirements$",
+        "-count=1",
+        "-v",
+        "-timeout=5m"
+      ],
+      "exit_code": 1,
+      "seconds": 8.89
+    },
+    {
+      "name": "stable",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-validation-fixes/stable/retrieval-overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/evaluation",
+        "-run",
+        "^TestLiveOllamaCompoundRetrievalRequirements$",
+        "-count=1",
+        "-v",
+        "-timeout=5m"
+      ],
+      "exit_code": 0,
+      "seconds": 18.72
+    }
+  ],
+  "compound_observation": "Baseline also failed; final unchanged compound requirements passed. Intermediate candidate failures retained, not erased. A small model may still omit required calls; validator refuses completion.",
+  "intermediate_failed_attempts": [
+    {
+      "path": "../final/native-retrieval-compound.jsonl",
+      "exit_code": 1
+    },
+    {
+      "path": "../native-retrieval-compound.jsonl",
+      "exit_code": 1
+    }
+  ],
+  "context_fixture_change": {
+    "previous_output_budget": 256,
+    "current_output_budget": 2048,
+    "discovery_expected": 65536,
+    "manual_user_budget_256_still_preserved": true,
+    "acceptance_assertions_unchanged": true
+  },
+  "retrieval_lexical": {
+    "version": 1,
+    "mode": "direct_tool_ranking",
+    "suite_sha256": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "embeddings_configured": false,
+    "results": [
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 522,
+        "duration_ms": 49,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 522,
+        "duration_ms": 13,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      },
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "lexical (embeddings not configured)",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 525,
+        "duration_ms": 37,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "lexical (embeddings not configured)",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 525,
+        "duration_ms": 15,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 528,
+        "duration_ms": 15,
+        "scan_reads": 2,
+        "reused_files": 0,
+        "updated_files": 2
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 528,
+        "duration_ms": 9,
+        "scan_reads": 0,
+        "reused_files": 2,
+        "updated_files": 0
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "lexical (embeddings not configured)",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 531,
+        "duration_ms": 15,
+        "scan_reads": 2,
+        "reused_files": 0,
+        "updated_files": 2
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "lexical (embeddings not configured)",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 531,
+        "duration_ms": 13,
+        "scan_reads": 0,
+        "reused_files": 2,
+        "updated_files": 0
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 0,
+        "mrr": 0,
+        "result_count": 1,
+        "response_bytes": 507,
+        "duration_ms": 35,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 0,
+        "mrr": 0,
+        "result_count": 1,
+        "response_bytes": 507,
+        "duration_ms": 12,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "lexical (embeddings not configured)",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 0,
+        "mrr": 0,
+        "result_count": 1,
+        "response_bytes": 510,
+        "duration_ms": 22,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "lexical (embeddings not configured)",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 0,
+        "mrr": 0,
+        "result_count": 1,
+        "response_bytes": 510,
+        "duration_ms": 10,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      }
+    ],
+    "notice": "Production search tool only: no chat generation. Each case/strategy starts in a fresh disposable workspace, then repeats the same query on its warm index. Hybrid may fall back to lexical; the effective strategy is recorded. Configured embeddings make bounded local HTTP calls and never download models. Ranking metrics do not prove answer quality."
+  },
+  "retrieval_embeddings": {
+    "version": 1,
+    "mode": "direct_tool_ranking",
+    "suite_sha256": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "embeddings_configured": true,
+    "results": [
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 522,
+        "duration_ms": 38,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 522,
+        "duration_ms": 10,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      },
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 569,
+        "duration_ms": 1472,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "python-scoped-symbol",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 569,
+        "duration_ms": 17,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 528,
+        "duration_ms": 16,
+        "scan_reads": 2,
+        "reused_files": 0,
+        "updated_files": 2
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 528,
+        "duration_ms": 13,
+        "scan_reads": 0,
+        "reused_files": 2,
+        "updated_files": 0
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 575,
+        "duration_ms": 41,
+        "scan_reads": 2,
+        "reused_files": 0,
+        "updated_files": 2
+      },
+      {
+        "id": "go-current-implementation",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 1,
+        "result_count": 1,
+        "response_bytes": 575,
+        "duration_ms": 13,
+        "scan_reads": 0,
+        "reused_files": 2,
+        "updated_files": 0
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 0,
+        "mrr": 0,
+        "result_count": 1,
+        "response_bytes": 507,
+        "duration_ms": 30,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "lexical",
+        "effective_strategy": "lexical BM25 + exact identifiers",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 0,
+        "mrr": 0,
+        "result_count": 1,
+        "response_bytes": 507,
+        "duration_ms": 22,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request",
+        "cache": "cold",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 0.5,
+        "result_count": 3,
+        "response_bytes": 1218,
+        "duration_ms": 70,
+        "scan_reads": 3,
+        "reused_files": 0,
+        "updated_files": 3
+      },
+      {
+        "id": "semantic-synonym-candidate",
+        "requested_strategy": "hybrid",
+        "effective_strategy": "hybrid RRF; bounded semantic candidate pool (128), up to 16 vectors per request",
+        "cache": "warm",
+        "status": "measured",
+        "recall": 1,
+        "mrr": 0.5,
+        "result_count": 3,
+        "response_bytes": 1218,
+        "duration_ms": 32,
+        "scan_reads": 0,
+        "reused_files": 3,
+        "updated_files": 0
+      }
+    ],
+    "notice": "Production search tool only: no chat generation. Each case/strategy starts in a fresh disposable workspace, then repeats the same query on its warm index. Hybrid may fall back to lexical; the effective strategy is recorded. Configured embeddings make bounded local HTTP calls and never download models. Ranking metrics do not prove answer quality."
+  },
+  "cross_builds": [
+    {
+      "target": "windows/amd64",
+      "exit_code": 0
+    },
+    {
+      "target": "darwin/arm64",
+      "exit_code": 0
+    }
+  ],
+  "no_dependency_changes": true,
+  "no_personal_config_changes": true,
+  "limits": [
+    "Lexical matching cannot recognize arbitrary synonyms; embeddings remain explicit global opt-in.",
+    "Model instruction following is not guaranteed; baseline and intermediate failures are recorded.",
+    "Coverage percentage not recalculated; targeted regressions added.",
+    "No external/company provider or physical Windows/macOS/clipboard testing."
+  ]
+}

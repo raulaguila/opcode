@@ -62,7 +62,8 @@ func testLiveOllamaFirstQuestion(t *testing.T, fixedWindow bool) {
 	for name, content := range files {
 		require.NoError(t, os.WriteFile(filepath.Join(workspace, name), []byte(content), 0600))
 	}
-	wantWindow, mode, maxTokens := selected.ContextWindow, "ask", 256
+	// Match the other native acceptance fixtures; reasoning and reply share output.
+	wantWindow, mode, maxTokens := selected.ContextWindow, "ask", 2048
 	if fixedWindow {
 		wantWindow, mode, maxTokens = 16384, "execute", 2048
 		for i := range 600 {

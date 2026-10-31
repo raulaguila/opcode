@@ -61,8 +61,11 @@ preservado. Nenhuma migração move credenciais/histórico.
 ## Busca e fontes
 
 `search_code_index` aceita os filtros existentes e `intent`:
-implementation, tests ou documentation. `strategy:lexical` é o padrão.
-`strategy:hybrid` usa o serviço opcional de embeddings. Ambas retornam páginas
+implementation, overview, tests ou documentation. Sem estratégia explícita,
+usa hybrid quando embeddings locais foram configurados globalmente; caso contrário,
+usa lexical. `strategy:lexical` evita requisições de embeddings mesmo quando
+configurados. `strategy:hybrid` usa esse serviço opcional e informa fallback
+lexical quando indisponível. Ambas retornam páginas
 curtas de navegação; `view`, `read_lines` ou `read_symbol` estabelecem leitura.
 `file_hash` é SHA256 da fonte inteira. `read_lines` deve reenviá-lo em
 `expected_hash` e usar os próximos offset/column, também em linhas longas.
@@ -124,6 +127,13 @@ PATH ainda precisa de configuração, marcadores de raiz compatíveis e autoriza
 normal de integração para ser iniciado durante o trabalho.
 
 ## Embeddings opcionais
+
+A busca lexical não reconhece sinônimos arbitrários. Quando os resultados não
+forem relevantes, tente termos equivalentes e leia as fontes antes de concluir
+que algo está ausente. Habilitar
+embeddings continua sendo uma escolha explícita: não há descoberta com inferência,
+download de pesos ou alteração automática da configuração. A busca híbrida pode
+adicionar requisições locais e latência, com os limites e cache existentes.
 
 Somente o JSON global pode habilitá-los. Exemplo **apenas se esse modelo já
 estiver instalado**:

@@ -5,6 +5,44 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Limite de saída e busca com embeddings explícitos — 31/10/2026
+
+O runtime classifica chamadas Ollama cortadas por saída como `ErrOutputLimit`.
+Elas continuam rejeitadas: não executam ferramentas, não provocam reparo automático
+nem reduzem o contexto aprendido. A UI usa “Limite de saída atingido” e encaminha
+às configurações de tokens de saída; o orçamento explícito do usuário é mantido.
+A fixture de descoberta automática passou a usar saída de 2.048, como as demais
+fixtures nativas. Apenas o orçamento anterior de 256 era insuficiente no Nemotron;
+as asserções de alocação, resposta e preservação dos arquivos permanecem.
+
+Sem estratégia explícita, a busca usa híbrido apenas quando embeddings já estão
+habilitados na configuração global. Lexical explícito evita HTTP; indisponibilidade
+mantém o fallback lexical. Não há nova dependência, download, serviço ou configuração
+automática. O prompt geral e os schemas foram preservados após a comparação;
+a mudança funcional fica na seleção da estratégia de busca. Busca lexical continua
+sem garantia para sinônimos arbitrários.
+
+Na fonte final: **1141 testes principais**, detector de corridas,
+integração, vet, staticcheck e complexidade passaram; **24/24 testes em PTY**, incluindo
+o fluxo real com Nemotron; descoberta automática de **65.536 tokens** passou.
+As quatro suítes de resposta passaram em **10/10 casos e 83/83 critérios**; a nova
+fixture exige navegação por sinônimo, leitura e citação da implementação real,
+sem embeddings. As fixtures anteriores não foram alteradas. Regressões cobrem
+orçamento explícito, término do streaming com erro, não repetição de efeitos,
+classificação da UI, rascunho e falha/configuração de embeddings.
+
+O pedido composto de quatro leituras passou na versão final. Também houve falha
+com o binário anterior, além de tentativas intermediárias: isso registra variação
+de obediência do modelo, não certifica sucesso para todos os pedidos. O validador
+continua recusando conclusão sem os recibos exigidos. A busca lexical manteve o
+miss do caso semântico; embeddings locais recuperaram a fonte em segundo lugar,
+sem alterar os critérios ou apresentar fallback como busca semântica.
+
+Ver [evidências](evidence/2026-10-31-output-and-search-fixes-validation.json).
+A cobertura percentual não foi recalculada nesta etapa; novos testes focam as
+falhas encontradas. Windows e macOS passaram em compilação cruzada, sem execução
+nesses sistemas. Provedores externos/da empresa não foram usados.
+
 ## Revisão de código com implementação/testes e painel do plano — 31/10/2026
 
 Pedidos gerais de revisão agora usam o índice existente para preparar corpos

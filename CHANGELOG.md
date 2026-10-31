@@ -2,6 +2,11 @@
 
 ## Em desenvolvimento — 2026-10-31
 
+- Chamadas Ollama interrompidas por limite de saída são rejeitadas com diagnóstico
+  próprio e acesso às configurações, sem repetição automática ou redução do contexto.
+- A busca usa o híbrido existente por padrão quando embeddings locais já estão
+  explicitamente configurados; a opção lexical evita essas requisições.
+
 - Pedidos de revisão preparam implementações e testes relacionados em consultas
   limitadas, favorecendo corpos executáveis e preservando identificadores.
   O prompt pede conferir proteções existentes e separar achados de hipóteses.

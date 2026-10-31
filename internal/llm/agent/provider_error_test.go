@@ -101,6 +101,12 @@ func TestProviderPublicFailureRetainsErrorIdentityAndContextClassification(t *te
 	require.True(t, contextFailure(public, model))
 	require.NotContains(t, public.Error(), "fake-private-payload")
 	require.ErrorIs(t, publicProviderFailure(provider.ErrInvalidFinalAnswer, model), provider.ErrInvalidFinalAnswer)
+	output := fmt.Errorf("private context window diagnostic: %w", provider.ErrOutputLimit)
+	public = publicProviderFailure(output, model)
+	require.ErrorIs(t, public, provider.ErrOutputLimit)
+	require.Contains(t, public.Error(), "increase output tokens")
+	require.NotContains(t, public.Error(), "private")
+	require.False(t, contextFailure(public, model), "output exhaustion must never reduce the context window")
 }
 
 func TestSSEContextAndOOMCausesStillClassifyPrivately(t *testing.T) {

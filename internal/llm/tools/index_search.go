@@ -3,6 +3,8 @@ package tools
 import (
 	"context"
 	"database/sql"
+
+	"github.com/raulaguila/opcode/internal/config"
 )
 
 // Search state is captured under the index semaphore; ranking and network I/O
@@ -41,7 +43,8 @@ func captureIndexSearch(ctx context.Context, db *sql.DB, root, scope string, inp
 	if err != nil {
 		return s, err
 	}
-	if input.Strategy == "hybrid" {
+	cfg := config.Get()
+	if input.Strategy == "hybrid" || input.Strategy == "" && cfg != nil && cfg.Index.Embeddings != nil {
 		s.captureSemanticPool(ctx, db, scoped, input.Kind)
 	}
 	return s, nil

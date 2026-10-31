@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "synonym_source_navigation",
+      "mode": "ask",
+      "files": {
+        "src/chargeback.py": "def refund_purchase(payment):\n    \"\"\"Return the buyer's money after cancellation.\"\"\"\n    return payment.amount\n",
+        "src/customer.py": "def customer_address(customer):\n    return customer.address\n",
+        "src/catalog.py": "def product_catalog():\n    return []\n"
+      },
+      "prompts": [
+        "Find the implementation of customer reimbursement in this project. Explain what it returns for a payment amount of 58. Inspect the source and cite the relevant file and lines. Do not edit files or execute commands."
+      ],
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "value": "src/chargeback.py"
+        },
+        {
+          "kind": "response_contains",
+          "value": "refund_purchase"
+        },
+        {
+          "kind": "response_contains",
+          "value": "58"
+        },
+        {
+          "kind": "response_cites",
+          "path": "src/chargeback.py",
+          "value": "3"
+        },
+        {
+          "kind": "tool_called",
+          "value": "view"
+        },
+        {
+          "kind": "tool_called",
+          "value": "search_code_index"
+        },
+        {
+          "kind": "file_contains",
+          "path": "src/chargeback.py",
+          "value": "return payment.amount"
+        }
+      ]
+    }
+  ]
+}

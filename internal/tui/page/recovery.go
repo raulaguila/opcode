@@ -108,6 +108,8 @@ func recoveryTitle(err error) string {
 	switch classifyRecovery(err) {
 	case recoveryCitation:
 		return config.Text("Citações não validadas", "Citations not validated")
+	case recoveryOutput:
+		return config.Text("Limite de saída atingido", "Output limit reached")
 	case recoveryAuthentication:
 		return config.Text("Autenticação necessária", "Authentication required")
 	case recoveryMemory:
@@ -129,6 +131,8 @@ func recoveryTitle(err error) string {
 func recoveryActions(err error) string {
 	title := recoveryTitle(err)
 	switch title {
+	case config.Text("Limite de saída atingido", "Output limit reached"):
+		return config.Text(" /settings Rever tokens de saída · /error Detalhes", " /settings Review output tokens · /error Details")
 	case config.Text("Citações não validadas", "Citations not validated"):
 		return config.Text(" /error Ver detalhes · /retry Solicitar correção", " /error View details · /retry Request correction")
 	case config.Text("Limite da execução atingido", "Run limit reached"):

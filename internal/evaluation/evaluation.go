@@ -400,6 +400,9 @@ func (c Case) validateCriteria() error {
 		if err := validateCriterion(c.ID, criterion); err != nil {
 			return err
 		}
+		if criterion.Kind == "response_cites" && !citationAnchorExists(c.Files, criterion) {
+			return fmt.Errorf("case %s: citation anchor must exist in fixture source", c.ID)
+		}
 	}
 	return nil
 }
@@ -428,6 +431,10 @@ func validateCriterion(id string, criterion Criterion) error {
 		return fmt.Errorf("case %s: criterion value exceeds 2000 bytes", id)
 	}
 	switch criterion.Kind {
+	case "response_cites":
+		if !safePath(criterion.Path) || citationAnchor(criterion.Value) < 1 {
+			return fmt.Errorf("case %s: citation criterion requires a safe path and positive line anchor", id)
+		}
 	case "response_contains", "response_not_contains", "tool_called", "expect_error", "task_status", "check_passed":
 		if criterion.Value == "" {
 			return fmt.Errorf("case %s: criterion value is required", id)

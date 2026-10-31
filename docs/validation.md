@@ -1400,3 +1400,48 @@ resultados, incluindo limites da avaliação, estão na
 O verificador de citações continua conferindo origem nativa, linhas entregues
 e hash atual. Esses testes não estabelecem correção semântica geral, nem
 garantem que todas as respostas de um modelo cumprirão as orientações.
+
+
+## Fluxos, fontes e densidade da conversa — 31/10/2026
+
+A suíte adicional `internal/evaluation/testdata/explanation_quality.json` cobre
+um fluxo entre arquivos em português/inglês, uma declaração homônima e um documento
+histórico conflitante. Os seis casos padrão e seus critérios são preservados.
+O critério `response_cites` exige caminho e intervalo que contenha a linha-âncora
+da implementação da fixture; referências fora dos limites não contam.
+Esse critério mede cobertura de referências, não substitui a validação nativa
+de leitura/hash e não certifica a interpretação semântica da resposta.
+
+Execução explícita em workspaces descartáveis, somente leitura:
+
+```sh
+opcode evaluate --cases internal/evaluation/testdata/explanation_quality.json \
+  --live --provider-config /caminho/config-isolada.json \
+  --output /caminho/relatorio.json
+```
+
+`--live` realiza chamadas reais ao provedor. Os casos usam modo Perguntar, sem
+`--allow-execution`; as permissões de escrita/execução continuam negadas.
+Os testes determinísticos também verificam consultas por identificadores dentro
+de frases, pistas de fluxo, orientação durante reparos, estados dos processos,
+fontes indisponíveis e largura de leitura. Listas simples são exercitadas em
+múltiplas larguras, mantendo parágrafos/código/tabelas e a cópia original.
+O aceite PTY inclui redimensionamento de listas e o fluxo com Nemotron local.
+
+
+Resultados e condições desta entrega, incluindo as tentativas de desenvolvimento
+que revelaram falhas e os critérios preservados, estão na
+[evidência de fluxos e fontes](evidence/2026-10-31-flow-and-source-validation.json).
+O relatório separa testes determinísticos, aceite PTY e avaliação do modelo.
+Nenhum desses resultados estabelece uma taxa geral de acerto ou superioridade
+sobre outros aplicativos/modelos.
+
+
+No candidato final, os quatro casos passaram com **32/32 critérios**, sem reparos
+nesses casos; os critérios e prompts das fixtures permaneceram os mesmos entre
+as tentativas. O aceite completo teve **12 cenários PTY aprovados**, incluindo o
+Nemotron `nemotron-3.5-bolt:e4b` local e aprovações explícitas na interface.
+A janela de 16384 é uma configuração isolada dos testes, não uma alteração do
+limite anunciado pelo modelo ou da configuração pessoal. As 14 verificações
+gerais também passaram; a evidência registra a sincronização final do teste de
+estado visual e a primeira execução PTY que precisou ser repetida isoladamente.

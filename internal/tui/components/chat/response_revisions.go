@@ -160,19 +160,32 @@ func (m *messagesCmp) toggleLatestRevision() bool {
 }
 
 func latestRevisionResponse(groups []turnGroup) string {
+	item := latestRevisionMessage(groups)
+	return item.Content().String()
+}
+
+func (m *messagesCmp) ResponseCitationStatus(text string) string {
+	item := latestRevisionMessage(m.groups())
+	if item.Content().String() == text {
+		return item.CitationValidation()
+	}
+	return ""
+}
+
+func latestRevisionMessage(groups []turnGroup) message.Message {
 	for i := len(groups) - 1; i >= 0; i-- {
 		items := groups[i].messages
 		p := planResponseRevisions(items)
 		for index := len(items) - 1; index >= 0; index-- {
 			if root, ok := p.hidden[index]; ok {
-				return items[p.roots[root].primary].Content().String()
+				return items[p.roots[root].primary]
 			}
 			if publicResponse(items[index]) {
-				return items[index].Content().String()
+				return items[index]
 			}
 		}
 	}
-	return ""
+	return message.Message{}
 }
 
 func legacyPreviousVersion(items []message.Message, index int) bool {

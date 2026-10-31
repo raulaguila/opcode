@@ -90,12 +90,12 @@ func (o *ollamaClient) request(history []message.Message, definitions []tools.Ba
 		}
 		instruction := "\nWhen the required facts or work are complete, call final_answer with your answer text to finish the turn. A request to reply or acknowledge something uses final_answer, never bash echo/printf or another operation."
 		if len(o.opts.sourceCitations) > 0 {
-			final = object{"name": ollamaSourceAnswer, "description": "Finish the corrected explanation of the original user's project or code defect. This sends a reply, never executes an operation. Explain the actual finding in the user's language and select the inspected source.",
+			final = object{"name": ollamaSourceAnswer, "description": "Finish the complete answer to the original user request with corrected references. This sends a reply, never executes an operation. Select an inspected source as an anchor; the answer may cite other supplied sources.",
 				"parameters": object{"type": "object", "additionalProperties": false, "properties": object{
-					"source":      object{"type": "string", "enum": o.opts.sourceCitations, "description": "Select one inspected file and line interval."},
-					"explanation": object{"type": "string", "description": "Return the COMPLETE answer to the ORIGINAL user request in its language. Retain the project name, requested facts, explanation and inspection scope when fixing references; do not replace an overview with a single sourced sentence. Do not discuss the application validation notice."},
+					"source":      object{"type": "string", "enum": o.opts.sourceCitations, "description": "Select one inspected file and line interval as an anchor, not a restriction on the complete explanation."},
+					"explanation": object{"type": "string", "description": "Return the COMPLETE answer to the ORIGINAL user request in its language, retaining the project name, requested facts and inspection scope. Explain every requested input/output case and preserve exact returned values supported by supplied sources; do not replace concrete results with vague paraphrases. Cite executable call/return statement lines for behavior, not only declaration headers. The selected source does not limit the answer to one source or one fact. Do not discuss the application validation notice."},
 				}, "required": []string{"source", "explanation"}}}
-			instruction = "\nFor this citation correction, finish with answer_with_sources: choose source from its enum and put your corrected answer in explanation. Do not call final_answer for this correction. Do not explain the validation notice or repeat successful reads. Source selection is still verified by the application."
+			instruction = "\nFor this citation correction, finish with answer_with_sources: choose an anchor source from its enum and put the complete corrected answer in explanation, including all requested cases and exact supported results. Do not call final_answer for this correction. Do not explain the validation notice or repeat successful reads. Source selection is still verified by the application."
 		}
 		functions = append(functions, object{"type": "function", "function": final})
 		messages[0]["content"] = o.opts.systemMessage + instruction

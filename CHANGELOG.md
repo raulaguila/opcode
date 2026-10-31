@@ -2,6 +2,14 @@
 
 ## Em desenvolvimento — 2026-10-31
 
+- Investigação de fluxos usa pistas da tarefa e orienta leitura de implementações,
+  relações e resultados, preservando limites, recibos e validação de citações.
+- Busca favorece identificadores dentro de perguntas naturais; avaliações
+  adicionais cobrem fluxos distribuídos, homônimos e documentação conflitante.
+- Listas simples permanecem compactas mesmo após quebra visual ou resize.
+- Processos e fontes apresentam resultados mais claros; ações da resposta expõem
+  a largura de leitura existente e o raciocínio tem rótulo explícito.
+
 - Visões gerais usam chamadas do ponto de entrada como pistas e ranking próprio
   do índice para priorizar símbolos/caminhos, reduzindo resultados que só repetem
   uma consulta no corpo do código. Leituras adicionais continuam limitadas.

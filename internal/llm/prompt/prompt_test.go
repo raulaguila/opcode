@@ -161,3 +161,14 @@ func TestProjectGuidanceReloadsWithoutCrossProjectCache(t *testing.T) {
 	cfg.WorkingDir = t.TempDir()
 	require.Empty(t, getContextFromPaths())
 }
+
+func TestFlowGuidanceDistinguishesContractsFromObservedBehavior(t *testing.T) {
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	for _, window := range []int64{4096, 16384, 131072} {
+		guidance := Compose("ask", "ollama", window, nil)
+		for _, phrase := range []string{"call hierarchy/references", "interface or struct field", "not semantic correctness", "error/cancellation"} {
+			require.Contains(t, guidance, phrase)
+		}
+	}
+}

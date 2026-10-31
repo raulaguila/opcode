@@ -150,6 +150,8 @@ func Evaluate(c Case, root string, observation Observation) CaseResult {
 	for _, criterion := range c.Criteria {
 		passed := false
 		switch criterion.Kind {
+		case "response_cites":
+			passed = responseCitesAnchor(c.Files, observation.Response, criterion)
 		case "response_contains":
 			passed = strings.Contains(strings.ToLower(observation.Response), strings.ToLower(criterion.Value))
 		case "response_not_contains":

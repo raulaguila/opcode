@@ -224,6 +224,13 @@ func TestOllamaRepairSchemaUsesOnlyRequestScopedCitationChoices(t *testing.T) {
 	properties := final["parameters"].(object)["properties"].(object)
 	require.Equal(t, ollamaSourceAnswer, final["name"])
 	require.Equal(t, opts.sourceCitations, properties["source"].(object)["enum"])
+	require.Contains(t, properties["source"].(object)["description"], "not a restriction on the complete explanation")
+	explanation := properties["explanation"].(object)["description"]
+	for _, phrase := range []string{"ORIGINAL user request", "every requested input/output case", "exact returned values", "not replace concrete results with vague paraphrases", "executable call/return statement lines", "does not limit the answer to one source or one fact"} {
+		require.Contains(t, explanation, phrase)
+	}
+	messages := body.(object)["messages"].([]object)
+	require.Contains(t, messages[0]["content"], "including all requested cases and exact supported results")
 	opts.sourceCitations = nil
 	plain := newOllamaClient(opts, "http://local.invalid/v1")
 	_, normal, err := plain.request(userMessages(), []tools.BaseTool{contractTool{}}, false)

@@ -18,6 +18,7 @@ import (
 type ResponseActionsMsg struct{ Text string }
 type ToggleProcessMsg struct{}
 type ProcessPreferencesChangedMsg struct{}
+type ReadingWidthChangedMsg struct{}
 type JumpToLatestMsg struct{}
 type transcriptHit struct {
 	start, end int
@@ -246,11 +247,11 @@ func (r *turnRenderer) renderProcess(group turnGroup, active bool) {
 	label := fmt.Sprintf(config.Text("%s Processo · %s", "%s Process · %s"), mark, processSummary(group.messages))
 	status := ""
 	if reasoningOnly(group.messages) && (!active || completedReasoning(group.messages)) {
-		label = mark + " " + config.Text("Detalhes", "Details")
+		label = mark + " " + config.Text("Raciocínio do modelo", "Model reasoning")
 	} else if active && !completedReasoning(group.messages) {
 		status = " · " + config.Text("em andamento", "working")
 	} else {
-		status = " · " + config.Text("finalizado", "finished")
+		status = " · " + processOutcome(group.messages)
 	}
 	label = styles.HintOn(r.theme.Background()).Render(label) + r.base.Render(status)
 	start := r.position

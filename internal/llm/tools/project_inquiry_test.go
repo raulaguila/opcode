@@ -22,3 +22,17 @@ func TestProjectOverviewSeparatesBroadQuestionsFromSpecificFacts(t *testing.T) {
 		require.False(t, ProjectOverview(question), question)
 	}
 }
+
+func TestProjectFlowQuestionsUseBoundedTaskTerms(t *testing.T) {
+	for _, question := range []string{"quero que analise o fluxo de chat e chamada de tools", "Trace the payment flow and cancellation", "Explique o fluxo de autorização do projeto", "Analyze the executeToolBatch pipeline", "Qual dispatchTool é realmente chamado por Submit neste projeto? Leia o caminho de execução e explique os retornos.", "Which handler is used? Trace its execution path.", "Explique a call chain de Submit"} {
+		require.NotEmpty(t, ProjectFlowQuery(question), question)
+		require.True(t, ProjectInquiry(question), question)
+		require.False(t, ProjectOverview(question), question)
+		require.Equal(t, ProjectFlowQuery(question), ProjectEvidenceQuery(question))
+	}
+	for _, question := range []string{"Adicione um fluxo ao projeto", "Não analise o fluxo de chat", "Don't analyze this project flow", "me faça uma pergunta", "Explain this project", "How do flowers grow?"} {
+		require.Empty(t, ProjectFlowQuery(question), question)
+	}
+	require.Contains(t, ProjectFlowQuery("analise o fluxo de conversa e ferramentas"), "conversation")
+	require.Contains(t, ProjectFlowQuery("analise o fluxo de conversa e ferramentas"), "tool")
+}

@@ -44,7 +44,7 @@ func TestPTYCodeBlocksAndReasoningDetails(t *testing.T) {
 	h.paste("Explique o projeto em README.md com um exemplo de shell.")
 	h.send("\r")
 	h.wait("code answer completed", 20*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Fim da explicação.") && strings.Contains(ptyUIFooter(frame), "Completed") && ptyUIIdleFooter(frame)
+		return strings.Contains(frame, "Fim da explicação.") && strings.Contains(ptyUIFooter(frame), "Completed") && ptyUIIdleFooter(frame) && !strings.Contains(frame, "Validating citations")
 	})
 	assertPTYCodeDetails(t, h)
 	require.EqualValues(t, 1, generations.Load(), "presentation must not trigger citation repair")
@@ -52,12 +52,12 @@ func TestPTYCodeBlocksAndReasoningDetails(t *testing.T) {
 	frameBytes, err := os.ReadFile(filepath.Join(os.TempDir(), "opcode-proposal-pty-frame.json"))
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(os.TempDir(), "opcode-code-details-pty-frame.json"), frameBytes, 0600))
-	h.clickLabel("Details")
+	h.clickLabel("Model reasoning")
 	h.wait("internal details expanded before their response", 5*time.Second, func(frame string) bool {
 		trace, answer := strings.Index(frame, codeDetailsThinking), strings.Index(frame, "O projeto coleta")
 		return trace >= 0 && answer > trace && strings.Contains(frame, "Fim da explicação.")
 	})
-	h.clickLabel("Details")
+	h.clickLabel("Model reasoning")
 	h.wait("details collapsed", 5*time.Second, func(frame string) bool {
 		return !strings.Contains(frame, codeDetailsThinking) && strings.Contains(frame, "Fim da explicação.")
 	})

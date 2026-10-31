@@ -284,8 +284,8 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 	}
 	raw, _ := json.Marshal(taskProjection(task))
 	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
-	header = overviewResponseGuidance(run, history) + header
-	copyHistory := projectReusedSources(history)
+	header = overviewResponseGuidance(run, history) + flowResponseGuidance(run, history) + header
+	copyHistory := projectReusedSources(projectPreparedIndexes(history, run))
 	for i := len(copyHistory) - 1; i >= 0; i-- {
 		if copyHistory[i].Role == message.User {
 			copyHistory[i].Parts = slices.Clone(copyHistory[i].Parts)

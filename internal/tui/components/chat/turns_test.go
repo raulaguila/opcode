@@ -23,7 +23,7 @@ func TestTurnProcessCanCollapseWithoutHidingResponse(t *testing.T) {
 		{ID: "final", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "visible response"}}},
 	}
 	m.renderView()
-	require.Contains(t, ansi.Strip(m.viewport.View()), config.Text("Detalhes", "Details"))
+	require.Contains(t, ansi.Strip(m.viewport.View()), config.Text("Raciocínio do modelo", "Model reasoning"))
 	require.NotContains(t, ansi.Strip(m.viewport.View()), "Copiar resposta")
 	require.NotContains(t, ansi.Strip(m.viewport.View()), "process details")
 	require.Contains(t, ansi.Strip(m.viewport.View()), "visible response")

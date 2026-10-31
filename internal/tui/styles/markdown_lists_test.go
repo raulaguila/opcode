@@ -77,15 +77,40 @@ func TestMarkdownListsKeepCodeBlankLinesTablesAndReferences(t *testing.T) {
 	}
 }
 
-func TestMarkdownListsKeepShortItemsCompactAndSeparateLongItems(t *testing.T) {
-	short := ansi.Strip(RenderMarkdownBlocks("- First\n- Second", 60, 60))
-	require.NotContains(t, short, "\n\n")
-	long := ansi.Strip(RenderMarkdownBlocks("- "+strings.Repeat("wrapped words ", 8)+"\n- Second", 40, 40))
-	lines := strings.Split(long, "\n")
-	for i, line := range lines {
-		if strings.Contains(line, "Second") {
-			require.Greater(t, i, 0)
-			require.Empty(t, strings.TrimSpace(lines[i-1]))
+func TestMarkdownTightListsStayCompactAcrossWidths(t *testing.T) {
+	for _, marker := range []string{"- ", "1. "} {
+		source := marker + strings.Repeat("wrapped words ", 8) + "\n" + strings.Replace(marker, "1.", "2.", 1) + "Final item"
+		for _, width := range []int{24, 40, 160} {
+			view := ansi.Strip(RenderMarkdownBlocks(source, width, width))
+			require.Contains(t, view, "Final item")
+			lines := strings.Split(view, "\n")
+			for i, line := range lines {
+				if strings.Contains(line, "Final item") {
+					require.Greater(t, i, 0)
+					require.NotEmpty(t, strings.TrimSpace(lines[i-1]), view)
+				}
+			}
+			var cache MarkdownCache
+			require.Equal(t, view, ansi.Strip(cache.Render(source, width, width)))
+		}
+	}
+}
+
+func TestMarkdownLooseListsKeepAuthoredParagraphSpacing(t *testing.T) {
+	for _, source := range []string{
+		"- First\n\n- Final item",
+		"1. First paragraph.\n\n   Second paragraph.\n\n2. Final item",
+	} {
+		for _, width := range []int{24, 160} {
+			view := ansi.Strip(RenderMarkdownBlocks(source, width, width))
+			require.Contains(t, view, "Final item")
+			lines := strings.Split(view, "\n")
+			for i, line := range lines {
+				if strings.Contains(line, "Final item") {
+					require.Greater(t, i, 0)
+					require.Empty(t, strings.TrimSpace(lines[i-1]), view)
+				}
+			}
 		}
 	}
 }

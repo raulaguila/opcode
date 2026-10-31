@@ -17,7 +17,6 @@ func (b *markdownBlockRenderer) renderList(list *ast.List) (string, error) {
 	width := markdownBlockWidth(list, b.width, b.prose)
 	digits := len(strconv.Itoa(list.Start + max(0, list.ChildCount()-1)))
 	var out strings.Builder
-	previousLong := false
 	index := 0
 	for item := list.FirstChild(); item != nil; item = item.NextSibling() {
 		marker := markdownListMarker(list, item, index, digits)
@@ -25,15 +24,13 @@ func (b *markdownBlockRenderer) renderList(list *ast.List) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		long := strings.Contains(body, "\n")
 		if index > 0 {
 			out.WriteByte('\n')
-			if !list.IsTight || previousLong || long {
+			if !list.IsTight {
 				out.WriteByte('\n')
 			}
 		}
 		out.WriteString(indentMarkdownListItem(body, marker))
-		previousLong = long
 		index++
 	}
 	return out.String(), nil

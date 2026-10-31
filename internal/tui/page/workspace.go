@@ -55,6 +55,7 @@ type WorkspaceResultMsg struct {
 type workspaceAction struct {
 	label, kind, text, path string
 	line                    int
+	citationStatus          string
 }
 type workspacePanel struct {
 	itemEditor              *dialog.ItemEditor
@@ -541,13 +542,18 @@ func (p *chatPage) openResponseActions(text string) tea.Cmd {
 	if text == "" {
 		return util.ReportWarn(config.Text("Nenhuma resposta disponível", "No response available"))
 	}
+	state := ""
+	if transcript, ok := p.transcript.(interface{ ResponseCitationStatus(string) string }); ok {
+		state = transcript.ResponseCitationStatus(text)
+	}
 	text = tools.RedactCredentials(text)
 	p.showWorkspace("actions", config.Text("Ações da resposta", "Response actions"), "")
 	p.workspace.actions = []workspaceAction{{label: config.Text("Copiar resposta", "Copy response"), kind: "copy", text: text}, {label: config.Text("Selecionar texto da resposta", "Select response text"), kind: "text", text: text}}
 	for i, match := range regexp.MustCompile("(?s)```[^\\n]*\\n(.*?)```").FindAllStringSubmatch(text, 10) {
 		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf(config.Text("Copiar código %d", "Copy code %d"), i+1), kind: "copy", text: match[1]})
 	}
-	appendCitationActions(p, text)
+	appendCitationActions(p, text, state)
+	appendReadingActions(p)
 	p.workspace.body = config.Text("Escolha uma ação. Prévia de arquivo é leitura local e não libera alterações para o agente.", "Choose an action. File preview is a local read and does not authorize agent edits.")
 	return nil
 }
@@ -603,9 +609,11 @@ func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 		p.showWorkspace("text", config.Text("Texto para seleção", "Selectable text"), item.text)
 		return nil
 	case "sources":
-		return p.openCitationSources(item.text)
+		return p.openCitationSources(item.text, item.citationStatus)
 	case "source":
-		return p.openCitationSource(item.text, item.path)
+		return p.openCitationSource(item.text, item.path, item.citationStatus)
+	case "reading-width":
+		return p.setReadingWidth(item.text)
 	case "file":
 		return p.openFile(item.path, item.line)
 	case "copy":

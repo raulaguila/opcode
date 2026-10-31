@@ -142,7 +142,7 @@ O resumo distingue leituras e buscas de contexto, fontes reutilizadas, chamadas
 de terminal, outras ferramentas e reparos. Por exemplo, “3 leituras de contexto”
 descreve a preparação inicial; não significa três comandos ou três chamadas ao
 modelo. Detalhes em [perguntas e evidências](question-and-evidence-recovery.md).
-Raciocínio anexado a uma mensagem aparece antes dela, em **Detalhes**, e não
+Raciocínio anexado a uma mensagem aparece antes dela, em **Raciocínio do modelo**, e não
 gera um grupo de processo duplicado depois da resposta. Expandir continua
 permitindo consultar o conteúdo interno; o texto público permanece visível.
 Reparos internos de protocolo, conclusão e citações ficam identificados como
@@ -683,3 +683,23 @@ Quando o Ollama entrega o mesmo texto no conteúdo normal e em `final_answer`,
 a resposta é publicada uma vez. Uma extensão exata acrescenta somente seu
 sufixo. Conteúdos diferentes, inclusive referências inválidas, são preservados
 para a validação normal; a interface não apaga parágrafos por semelhança.
+
+
+### Leitura compacta e resultado dos processos
+
+Listas simples mantêm itens consecutivos mesmo quando o texto quebra em mais
+linhas. A largura do terminal não acrescenta separadores entre itens. Listas
+com separação explícita no Markdown e parágrafos dentro dos itens conservam
+seu espaço; linhas de código e tabelas não são compactadas por essa regra.
+
+As ações da resposta oferecem atalhos para leitura confortável e largura total,
+usando a configuração existente `tui.proseWidth`. O texto armazenado/copiado não
+é alterado, e código/tabelas conservam a largura disponível.
+
+O resumo recolhido de ferramentas informa falhas e leituras parciais quando
+os resultados reais contêm esses estados. Encerrar um grupo não transforma uma
+falha em sucesso. Raciocínio usa rótulo próprio, separado de detalhes operacionais.
+O painel de fontes distingue referências presentes no texto da validação feita
+na geração; essa informação não representa uma nova conferência do arquivo nem
+uma garantia de interpretação. Arquivos indisponíveis continuam identificados,
+com abertura sujeita às mesmas permissões.

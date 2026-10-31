@@ -20,7 +20,7 @@ func (r *turnRenderer) renderReasoningDetails(item message.Message) {
 	if expanded {
 		mark = "⌄"
 	}
-	label := mark + " " + config.Text("Detalhes", "Details")
+	label := mark + " " + config.Text("Raciocínio do modelo", "Model reasoning")
 	start := r.position
 	r.appendText(key+":process", styles.HintOn(r.theme.Background()).Render(ansi.Truncate(label, r.messages.width, "…")))
 	r.hits = append(r.hits, transcriptHit{start: start, end: start + 1, kind: "process", id: key, expanded: expanded})

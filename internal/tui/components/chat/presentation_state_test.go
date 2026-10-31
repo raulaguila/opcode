@@ -53,11 +53,11 @@ func TestCompletedReasoningDoesNotClaimItIsStillWorking(t *testing.T) {
 	item := message.Message{ID: "reply", SessionID: m.session.ID, Role: message.Assistant, Parts: []message.ContentPart{message.ReasoningContent{Thinking: "Private reasoning"}, message.TextContent{Text: "Public response"}}}
 	m.messages = []message.Message{item}
 	m.renderView()
-	require.Contains(t, timelineText(m), config.Text("Detalhes", "Details"))
+	require.Contains(t, timelineText(m), config.Text("Raciocínio do modelo", "Model reasoning"))
 	require.NotContains(t, timelineText(m), config.Text("em andamento", "working"))
 	item.Parts = append(item.Parts, message.Finish{Reason: message.FinishReasonEndTurn, Time: 1})
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: item})
-	require.Contains(t, timelineText(m), config.Text("Detalhes", "Details"))
+	require.Contains(t, timelineText(m), config.Text("Raciocínio do modelo", "Model reasoning"))
 	require.NotContains(t, timelineText(m), config.Text("em andamento", "working"))
 	require.Contains(t, timelineText(m), "Public response")
 	require.NotContains(t, timelineText(m), "Private reasoning")

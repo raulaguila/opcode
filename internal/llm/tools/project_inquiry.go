@@ -34,6 +34,9 @@ func ProjectSourcePaths(question string) []string {
 // index. It is a search hint, never evidence, an instruction, or an approval.
 func ProjectEvidenceQuery(question string) string {
 	s := strings.ToLower(question)
+	if query := ProjectFlowQuery(question); query != "" {
+		return query
+	}
 	for _, topic := range []struct {
 		terms []string
 		query string
@@ -53,6 +56,9 @@ func ProjectEvidenceQuery(question string) string {
 }
 
 func ProjectInquiry(question string) bool {
+	if ProjectFlowQuery(question) != "" {
+		return true
+	}
 	s := strings.ToLower(question)
 	project := false
 	for _, term := range []string{"projeto", "reposit", "codebase", "this project", "current project", "this repo", "opcode"} {

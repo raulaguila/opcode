@@ -54,7 +54,7 @@ func assertChatHintSurfaces(t *testing.T) {
 	r.renderRevisionToggle("previous", "Older version")
 	r.renderProcess(turnGroup{key: "group", messages: []message.Message{{Parts: []message.ContentPart{message.ToolCall{Name: "view"}}}}}, true)
 	view := strings.Join(r.rendered, "\n")
-	for _, text := range []string{"Drag to select", "Details", "Older version", "Process"} {
+	for _, text := range []string{"Drag to select", "Model reasoning", "Older version", "Process"} {
 		actual := chatHintGlyph(t, view, text)
 		require.Equal(t, root.FG, actual.FG)
 		require.Equal(t, root.BG, actual.BG)

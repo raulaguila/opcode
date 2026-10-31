@@ -221,3 +221,34 @@ A orientação de resposta também acompanha a pergunta original durante reparos
 de citações: preservar os fatos pedidos, explicar o produto e terminar com
 escopo/limites explícitos. Isso não adiciona tentativas de reparo nem altera a
 validação; a qualidade da interpretação continua dependendo do modelo.
+
+
+### Perguntas sobre fluxos e evidência de comportamento
+
+Perguntas de fluxo em português/inglês usam termos da própria tarefa para
+localizar implementações. A preparação pode seguir uma chamada textual encontrada
+em uma leitura real, em uma etapa adicional limitada pelo orçamento existente.
+Essas pistas não resolvem símbolos nem comprovam relações; o agente deve ler os
+trechos relevantes e usar definição/referências/hierarquia LSP quando disponíveis.
+Declarações de interface e campos descrevem contratos/dependências, não provam
+execução, tratamento de erros ou cancelamento. A orientação pede distinguir
+implementação observada, documentação e inferência, indicando elos não verificados.
+
+O índice favorece identificadores reconhecíveis dentro da pergunta, além da
+consulta inteira, com parâmetros SQL e os filtros normais. Busca textual continua
+sujeita a homônimos; resultados do índice são navegação e precisam de leitura
+atual antes de servirem como fonte citada.
+
+
+Os resultados de buscas automáticas de preparação são resumidos na projeção
+para o provedor: somente arquivos realmente lidos no turno permanecem como
+pistas de caminho/símbolo. Prévias e assinaturas do índice não são entregues como se fossem leituras. O histórico persistido mantém o resultado
+bruto; buscas pedidas pelo próprio modelo mantêm a resposta normal da ferramenta.
+As leituras nativas e seus recibos permanecem intactos, com a mesma conferência
+de origem, linhas e hash na validação final.
+
+O resumo pode oferecer uma referência ao intervalo completo de um símbolo
+nomeado somente quando todo o intervalo foi lido e o hash do índice coincide
+com o recibo nativo. Leitura parcial, hash diferente ou janela textual genérica
+não recebem essa referência. A aplicação não insere citações automaticamente;
+o modelo escolhe suas referências e o verificador continua conferindo-as.

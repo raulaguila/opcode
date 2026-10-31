@@ -41,7 +41,7 @@ func codeQueryTerms(query string) []string {
 	for term := range strings.FieldsSeq("a as o os de da do das dos e em no na nos nas um uma para por que como onde qual quais the an of to in is are where how what this project projeto código code") {
 		stop[term] = true
 	}
-	concepts := map[string][]string{"permissão": {"permission", "authorize", "access"}, "permissões": {"permission", "authorize", "access"}, "autenticação": {"authentication", "auth", "login"}, "usuário": {"user"}, "contexto": {"context"}, "configuração": {"config", "settings"}, "arquivo": {"file"}, "busca": {"search"}, "erro": {"error", "exception"}}
+	concepts := map[string][]string{"permissão": {"permission", "authorize", "access"}, "permissões": {"permission", "authorize", "access"}, "autenticação": {"authentication", "auth", "login"}, "usuário": {"user"}, "contexto": {"context"}, "configuração": {"config", "settings"}, "arquivo": {"file"}, "busca": {"search"}, "erro": {"error", "exception"}, "conversa": {"conversation", "session"}, "ferramenta": {"tool"}, "ferramentas": {"tool", "tools"}, "cancelamento": {"cancel", "cancelled"}, "limite": {"limit", "budget"}, "permissions": {"permission", "authorize", "access"}, "authorization": {"authorize", "permission"}, "authentication": {"authenticate", "auth", "login"}}
 	var result []string
 	for _, term := range codeTerms(query) {
 		if !stop[term] {

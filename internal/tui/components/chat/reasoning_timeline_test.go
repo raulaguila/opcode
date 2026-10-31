@@ -14,7 +14,7 @@ func TestReasoningDetailsPrecedeMatchingPublicResponseWithoutTrailingProcess(t *
 	m.messages = []message.Message{{ID: "final", SessionID: m.session.ID, Role: message.Assistant, Parts: []message.ContentPart{message.ReasoningContent{Thinking: "Internal analysis"}, message.TextContent{Text: "Public answer README.md:1-2"}, message.Finish{Reason: message.FinishReasonEndTurn}}}}
 	m.renderView()
 	view := timelineText(m)
-	label := config.Text("Detalhes", "Details")
+	label := config.Text("Raciocínio do modelo", "Model reasoning")
 	require.Contains(t, view, label)
 	require.Less(t, strings.Index(view, label), strings.Index(view, "Public answer"))
 	require.NotContains(t, view[strings.Index(view, "Public answer"):], config.Text("Processo", "Process"))

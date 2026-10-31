@@ -91,6 +91,10 @@ func (m *messagesCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		m.renderCache.dirty = true
 		m.renderView()
 		return m, nil
+	case ReadingWidthChangedMsg:
+		m.selection = textSelection{}
+		m.rerender()
+		return m, nil
 	case dialog.ThemeChangedMsg:
 		m.rerender()
 		return m, nil

@@ -100,6 +100,10 @@ func (p *chatPage) Update(msg tea.Msg) (updated util.Model, result tea.Cmd) {
 		return updateChatPageDefaultCase(p, &msg)
 	case pubsub.Event[session.Session]:
 		updateChatPageSession(p, &msg)
+	case chat.ReadingWidthChangedMsg:
+		updated, cmd := p.messages.Update(msg)
+		p.messages = updated.(layout.Container)
+		return p, cmd
 	case chat.ProcessPreferencesChangedMsg:
 		return p, tea.Batch(p.syncSidebar(), p.resizeContent())
 	case AgentOutcomeMsg:

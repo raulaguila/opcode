@@ -34,7 +34,12 @@ func TestSourceBrowserGroupsFilesKeepsEveryRangeAndRestoresResponseActions(t *te
 	raw := "Read `a/main.go:1-2`, `a/main.go:6-8`, `a/main.go:1-2`, b/main.go:3-4 and src/only.go:7."
 	p.openResponseActions(raw)
 	require.Equal(t, raw, p.workspace.actions[0].text, "copy response remains unchanged")
-	p.workspace.selected = len(p.workspace.actions) - 1
+	for i, action := range p.workspace.actions {
+		if action.kind == "sources" {
+			p.workspace.selected = i
+			break
+		}
+	}
 	p.workspaceChoose()
 	require.Equal(t, "sources", p.workspace.kind)
 	require.Len(t, p.workspace.actions, 4)
@@ -68,7 +73,10 @@ func TestSourceBrowserKeepsMoreThanFortyDistinctReferencedRanges(t *testing.T) {
 	sources := responseSources(text.String())
 	require.Len(t, sources, 1)
 	require.Len(t, sources[0].ranges, 60)
-	require.Empty(t, responseSources("https://example.test/a/main.go:1 `a/main.go:8-2` `missing.go:1`"))
+	sources = responseSources("https://example.test/a/main.go:1 `a/main.go:8-2` `missing.go:1`")
+	require.Len(t, sources, 1)
+	require.Equal(t, "missing.go", sources[0].path)
+	require.True(t, sources[0].unavailable)
 }
 
 func TestSourceBrowserFileOpenStillRequiresExternalReadPermission(t *testing.T) {

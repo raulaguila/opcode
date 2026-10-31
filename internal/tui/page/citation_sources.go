@@ -10,12 +10,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/message"
 )
 
 type citedSource struct {
-	path   string
-	ranges []string
-	starts []int
+	path        string
+	ranges      []string
+	starts      []int
+	unavailable bool
 }
 
 var responseReferencePattern = regexp.MustCompile("`([^`\\n]+)`|([[:alnum:]_./-]+\\.[[:alnum:]]+:[0-9]+(?:-[0-9]+)?)")
@@ -32,15 +34,7 @@ func responseSources(text string) []citedSource {
 			token = match[2]
 		}
 		path, span, start, ok := responseReference(token)
-		if !ok || seen[path+":"+span] {
-			continue
-		}
-		absolute := path
-		if !filepath.IsAbs(path) {
-			absolute = filepath.Join(config.WorkingDirectory(), path)
-		}
-		info, err := os.Lstat(absolute)
-		if err != nil || info.IsDir() {
+		if !ok || seen[path+":"+span] || span == "" && sourceUnavailable(path) {
 			continue
 		}
 		seen[path+":"+span] = true
@@ -48,7 +42,7 @@ func responseSources(text string) []citedSource {
 		if !exists {
 			group = len(sources)
 			groups[path] = group
-			sources = append(sources, citedSource{path: path})
+			sources = append(sources, citedSource{path: path, unavailable: sourceUnavailable(path)})
 		}
 		sources[group].ranges = append(sources[group].ranges, span)
 		sources[group].starts = append(sources[group].starts, start)
@@ -57,7 +51,7 @@ func responseSources(text string) []citedSource {
 }
 
 func responseReference(token string) (path, span string, start int, ok bool) {
-	if strings.ContainsAny(token, "\n\x00") || strings.Contains(token, "://") {
+	if strings.ContainsAny(token, "\n\x00") || strings.Contains(token, "://") || strings.HasPrefix(token, "//") {
 		return "", "", 0, false
 	}
 	path, span, start = token, "", 1
@@ -93,17 +87,18 @@ func sourceReferences(sources []citedSource) string {
 	return strings.Join(lines, "\n")
 }
 
-func appendCitationActions(p *chatPage, text string) {
+func appendCitationActions(p *chatPage, text, state string) {
 	sources := responseSources(text)
 	if len(sources) == 0 {
 		return
 	}
-	p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf(config.Text("Fontes citadas · %d arquivo(s)", "Cited sources · %d file(s)"), len(sources)), kind: "sources", text: text})
+	p.workspace.actions = append(p.workspace.actions, workspaceAction{label: fmt.Sprintf(config.Text("Fontes citadas · %d arquivo(s)", "Cited sources · %d file(s)"), len(sources)), kind: "sources", text: text, citationStatus: state})
 }
 
-func (p *chatPage) openCitationSources(text string) tea.Cmd {
+func (p *chatPage) openCitationSources(text string, states ...string) tea.Cmd {
 	sources := responseSources(text)
-	p.showWorkspace("sources", config.Text("Fontes citadas", "Cited sources"), config.Text("Referências presentes na resposta. A prévia usa as permissões normais; esta lista não comprova a validação das fontes.", "References present in the response. Preview uses normal permissions; this list does not prove source validation."))
+	state := citationState(states)
+	p.showWorkspace("sources", config.Text("Fontes citadas", "Cited sources"), sourceEvidenceLabel(state))
 	basenames := map[string]int{}
 	for _, source := range sources {
 		basenames[filepath.Base(source.path)]++
@@ -114,20 +109,29 @@ func (p *chatPage) openCitationSources(text string) tea.Cmd {
 			label = source.path
 		}
 		label += fmt.Sprintf(config.Text(" · %d referência(s)", " · %d reference(s)"), len(source.ranges))
-		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: label, kind: "source", path: source.path, text: text})
+		if source.unavailable {
+			label += config.Text(" · indisponível", " · unavailable")
+		}
+		p.workspace.actions = append(p.workspace.actions, workspaceAction{label: label, kind: "source", path: source.path, text: text, citationStatus: state})
 	}
 	p.workspace.actions = append(p.workspace.actions, workspaceAction{label: config.Text("Copiar referências", "Copy references"), kind: "copy", text: sourceReferences(sources)})
 	return nil
 }
 
-func (p *chatPage) openCitationSource(text, path string) tea.Cmd {
+func (p *chatPage) openCitationSource(text, path string, states ...string) tea.Cmd {
 	for _, source := range responseSources(text) {
 		if source.path != path {
 			continue
 		}
 		refs := sourceReferences([]citedSource{source})
-		p.showWorkspace("source", config.Text("Fonte · ", "Source · ")+filepath.Base(path), source.path+"\n\n"+refs)
+		p.showWorkspace("source", config.Text("Fonte · ", "Source · ")+filepath.Base(path), source.path+"\n\n"+refs+"\n\n"+sourceEvidenceLabel(citationState(states)))
+		if source.unavailable {
+			p.workspace.body += config.Text("\nArquivo indisponível; a referência histórica foi preservada.", "\nFile unavailable; the historical reference was preserved.")
+		}
 		for i, span := range source.ranges {
+			if source.unavailable {
+				continue
+			}
 			label := config.Text("Abrir arquivo", "Open file")
 			if span != "" {
 				label = config.Text("Abrir intervalo ", "Open range ") + span
@@ -138,4 +142,32 @@ func (p *chatPage) openCitationSource(text, path string) tea.Cmd {
 		return nil
 	}
 	return nil
+}
+
+func sourceUnavailable(path string) bool {
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(config.WorkingDirectory(), path)
+	}
+	info, err := os.Lstat(path)
+	return err != nil || !info.Mode().IsRegular()
+}
+
+func citationState(states []string) string {
+	if len(states) > 0 {
+		return states[0]
+	}
+	return ""
+}
+
+func sourceEvidenceLabel(state string) string {
+	label := config.Text("Referências presentes na resposta; sem validação registrada para este texto.", "References present in the response; no recorded validation for this text.")
+	switch state {
+	case message.CitationValid:
+		label = config.Text("Referências verificadas ao gerar a resposta: origem, intervalo lido e hash então atual.", "References checked when the answer was generated: origin, supplied line range and then-current hash.")
+	case message.CitationInvalid:
+		label = config.Text("Referências não validadas na resposta.", "References not validated in this answer.")
+	case message.CitationPending, message.CitationRevising:
+		label = config.Text("A validação das referências ainda não foi concluída.", "Reference validation has not completed.")
+	}
+	return label + config.Text("\nIsso não verifica a interpretação. Arquivos não foram revalidados agora; a prévia mantém as permissões normais.", "\nThis does not verify interpretation. Files have not been revalidated now; preview keeps normal permissions.")
 }

@@ -102,7 +102,7 @@ func TestContextPanelIgnoresStaleResultsAndPreventsRepeatedOperations(t *testing
 func TestClipboardFailureKeepsSelectableTextAndRecoveryPersists(t *testing.T) {
 	p, _ := workspacePage(t)
 	p.openResponseActions("answer\n```go\nfmt.Println(1)\n```\n")
-	require.Len(t, p.workspace.actions, 3)
+	require.Len(t, p.workspace.actions, 5)
 	cmd := p.workspaceChoose()
 	request := cmd().(util.CopyTextMsg)
 	p.workspaceResult(request.Result(false, errors.New("unavailable")).(WorkspaceResultMsg))

@@ -131,10 +131,23 @@ descartam o catálogo ou um contexto válido. Fontes citadas ficam agrupadas, co
 caminhos e intervalos completos para cópia e prévia protegida. As referências
 inline não são abreviadas, preservando também a seleção de texto.
 
-Raciocínio associado à resposta fica em Detalhes antes dela. Código direto ou
+Raciocínio associado à resposta fica em Raciocínio do modelo antes dela. Código direto ou
 em listas tem superfície própria e cabeçalho de linguagem, sem modificar cópia
 ou fonte. A seleção de modelos separa destaque de navegação e marcador Em uso;
 legendas de navegação têm estilo secundário com contraste, preservando estados
 e decisões de permissão. Visões gerais do projeto combinam arquivos básicos e
 busca limitada por implementação; fontes preparadas não significam inspeção
 completa nem dispensam novas ferramentas quando faltam fatos.
+
+
+A investigação de fluxos usa os termos da tarefa e uma etapa adicional limitada
+para seguir chamadas textuais. O índice favorece identificadores dentro de
+perguntas naturais. Preparação automática resume apenas arquivos lidos no turno;
+referências de símbolos completos exigem intervalo entregue e hash coincidente.
+O histórico bruto, leituras nativas, recibos e a validação das citações permanecem
+preservados. A explicação distingue contrato, implementação e inferência.
+Listas simples não ganham separadores por quebra visual. As ações da resposta
+expõem largura total/leitura confortável. Fontes mostram o estado registrado
+na geração e mantêm referências indisponíveis; isso não é revalidação atual nem
+prova de interpretação. Processos recolhidos resumem falhas e saídas parciais
+quando registradas nos resultados reais.

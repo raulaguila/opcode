@@ -23,22 +23,27 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 	}
 	query := tools.ProjectEvidenceQuery(question)
 	if query != "" && tools.ProjectInquiry(question) && index != nil && len(tools.ProjectSourcePaths(question)) == 0 {
-		b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view}
-		query, err := b.topicQuery(query, inventory)
-		if err != nil {
-			return b.history, err
-		}
-		read, err := b.readIndex(query, index)
+		b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, flow: tools.ProjectFlowQuery(question) != ""}
+		read, err := b.prepareTopic(query, index, inventory)
 		history = b.history
 		if err != nil || read {
 			return history, err
 		}
 	}
 	history, err := a.bootstrapBasic(ctx, session, question, history, run, view)
-	if err != nil || index == nil || !tools.ProjectOverview(question) {
+	if err != nil || index == nil {
 		return history, err
 	}
-	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, overview: true}
+	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view}
+	if tools.ProjectFlowQuery(question) != "" {
+		b.flow = true
+		err = b.followFlowCalls(index)
+		return b.history, err
+	}
+	if !tools.ProjectOverview(question) {
+		return history, nil
+	}
+	b.overview = true
 	_, err = b.readIndex(overviewQuery(history), index)
 	return b.history, err
 }
@@ -174,6 +179,7 @@ type evidenceBootstrap struct {
 	view     tools.BaseTool
 	read     bool
 	overview bool
+	flow     bool
 }
 
 func (b *evidenceBootstrap) topicQuery(query string, inventory tools.BaseTool) (string, error) {
@@ -191,9 +197,12 @@ func (b *evidenceBootstrap) topicQuery(query string, inventory tools.BaseTool) (
 func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool) (bool, error) {
 	limit := 2
 	intent := "implementation"
-	if b.overview {
+	if b.overview || b.flow {
 		limit = 4
 		intent = "overview"
+		if b.flow {
+			intent = "implementation"
+		}
 	}
 	input, _ := json.Marshal(map[string]any{"query": query, "limit": limit, "intent": intent, "strategy": "lexical"})
 	history, response, err := b.agent.bootstrapCall(b.ctx, b.session, index, string(input), b.history, b.run)
@@ -212,7 +221,7 @@ func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool) (bool,
 
 func (b *evidenceBootstrap) readIndexHits(query string, hits []projectEvidenceHit) (bool, error) {
 	seen := map[string]bool{}
-	if b.overview {
+	if b.overview || b.flow {
 		seen = overviewReadPaths(b.run, b.history)
 	}
 	attempts := 0
@@ -227,7 +236,7 @@ func (b *evidenceBootstrap) readIndexHits(query string, hits []projectEvidenceHi
 		if err != nil {
 			return false, err
 		}
-		if complete && !b.overview || attempts == 2 {
+		if complete && !b.overview && !b.flow || attempts == 2 {
 			break
 		}
 	}

@@ -1,0 +1,237 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "distributed_flow_pt",
+      "mode": "ask",
+      "files": {
+        "README.md": "# ChatRelay\nA Python chat application dispatches messages to protected tools.\nCurrent behavior is implemented in service.py and tools_runtime.py.\napi_contract.py is a declaration only; docs/historical-flow.md describes an obsolete design.\n",
+        "main.py": "from service import Submit\n\ndef main():\n    return Submit(\"ping\")\n",
+        "service.py": "from tools_runtime import dispatchTool\n\ndef Submit(text):\n    return dispatchTool(text)\n",
+        "tools_runtime.py": "# Current chat tool dispatch implementation; this is not the API declaration.\n\ndef dispatchTool(text):\n    if text == \"blocked\":\n        return \"TOOL_DENIED\"\n    return \"TOOL_OK\"\n",
+        "api_contract.py": "class ToolContract:\n    # Declaration only: no tool is executed by this method.\n    def dispatchTool(self, text):\n        raise NotImplementedError(\"CONTRACT_ONLY\")\n",
+        "docs/historical-flow.md": "# Historical design (obsolete)\nThis old draft describes dispatchTool returning LEGACY_OK for every message, including blocked.\nIt predates the current implementation and must not establish present behavior.\n"
+      },
+      "prompts": [
+        "Analise o fluxo de chat e chamada de tools deste projeto. Siga Submit até dispatchTool na implementação real. Explique o retorno para blocked e para ping, com referências pontuais, distinguindo declarações de comportamento observado."
+      ],
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "value": "Submit"
+        },
+        {
+          "kind": "response_contains",
+          "value": "dispatchTool"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_DENIED"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_OK"
+        },
+        {
+          "kind": "response_cites",
+          "path": "service.py",
+          "value": "4"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "5"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "6"
+        },
+        {
+          "kind": "file_contains",
+          "path": "tools_runtime.py",
+          "value": "return \"TOOL_DENIED\""
+        }
+      ],
+      "timeout_seconds": 180,
+      "expected_retrieval": [
+        "service.py",
+        "tools_runtime.py"
+      ]
+    },
+    {
+      "id": "distributed_flow_en",
+      "mode": "ask",
+      "files": {
+        "README.md": "# ChatRelay\nA Python chat application dispatches messages to protected tools.\nCurrent behavior is implemented in service.py and tools_runtime.py.\napi_contract.py is a declaration only; docs/historical-flow.md describes an obsolete design.\n",
+        "main.py": "from service import Submit\n\ndef main():\n    return Submit(\"ping\")\n",
+        "service.py": "from tools_runtime import dispatchTool\n\ndef Submit(text):\n    return dispatchTool(text)\n",
+        "tools_runtime.py": "# Current chat tool dispatch implementation; this is not the API declaration.\n\ndef dispatchTool(text):\n    if text == \"blocked\":\n        return \"TOOL_DENIED\"\n    return \"TOOL_OK\"\n",
+        "api_contract.py": "class ToolContract:\n    # Declaration only: no tool is executed by this method.\n    def dispatchTool(self, text):\n        raise NotImplementedError(\"CONTRACT_ONLY\")\n",
+        "docs/historical-flow.md": "# Historical design (obsolete)\nThis old draft describes dispatchTool returning LEGACY_OK for every message, including blocked.\nIt predates the current implementation and must not establish present behavior.\n"
+      },
+      "prompts": [
+        "Analyze the chat flow and tool dispatch in this project. Follow Submit to dispatchTool in the real implementation. Explain the return for blocked and for ping with precise references, distinguishing declarations from observed behavior."
+      ],
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "value": "Submit"
+        },
+        {
+          "kind": "response_contains",
+          "value": "dispatchTool"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_DENIED"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_OK"
+        },
+        {
+          "kind": "response_cites",
+          "path": "service.py",
+          "value": "4"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "5"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "6"
+        },
+        {
+          "kind": "file_contains",
+          "path": "tools_runtime.py",
+          "value": "return \"TOOL_DENIED\""
+        }
+      ],
+      "timeout_seconds": 180,
+      "expected_retrieval": [
+        "service.py",
+        "tools_runtime.py"
+      ]
+    },
+    {
+      "id": "homonymous_contract",
+      "mode": "ask",
+      "files": {
+        "README.md": "# ChatRelay\nA Python chat application dispatches messages to protected tools.\nCurrent behavior is implemented in service.py and tools_runtime.py.\napi_contract.py is a declaration only; docs/historical-flow.md describes an obsolete design.\n",
+        "main.py": "from service import Submit\n\ndef main():\n    return Submit(\"ping\")\n",
+        "service.py": "from tools_runtime import dispatchTool\n\ndef Submit(text):\n    return dispatchTool(text)\n",
+        "tools_runtime.py": "# Current chat tool dispatch implementation; this is not the API declaration.\n\ndef dispatchTool(text):\n    if text == \"blocked\":\n        return \"TOOL_DENIED\"\n    return \"TOOL_OK\"\n",
+        "api_contract.py": "class ToolContract:\n    # Declaration only: no tool is executed by this method.\n    def dispatchTool(self, text):\n        raise NotImplementedError(\"CONTRACT_ONLY\")\n",
+        "docs/historical-flow.md": "# Historical design (obsolete)\nThis old draft describes dispatchTool returning LEGACY_OK for every message, including blocked.\nIt predates the current implementation and must not establish present behavior.\n"
+      },
+      "prompts": [
+        "Qual dispatchTool é realmente chamado por Submit neste projeto? Há um método homônimo no contrato. Leia o caminho de execução e explique os retornos para blocked e ping com citações da implementação, sem tratar uma declaração como execução."
+      ],
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "value": "Submit"
+        },
+        {
+          "kind": "response_contains",
+          "value": "dispatchTool"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_DENIED"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_OK"
+        },
+        {
+          "kind": "response_cites",
+          "path": "service.py",
+          "value": "4"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "5"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "6"
+        },
+        {
+          "kind": "file_contains",
+          "path": "tools_runtime.py",
+          "value": "return \"TOOL_DENIED\""
+        }
+      ],
+      "timeout_seconds": 180,
+      "expected_retrieval": [
+        "service.py",
+        "tools_runtime.py"
+      ]
+    },
+    {
+      "id": "historical_document_conflict",
+      "mode": "ask",
+      "files": {
+        "README.md": "# ChatRelay\nA Python chat application dispatches messages to protected tools.\nCurrent behavior is implemented in service.py and tools_runtime.py.\napi_contract.py is a declaration only; docs/historical-flow.md describes an obsolete design.\n",
+        "main.py": "from service import Submit\n\ndef main():\n    return Submit(\"ping\")\n",
+        "service.py": "from tools_runtime import dispatchTool\n\ndef Submit(text):\n    return dispatchTool(text)\n",
+        "tools_runtime.py": "# Current chat tool dispatch implementation; this is not the API declaration.\n\ndef dispatchTool(text):\n    if text == \"blocked\":\n        return \"TOOL_DENIED\"\n    return \"TOOL_OK\"\n",
+        "api_contract.py": "class ToolContract:\n    # Declaration only: no tool is executed by this method.\n    def dispatchTool(self, text):\n        raise NotImplementedError(\"CONTRACT_ONLY\")\n",
+        "docs/historical-flow.md": "# Historical design (obsolete)\nThis old draft describes dispatchTool returning LEGACY_OK for every message, including blocked.\nIt predates the current implementation and must not establish present behavior.\n"
+      },
+      "prompts": [
+        "A documentação histórica deste projeto descreve um fluxo antigo. Investigue o fluxo atual de Submit e dispatchTool na implementação e explique os retornos de blocked e ping com referências. Diga qual evidência estabelece o comportamento atual."
+      ],
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "value": "Submit"
+        },
+        {
+          "kind": "response_contains",
+          "value": "dispatchTool"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_DENIED"
+        },
+        {
+          "kind": "response_contains",
+          "value": "TOOL_OK"
+        },
+        {
+          "kind": "response_cites",
+          "path": "service.py",
+          "value": "4"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "5"
+        },
+        {
+          "kind": "response_cites",
+          "path": "tools_runtime.py",
+          "value": "6"
+        },
+        {
+          "kind": "file_contains",
+          "path": "tools_runtime.py",
+          "value": "return \"TOOL_DENIED\""
+        }
+      ],
+      "timeout_seconds": 180,
+      "expected_retrieval": [
+        "service.py",
+        "tools_runtime.py"
+      ]
+    }
+  ]
+}

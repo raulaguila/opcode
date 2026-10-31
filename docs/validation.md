@@ -5,6 +5,33 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Revisão de código com implementação/testes e painel do plano — 31/10/2026
+
+Pedidos gerais de revisão agora usam o índice existente para preparar corpos
+executáveis e testes relacionados em consultas separadas e limitadas. Declarações
+e documentação não substituem essas leituras; se a busca não encontra código,
+permanece o contexto básico. Rotas de linguagem, permissões, contexto e fluxo
+mantêm prioridade sobre a revisão genérica. O prompt pede conferir proteções
+existentes, justificar cada recomendação e manter hipóteses como investigação.
+Ler um teste não comprova sua execução.
+
+Com `nemotron-3.5-bolt:e4b`, passaram os dois casos de revisão PT/EN e um caso
+adicional com snapshot dos arquivos reais do Opcode: **3/3 casos e 24/24 critérios**.
+O caso real reconheceu o bloqueio já existente em `agent.SetMode` e os testes
+de recusa durante execução/troca quando ocioso. Os quatro casos anteriores de
+explicação mantiveram prompts e critérios e passaram em **44/44**. Esses critérios
+medem fatos/referências declarados, não correção semântica geral ou uma auditoria
+completa do repositório. A execução usou Ask e não autorizou alterações.
+
+O plano expandido compartilha borda, superfície, título e divisória das perguntas,
+com progresso e etapa ativa. Sessão e detalhes continuam em `/task`; perguntas
+pendentes conservam prioridade. Os testes em PTY cobrem temas escuro/claro/sem
+cores, redimensionamento, rolagem e preservação do rascunho. O fluxo nativo com
+Ollama mantém aprovações explícitas e sandbox. Não houve alteração dos gates de
+permissão/citação nem novas dependências ou configurações.
+
+Evidências e limites: [revisão e plano](evidence/2026-10-31-review-and-plan-validation.json).
+
 ## Correção dos padrões narrativos — 31/10/2026
 
 A correção ficou nos padrões das fixtures, nos testes e na documentação; nenhum

@@ -715,3 +715,10 @@ Processos concluídos sem falhas usam o estilo secundário; atividade, falhas,
 interrupções e saídas parciais mantêm destaque. Opções longas de pergunta mostram
 o início e o final, enquanto F2 detalhes apresenta o texto integral. A redução
 visual não altera o texto enviado ao agente.
+
+O plano expandido usa a mesma superfície elevada, borda reta, título e divisória
+do painel de perguntas. Mostra progresso, estados das etapas e destaque da etapa
+ativa; modo e atividade continuam no rodapé principal. O UUID e os dados completos
+permanecem em `/task`, em vez de ocupar a área compacta. Alt+↑/↓ continua rolando
+as etapas. Rascunhos são preservados ao redimensionar; em terminais pequenos, o
+painel mantém título e etapa ativa. Uma pergunta pendente continua tendo prioridade.

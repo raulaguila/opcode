@@ -52,11 +52,11 @@ func ProjectEvidenceQuery(question string) string {
 			}
 		}
 	}
-	return ""
+	return ProjectReviewQuery(question)
 }
 
 func ProjectInquiry(question string) bool {
-	if ProjectFlowQuery(question) != "" {
+	if ProjectFlowQuery(question) != "" || ProjectReviewQuery(question) != "" {
 		return true
 	}
 	s := strings.ToLower(question)

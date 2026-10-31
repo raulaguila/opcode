@@ -16,7 +16,6 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
@@ -135,20 +134,6 @@ func (p *chatPage) planRows() []string {
 	rows = append(rows, styles.PanelHint().Render(config.Text(" Alt+↑/↓ rola · /plan recolhe · /resume continua", " Alt+↑/↓ scroll · /plan collapse · /resume continue")))
 	return rows
 }
-func (p *chatPage) planOffset() int {
-	limit := max(1, min(8, p.height/3))
-	offset := p.workflow.offset
-	if offset < 0 {
-		offset = 0
-		for i, step := range p.workflow.task.Steps {
-			if step.Status == "in_progress" {
-				offset = max(0, i+1)
-				break
-			}
-		}
-	}
-	return min(offset, max(0, len(p.planRows())-limit))
-}
 func (p *chatPage) workflowHeight() int {
 	if p.app == nil || p.app.Workflows == nil || p.width < 20 || p.height < 8 {
 		return 0
@@ -156,13 +141,10 @@ func (p *chatPage) workflowHeight() int {
 	if !p.workflow.expanded && p.workflow.question.ID == "" {
 		return 0
 	}
-	h := 1
 	if p.workflow.question.ID != "" {
 		return p.questionPanelHeight()
-	} else if p.workflow.expanded {
-		h += min(len(p.planRows()), max(1, min(8, p.height/3)))
 	}
-	return min(h, max(1, p.height-5))
+	return p.planPanelHeight()
 }
 func (p *chatPage) workflowView() string {
 	height := p.workflowHeight()
@@ -172,31 +154,7 @@ func (p *chatPage) workflowView() string {
 	if p.workflow.question.ID != "" {
 		return p.questionPanelView(height)
 	}
-	w := max(1, p.width-2)
-	task := p.workflow.task
-	line := fmt.Sprintf(" %s · /mode ask|plan|execute · /plan", modeLabel(p.mode()))
-	workflowViewTaskSteps(p, &task, &line)
-	if task.Contract != nil {
-		line = fmt.Sprintf(" %s · %s: %s · /contract · /plan", modeLabel(p.mode()), config.Text("Tarefa", "Task"), contractLabel(task.Contract.Kind))
-	}
-	lines := []string{ansi.Truncate(line+" · "+p.activityLabel()+p.queueSummary(), w, "…")}
-	if p.workflow.expanded && p.workflow.question.ID == "" {
-		rows := p.planRows()
-		offset := p.planOffset()
-		limit := min(len(rows)-offset, max(1, min(8, p.height/3)))
-		for _, row := range rows[offset : offset+limit] {
-			lines = append(lines, ansi.Truncate(row, w, "…"))
-		}
-	}
-
-	if len(lines) > height {
-		lines = lines[len(lines)-height:]
-	}
-	for i := range lines {
-		lines[i] = ansi.Truncate(lines[i], max(1, p.width), "…")
-	}
-	t := theme.CurrentTheme()
-	return styles.BaseStyle().Foreground(t.Text()).Width(max(0, p.width)).MaxHeight(height).Render(strings.Join(lines, "\n"))
+	return p.planPanelView(height)
 }
 func (p *chatPage) questionKey(msg tea.KeyPressMsg) tea.Cmd {
 	q := p.workflow.question
@@ -330,21 +288,9 @@ func applyWorkflowCommandCasePlanTask(p *chatPage, command string, value string,
 
 }
 
-func workflowViewTaskSteps(p *chatPage, task *workflow.Task, line *string) {
-	if len(task.Steps) > 0 {
-		done := 0
-		for _, step := range task.Steps {
-			if step.Status == "completed" {
-				done++
-			}
-		}
-		(*line) = fmt.Sprintf(config.Text(" %s · Plano %d/%d · %s · /plan", " %s · Plan %d/%d · %s · /plan"), modeLabel(p.mode()), done, len(task.Steps), task.Status)
-	}
-}
-
 func planRowsTaskContract(task *workflow.Task, rows *[]string) {
 	if task.Contract != nil {
-		(*rows) = append((*rows), " "+config.Text("Resultado esperado: ", "Expected outcome: ")+task.Contract.Kind)
+		(*rows) = append((*rows), " "+config.Text("Resultado esperado: ", "Expected outcome: ")+contractLabel(task.Contract.Kind))
 		for _, target := range task.Contract.Targets {
 			(*rows) = append((*rows), " "+config.Text("Alvo: ", "Target: ")+panelText(target))
 		}

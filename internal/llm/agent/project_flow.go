@@ -14,7 +14,7 @@ func (b *evidenceBootstrap) prepareTopic(query string, index, inventory tools.Ba
 	if err != nil {
 		return false, err
 	}
-	read, err := b.readIndex(query, index)
+	read, err := b.readIndex(query, index, "implementation")
 	if err == nil && b.flow && read {
 		err = b.followFlowCalls(index)
 	}
@@ -50,7 +50,7 @@ func (b *evidenceBootstrap) followFlowSource(result message.ToolResult, index to
 			continue
 		}
 		seen[name] = true
-		read, err := b.readIndex(name, index)
+		read, err := b.readIndex(name, index, "implementation")
 		if err != nil || read || len(seen) == 3 || b.flowReadsRemaining == 0 {
 			return true, err
 		}

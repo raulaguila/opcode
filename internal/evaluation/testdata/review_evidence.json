@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "review_existing_protection_pt",
+      "mode": "ask",
+      "files": {
+        "README.md": "# ModeSwitch\nA Go agent with ask, plan and execute modes. Implementation and regression tests define current behavior.\n",
+        "agent.go": "package fixture\ntype Service interface { SetMode(string) error }\n",
+        "runtime.go": "package fixture\nimport \"errors\"\nvar ErrSessionBusy = errors.New(\"session busy\")\ntype Agent struct { busy bool }\nfunc (a *Agent) SetMode(mode string) error {\n if a.busy { return ErrSessionBusy }\n return nil\n}\n",
+        "runtime_test.go": "package fixture\nimport \"testing\"\nfunc TestModeCannotChangeDuringRequest(t *testing.T) {\n a := &Agent{busy:true}\n if a.SetMode(\"execute\") != ErrSessionBusy { t.Fatal(\"busy guard missing\") }\n a.busy=false\n if err:=a.SetMode(\"execute\");err!=nil {t.Fatal(err)}\n}\n"
+      },
+      "prompts": [
+        "Analise o código deste projeto e sugira melhorias para SetMode, especialmente durante uma requisição ativa. Confira a implementação e os testes antes de recomendar mudanças. Explique a proteção existente e o que é permitido quando está ocioso, com referências pontuais. Se não houver falha demonstrada, diga isso. Não implemente nada."
+      ],
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "value": "SetMode"
+        },
+        {
+          "kind": "response_contains",
+          "value": "ErrSessionBusy"
+        },
+        {
+          "kind": "response_cites",
+          "path": "runtime.go",
+          "value": "6"
+        },
+        {
+          "kind": "response_cites",
+          "path": "runtime_test.go",
+          "value": "5"
+        },
+        {
+          "kind": "response_cites",
+          "path": "runtime_test.go",
+          "value": "7"
+        },
+        {
+          "kind": "file_contains",
+          "path": "runtime.go",
+          "value": "if a.busy { return ErrSessionBusy }"
+        },
+        {
+          "kind": "file_contains",
+          "path": "runtime_test.go",
+          "value": "a.busy=false"
+        },
+        {
+          "kind": "tool_called",
+          "value": "search_code_index"
+        }
+      ],
+      "timeout_seconds": 180,
+      "expected_retrieval": [
+        "runtime.go",
+        "runtime_test.go"
+      ]
+    },
+    {
+      "id": "review_existing_protection_en",
+      "mode": "ask",
+      "files": {
+        "README.md": "# ModeSwitch\nA Go agent with ask, plan and execute modes. Implementation and regression tests define current behavior.\n",
+        "agent.go": "package fixture\ntype Service interface { SetMode(string) error }\n",
+        "runtime.go": "package fixture\nimport \"errors\"\nvar ErrSessionBusy = errors.New(\"session busy\")\ntype Agent struct { busy bool }\nfunc (a *Agent) SetMode(mode string) error {\n if a.busy { return ErrSessionBusy }\n return nil\n}\n",
+        "runtime_test.go": "package fixture\nimport \"testing\"\nfunc TestModeCannotChangeDuringRequest(t *testing.T) {\n a := &Agent{busy:true}\n if a.SetMode(\"execute\") != ErrSessionBusy { t.Fatal(\"busy guard missing\") }\n a.busy=false\n if err:=a.SetMode(\"execute\");err!=nil {t.Fatal(err)}\n}\n"
+      },
+      "prompts": [
+        "Review this project code and suggest improvements to SetMode, especially during an active request. Inspect implementation and tests before recommending changes. Explain the existing protection and what is allowed while idle, with precise references. If no defect is demonstrated, say so. Do not implement changes."
+      ],
+      "criteria": [
+        {
+          "kind": "response_contains",
+          "value": "SetMode"
+        },
+        {
+          "kind": "response_contains",
+          "value": "ErrSessionBusy"
+        },
+        {
+          "kind": "response_cites",
+          "path": "runtime.go",
+          "value": "6"
+        },
+        {
+          "kind": "response_cites",
+          "path": "runtime_test.go",
+          "value": "5"
+        },
+        {
+          "kind": "response_cites",
+          "path": "runtime_test.go",
+          "value": "7"
+        },
+        {
+          "kind": "file_contains",
+          "path": "runtime.go",
+          "value": "if a.busy { return ErrSessionBusy }"
+        },
+        {
+          "kind": "file_contains",
+          "path": "runtime_test.go",
+          "value": "a.busy=false"
+        },
+        {
+          "kind": "tool_called",
+          "value": "search_code_index"
+        }
+      ],
+      "timeout_seconds": 180,
+      "expected_retrieval": [
+        "runtime.go",
+        "runtime_test.go"
+      ]
+    }
+  ]
+}

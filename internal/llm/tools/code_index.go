@@ -298,9 +298,12 @@ func buildCodeIndexQuery(input codeIndexInput, scoped bool) (string, []any, erro
 	case "documentation":
 		preference = " (path NOT LIKE '%.md' AND path NOT LIKE 'docs/%'),"
 	case "implementation", "overview":
-		preference = " (path LIKE '%.md' OR path LIKE '%test%'),"
+		preference = " (path LIKE '%.md' OR path LIKE '%test%'), (kind NOT IN ('function','method')),"
 	}
 	order, identifiers := codeIdentifierOrder(input.Query)
+	if input.Intent == "tests" {
+		order, preference = preference+order, ""
+	}
 	query += ` ORDER BY ` + order + preference + ` (kind='text'), bm25(chunks,3,8,4,1,1,0,0,0,0,0),path,start_line LIMIT 120`
 	args = append(args, identifiers...)
 	return query, args, nil

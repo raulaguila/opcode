@@ -2,6 +2,12 @@
 
 ## Em desenvolvimento — 2026-10-31
 
+- Pedidos de revisão preparam implementações e testes relacionados em consultas
+  limitadas, favorecendo corpos executáveis e preservando identificadores.
+  O prompt pede conferir proteções existentes e separar achados de hipóteses.
+- Plano usa a superfície, borda e divisória das perguntas, com progresso e etapa
+  ativa destacados; a identidade da sessão continua nos detalhes de `/task`.
+
 - Padrões das avaliações aceitam prosa, setas LaTeX e parágrafos de cabeçalhos,
   preservando rejeição de inversões, negações e contradições explícitas. O motor
   de avaliação, o agente e a validação de citações permanecem inalterados.

@@ -145,6 +145,20 @@ func TestOverviewGuidancePrioritizesUserPurposePreciseReferencesAndInspectionLim
 		}
 	}
 }
+
+func TestRecommendationsAndPlansRequireImplementationAndTestInspection(t *testing.T) {
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	for _, mode := range []string{"ask", "plan", "execute"} {
+		for _, window := range []int64{8192, 65536} {
+			text := Compose(mode, "ollama", window, []string{"view", "search_code_index"})
+			for _, rule := range []string{"Before recommending code changes or saving a plan", "implementation, callers and associated tests", "already exists", "Label unverified ideas as hypotheses", "Finding no justified change is valid", "Reading tests is not running them", "do not fill a list with generic refactors", "only inspected and not run"} {
+				require.Contains(t, text, rule)
+			}
+		}
+	}
+}
+
 func TestProjectGuidanceReloadsWithoutCrossProjectCache(t *testing.T) {
 	root := t.TempDir()
 	_, err := config.Load(root, false)

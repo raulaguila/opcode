@@ -22,6 +22,9 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 		return history, nil
 	}
 	query := tools.ProjectEvidenceQuery(question)
+	if review := tools.ProjectReviewQuery(question); review != "" && query == review && index != nil && tools.ProjectFlowQuery(question) == "" {
+		return a.bootstrapReview(ctx, session, question, review, history, run, view, index)
+	}
 	if query != "" && tools.ProjectInquiry(question) && index != nil && len(tools.ProjectSourcePaths(question)) == 0 {
 		b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, flow: tools.ProjectFlowQuery(question) != "", flowReadsRemaining: 4}
 		read, err := b.prepareTopic(query, index, inventory)
@@ -44,7 +47,7 @@ func (a *agent) bootstrap(ctx context.Context, session, question string, history
 		return history, nil
 	}
 	b.overview = true
-	_, err = b.readIndex(overviewQuery(history), index)
+	_, err = b.readIndex(overviewQuery(history), index, "overview")
 	return b.history, err
 }
 
@@ -179,6 +182,7 @@ type evidenceBootstrap struct {
 	view               tools.BaseTool
 	overview           bool
 	flow               bool
+	review             bool
 	flowReadsRemaining int
 }
 
@@ -194,15 +198,10 @@ func (b *evidenceBootstrap) topicQuery(query string, inventory tools.BaseTool) (
 	b.history = history
 	return query, err
 }
-func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool) (bool, error) {
+func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool, intent string) (bool, error) {
 	limit := 2
-	intent := "implementation"
-	if b.overview || b.flow {
+	if b.overview || b.flow || b.review {
 		limit = 4
-		intent = "overview"
-		if b.flow {
-			intent = "implementation"
-		}
 	}
 	input, _ := json.Marshal(map[string]any{"query": query, "limit": limit, "intent": intent, "strategy": "lexical"})
 	history, response, err := b.agent.bootstrapCall(b.ctx, b.session, index, string(input), b.history, b.run)
@@ -216,12 +215,15 @@ func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool) (bool,
 	if response.IsError || json.Unmarshal([]byte(response.Content), &result) != nil {
 		return false, nil
 	}
+	if b.review && intent == "tests" {
+		result.Results = slices.DeleteFunc(result.Results, func(hit projectEvidenceHit) bool { return !tools.IsTestSource(hit.Path) })
+	}
 	return b.readIndexHits(query, result.Results[:min(limit, len(result.Results))])
 }
 
 func (b *evidenceBootstrap) readIndexHits(query string, hits []projectEvidenceHit) (bool, error) {
 	seen := map[string]bool{}
-	if b.overview || b.flow {
+	if b.overview || b.flow || b.review {
 		seen = overviewReadPaths(b.run, b.history)
 	}
 	attempts := 0
@@ -236,7 +238,7 @@ func (b *evidenceBootstrap) readIndexHits(query string, hits []projectEvidenceHi
 			return false, err
 		}
 		read = read || visible
-		if complete && !b.overview && !b.flow || attempts == 2 {
+		if complete && !b.overview && !b.flow && !b.review || attempts == 2 {
 			break
 		}
 	}

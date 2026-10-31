@@ -13,6 +13,9 @@ import (
 	"strings"
 )
 
+// IsTestSource shares the structural map's path classification, not proof of coverage.
+func IsTestSource(path string) bool { return projectFileRole(path) == "test" }
+
 func projectFileRole(path string) string {
 	base := strings.ToLower(filepath.Base(path))
 	lower := strings.ToLower(filepath.ToSlash(path))
@@ -20,14 +23,14 @@ func projectFileRole(path string) string {
 	case "go.mod", "package.json", "pyproject.toml", "cargo.toml", "pom.xml", "build.gradle", "composer.json", "gemfile", "cmakelists.txt":
 		return "manifest"
 	}
-	if strings.Contains(lower, "/test") || strings.HasPrefix(base, "test_") || strings.Contains(base, "_test.") || strings.Contains(base, ".test.") || strings.Contains(base, ".spec.") {
+	if strings.HasSuffix(base, ".md") || strings.HasSuffix(base, ".rst") {
+		return "documentation"
+	}
+	if strings.Contains(lower, "/test") || strings.HasPrefix(lower, "tests/") || strings.HasPrefix(lower, "test/") || strings.HasPrefix(base, "test_") || strings.Contains(base, "_test.") || strings.Contains(base, ".test.") || strings.Contains(base, ".spec.") {
 		return "test"
 	}
 	if base == "main.go" || base == "main.py" || base == "__main__.py" || base == "main.rs" || base == "index.ts" || base == "index.js" || base == "program.cs" {
 		return "entry_point"
-	}
-	if strings.HasSuffix(base, ".md") || strings.HasSuffix(base, ".rst") {
-		return "documentation"
 	}
 	return "source"
 }

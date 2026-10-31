@@ -157,3 +157,14 @@ Consulta de fontes compartilha o reconhecimento do validador, mantém estado por
 ID da mensagem e relê a prévia por Ctrl+R nas mesmas permissões. Opções longas
 mostram início e final e identificam F2 detalhes; processos concluídos sem falhas
 usam estilo secundário. Não há novas dependências, painéis ou configurações.
+
+Pedidos gerais de revisão de código recebem buscas separadas por implementação e testes,
+com até duas leituras em cada consulta, além dos caminhos explicitamente pedidos
+ou do contexto básico de fallback. O índice favorece corpos de funções/métodos e
+prioriza arquivos de testes na busca correspondente. O prompt exige conferir se
+a proteção já existe e sustentar cada recomendação com implementação, chamadores
+e testes disponíveis; hipóteses ficam como investigação, não implementação
+prescrita. Rotas temáticas mais específicas e fluxos mantêm sua prioridade.
+Essa preparação limitada não equivale a uma auditoria completa nem
+executa testes. O plano expandido usa a mesma superfície e divisória das perguntas,
+com progresso e etapa ativa; sessão e controles completos permanecem em `/task`.

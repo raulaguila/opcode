@@ -257,3 +257,22 @@ nomeado somente quando todo o intervalo foi lido e o hash do índice coincide
 com o recibo nativo. Leitura parcial, hash diferente ou janela textual genérica
 não recebem essa referência. A aplicação não insere citações automaticamente;
 o modelo escolhe suas referências e o verificador continua conferindo-as.
+
+Pedidos gerais de revisão e sugestões de melhoria fazem duas consultas existentes do
+índice: implementação com ranking por identificadores/caminhos, depois testes.
+Cada consulta lê até dois arquivos pelo caminho nativo protegido; na segunda,
+somente caminhos classificados como testes são lidos. Consultas de testes
+priorizam esses caminhos antes do identificador exato da implementação. Corpos
+de funções/métodos recebem prioridade sobre declarações quando pertinente.
+Termos genéricos de revisão não substituem o assunto ou identificadores pedidos;
+perguntas genéricas usam uma pista limitada. Se nenhuma implementação for
+encontrada, o contexto básico existente continua disponível. Caminhos explícitos
+são inspecionados normalmente. Rotas temáticas específicas e fluxos continuam
+prioritários. Nenhum desses resultados comprova que os testes
+foram executados ou que todos os componentes relevantes foram examinados.
+
+Antes de recomendar ou planejar alterações, o prompt pede inspecionar a
+implementação, chamadores e testes disponíveis, conferir se a proteção já existe
+e justificar cada proposta com um problema observado. Ideias sem evidência são
+hipóteses para investigar; não exigem uma refatoração. A validação de citações
+continua conferindo origem, linhas entregues e hash, sem julgar a interpretação.

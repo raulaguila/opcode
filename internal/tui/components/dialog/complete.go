@@ -1,14 +1,13 @@
 package dialog
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/logging"
 	utilComponents "github.com/raulaguila/opcode/internal/tui/components/util"
 	"github.com/raulaguila/opcode/internal/tui/layout"
-	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
@@ -26,7 +25,7 @@ type CompletionItemI interface {
 
 func (ci *CompletionItem) Render(selected bool, width int) string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	itemStyle := baseStyle.
 		Width(width).
@@ -34,8 +33,8 @@ func (ci *CompletionItem) Render(selected bool, width int) string {
 
 	if selected {
 		itemStyle = itemStyle.
-			Background(t.Background()).
-			Foreground(t.Primary()).
+			Background(t.BorderDim()).
+			Foreground(t.Text()).
 			Bold(true)
 	}
 
@@ -76,7 +75,7 @@ type CompletionDialogCompleteItemMsg struct {
 type CompletionDialogCloseMsg struct{}
 
 type CompletionDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 	SetWidth(width int)
 }
@@ -100,7 +99,7 @@ var completionDialogKeys = completionDialogKeyMap{
 		key.WithKeys("tab", "enter"),
 	),
 	Cancel: key.NewBinding(
-		key.WithKeys(" ", "esc", "backspace"),
+		key.WithKeys("space", "esc", "backspace"),
 	),
 }
 
@@ -132,11 +131,13 @@ func (c *completionDialogCmp) close() tea.Cmd {
 	return util.CmdHandler(CompletionDialogCloseMsg{})
 }
 
-func (c *completionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (c *completionDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return updateCompletionDialogCmpKeyMsg(c, &cmds, &msg)
+	case tea.PasteMsg:
+		cmds = append(cmds, c.updateCompletionSearch(msg)...)
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
@@ -147,7 +148,7 @@ func (c *completionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (c *completionDialogCmp) View() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	maxWidth := 40
 
@@ -167,7 +168,7 @@ func (c *completionDialogCmp) View() string {
 		BorderBottom(false).
 		BorderRight(false).
 		BorderLeft(false).
-		BorderBackground(t.Background()).
+		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
 		Width(c.width).
 		Render(c.listView.View())
@@ -183,6 +184,7 @@ func (c *completionDialogCmp) BindingKeys() []key.Binding {
 
 func NewCompletionDialogCmp(completionProvider CompletionProvider) CompletionDialog {
 	ti := textarea.New()
+	ti.SetVirtualCursor(true)
 
 	items, err := completionProvider.GetChildEntries("")
 	if err != nil {
@@ -204,7 +206,7 @@ func NewCompletionDialogCmp(completionProvider CompletionProvider) CompletionDia
 	}
 }
 
-func updateCompletionDialogCmpKeyMsg(c *completionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateCompletionDialogCmpKeyMsg(c *completionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if c.pseudoSearchTextArea.Focused() {
 
 		completeSelectedItem(c, cmds, msg)
@@ -240,33 +242,29 @@ func updateCompletionDialogCmpKeyMsg(c *completionDialogCmp, cmds *[]tea.Cmd, ms
 
 }
 
-func completeSelectedItem(c *completionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) {
+func completeSelectedItem(c *completionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyPressMsg) {
 	if !key.Matches((*msg), completionDialogKeys.Complete) {
-
-		var cmd tea.Cmd
-		c.pseudoSearchTextArea, cmd = c.pseudoSearchTextArea.Update((*msg))
-		(*cmds) = append((*cmds), cmd)
-
-		var query string
-		query = c.pseudoSearchTextArea.Value()
-		if query != "" {
-			query = query[1:]
-		}
-
-		if query != c.query {
-			logging.Info("Query", query)
-			items, err := c.completionProvider.GetChildEntries(query)
-			if err != nil {
-				logging.Error("Failed to get child entries", err)
-			}
-
-			c.listView.SetItems(items)
-			c.query = query
-		}
-
-		u, cmd := c.listView.Update((*msg))
-		c.listView = u.(utilComponents.SimpleList[CompletionItemI])
-
-		(*cmds) = append((*cmds), cmd)
+		(*cmds) = append((*cmds), c.updateCompletionSearch(*msg)...)
 	}
+}
+
+func (c *completionDialogCmp) updateCompletionSearch(msg tea.Msg) []tea.Cmd {
+	var cmd tea.Cmd
+	c.pseudoSearchTextArea, cmd = c.pseudoSearchTextArea.Update(msg)
+	cmds := []tea.Cmd{cmd}
+	query := c.pseudoSearchTextArea.Value()
+	if query != "" {
+		query = query[1:]
+	}
+	if query != c.query {
+		items, err := c.completionProvider.GetChildEntries(query)
+		if err != nil {
+			logging.Error("Failed to get child entries", err)
+		}
+		c.listView.SetItems(items)
+		c.query = query
+	}
+	u, cmd := c.listView.Update(msg)
+	c.listView = u.(utilComponents.SimpleList[CompletionItemI])
+	return append(cmds, cmd)
 }

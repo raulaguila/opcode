@@ -3,20 +3,21 @@ package chat
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Keep transcript line references and global scroll coordinates locally. Bubbles
 // receives only the visible window, avoiding its full-content split/width scan.
 type transcriptViewport struct {
 	viewport.Model
-	lines []string
+	lines                  []string
+	Width, Height, YOffset int
 }
 
 func newTranscriptViewport(width, height int) transcriptViewport {
-	return transcriptViewport{Model: viewport.New(width, height)}
+	return transcriptViewport{Model: viewport.New(viewport.WithWidth(width), viewport.WithHeight(height)), Width: width, Height: height}
 }
 
 func (v *transcriptViewport) SetContent(content string) {
@@ -69,7 +70,9 @@ func (v *transcriptViewport) ScrollDown(lines int) []string {
 
 func (v transcriptViewport) View() string {
 	window := v.Model
-	window.YOffset = 0
+	window.SetWidth(v.Width)
+	window.SetHeight(v.Height)
+	window.SetYOffset(0)
 	window.SetContent(strings.Join(v.visibleLines(), "\n"))
 	return window.View()
 }
@@ -81,7 +84,7 @@ func (v transcriptViewport) Update(msg tea.Msg) (transcriptViewport, tea.Cmd) {
 
 func (v transcriptViewport) scrollDelta(msg tea.Msg) int {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return v.keyScroll(msg)
 	case tea.MouseMsg:
 		return v.mouseScroll(msg)
@@ -89,7 +92,7 @@ func (v transcriptViewport) scrollDelta(msg tea.Msg) int {
 	return 0
 }
 
-func (v transcriptViewport) keyScroll(msg tea.KeyMsg) int {
+func (v transcriptViewport) keyScroll(msg tea.KeyPressMsg) int {
 	switch {
 	case key.Matches(msg, v.KeyMap.PageDown):
 		return v.Height
@@ -108,13 +111,14 @@ func (v transcriptViewport) keyScroll(msg tea.KeyMsg) int {
 }
 
 func (v transcriptViewport) mouseScroll(msg tea.MouseMsg) int {
-	if !v.MouseWheelEnabled || msg.Action != tea.MouseActionPress || msg.Shift {
+	_, wheel := msg.(tea.MouseWheelMsg)
+	if !v.MouseWheelEnabled || !wheel || msg.Mouse().Mod&tea.ModShift != 0 {
 		return 0
 	}
-	switch msg.Button {
-	case tea.MouseButtonWheelUp:
+	switch msg.Mouse().Button {
+	case tea.MouseWheelUp:
 		return -v.MouseWheelDelta
-	case tea.MouseButtonWheelDown:
+	case tea.MouseWheelDown:
 		return v.MouseWheelDelta
 	}
 	return 0

@@ -1,9 +1,9 @@
 package page
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diagnostic"
 	"github.com/raulaguila/opcode/internal/llm/models"

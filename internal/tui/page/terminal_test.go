@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -19,18 +19,21 @@ import (
 
 func TestTerminalKeyEncoding(t *testing.T) {
 	for _, tc := range []struct {
-		key  tea.KeyMsg
+		key  tea.KeyPressMsg
 		want string
 	}{
-		{tea.KeyMsg{Type: tea.KeyCtrlC}, "\x03"},
-		{tea.KeyMsg{Type: tea.KeyCtrlD}, "\x04"},
-		{tea.KeyMsg{Type: tea.KeyEnter}, "\r"},
-		{tea.KeyMsg{Type: tea.KeyTab}, "\t"},
-		{tea.KeyMsg{Type: tea.KeyEsc}, "\x1b"},
-		{tea.KeyMsg{Type: tea.KeyUp}, "\x1b[A"},
-		{tea.KeyMsg{Type: tea.KeyBackspace}, "\x7f"},
-		{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ação")}, "ação"},
-		{tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x"), Alt: true}, "\x1bx"},
+		{tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}, "\x03"},
+		{tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl}, "\x04"},
+		{tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModCtrl}, "\x00"},
+		{tea.KeyPressMsg{Code: '[', Mod: tea.ModCtrl}, "\x1b"},
+		{tea.KeyPressMsg{Code: tea.KeyEnter}, "\r"},
+		{tea.KeyPressMsg{Code: tea.KeyTab}, "\t"},
+		{tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, "\x1b[Z"},
+		{tea.KeyPressMsg{Code: tea.KeyEsc}, "\x1b"},
+		{tea.KeyPressMsg{Code: tea.KeyUp}, "\x1b[A"},
+		{tea.KeyPressMsg{Code: tea.KeyBackspace}, "\x7f"},
+		{tea.KeyPressMsg{Code: []rune("ação")[0], Text: "ação"}, "ação"},
+		{tea.KeyPressMsg{Code: []rune("x")[0], Mod: tea.ModAlt}, "\x1bx"},
 	} {
 		require.Equal(t, tc.want, terminalInput(tc.key))
 	}
@@ -123,16 +126,16 @@ func TestTerminalSnapshotReusePreservesScrollAndRefreshesCursor(t *testing.T) {
 	snapshot := tools.ProcessSnapshot{ProcessInfo: tools.ProcessInfo{ID: "p", Running: true}, Stdout: "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nten\neleven\ntwelve"}
 	p.installTerminalSnapshot(snapshot)
 	p.terminal.logs.SetYOffset(1)
-	before := p.terminal.logs.YOffset
+	before := p.terminal.logs.YOffset()
 	snapshot.CursorX = 7
 	snapshot.CursorVisible = true
 	p.installTerminalSnapshot(snapshot)
-	require.Equal(t, before, p.terminal.logs.YOffset)
+	require.Equal(t, before, p.terminal.logs.YOffset())
 	require.Equal(t, 7, p.terminal.snapshot.CursorX)
 	require.True(t, p.terminal.snapshot.CursorVisible)
 	snapshot.Stdout += "\nnew line"
 	p.installTerminalSnapshot(snapshot)
-	require.Equal(t, before, p.terminal.logs.YOffset, "streaming must not interrupt a user reading older terminal output")
+	require.Equal(t, before, p.terminal.logs.YOffset(), "streaming must not interrupt a user reading older terminal output")
 	require.Contains(t, p.terminal.snapshot.Stdout, "new line")
 }
 func TestIdleWorkflowPollingUsesEventsAndKeepsQuestionMemoryFresh(t *testing.T) {

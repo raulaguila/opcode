@@ -1,12 +1,13 @@
 package dialog
 
 import (
-	"github.com/raulaguila/opcode/internal/config"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/raulaguila/opcode/internal/config"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -20,7 +21,7 @@ type ConfirmQuitMsg struct{}
 type OpenQuitMsg struct{}
 
 type QuitDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 }
 
@@ -42,7 +43,7 @@ var helpKeys = helpMapping{
 		key.WithHelp("←/→", "switch options"),
 	),
 	EnterSpace: key.NewBinding(
-		key.WithKeys("enter", " "),
+		key.WithKeys("enter", "space"),
 		key.WithHelp("enter/space", "confirm"),
 	),
 	Yes: key.NewBinding(
@@ -63,7 +64,7 @@ func (q *quitDialogCmp) Init() tea.Cmd {
 	return nil
 }
 
-func (q *quitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (q *quitDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if clickedLabel(q.View(), config.Text("Sair", "Quit"), msg) {
@@ -72,8 +73,11 @@ func (q *quitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if clickedLabel(q.View(), config.Text("Continuar", "Continue"), msg) {
 			return q, util.CmdHandler(CloseQuitMsg{})
 		}
-	case tea.KeyMsg:
-		if msg.Type == tea.KeyEsc {
+	case tea.KeyPressMsg:
+		if msg.Mod & ^tea.ModShift != 0 {
+			return q, nil
+		}
+		if msg.Code == tea.KeyEsc {
 			return q, util.CmdHandler(CloseQuitMsg{})
 		}
 		switch {
@@ -96,18 +100,18 @@ func (q *quitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (q *quitDialogCmp) View() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	yesStyle := baseStyle
 	noStyle := baseStyle
-	spacerStyle := baseStyle.Background(t.Background())
+	spacerStyle := baseStyle.Background(t.BackgroundSecondary())
 
 	if q.selectedNo {
-		noStyle = noStyle.Background(t.Primary()).Foreground(t.Background())
-		yesStyle = yesStyle.Background(t.Background()).Foreground(t.Primary())
+		noStyle = noStyle.Background(t.BorderDim()).Foreground(t.Text())
+		yesStyle = yesStyle.Background(t.BackgroundSecondary()).Foreground(t.Primary())
 	} else {
-		yesStyle = yesStyle.Background(t.Primary()).Foreground(t.Background())
-		noStyle = noStyle.Background(t.Background()).Foreground(t.Primary())
+		yesStyle = yesStyle.Background(t.BorderDim()).Foreground(t.Text())
+		noStyle = noStyle.Background(t.BackgroundSecondary()).Foreground(t.Primary())
 	}
 
 	yesButton := yesStyle.Padding(0, 1).Render(selectionMark(!q.selectedNo) + config.Text("Sair", "Quit"))
@@ -116,7 +120,7 @@ func (q *quitDialogCmp) View() string {
 	buttons := lipgloss.JoinHorizontal(lipgloss.Left, yesButton, spacerStyle.Render("  "), noButton)
 
 	question := config.Text("Deseja sair?", question)
-	width := lipgloss.Width(question)
+	width := max(lipgloss.Width(question), lipgloss.Width(buttons))
 	remainingWidth := width - lipgloss.Width(buttons)
 	if remainingWidth > 0 {
 		buttons = spacerStyle.Render(strings.Repeat(" ", remainingWidth)) + buttons
@@ -126,16 +130,15 @@ func (q *quitDialogCmp) View() string {
 		lipgloss.JoinVertical(
 			lipgloss.Center,
 			question,
-			"",
+			styles.PanelDivider(width),
 			buttons,
 		),
 	)
 
 	return baseStyle.Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(t.Background()).
+		Border(lipgloss.NormalBorder()).
+		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
-		Width(lipgloss.Width(content) + 4).
 		Render(content)
 }
 

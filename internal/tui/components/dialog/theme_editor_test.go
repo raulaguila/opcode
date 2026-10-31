@@ -5,10 +5,10 @@ import (
 	"os"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/localstate"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -28,7 +28,7 @@ func editableTheme(t *testing.T) *themeDialogCmp {
 	m := NewThemeDialogCmp().(*themeDialogCmp)
 	m.Init()
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+	m.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
 	require.NotNil(t, m.editor)
 	return m
 }
@@ -36,9 +36,9 @@ func TestThemeEditorCancelPreservesPaletteAndConfiguration(t *testing.T) {
 	m := editableTheme(t)
 	before := config.Get().TUI.Theme
 	m.editor.fields[1].SetValue("#ffb283")
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	require.Equal(t, "#ffb283", theme.CurrentTheme().Primary().Dark)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.NotNil(t, cmd)
 	require.True(t, cmd().(ThemeChangedMsg).Preview)
 	require.Nil(t, m.editor)
@@ -51,14 +51,14 @@ func TestThemeEditorCancelPreservesPaletteAndConfiguration(t *testing.T) {
 func TestThemeEditorExplicitSaveReloadAndInvalidInput(t *testing.T) {
 	m := editableTheme(t)
 	m.editor.fields[1].SetValue("bad")
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	require.Nil(t, cmd)
 	require.NotNil(t, m.editor)
 	path, err := theme.CustomThemePath()
 	require.NoError(t, err)
 	require.NoFileExists(t, path)
 	m.editor.fields[1].SetValue("#ffb283")
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	require.NotNil(t, cmd)
 	require.Equal(t, theme.CustomThemeName, cmd().(ThemeChangedMsg).ThemeName)
 	require.Nil(t, m.editor)
@@ -74,9 +74,9 @@ func TestThemeEditorExplicitSaveReloadAndInvalidInput(t *testing.T) {
 }
 func TestThemeEditorCompactResizeAndNoColorKeepFocus(t *testing.T) {
 	m := editableTheme(t)
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.Ascii)
-	defer lipgloss.SetColorProfile(before)
+	before := theme.ColorProfile()
+	theme.SetColorProfile(colorprofile.Ascii)
+	defer theme.SetColorProfile(before)
 	for _, size := range []tea.WindowSizeMsg{{Width: 36, Height: 12}, {Width: 60, Height: 20}, {Width: 80, Height: 24}} {
 		m.Update(size)
 		for range 8 {
@@ -84,7 +84,7 @@ func TestThemeEditorCompactResizeAndNoColorKeepFocus(t *testing.T) {
 			require.LessOrEqual(t, lipgloss.Width(view), size.Width)
 			require.LessOrEqual(t, lipgloss.Height(view), size.Height)
 			require.Contains(t, ansi.Strip(view), "›")
-			m.Update(tea.KeyMsg{Type: tea.KeyTab})
+			m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		}
 	}
 	m.editor.focus = 5
@@ -95,7 +95,7 @@ func TestThemeEditorCompactResizeAndNoColorKeepFocus(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	require.Equal(t, 5, m.editor.focus)
 	require.True(t, m.editor.fields[5].Focused())
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 }
 
 func TestThemeEditorFailedSettingsSaveRestoresDiskAndRegistry(t *testing.T) {
@@ -129,12 +129,12 @@ func testThemeEditorFailedSettingsSaveRestoresDiskAndRegistryCallback(existed *b
 	registeredBefore := theme.GetTheme(theme.CustomThemeName)
 	configuredBefore := cfg.TUI.Theme
 	m.editor.fields[1].SetValue("#ffb283")
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	// Invalid JSON fails the config patch without relying on host file
 	// permissions (which behave differently when tests run as root).
 	configPath := viper.ConfigFileUsed()
 	require.NoError(t, os.WriteFile(configPath, []byte(`{`), 0600))
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	require.Nil(t, cmd)
 	require.NotNil(t, m.editor)
 	require.Contains(t, m.editor.note, "previous palette restored")
@@ -151,7 +151,7 @@ func testThemeEditorFailedSettingsSaveRestoresDiskAndRegistryCallback(existed *b
 	} else {
 		require.NoFileExists(t, path)
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Nil(t, m.editor)
 	require.Equal(t, m.currentTheme, theme.CurrentThemeName())
 	require.Equal(t, original.Primary, theme.CurrentTheme().Primary())

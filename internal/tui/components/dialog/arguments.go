@@ -2,16 +2,16 @@ package dialog
 
 import (
 	"fmt"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/raulaguila/opcode/internal/config"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
+
 	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
@@ -67,23 +67,17 @@ type MultiArgumentsDialogCmp struct {
 
 // NewMultiArgumentsDialogCmp creates a new MultiArgumentsDialogCmp.
 func NewMultiArgumentsDialogCmp(commandID, content string, argNames []string) MultiArgumentsDialogCmp {
-	t := theme.CurrentTheme()
 	inputs := make([]textinput.Model, len(argNames))
 
 	for i, name := range argNames {
-		ti := textinput.New()
+		ti := newDialogInput()
 		ti.Placeholder = fmt.Sprintf("Enter value for %s...", name)
-		ti.Width = 40
+		ti.SetWidth(40)
 		ti.Prompt = ""
-		ti.PlaceholderStyle = ti.PlaceholderStyle.Background(t.Background())
-		ti.PromptStyle = ti.PromptStyle.Background(t.Background())
-		ti.TextStyle = ti.TextStyle.Background(t.Background())
 
 		// Only focus the first input initially
 		if i == 0 {
 			ti.Focus()
-			ti.PromptStyle = ti.PromptStyle.Foreground(t.Primary())
-			ti.TextStyle = ti.TextStyle.Foreground(t.Primary())
 		} else {
 			ti.Blur()
 		}
@@ -101,7 +95,7 @@ func NewMultiArgumentsDialogCmp(commandID, content string, argNames []string) Mu
 	}
 }
 
-// Init implements tea.Model.
+// Init implements util.Model.
 func (m MultiArgumentsDialogCmp) Init() tea.Cmd {
 	// Make sure only the first input is focused
 	for i := range m.inputs {
@@ -115,16 +109,15 @@ func (m MultiArgumentsDialogCmp) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-// Update implements tea.Model.
-func (m MultiArgumentsDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update implements util.Model.
+func (m MultiArgumentsDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	if len(m.inputs) == 0 {
 		return m, nil
 	}
-	t := theme.CurrentTheme()
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
 			return m, util.CmdHandler(CloseMultiArgumentsDialogMsg{
@@ -151,28 +144,22 @@ func (m MultiArgumentsDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.inputs[m.focusIndex].Blur()
 			m.focusIndex++
 			m.inputs[m.focusIndex].Focus()
-			m.inputs[m.focusIndex].PromptStyle = m.inputs[m.focusIndex].PromptStyle.Foreground(t.Primary())
-			m.inputs[m.focusIndex].TextStyle = m.inputs[m.focusIndex].TextStyle.Foreground(t.Primary())
 		case key.Matches(msg, key.NewBinding(key.WithKeys("tab"))):
 			// Move to the next input
 			m.inputs[m.focusIndex].Blur()
 			m.focusIndex = (m.focusIndex + 1) % len(m.inputs)
 			m.inputs[m.focusIndex].Focus()
-			m.inputs[m.focusIndex].PromptStyle = m.inputs[m.focusIndex].PromptStyle.Foreground(t.Primary())
-			m.inputs[m.focusIndex].TextStyle = m.inputs[m.focusIndex].TextStyle.Foreground(t.Primary())
 		case key.Matches(msg, key.NewBinding(key.WithKeys("shift+tab"))):
 			// Move to the previous input
 			m.inputs[m.focusIndex].Blur()
 			m.focusIndex = (m.focusIndex - 1 + len(m.inputs)) % len(m.inputs)
 			m.inputs[m.focusIndex].Focus()
-			m.inputs[m.focusIndex].PromptStyle = m.inputs[m.focusIndex].PromptStyle.Foreground(t.Primary())
-			m.inputs[m.focusIndex].TextStyle = m.inputs[m.focusIndex].TextStyle.Foreground(t.Primary())
 		}
 	case tea.MouseMsg:
-		rows := max(1, (m.height-8)/2)
+		rows := max(1, (m.height-9)/2)
 		start := max(0, m.focusIndex-rows+1)
-		i := start + (msg.Y-3)/2
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.Y >= 3 && msg.Y < 3+rows*2 && i < len(m.inputs) {
+		i := start + (msg.Mouse().Y-3)/2
+		if leftClick(msg) && msg.Mouse().X >= 3 && msg.Mouse().Y >= 3 && msg.Mouse().Y < 3+rows*2 && i < len(m.inputs) {
 			m.inputs[m.focusIndex].Blur()
 			m.focusIndex = i
 			return m, m.inputs[i].Focus()
@@ -190,7 +177,7 @@ func (m MultiArgumentsDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// View implements tea.Model.
+// View implements util.Model.
 func (m MultiArgumentsDialogCmp) View() string {
 	width := max(1, min(60, m.width-6))
 	if m.width <= 0 {
@@ -200,7 +187,7 @@ func (m MultiArgumentsDialogCmp) View() string {
 	if height <= 0 {
 		height = 24
 	}
-	rows := max(1, (height-8)/2)
+	rows := max(1, (height-9)/2)
 	start := max(0, m.focusIndex-rows+1)
 	lines := []string{config.Text("Argumentos do comando", "Command arguments")}
 	for i := start; i < min(len(m.inputs), start+rows); i++ {
@@ -208,14 +195,14 @@ func (m MultiArgumentsDialogCmp) View() string {
 		if i == m.focusIndex {
 			mark = "› "
 		}
-		m.inputs[i].Width = max(1, width-2)
+		m.inputs[i].SetWidth(max(1, width-2))
 		lines = append(lines, mark+m.argNames[i], m.inputs[i].View())
 	}
-	lines = append(lines, config.Text("Tab campo · Enter próxima/envia · Esc cancela", "Tab field · Enter next/send · Esc cancel"))
+	lines = append(lines, styles.PanelDivider(width), config.Text("Tab campo · Enter próxima/envia · Esc cancela", "Tab field · Enter next/send · Esc cancel"))
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
 }
 
 // SetSize sets the size of the component.

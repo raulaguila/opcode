@@ -1,9 +1,9 @@
 package dialog
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -63,13 +63,13 @@ func (k initDialogKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{k.ShortHelp()}
 }
 
-// Init implements tea.Model.
+// Init implements util.Model.
 func (m InitDialogCmp) Init() tea.Cmd {
 	return nil
 }
 
-// Update implements tea.Model.
-func (m InitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update implements util.Model.
+func (m InitDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.MouseMsg:
 		if clickedLabel(m.View(), config.Text("Criar Opcode.md", "Create Opcode.md"), msg) {
@@ -78,7 +78,8 @@ func (m InitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if clickedLabel(m.View(), config.Text("Agora não", "Not now"), msg) {
 			return m, util.CmdHandler(CloseInitDialogMsg{Initialize: false})
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
+		msg.Text = "" // Match the full keystroke before authorizing initialization.
 		switch {
 		case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
 			return m, util.CmdHandler(CloseInitDialogMsg{Initialize: false})
@@ -99,10 +100,10 @@ func (m InitDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View implements tea.Model.
+// View implements util.Model.
 func (m InitDialogCmp) View() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	// Calculate width needed for content
 	maxWidth := max(1, min(60, m.width-10)) // Wrap inside the available frame.
@@ -131,16 +132,16 @@ func (m InitDialogCmp) View() string {
 
 	if m.selected == 0 {
 		yesStyle = yesStyle.
-			Background(t.Primary()).
-			Foreground(t.Background()).
+			Background(t.BorderDim()).
+			Foreground(t.Text()).
 			Bold(true)
 		noStyle = noStyle.
 			Background(t.Background()).
 			Foreground(t.Primary())
 	} else {
 		noStyle = noStyle.
-			Background(t.Primary()).
-			Foreground(t.Background()).
+			Background(t.BorderDim()).
+			Foreground(t.Text()).
 			Bold(true)
 		yesStyle = yesStyle.
 			Background(t.Background()).
@@ -168,6 +169,7 @@ func (m InitDialogCmp) View() string {
 		baseStyle.Width(maxWidth).Render(""),
 		explanation,
 		question,
+		styles.PanelDivider(maxWidth),
 		buttons,
 		baseStyle.Width(maxWidth).Render(""),
 	)
@@ -177,14 +179,13 @@ func (m InitDialogCmp) View() string {
 		explanation = baseStyle.Foreground(t.Text()).Width(maxWidth).Padding(0, 1).
 			Render(config.Text("Cria Opcode.md com orientações do projeto. Você pode editá-lo depois.", "Creates Opcode.md with project guidance. You can edit it later."))
 		buttons = baseStyle.Width(maxWidth).Render(lipgloss.JoinHorizontal(lipgloss.Center, yes, baseStyle.Render("  "), no))
-		content = lipgloss.JoinVertical(lipgloss.Left, title, "", explanation, "", buttons)
+		content = lipgloss.JoinVertical(lipgloss.Left, title, "", explanation, styles.PanelDivider(maxWidth), buttons)
 	}
 
 	return baseStyle.Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(t.Background()).
+		Border(lipgloss.NormalBorder()).
+		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
-		Width(lipgloss.Width(content) + 4).
 		Render(content)
 }
 

@@ -3,11 +3,12 @@ package chat
 import (
 	"context"
 	"fmt"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"sort"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
 	"github.com/raulaguila/opcode/internal/history"
@@ -33,7 +34,7 @@ func (m *sidebarCmp) Init() tea.Cmd {
 	return nil
 }
 
-func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *sidebarCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case SessionSelectedMsg:
 		if msg.ID != m.session.ID {
@@ -64,7 +65,7 @@ func (m *sidebarCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *sidebarCmp) View() string {
-	baseStyle := styles.BaseStyle()
+	baseStyle := styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary())
 
 	return baseStyle.
 		Width(m.width).
@@ -87,7 +88,7 @@ func (m *sidebarCmp) View() string {
 
 func (m *sidebarCmp) sessionSection() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary())
 
 	sessionKey := baseStyle.
 		Foreground(t.Primary()).
@@ -108,7 +109,7 @@ func (m *sidebarCmp) sessionSection() string {
 
 func (m *sidebarCmp) modifiedFile(filePath string, additions, removals int) string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary())
 
 	stats := ""
 	if additions > 0 && removals > 0 {
@@ -153,7 +154,7 @@ func (m *sidebarCmp) modifiedFile(filePath string, additions, removals int) stri
 
 func (m *sidebarCmp) modifiedFiles() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary())
 
 	modifiedFiles := baseStyle.
 		Width(m.width).
@@ -217,7 +218,7 @@ func (m *sidebarCmp) GetSize() (int, int) {
 	return m.width, m.height
 }
 
-func NewSidebarCmp(session session.Session, history history.Service) tea.Model {
+func NewSidebarCmp(session session.Session, history history.Service) util.Model {
 	return &sidebarCmp{
 		session: session,
 		history: history,

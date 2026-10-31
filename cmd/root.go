@@ -7,8 +7,7 @@ import (
 	"sync"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	zone "github.com/lrstanley/bubblezone"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/db"
@@ -209,16 +208,10 @@ to assist developers in writing, debugging, and understanding code directly from
 
 		// Interactive mode
 		// Set up the TUI
-		zone.NewGlobal()
-		keyboard := tui.NewKeyboard(os.Stdout)
-		defer keyboard.Close()
+		output := tui.NewTerminalWriter(os.Stdout)
 		program := tea.NewProgram(
-			tui.WithTerminalOutput(tui.New(app, initialSessions...), keyboard),
-			tea.WithAltScreen(),
-			tea.WithMouseCellMotion(),
-			tea.WithReportFocus(),
-			tea.WithFilter(keyboard.Filter),
-			tea.WithOutput(keyboard),
+			tui.WithTerminalOutput(tui.New(app, initialSessions...), output),
+			tea.WithOutput(output),
 		)
 
 		// Setup the subscriptions, this will send services events to the TUI

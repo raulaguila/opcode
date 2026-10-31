@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
@@ -57,7 +58,7 @@ func renderMessageWithCache(msg string, isUser bool, width int, cache *styles.Ma
 	return renderMessageWithPipe(msg, width, cache, pipe, info...)
 }
 
-func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, pipe lipgloss.TerminalColor, info ...string) string {
+func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, pipe color.Color, info ...string) string {
 	t := theme.CurrentTheme()
 
 	style := styles.BaseStyle().

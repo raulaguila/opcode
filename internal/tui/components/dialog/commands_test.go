@@ -3,8 +3,8 @@ package dialog
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
@@ -13,14 +13,14 @@ func TestCommandSearchFindsAdvancedActionsAndResetsWhenReopened(t *testing.T) {
 	m := NewCommandDialogCmp().(*commandDialogCmp)
 	items := []Command{{ID: "models", Title: "Models"}, {ID: "queue", Title: "Pending instructions"}, {ID: "permissions", Title: "Session permissions"}}
 	m.SetCommands(items)
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("permissions")})
+	m.Update(tea.KeyPressMsg{Text: "permissions"})
 	require.Len(t, m.listView.GetItems(), 1)
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Equal(t, "permissions", cmd().(CommandSelectedMsg).Command.ID)
 	m.SetCommands(items)
 	require.Empty(t, m.search.Value())
 	require.Len(t, m.listView.GetItems(), 3)
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	m.Update(tea.KeyPressMsg{Text: "j"})
 	require.Equal(t, "j", m.search.Value(), "letters must search rather than navigate")
 	require.Empty(t, m.listView.GetItems())
 }
@@ -33,7 +33,7 @@ func TestModeChooserDistinguishesActiveModeAndResetsTitleOnPalette(t *testing.T)
 	view := ansi.Strip(m.View())
 	require.Contains(t, view, "Work mode")
 	require.Contains(t, view, "✓ Execute")
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Equal(t, "mode-execute", cmd().(CommandSelectedMsg).Command.ID, "opening highlights the current mode")
 	m.SetCommands(items)
 	require.Empty(t, m.title)

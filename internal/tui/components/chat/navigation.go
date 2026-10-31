@@ -1,8 +1,8 @@
 package chat
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/rivo/uniseg"
@@ -12,7 +12,7 @@ import (
 
 // TranscriptNavigation only navigates local presentation, never model context.
 type TranscriptNavigation interface {
-	TranscriptKey(tea.KeyMsg) bool
+	TranscriptKey(tea.KeyPressMsg) bool
 	StartSearch(string)
 	ToggleKeyboardSelection()
 }
@@ -26,10 +26,18 @@ type transcriptFind struct {
 	normalizedBytes int
 }
 
-func (m *messagesCmp) TranscriptKey(msg tea.KeyMsg) bool {
-	if msg.Paste && !m.find.open {
+func (m *messagesCmp) TranscriptPaste(msg tea.PasteMsg) bool {
+	if !m.find.open {
 		return false
 	}
+	m.find.query = boundedQuery(m.find.query + msg.Content)
+	m.find.selected = 0
+	m.updateSearch()
+	m.jumpSearch(0)
+	return true
+}
+
+func (m *messagesCmp) TranscriptKey(msg tea.KeyPressMsg) bool {
 	// Existing custom global shortcuts retain precedence. Slash commands still
 	// expose search/selection; revision links also remain clickable.
 	if result0, handled := transcriptKeyAltF(&msg); handled {
@@ -218,7 +226,7 @@ func (m *messagesCmp) searchLineMatches(row int, plain, query string) {
 		offset = at + len(query)
 	}
 }
-func (m *messagesCmp) findKey(msg tea.KeyMsg) bool {
+func (m *messagesCmp) findKey(msg tea.KeyPressMsg) bool {
 	switch msg.String() {
 	case "esc":
 		m.find.open = false
@@ -240,8 +248,8 @@ func (m *messagesCmp) findKey(msg tea.KeyMsg) bool {
 			m.find.query = string(r[:len(r)-1])
 		}
 	default:
-		if msg.Type == tea.KeyRunes {
-			m.find.query = boundedQuery(m.find.query + string(msg.Runes))
+		if msg.Text != "" && msg.Mod&(tea.ModCtrl|tea.ModAlt|tea.ModMeta) == 0 {
+			m.find.query = boundedQuery(m.find.query + msg.Text)
 		} else {
 			return true
 		}
@@ -281,7 +289,7 @@ func (m *messagesCmp) navigationHint() string {
 	return ansi.Truncate(config.Text("Setas movem · Shift+setas amplia · Ctrl+C copia · Esc", "Arrows move · Shift+arrows extend · Ctrl+C copy · Esc"), m.width, "…")
 }
 
-func transcriptKeyAltF(msg *tea.KeyMsg) (extractedResult0 bool, handled bool) {
+func transcriptKeyAltF(msg *tea.KeyPressMsg) (extractedResult0 bool, handled bool) {
 	if msg.String() == "alt+f" || msg.String() == "alt+s" || msg.String() == "alt+v" {
 		for action := range config.DefaultKeybindings {
 			if config.Shortcut(action) == msg.String() {

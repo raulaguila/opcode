@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -30,7 +29,7 @@ func currentVisualIdentity(width int) visualIdentity {
 	if value.Kind() == reflect.Pointer {
 		identity = value.Pointer()
 	}
-	key := visualIdentity{width: width, profile: int(lipgloss.ColorProfile()), theme: identity, name: theme.CurrentThemeName(), dark: lipgloss.HasDarkBackground()}
+	key := visualIdentity{width: width, profile: int(theme.ColorProfile()), theme: identity, name: theme.CurrentThemeName(), dark: theme.HasDarkBackground()}
 	if cfg := config.Get(); cfg != nil {
 		key.prose = cfg.TUI.ProseWidth
 		key.language = cfg.TUI.Language

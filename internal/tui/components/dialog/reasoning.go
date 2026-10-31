@@ -1,15 +1,16 @@
 package dialog
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"slices"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/util"
-	"slices"
-	"strings"
 )
 
 type ReasoningSelectedMsg struct {
@@ -33,7 +34,7 @@ func (m *modelDialogCmp) reasoningUpdate(msg tea.Msg) (tea.Cmd, bool) {
 	if result0, result1, handled := reasoningUpdateTeaMouseMsg(m, msg); handled {
 		return result0, result1
 	}
-	key, ok := msg.(tea.KeyMsg)
+	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil, false
 	}
@@ -77,15 +78,15 @@ func (m *modelDialogCmp) reasoningView() string {
 	for i := start; i < min(len(levels), start+rows); i++ {
 		lines = append(lines, selectionMark(i == m.reasoningIndex)+levels[i])
 	}
-	lines = append(lines, config.Text("↑↓ escolher · Enter salvar · Esc voltar", "↑↓ select · Enter save · Esc back"))
 	width := 52
 	if m.width > 0 {
 		width = max(1, min(width, m.width-6))
 	}
+	lines = append(lines, styles.PanelDivider(width), config.Text("↑↓ escolher · Enter salvar · Esc voltar", "↑↓ select · Enter save · Esc back"))
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
 }
 
 func reasoningRole(role config.AgentName) config.AgentName {
@@ -100,7 +101,7 @@ func (m *modelDialogCmp) reasoningRows() (rows, start int) {
 	if height <= 0 {
 		height = 20
 	}
-	rows = max(1, height-8)
+	rows = max(1, height-9)
 	start = max(0, m.reasoningIndex-rows+1)
 	return
 }
@@ -108,15 +109,15 @@ func (m *modelDialogCmp) reasoningRows() (rows, start int) {
 func reasoningUpdateTeaMouseMsg(m *modelDialogCmp, msg tea.Msg) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
 	if mouse, ok := msg.(tea.MouseMsg); ok && m.reasoningOpen {
 		levels := m.reasoningModel().ReasoningChoices()
-		if mouse.Button == tea.MouseButtonWheelUp {
+		if mouse.Mouse().Button == tea.MouseWheelUp {
 			m.reasoningIndex = max(0, m.reasoningIndex-1)
 		}
-		if mouse.Button == tea.MouseButtonWheelDown {
+		if mouse.Mouse().Button == tea.MouseWheelDown {
 			m.reasoningIndex = min(max(0, len(levels)-1), m.reasoningIndex+1)
 		}
 		rows, start := m.reasoningRows()
-		index := start + mouse.Y - 4
-		if mouse.Action == tea.MouseActionPress && mouse.Button == tea.MouseButtonLeft && mouse.X >= 3 && mouse.X < max(4, m.width-3) && mouse.Y >= 4 && mouse.Y < 4+rows && index < len(levels) {
+		index := start + mouse.Mouse().Y - 4
+		if leftClick(mouse) && mouse.Mouse().X >= 3 && mouse.Mouse().X < max(4, m.width-3) && mouse.Mouse().Y >= 4 && mouse.Mouse().Y < 4+rows && index < len(levels) {
 			m.reasoningIndex = index
 		}
 		return nil, true, true

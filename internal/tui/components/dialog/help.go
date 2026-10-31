@@ -4,14 +4,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/raulaguila/opcode/internal/tui/styles"
+	"github.com/raulaguila/opcode/internal/tui/util"
+
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
 type helpCmp struct {
@@ -29,22 +29,22 @@ func (h *helpCmp) SetBindings(k []key.Binding) {
 	h.keys = k
 }
 
-func (h *helpCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (h *helpCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.Type == tea.KeyEnd {
+	case tea.KeyPressMsg:
+		if msg.Code == tea.KeyEnd {
 			h.viewport.GotoBottom()
 			return h, nil
 		}
-		if msg.Type == tea.KeyHome {
+		if msg.Code == tea.KeyHome {
 			h.viewport.GotoTop()
 			return h, nil
 		}
 	case tea.WindowSizeMsg:
 		h.width = min(90, max(8, msg.Width-4))
 		h.height = msg.Height
-		h.viewport.Width = max(1, h.width-4)
-		h.viewport.Height = max(1, msg.Height-8)
+		h.viewport.SetWidth(max(1, h.width-4))
+		h.viewport.SetHeight(max(1, msg.Height-9))
 	}
 	var cmd tea.Cmd
 	h.viewport, cmd = h.viewport.Update(msg)
@@ -95,9 +95,9 @@ func (h *helpCmp) render() string {
 		lines = append(lines, "")
 	}
 
-	h.viewport.Width = width
-	if h.viewport.Height == 0 {
-		h.viewport.Height = 10
+	h.viewport.SetWidth(width)
+	if h.viewport.Height() == 0 {
+		h.viewport.SetHeight(10)
 	}
 	h.viewport.SetContent(strings.Join(lines, "\n"))
 	return h.viewport.View()
@@ -105,11 +105,11 @@ func (h *helpCmp) render() string {
 func (h *helpCmp) View() string {
 	title := config.Text("Atalhos do teclado", "Keyboard shortcuts")
 	hint := config.Text("↑↓/PgUp/PgDn rola · Esc fecha", "↑↓/PgUp/PgDn scroll · Esc closes")
-	return styles.BaseStyle().Width(max(1, h.width-2)).Padding(1).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(strings.Join([]string{title, h.render(), ansi.Truncate(hint, max(1, h.width-4), "…")}, "\n"))
+	return styles.Panel().Width(max(1, h.width)).Padding(1).Render(strings.Join([]string{styles.PanelTitle().Render(title), h.render(), styles.PanelDivider(max(1, h.width-4)), ansi.Truncate(hint, max(1, h.width-4), "…")}, "\n"))
 }
 
 type HelpCmp interface {
-	tea.Model
+	util.Model
 	SetBindings([]key.Binding)
 }
 

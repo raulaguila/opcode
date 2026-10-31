@@ -3,10 +3,10 @@ package page
 import (
 	message "github.com/raulaguila/opcode/internal/message"
 
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"encoding/json"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/tui/commands"

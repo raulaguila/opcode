@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/db"
@@ -148,8 +148,8 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 		testLiveOllamaTerminalAndSteeringCallback(&t, &application, &ctx, &harness, &diagnosticSession, &lastFrame, marker)
 	}
 	sendText := func(text string) {
-		program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(text)})
-		program.Send(tea.KeyMsg{Type: tea.KeyEnter})
+		program.Send(testTextKey(string([]rune(text)), 0))
+		program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	}
 	waitFrame("Opcode")
 	program.Send(tea.WindowSizeMsg{Width: 160, Height: 40})
@@ -163,7 +163,7 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 	validateLiveCommandApproval(t, application, request, command)
 	require.Empty(t, application.Processes.List(request.SessionID), "nothing executes before UI approval")
 	waitFrame("Allow (a)")
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	program.Send(testTextKey(string([]rune("a")), 0))
 	waitFrame("LIVE_READY")
 	processes := application.Processes.List(request.SessionID)
 	require.Len(t, processes, 1)
@@ -186,11 +186,11 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 	snapshot, err := application.Processes.Snapshot(request.SessionID, process.ID)
 	require.NoError(t, err)
 	require.True(t, snapshot.Running, "new instruction accepted before the blocked command completes")
-	program.Send(tea.KeyMsg{Type: tea.KeyCtrlP})
+	program.Send(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 	waitFrame("Terminal • running")
 	sendText("HUMAN_PTY_OK")
 	waitFrame("LIVE_INPUT:HUMAN_PTY_OK")
-	program.Send(tea.KeyMsg{Type: tea.KeyCtrlP})
+	program.Send(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 	t.Log("new instruction queued while agent was busy; human input reached its real PTY")
 	for {
 		select {

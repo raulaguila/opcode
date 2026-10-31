@@ -113,8 +113,11 @@ func assertPTYVerifiedRevision(t *testing.T, h *ptyUIHarness, p *ptyRevisionProv
 
 func assertPTYFailedRevision(t *testing.T, h *ptyUIHarness, p *ptyRevisionProvider) {
 	t.Helper()
+	// While the agent stops, the transcript can temporarily render a standalone
+	// warning for a still-revising original. Wait for its persisted invalid state
+	// inside the answer card; applying that state also moves the revision link.
 	h.wait("failed repair retains original and validation warning", 15*time.Second, func(frame string) bool {
-		return strings.Contains(frame, revisionOriginal) && strings.Contains(frame, "Citations not validated") && strings.Contains(frame, "View correction attempt") && !strings.Contains(frame, "REVISION_CORRECTED") && !strings.Contains(frame, "Revising references") && !strings.Contains(ptyUIFooter(frame), "Esc cancels")
+		return strings.Contains(frame, revisionOriginal) && strings.Contains(frame, "│ Citations not validated") && strings.Contains(frame, "View correction attempt") && !strings.Contains(frame, "REVISION_CORRECTED") && !strings.Contains(frame, "Revising references") && !strings.Contains(ptyUIFooter(frame), "Esc cancels")
 	})
 	require.EqualValues(t, 2, p.generation.Load(), "the citation gate must stop after its existing repair budget")
 	require.NotContains(t, h.frame(), "Model limit reached")

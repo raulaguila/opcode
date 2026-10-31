@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
@@ -116,16 +116,16 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 	last := lines[len(lines)-1]
 	x := strings.Index(last, "old:8b")
 	require.GreaterOrEqual(t, x, 0)
-	program.Send(tea.MouseMsg{X: ansi.StringWidth(last[:x]) + 1, Y: len(lines) - 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	program.Send(tea.MouseClickMsg{X: ansi.StringWidth(last[:x]) + 1, Y: len(lines) - 1, Button: tea.MouseLeft})
 	wait("Provider catalog · 2 models")
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("new.model")})
+	program.Send(testTextKey(string([]rune("new.model")), 0))
 	frame = wait("Search: new.model")
 	lines = strings.Split(frame, "\n")
 	y := -1
 	x = -1
 	testUserClicksActiveModelSearchesProviderAndPersistsSelectionLines(lines, &x, &y)
 	require.GreaterOrEqual(t, y, 0)
-	program.Send(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	program.Send(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
 	wait("Model changed to")
 	program.Quit()
 	require.NoError(t, <-done)

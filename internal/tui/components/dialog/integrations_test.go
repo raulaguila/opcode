@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -34,7 +34,7 @@ func TestIntegrationDialogTestsCandidateListsMethodsAndPreservesDraft(t *testing
 	require.Equal(t, "docs", tested.Name)
 	require.Equal(t, []string{"--stdio"}, tested.MCP.Args)
 	require.Contains(t, m.View(), "search")
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "edit", m.screen)
 	require.Equal(t, "mcp-docs", m.fields[2].Value())
 	cmd = m.saveIntegration()
@@ -58,13 +58,13 @@ func TestIntegrationDialogCancellationAndInvalidArgumentsKeepEdits(t *testing.T)
 	m.fields[2].SetValue(`[]`)
 	cmd := m.testIntegration()
 	require.NotNil(t, cmd)
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m.Update(cmd())
 	require.Contains(t, m.note, "cancelled")
 	require.Equal(t, "gopls", m.fields[1].Value())
 	m.Update(tea.WindowSizeMsg{Width: 36, Height: 14})
 	for range m.fields {
-		m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		require.LessOrEqual(t, lipgloss.Width(m.View()), 36)
 		require.LessOrEqual(t, lipgloss.Height(m.View()), 14)
 	}

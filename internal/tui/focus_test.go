@@ -1,11 +1,13 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/tui/components/core"
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
 	"github.com/raulaguila/opcode/internal/tui/page"
+	"github.com/raulaguila/opcode/internal/tui/styles"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
@@ -31,7 +33,7 @@ func TestEveryGlobalModalAndWindowBlurSuspendComposerFocus(t *testing.T) {
 		func(a *appModel) { a.isCompacting = true }, func(a *appModel) { a.unfocused = true },
 	} {
 		p := &focusPageProbe{}
-		a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: p}}
+		a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: p}}
 		a.syncInputFocus()
 		require.True(t, p.focused)
 		modal(&a)
@@ -39,7 +41,7 @@ func TestEveryGlobalModalAndWindowBlurSuspendComposerFocus(t *testing.T) {
 		require.False(t, p.focused)
 	}
 	p := &focusPageProbe{}
-	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: p}}
+	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: p}}
 	updated, _ := a.Update(tea.BlurMsg{})
 	a = updated.(appModel)
 	require.False(t, p.focused)
@@ -55,15 +57,15 @@ func TestEveryGlobalModalAndWindowBlurSuspendComposerFocus(t *testing.T) {
 
 func TestRootFrameBoundsPreserveOneFooterDuringOverflowAndResize(t *testing.T) {
 	p := &focusPageProbe{content: strings.Repeat(strings.Repeat("x", 250)+"\n", 100)}
-	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: p}}
+	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: p}}
 	for _, size := range [][2]int{{180, 40}, {80, 24}, {36, 12}, {12, 4}, {8, 1}} {
 		a.width, a.height = size[0], size[1]-1
 		status, _ := core.NewStatusCmp(nil).Update(tea.WindowSizeMsg{Width: size[0], Height: size[1] - 1})
 		a.status = status.(core.StatusCmp)
-		view := a.View()
+		view := a.View().Content
 		require.LessOrEqual(t, lipgloss.Width(view), size[0])
 		require.Equal(t, size[1], lipgloss.Height(view))
-		footer := a.statusView()
+		footer := styles.TerminalOutput(a.statusView())
 		rows := strings.Split(view, "\n")
 		require.Equal(t, footer, rows[len(rows)-1], "the footer must survive oversized content")
 	}

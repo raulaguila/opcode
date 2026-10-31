@@ -1,9 +1,8 @@
 package styles
 
 import (
-	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glamour/ansi"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/glamour/v2"
+	"charm.land/glamour/v2/ansi"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
@@ -13,13 +12,19 @@ const defaultMargin = 1
 func uintPtr(u uint) *uint { return new(u) }
 
 // returns a glamour TermRenderer configured with the current theme
-func GetMarkdownRenderer(width int) *glamour.TermRenderer {
+func GetMarkdownRenderer(width int) *markdownRenderer {
 	r, _ := glamour.NewTermRenderer(
 		glamour.WithStyles(generateMarkdownStyleConfig()),
 		glamour.WithWordWrap(width),
-		glamour.WithColorProfile(lipgloss.ColorProfile()),
 	)
-	return r
+	return &markdownRenderer{renderer: r}
+}
+
+type markdownRenderer struct{ renderer *glamour.TermRenderer }
+
+func (r *markdownRenderer) Render(content string) (string, error) {
+	view, err := r.renderer.Render(content)
+	return TerminalOutput(view), err
 }
 
 // creates an ansi.StyleConfig for markdown rendering
@@ -226,10 +231,10 @@ func generateMarkdownStyleConfig() ansi.StyleConfig {
 	}
 }
 
-// adaptiveColorToString converts a lipgloss.AdaptiveColor to the appropriate
+// adaptiveColorToString converts a theme.AdaptiveColor to the appropriate
 // hex color string based on the current terminal background
-func adaptiveColorToString(color lipgloss.AdaptiveColor) string {
-	if lipgloss.HasDarkBackground() {
+func adaptiveColorToString(color theme.AdaptiveColor) string {
+	if theme.HasDarkBackground() {
 		return color.Dark
 	}
 	return color.Light

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -17,7 +17,7 @@ func (m *integrationDialogCmp) integrationBodyLines(t theme.Theme, width int, ba
 	case "edit":
 		return m.integrationFormLines(width, base, line)
 	default:
-		rows := max(1, m.height-7)
+		rows := max(1, m.height-8)
 		if m.height == 0 {
 			rows = 12
 		}
@@ -39,7 +39,7 @@ func (m *integrationDialogCmp) integrationListLines(t theme.Theme, width int, ba
 	for i := start; i < min(len(m.entries), start+rows); i++ {
 		style := base
 		if i == m.selected {
-			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
+			style = style.Foreground(t.Text()).Background(t.BorderDim()).Bold(true)
 		}
 		lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+config.IntegrationSummary(m.entries[i]), width, "…")))
 	}
@@ -64,7 +64,7 @@ func (m *integrationDialogCmp) integrationFormLines(width int, base lipgloss.Sty
 			label = "› " + label
 		}
 		lines = append(lines, line(label))
-		m.fields[i].Width = max(8, width-2)
+		m.fields[i].SetWidth(max(8, width-2))
 		lines = append(lines, base.Render(ansi.Truncate(choiceView(m.fields[i], fieldOptions(m.labels[i])), width, "…")))
 	}
 	return lines

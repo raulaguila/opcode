@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/interaction"
@@ -78,14 +78,14 @@ func TestHeadlessPlanModeAndUserQuestionPreserveDraft(t *testing.T) {
 	program.Send(chat.SessionSelectedMsg(session.Session{ID: "s", Title: "Workflow"}))
 	program.Send(page.WorkflowCommandMsg{Command: "plan"})
 	wait("Ajustar plano")
-	program.Send(tea.KeyMsg{Type: tea.KeyEsc})
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/mod")})
+	program.Send(tea.KeyPressMsg{Code: tea.KeyEsc, Mod: 0})
+	program.Send(testTextKey(string([]rune("/mod")), 0))
 	wait("Escolher modo de trabalho")
-	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	wait("somente leitura")
-	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	wait("Perguntar")
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Rascunho intocado")})
+	program.Send(testTextKey(string([]rune("Rascunho intocado")), 0))
 	wait("Rascunho intocado")
 	answer := make(chan string, 1)
 	go func() {
@@ -97,8 +97,8 @@ func TestHeadlessPlanModeAndUserQuestionPreserveDraft(t *testing.T) {
 		}
 	}()
 	wait("Qual banco?")
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Minha escolha")})
-	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	program.Send(testTextKey(string([]rune("Minha escolha")), 0))
+	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	select {
 	case text := <-answer:
 		require.Equal(t, "Minha escolha", text)

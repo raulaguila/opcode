@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/clipboard"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
@@ -10,7 +10,7 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
-func updateAppModelKeyMsg(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateAppModelKeyMsg(a *appModel, cmd *tea.Cmd, msg *tea.KeyPressMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
 	if result0, result1, handled := routeRemotePasteKey(a, msg); handled {
 		return result0, result1, true
 	}
@@ -43,19 +43,19 @@ func updateAppModelKeyMsg(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (extracted
 	return updateApplicationShortcut(a, msg)
 }
 
-func updateApplicationShortcut(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+func updateApplicationShortcut(a *appModel, msg *tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 
 	switch {
 
 	case key.Matches((*msg), keys.Quit):
 		return updateAppModelKeyMsgQuit(a)
-	case msg.String() == config.Shortcut("sessions"):
+	case msg.Keystroke() == config.Shortcut("sessions"):
 		return updateAppModelKeyMsgSessions(a)
-	case msg.String() == config.Shortcut("commands"):
+	case msg.Keystroke() == config.Shortcut("commands"):
 		return updateAppModelKeyMsgCommands(a)
-	case msg.String() == config.Shortcut("models"):
+	case msg.Keystroke() == config.Shortcut("models"):
 		return updateAppModelKeyMsgModels(a)
-	case msg.String() == config.Shortcut("theme"):
+	case msg.Keystroke() == config.Shortcut("theme"):
 		return updateAppModelKeyMsgTheme(a)
 	case key.Matches((*msg), returnKey) || key.Matches((*msg)):
 		if result0, result1, result2, handled := updateAppModelKeyMsgMatches(a, msg); handled {
@@ -74,7 +74,7 @@ func updateApplicationShortcut(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd
 			a.showHelp = false
 			return (*a), nil, true
 		}
-	case msg.String() == config.Shortcut("files"):
+	case msg.Keystroke() == config.Shortcut("files"):
 		a.showFilepicker = !a.showFilepicker
 		a.filepicker.ToggleFilepicker(a.showFilepicker)
 		return (*a), nil, true
@@ -82,8 +82,8 @@ func updateApplicationShortcut(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd
 	return nil, nil, false
 }
 
-func updateAppModelKeyMsgMatches(a *appModel, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.String() == quitKey {
+func updateAppModelKeyMsgMatches(a *appModel, msg *tea.KeyPressMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if msg.Keystroke() == quitKey {
 		if a.currentPage == page.LogsPage {
 			return (*a), a.moveToPage(page.ChatPage), true, true
 		}
@@ -170,7 +170,7 @@ func updateAppModelKeyMsgTheme(a *appModel) (extractedResult0 tea.Model, extract
 
 }
 
-func routeTerminalOrSelectionKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
+func routeTerminalOrSelectionKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 	if !a.showPermissions && !a.showHelp && !a.showQuit && !a.showSessionDialog &&
 		!a.showCommandDialog && !a.showModelDialog && !a.showInitDialog && !a.showFilepicker &&
 		!a.showThemeDialog && !a.showMultiArgumentsDialog && !a.showProviderDialog && !a.showIntegrationDialog && !a.isCompacting {
@@ -179,7 +179,7 @@ func routeTerminalOrSelectionKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (te
 			return (*a), (*cmd), true
 		}
 		if selection, ok := a.pages[a.currentPage].(interface {
-			SelectionKey(tea.KeyMsg) (tea.Cmd, bool)
+			SelectionKey(tea.KeyPressMsg) (tea.Cmd, bool)
 		}); ok {
 			if cmd, handled := selection.SelectionKey((*msg)); handled {
 				return (*a), cmd, true
@@ -189,8 +189,8 @@ func routeTerminalOrSelectionKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (te
 	return nil, nil, false
 }
 
-func routeConnectionOrWorkspaceKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if msg.String() != "ctrl+c" && !a.showPermissions && !a.showHelp && !a.showQuit && !a.showSessionDialog && !a.showCommandDialog && !a.showModelDialog && !a.showInitDialog && !a.showFilepicker && !a.showThemeDialog && !a.showMultiArgumentsDialog {
+func routeConnectionOrWorkspaceKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if msg.Keystroke() != "ctrl+c" && !a.showPermissions && !a.showHelp && !a.showQuit && !a.showSessionDialog && !a.showCommandDialog && !a.showModelDialog && !a.showInitDialog && !a.showFilepicker && !a.showThemeDialog && !a.showMultiArgumentsDialog {
 		if a.showProviderDialog {
 			d, c := a.providerDialog.Update((*msg))
 			a.providerDialog = d.(dialog.ProviderDialog)
@@ -209,8 +209,8 @@ func routeConnectionOrWorkspaceKey(a *appModel, cmd *tea.Cmd, msg *tea.KeyMsg) (
 	return nil, nil, false
 }
 
-func routeRemotePasteKey(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if msg.Type == tea.KeyCtrlV && clipboard.Remote() {
+func routeRemotePasteKey(a *appModel, msg *tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if msg.Keystroke() == "ctrl+v" && clipboard.Remote() {
 		terminal := false
 		if p, ok := a.pages[a.currentPage].(interface{ TerminalFocused() bool }); ok {
 			terminal = p.TerminalFocused()
@@ -223,14 +223,14 @@ func routeRemotePasteKey(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool
 	return nil, nil, false
 }
 
-func routeSessionOrModelKey(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if msg.String() != "ctrl+c" && !a.showPermissions && !a.showQuit && !a.showHelp {
+func routeSessionOrModelKey(a *appModel, msg *tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if msg.Keystroke() != "ctrl+c" && !a.showPermissions && !a.showQuit && !a.showHelp {
 		if a.showSessionDialog {
 			updated, c := a.sessionDialog.Update((*msg))
 			a.sessionDialog = updated.(dialog.SessionDialog)
 			return (*a), c, true
 		}
-		if a.showModelDialog && msg.String() != config.Shortcut("models") {
+		if a.showModelDialog && msg.Keystroke() != config.Shortcut("models") {
 			updated, c := a.modelDialog.Update((*msg))
 			a.modelDialog = updated.(dialog.ModelDialog)
 			return (*a), c, true
@@ -239,8 +239,8 @@ func routeSessionOrModelKey(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, b
 	return nil, nil, false
 }
 
-func routeFocusedHelpKey(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if a.showHelp && msg.String() != "ctrl+c" && msg.String() != "esc" && !key.Matches((*msg), helpEsc) && !key.Matches((*msg), keys.Help) {
+func routeFocusedHelpKey(a *appModel, msg *tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if a.showHelp && msg.Keystroke() != "ctrl+c" && msg.Keystroke() != "esc" && !key.Matches((*msg), helpEsc) && !key.Matches((*msg), keys.Help) {
 		updated, c := a.help.Update((*msg))
 		a.help = updated.(dialog.HelpCmp)
 		return (*a), c, true
@@ -248,8 +248,8 @@ func routeFocusedHelpKey(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool
 	return nil, nil, false
 }
 
-func routeQuitOrPermissionKey(a *appModel, msg *tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
-	if msg.String() != "ctrl+c" {
+func routeQuitOrPermissionKey(a *appModel, msg *tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
+	if msg.Keystroke() != "ctrl+c" {
 		if a.showQuit {
 			updated, c := a.quit.Update((*msg))
 			a.quit = updated.(dialog.QuitDialog)

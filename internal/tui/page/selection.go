@@ -1,14 +1,14 @@
 package page
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
 // SelectionKey is queried before global cancel/quit shortcuts. Modal dialogs,
 // the terminal and the editor's own selection keep their existing precedence.
-func (p *chatPage) SelectionKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (p *chatPage) SelectionKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if p.WorkspaceFocused() || p.terminal.focused || p.slashMenuOpen() || p.showCompletionDialog || p.workflow.question.ID != "" {
 		return nil, false
 	}

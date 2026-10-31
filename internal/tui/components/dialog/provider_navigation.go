@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
@@ -21,7 +21,7 @@ func (m *providerDialogCmp) handleProviderMessage(msg tea.Msg) connectionAction 
 		m.width, m.height = msg.Width, msg.Height
 	case tea.MouseMsg:
 		return m.handleProviderMouse(msg)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleProviderKey(msg)
 	}
 	return connectionAction{}
@@ -36,7 +36,7 @@ func (m *providerDialogCmp) finishCatalogTest(result providerTestMsg) {
 	}
 }
 
-func (m *providerDialogCmp) handleProviderKey(msg tea.KeyMsg) connectionAction {
+func (m *providerDialogCmp) handleProviderKey(msg tea.KeyPressMsg) connectionAction {
 	if msg.String() == "esc" {
 		return connectionHandled(m.leaveProviderScreen())
 	}
@@ -50,7 +50,7 @@ func (m *providerDialogCmp) handleProviderKey(msg tea.KeyMsg) connectionAction {
 	return m.handleProviderFormKey(msg)
 }
 
-func (m *providerDialogCmp) handleProviderFormKey(msg tea.KeyMsg) connectionAction {
+func (m *providerDialogCmp) handleProviderFormKey(msg tea.KeyPressMsg) connectionAction {
 	switch msg.String() {
 	case "ctrl+g":
 		if m.screen == "provider" {
@@ -78,7 +78,7 @@ func (m *providerDialogCmp) handleProviderFormKey(msg tea.KeyMsg) connectionActi
 	return connectionAction{}
 }
 
-func (m *providerDialogCmp) handleProviderListKey(msg tea.KeyMsg) tea.Cmd {
+func (m *providerDialogCmp) handleProviderListKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "d", "delete":
 		return m.startDelete()
@@ -164,9 +164,13 @@ func (m *providerDialogCmp) updateProviderInput(msg tea.Msg) tea.Cmd {
 	if m.screen == "list" || len(m.fields) == 0 {
 		return nil
 	}
+	if len(fieldOptions(m.labels[m.focus])) > 0 {
+		return nil
+	}
 	var cmd tea.Cmd
+	before := m.fields[m.focus].Value()
 	m.fields[m.focus], cmd = m.fields[m.focus].Update(msg)
-	if _, ok := msg.(tea.KeyMsg); ok {
+	if before != m.fields[m.focus].Value() {
 		m.invalidateCatalogTest()
 	}
 	return cmd
@@ -177,14 +181,14 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 		return action
 	}
 	if m.screen == "list" && len(m.rows) > 0 {
-		if msg.Button == tea.MouseButtonWheelUp {
+		if msg.Mouse().Button == tea.MouseWheelUp {
 			m.selected = max(0, m.selected-1)
 		}
-		if msg.Button == tea.MouseButtonWheelDown {
+		if msg.Mouse().Button == tea.MouseWheelDown {
 			m.selected = min(len(m.rows)-1, m.selected+1)
 		}
 	}
-	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft || msg.X < 3 || msg.X >= m.contentWidth()+3 {
+	if !leftClick(msg) || msg.Mouse().X < 3 || msg.Mouse().X >= m.contentWidth()+3 {
 		return connectionAction{}
 	}
 	if m.screen == "list" {
@@ -193,8 +197,8 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 	indices := m.fieldIndices()
 	count := m.formRows()
 	start := max(0, slices.Index(indices, m.focus)-count+1)
-	i := start + (msg.Y-3)/2
-	if msg.Y < 3 || msg.Y >= 3+count*2 || i >= len(indices) {
+	i := start + (msg.Mouse().Y-3)/2
+	if msg.Mouse().Y < 3 || msg.Mouse().Y >= 3+count*2 || i >= len(indices) {
 		return connectionAction{}
 	}
 	m.fields[m.focus].Blur()
@@ -205,8 +209,8 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 func (m *providerDialogCmp) providerRowClick(msg tea.MouseMsg) connectionAction {
 	rows := m.listRows()
 	start := max(0, m.selected-rows+1)
-	i := msg.Y - 3 + start
-	if msg.Y < 3 || msg.Y >= 3+rows || i >= len(m.rows) {
+	i := msg.Mouse().Y - 3 + start
+	if msg.Mouse().Y < 3 || msg.Mouse().Y >= 3+rows || i >= len(m.rows) {
 		return connectionAction{}
 	}
 	m.selected = i
@@ -228,10 +232,10 @@ func (m *providerDialogCmp) providerFooterClick(msg tea.MouseMsg) connectionActi
 	if m.screen == "provider" {
 		for _, action := range []struct {
 			label string
-			key   tea.KeyType
-		}{{config.Text("[Salvar]", "[Save]"), tea.KeyCtrlS}, {config.Text("[Catálogo]", "[Catalog]"), tea.KeyCtrlT}, {config.Text("[Mais]", "[More]"), tea.KeyCtrlA}} {
+			key   tea.KeyPressMsg
+		}{{config.Text("[Salvar]", "[Save]"), tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}}, {config.Text("[Catálogo]", "[Catalog]"), tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl}}, {config.Text("[Mais]", "[More]"), tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}}} {
 			if clickedLabel(m.View(), action.label, msg) {
-				_, cmd := m.Update(tea.KeyMsg{Type: action.key})
+				_, cmd := m.Update(action.key)
 				return connectionHandled(cmd)
 			}
 		}

@@ -16,7 +16,10 @@ verificações executadas; os recursos disponíveis não garantem correção ger
 
 Use Go 1.27 ou posterior para compilar o checkout. O módulo recomenda a toolchain
 1.27.3; com `GOTOOLCHAIN=auto`, o Go pode obtê-la automaticamente. O CI acompanha
-os patches da linha 1.27:
+os patches da linha 1.27.
+
+As versões das bibliotecas e a pendência de trocar o commit oficial do Lip Gloss
+por uma release estão no [guia de dependências](docs/dependencies.md).
 
 ```sh
 git clone --branch develop https://github.com/raulaguila/opcode.git

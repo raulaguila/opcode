@@ -4,13 +4,13 @@ import (
 	"errors"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewlineShortcutsPreserveDraftAndEnterStillSubmits(t *testing.T) {
-	for _, key := range []tea.KeyMsg{{Type: tea.KeyCtrlJ}, {Type: tea.KeyEnter, Alt: true}} {
+	for _, key := range []tea.KeyPressMsg{{Code: 'j', Mod: tea.ModCtrl}, {Code: tea.KeyEnter, Mod: tea.ModAlt}, {Code: tea.KeyEnter, Mod: tea.ModShift}} {
 		t.Run(key.String(), func(t *testing.T) {
 			m := slashEditor()
 			enterText(m, "first line")
@@ -18,13 +18,13 @@ func TestNewlineShortcutsPreserveDraftAndEnterStillSubmits(t *testing.T) {
 			enterText(m, "second line")
 			require.Equal(t, "first line\nsecond line", m.textarea.Value())
 			require.False(t, m.submitting)
-			require.NotNil(t, editorKey(m, tea.KeyMsg{Type: tea.KeyEnter}))
+			require.NotNil(t, editorKey(m, tea.KeyPressMsg{Code: tea.KeyEnter}))
 			require.True(t, m.submitting)
 		})
 	}
 	m := slashEditor()
 	enterText(m, "legacy\\")
-	require.Nil(t, editorKey(m, tea.KeyMsg{Type: tea.KeyEnter}))
+	require.Nil(t, editorKey(m, tea.KeyPressMsg{Code: tea.KeyEnter}))
 	require.Equal(t, "legacy\n", m.textarea.Value())
 }
 

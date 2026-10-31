@@ -2,16 +2,17 @@ package dialog
 
 import (
 	"fmt"
-	"github.com/raulaguila/opcode/internal/config"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/raulaguila/opcode/internal/config"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui/layout"
@@ -31,7 +32,7 @@ type SessionActionMsg struct {
 }
 
 type SessionDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 	SetSessions([]session.Session)
 	SetSelectedSession(string)
@@ -47,7 +48,7 @@ type sessionDialogCmp struct {
 }
 
 func (s *sessionDialogCmp) Init() tea.Cmd { return s.requestPreview() }
-func (s *sessionDialogCmp) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+func (s *sessionDialogCmp) Update(msg tea.Msg) (model util.Model, cmd tea.Cmd) {
 	defer func() {
 		if preview := s.requestPreviewIfIdle(cmd); preview != nil {
 			cmd = tea.Batch(cmd, preview)
@@ -63,12 +64,19 @@ func (s *sessionDialogCmp) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		s.width, s.height = msg.Width, msg.Height
 		s.move(0)
 	case tea.MouseMsg:
-		if result0, result1, handled := updateCaseTeaMouseMsg(s, &msg); handled {
+		if result0, result1, handled := updateCaseTeaMouseMsg(s, msg); handled {
 			return result0, result1
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateSessionDialogCmpKeyMsg(s, &msg); handled {
 			return result0, result1
+		}
+	case tea.PasteMsg:
+		key := tea.KeyPressMsg{Text: msg.Content}
+		if s.editing {
+			updateSessionDialogCmpKeyMsgSEditingCaseTeaKeyRunes(s, &key)
+		} else {
+			updateSessionDialogCmpKeyMsgDefault(s, &key)
 		}
 	}
 	return s, nil
@@ -78,6 +86,9 @@ func (s *sessionDialogCmp) rows() int {
 		return 10
 	}
 	reserve := 10
+	if s.height >= 16 {
+		reserve++
+	}
 	if s.height >= 18 {
 		reserve += 2
 	}
@@ -123,7 +134,7 @@ func (s *sessionDialogCmp) View() string {
 		width = 60
 	}
 	t := theme.CurrentTheme()
-	base := styles.BaseStyle().Width(width)
+	base := dialogBody().Width(width)
 	line := func(text string) string { return base.Render(ansi.Truncate(text, width, "…")) }
 	rows := []string{base.Foreground(t.Primary()).Bold(true).Render(config.Text("Conversas", "Conversations")), line(config.Text("Buscar: ", "Search: ") + s.query)}
 	if len(s.filtered) == 0 {
@@ -138,11 +149,13 @@ func (s *sessionDialogCmp) View() string {
 		rows = append(rows, line(""), line(preview))
 	}
 	if s.editing {
-		rows = append(rows, line(config.Text("Novo título: ", "New title: ")+s.rename), line(config.Text("Enter salva · Esc volta", "Enter save · Esc back")))
+		rows = append(rows, line(config.Text("Novo título: ", "New title: ")+s.rename))
+		rows = dialogFooter(rows, width, s.height, line(config.Text("Enter salva · Esc volta", "Enter save · Esc back")))
 	} else {
-		rows = append(rows, line(fmt.Sprintf(config.Text("%d conversas", "%d conversations"), len(s.filtered))), line(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename")), line(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export")), line(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close")))
+		rows = append(rows, line(fmt.Sprintf(config.Text("%d conversas", "%d conversations"), len(s.filtered))))
+		rows = dialogFooter(rows, width, s.height, line(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename")), line(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export")), line(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close")))
 	}
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 }
 func (s *sessionDialogCmp) BindingKeys() []key.Binding {
 	return []key.Binding{key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "conversas"))}
@@ -202,7 +215,7 @@ func (s *sessionDialogCmp) requestPreviewIfIdle(cmd tea.Cmd) tea.Cmd {
 	return s.requestPreview()
 }
 
-func updateSessionDialogCmpKeyMsg(s *sessionDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateSessionDialogCmpKeyMsg(s *sessionDialogCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if result0, result1, result2, handled := updateSessionDialogCmpKeyMsgSEditing(s, msg); handled {
 		return result0, result1, result2
 	}
@@ -239,16 +252,16 @@ func updateSessionDialogCmpKeyMsg(s *sessionDialogCmp, msg *tea.KeyMsg) (extract
 	return extractedResult0, extractedResult1, false
 }
 
-func updateSessionDialogCmpKeyMsgDefault(s *sessionDialogCmp, msg *tea.KeyMsg) {
-	if msg.Type == tea.KeyBackspace {
+func updateSessionDialogCmpKeyMsgDefault(s *sessionDialogCmp, msg *tea.KeyPressMsg) {
+	if msg.Code == tea.KeyBackspace {
 		_, n := utf8.DecodeLastRuneInString(s.query)
 		if n > 0 {
 			s.query = s.query[:len(s.query)-n]
 			s.filter()
 		}
 	}
-	if msg.Type == tea.KeyRunes {
-		for _, r := range msg.Runes {
+	if msg.Text != "" {
+		for _, r := range msg.Text {
 			if !unicode.IsControl(r) && len(s.query) < 128 {
 				s.query += string(r)
 			}
@@ -257,26 +270,28 @@ func updateSessionDialogCmpKeyMsgDefault(s *sessionDialogCmp, msg *tea.KeyMsg) {
 	}
 }
 
-func updateSessionDialogCmpKeyMsgSEditing(s *sessionDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateSessionDialogCmpKeyMsgSEditing(s *sessionDialogCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if s.editing {
-		switch msg.Type {
-		case tea.KeyEsc:
+		switch msg.String() {
+		case "esc":
 			s.editing = false
-		case tea.KeyEnter:
+		case "enter":
 			title := strings.TrimSpace(s.rename)
 			if title != "" && len(s.filtered) > 0 {
 				s.editing = false
 				return s, util.CmdHandler(SessionActionMsg{Action: "rename", Session: s.filtered[s.selectedIdx], Title: title}), true, true
 			}
-		case tea.KeyCtrlU:
+		case "ctrl+u":
 			s.rename = ""
-		case tea.KeyBackspace:
+		case "backspace":
 			_, n := utf8.DecodeLastRuneInString(s.rename)
 			if n > 0 {
 				s.rename = s.rename[:len(s.rename)-n]
 			}
-		case tea.KeyRunes:
-			updateSessionDialogCmpKeyMsgSEditingCaseTeaKeyRunes(s, msg)
+		default:
+			if msg.Text != "" {
+				updateSessionDialogCmpKeyMsgSEditingCaseTeaKeyRunes(s, msg)
+			}
 		}
 		return s, nil, true, true
 	}
@@ -305,32 +320,32 @@ func viewSOffset(s *sessionDialogCmp, width int, t theme.Theme, base *lipgloss.S
 		}
 		row := (*base)
 		if i == s.selectedIdx {
-			row = row.Background(t.Primary()).Foreground(t.Background())
+			row = row.Background(t.BorderDim()).Foreground(t.Text())
 		}
 		(*rows) = append((*rows), row.Render(ansi.Truncate(label, width, "…")))
 	}
 }
 
-func updateSessionDialogCmpKeyMsgSEditingCaseTeaKeyRunes(s *sessionDialogCmp, msg *tea.KeyMsg) {
-	for _, r := range msg.Runes {
+func updateSessionDialogCmpKeyMsgSEditingCaseTeaKeyRunes(s *sessionDialogCmp, msg *tea.KeyPressMsg) {
+	for _, r := range msg.Text {
 		if !unicode.IsControl(r) && len(s.rename) < 180 {
 			s.rename += string(r)
 		}
 	}
 }
 
-func updateCaseTeaMouseMsg(s *sessionDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateCaseTeaMouseMsg(s *sessionDialogCmp, msg tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if s.editing {
 		return s, nil, true
 	}
-	if msg.Button == tea.MouseButtonWheelUp {
+	if msg.Mouse().Button == tea.MouseWheelUp {
 		s.move(-1)
 	}
-	if msg.Button == tea.MouseButtonWheelDown {
+	if msg.Mouse().Button == tea.MouseWheelDown {
 		s.move(1)
 	}
-	row := msg.Y - 4
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
+	row := msg.Mouse().Y - 4
+	if leftClick(msg) && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
 		s.selectedIdx = s.offset + row
 		return s, s.requestPreview(), true
 	}

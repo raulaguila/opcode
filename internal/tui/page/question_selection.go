@@ -3,7 +3,7 @@ package page
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/interaction"
 )
 
@@ -36,8 +36,8 @@ func (p *chatPage) navigateQuestionAnswer(key string, count int) tea.Cmd {
 	return p.focusQuestionInput(count)
 }
 
-func (p *chatPage) editQuestionAnswer(msg tea.KeyMsg, count int) tea.Cmd {
-	if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace || msg.Type == tea.KeyCtrlV {
+func (p *chatPage) editQuestionAnswer(msg tea.KeyPressMsg, count int) tea.Cmd {
+	if msg.Text != "" || msg.Code == tea.KeySpace || msg.Keystroke() == "ctrl+v" {
 		p.workflow.choice = count
 	}
 	if !p.customQuestionAnswer(count) {

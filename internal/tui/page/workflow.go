@@ -7,9 +7,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/interaction"
@@ -73,7 +73,7 @@ func (p *chatPage) refreshQuestion() {
 		input.CharLimit = 4000
 		input.Prompt = config.Text("Resposta: ", "Answer: ")
 		p.workflow.details = false
-		p.workflow.detailView = viewport.New(max(1, p.width-2), max(1, p.height-8))
+		p.workflow.detailView = viewport.New(viewport.WithWidth(max(1, p.width-2)), viewport.WithHeight(max(1, p.height-8)))
 		p.workflow.answer = input
 		p.workflow.choice = -1
 		p.workflow.questionIndex = 0
@@ -198,7 +198,7 @@ func (p *chatPage) workflowView() string {
 	t := theme.CurrentTheme()
 	return styles.BaseStyle().Foreground(t.Text()).Width(max(0, p.width)).MaxHeight(height).Render(strings.Join(lines, "\n"))
 }
-func (p *chatPage) questionKey(msg tea.KeyMsg) tea.Cmd {
+func (p *chatPage) questionKey(msg tea.KeyPressMsg) tea.Cmd {
 	q := p.workflow.question
 	if len(q.Questions) > 0 {
 		return p.batchQuestionKey(msg)
@@ -296,7 +296,7 @@ func panelText(value string) string {
 	}, ansi.Strip(tools.RedactCredentials(value)))
 }
 
-func questionKeyWorkflowDetails(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+func questionKeyWorkflowDetails(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 tea.Cmd, handled bool) {
 	if p.workflow.details {
 		if msg.String() == "esc" || msg.String() == "enter" {
 			p.workflow.details = false

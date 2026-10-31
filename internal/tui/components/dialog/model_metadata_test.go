@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
@@ -67,7 +67,7 @@ func TestSelectedModelMetadataIsDebouncedCancelledAndNeverGenerates(t *testing.T
 	_, first := m.Update(m.Open()())
 	require.Zero(t, shows, "catalog must not read metadata for every model")
 	require.NotNil(t, first)
-	_, second := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, second := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	require.NotNil(t, second)
 	stale := first().(modelMetadataLoadedMsg)
 	require.ErrorIs(t, stale.err, context.Canceled)
@@ -115,7 +115,7 @@ func TestModelFilteringToEmptyCancelsMetadataAndRejectsLateResult(t *testing.T) 
 	_, pending := m.Update(m.Open()())
 	require.NotNil(t, pending)
 	before := append([]models.Model(nil), m.models...)
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("no-such-model")})
+	m.Update(tea.KeyPressMsg{Text: "no-such-model"})
 	require.Empty(t, m.filtered)
 	late := pending().(modelMetadataLoadedMsg)
 	require.ErrorIs(t, late.err, context.Canceled)

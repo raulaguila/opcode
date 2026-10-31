@@ -2,13 +2,14 @@ package tools
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/ncruces/go-sqlite3/driver"
+	"github.com/ncruces/go-sqlite3/ext/fts5"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/stretchr/testify/require"
@@ -65,7 +66,7 @@ func TestCodeIndexIncrementalIgnorePrivacyAndRemoval(t *testing.T) {
 	info, err := os.Stat(indexPath)
 	require.NoError(t, err)
 	require.EqualValues(t, 0600, info.Mode().Perm())
-	db, err := sql.Open("sqlite3", indexPath)
+	db, err := driver.Open(indexPath, fts5.Register)
 	require.NoError(t, err)
 	var count int
 	require.NoError(t, db.QueryRow(`SELECT count(*) FROM chunks WHERE content LIKE '%index-private-known-credential%'`).Scan(&count))

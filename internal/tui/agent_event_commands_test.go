@@ -2,9 +2,10 @@ package tui
 
 import (
 	"errors"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -16,7 +17,7 @@ type agentEventCommandProbe struct{ executed []string }
 
 func (*agentEventCommandProbe) Init() tea.Cmd { return nil }
 func (*agentEventCommandProbe) View() string  { return "" }
-func (p *agentEventCommandProbe) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (p *agentEventCommandProbe) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var marker string
 	switch msg.(type) {
 	case page.ActivityMsg:
@@ -58,7 +59,7 @@ func TestAgentEventsDeliverActivityOutcomeAndNotificationCommands(t *testing.T) 
 		t.Run(scenario.name, func(t *testing.T) {
 			probe := &agentEventCommandProbe{}
 			deliverNotification = func(string, bool, string) { probe.executed = append(probe.executed, "notification") }
-			model := appModel{unfocused: true, currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: probe}}
+			model := appModel{unfocused: true, currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: probe}}
 			event := pubsub.Event[agent.AgentEvent]{Payload: agent.AgentEvent{Type: agent.AgentEventTypeResponse, Done: scenario.done, Error: scenario.err, Message: message.Message{SessionID: "fixture"}}}
 			_, cmd := model.Update(event)
 			runCommandBatch(cmd)

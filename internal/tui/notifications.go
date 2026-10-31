@@ -1,8 +1,8 @@
 package tui
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/config"
 	"io"
 	"os"

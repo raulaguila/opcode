@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/spf13/viper"
@@ -29,7 +29,7 @@ func TestProviderDirectKeyIsMaskedUsedByCatalogAndSavedPrivately(t *testing.T) {
 	m.fields[m.focus].Blur()
 	m.focus = providerKeyField
 	m.fields[m.focus].Focus()
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(secret), Paste: true})
+	m.Update(tea.PasteMsg{Content: secret})
 	require.Equal(t, textinput.EchoPassword, m.fields[providerKeyField].EchoMode)
 	require.NotContains(t, m.View(), secret)
 	require.Contains(t, m.View(), "•")
@@ -84,9 +84,9 @@ func TestProviderCredentialModeSwitchNeverCopiesEnvironmentSecret(t *testing.T) 
 	m.focus = providerAuthField
 	m.fields[m.focus].Focus()
 	// environment -> vault -> none -> api_key uses the real typed selector.
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	require.Equal(t, "api_key", m.fields[providerAuthField].Value())
 	require.Nil(t, m.save(), "direct mode must require an explicit key")
 	m.fields[providerKeyField].SetValue("fake-new-direct-credential")
@@ -150,8 +150,8 @@ func TestProviderCredentialModesFitCompactTerminalsAndKeepDraftOnEscape(t *testi
 			}
 		}
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Text: "r"})
 	require.Equal(t, "fake-private-unsaved-key", m.fields[providerKeyField].Value())
 	raw, err := os.ReadFile(viper.ConfigFileUsed())
 	require.NoError(t, err)

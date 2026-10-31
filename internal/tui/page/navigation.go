@@ -1,8 +1,8 @@
 package page
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -42,7 +42,7 @@ func (p *chatPage) refreshTaskPanel() {
 	if body == p.workspace.body {
 		return
 	}
-	offset := p.workspace.view.YOffset
+	offset := p.workspace.view.YOffset()
 	p.workspace.body = body
 	p.workspace.view.SetContent(body)
 	p.workspace.view.SetYOffset(offset)

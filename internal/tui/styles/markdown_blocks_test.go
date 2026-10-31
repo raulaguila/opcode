@@ -1,19 +1,19 @@
 package styles
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
 )
 
 func TestMarkdownBlockSpacingHasOneBlankLine(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
-	for _, color := range []termenv.Profile{termenv.Ascii, termenv.TrueColor} {
-		lipgloss.SetColorProfile(color)
+	profile := theme.ColorProfile()
+	t.Cleanup(func() { theme.SetColorProfile(profile) })
+	for _, color := range []colorprofile.Profile{colorprofile.Ascii, colorprofile.TrueColor} {
+		theme.SetColorProfile(color)
 		for _, source := range []string{
 			"# Title\n\nText.",
 			"First paragraph.\n\nSecond paragraph.",
@@ -78,16 +78,17 @@ func TestMixedMarkdownKeepsProseNarrowAndCodeWide(t *testing.T) {
 }
 
 func TestMarkdownContainersTablesAndNoColor(t *testing.T) {
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.Ascii)
-	defer lipgloss.SetColorProfile(before)
+	before := theme.ColorProfile()
+	theme.SetColorProfile(colorprofile.Ascii)
+	defer theme.SetColorProfile(before)
 	source := "4. first\n5. second\n\n| Column A | Column B |\n| --- | --- |\n| " + strings.Repeat("left ", 10) + " | " + strings.Repeat("right ", 8) + " |\n\n```go\nfmt.Println(\"streaming\")\n"
 	view := RenderMarkdownBlocks(source, 120, 48)
-	require.Equal(t, ansi.Strip(view), view)
-	require.Contains(t, view, "4.")
-	require.Contains(t, view, "5.")
-	require.Contains(t, view, "streaming")
-	require.Contains(t, view, "Column A")
+	assertMarkdownDefaultColors(t, view)
+	plain := ansi.Strip(view)
+	require.Contains(t, plain, "4.")
+	require.Contains(t, plain, "5.")
+	require.Contains(t, plain, "streaming")
+	require.Contains(t, plain, "Column A")
 	wide := false
 	for line := range strings.SplitSeq(view, "\n") {
 		if strings.Contains(line, "│") && ansi.StringWidth(line) > 60 {

@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
-	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
@@ -41,8 +40,8 @@ func reviewDiff(raw string, width int, mode string) string {
 	return strings.Join(out, "\n")
 }
 func (p *permissionDialogCmp) diffContent(raw string) string {
-	key := fmt.Sprintf("%s:%d:%s", p.permission.ID, p.contentViewPort.Width, p.diffMode)
-	rendered := p.GetOrSetDiff(key, func() (string, error) { return reviewDiff(raw, p.contentViewPort.Width, p.diffMode), nil })
+	key := fmt.Sprintf("%s:%d:%s", p.permission.ID, p.contentViewPort.Width(), p.diffMode)
+	rendered := p.GetOrSetDiff(key, func() (string, error) { return reviewDiff(raw, p.contentViewPort.Width(), p.diffMode), nil })
 	p.activeDiff = rendered
 	p.contentViewPort.SetContent(rendered)
 	return p.styleViewport()
@@ -54,10 +53,10 @@ func (p *permissionDialogCmp) nextFile(delta int) {
 	lines := strings.Split(ansi.Strip(body), "\n")
 	offsets := []int{0}
 	nextFileLines(lines, &offsets)
-	current := p.contentViewPort.YOffset
+	current := p.contentViewPort.YOffset()
 	target := 0
 	if delta > 0 {
-		target = max(0, len(lines)-p.contentViewPort.Height)
+		target = max(0, len(lines)-p.contentViewPort.Height())
 		for _, y := range offsets {
 			if y > current {
 				target = y
@@ -93,7 +92,7 @@ func reviewDiffDiffFilesRaw(raw string, width int, split bool, out *[]string) {
 
 func reviewDiffDiffFilesRawSplitPartN(width int, out *[]string, part string) {
 	for line := range strings.SplitSeq(part, "\n") {
-		style := styles.BaseStyle()
+		style := dialogBody()
 		if strings.HasPrefix(line, "+") {
 			style = style.Foreground(theme.CurrentTheme().Success())
 		}

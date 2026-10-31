@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync"
 
-	_ "github.com/ncruces/go-sqlite3/driver"
-	_ "github.com/ncruces/go-sqlite3/embed"
+	"github.com/ncruces/go-sqlite3/driver"
+	"github.com/ncruces/go-sqlite3/ext/fts5"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/localstate"
 )
@@ -134,7 +134,7 @@ func openCodeIndex(ctx context.Context, root string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", path)
+	db, err := driver.Open(path, fts5.Register)
 	if err != nil {
 		return nil, err
 	}

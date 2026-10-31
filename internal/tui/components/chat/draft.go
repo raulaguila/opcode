@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/localstate"
 	"github.com/raulaguila/opcode/internal/message"
@@ -225,14 +225,14 @@ func (m *editorCmp) PrepareSessionDraft(id string) error {
 	m.preparedDraft = &preparedSessionDraft{id: id, draft: draft, history: history}
 	return nil
 }
-func (m *editorCmp) promptHistoryKey(msg tea.KeyMsg) bool {
-	if msg.Type != tea.KeyUp && msg.Type != tea.KeyDown {
+func (m *editorCmp) promptHistoryKey(msg tea.KeyPressMsg) bool {
+	if msg.Code != tea.KeyUp && msg.Code != tea.KeyDown {
 		return false
 	}
 	if len(m.history) == 0 || m.deleteMode || m.submitting {
 		return false
 	}
-	if msg.Type == tea.KeyUp && (m.browsingHistory || m.textarea.Line() == 0) {
+	if msg.Code == tea.KeyUp && (m.browsingHistory || m.textarea.Line() == 0) {
 		if !m.browsingHistory {
 			m.historyDraft = m.textarea.Value()
 			m.historyIndex = len(m.history)
@@ -243,7 +243,7 @@ func (m *editorCmp) promptHistoryKey(msg tea.KeyMsg) bool {
 		m.textarea.CursorEnd()
 		return true
 	}
-	if msg.Type == tea.KeyDown && m.browsingHistory {
+	if msg.Code == tea.KeyDown && m.browsingHistory {
 		m.historyIndex++
 		if m.historyIndex >= len(m.history) {
 			m.textarea.SetValue(m.historyDraft)

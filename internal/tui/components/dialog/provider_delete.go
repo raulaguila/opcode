@@ -4,8 +4,8 @@ import (
 	"strings"
 	"unicode"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -35,7 +35,7 @@ func (m *providerDialogCmp) deleteUpdate(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "esc":
 			return m.Open(), true
@@ -61,7 +61,7 @@ func (m *providerDialogCmp) deleteUpdate(msg tea.Msg) (tea.Cmd, bool) {
 
 func (m *providerDialogCmp) deleteView() string {
 	t := theme.CurrentTheme()
-	base := styles.BaseStyle().Width(m.contentWidth())
+	base := dialogBody().Width(m.contentWidth())
 	line := func(s string) string { return base.Render(ansi.Truncate(s, m.contentWidth(), "…")) }
 	label := m.deleting.id
 	if !m.deleting.legacy {
@@ -69,9 +69,9 @@ func (m *providerDialogCmp) deleteView() string {
 			label = p.Name + " · " + label
 		}
 	}
-	cancel := styles.BaseStyle().Render(config.Text("[Cancelar]", "[Cancel]"))
-	remove := styles.BaseStyle().Render(config.Text("[Excluir]", "[Delete]"))
-	selected := styles.BaseStyle().Background(t.Primary()).Foreground(t.Background()).Bold(true)
+	cancel := dialogBody().Render(config.Text("[Cancelar]", "[Cancel]"))
+	remove := dialogBody().Render(config.Text("[Excluir]", "[Delete]"))
+	selected := dialogBody().Background(t.BorderDim()).Foreground(t.Text()).Bold(true)
 	if m.deleteSelected {
 		remove = selected.Render(config.Text("[Excluir]", "[Delete]"))
 	} else {
@@ -90,8 +90,8 @@ func (m *providerDialogCmp) deleteView() string {
 		base.Render(cancel + "  " + remove),
 	}
 	lines = append(lines, m.noteLines(m.note)...)
-	lines = append(lines, line(config.Text("←/→ escolhe · Enter · Esc", "←/→ choose · Enter · Esc")))
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderNormal()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	lines = dialogFooter(lines, m.contentWidth(), m.height, line(config.Text("←/→ escolhe · Enter · Esc", "←/→ choose · Enter · Esc")))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func deleteUpdateConfirm(m *providerDialogCmp, confirm bool) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {

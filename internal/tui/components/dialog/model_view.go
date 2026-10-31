@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -32,6 +32,9 @@ func (m *modelDialogCmp) geometry() modelGeometry {
 		pad = 0
 	}
 	helpRows := 1
+	if height >= 14 {
+		helpRows++
+	}
 	if m.details && height >= 18 {
 		helpRows += 2
 		if len(m.reasoningModel().ReasoningChoices()) > 0 {
@@ -202,11 +205,11 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 func (m *modelDialogCmp) catalogView() string {
 	g := m.geometry()
 	t := theme.CurrentTheme()
-	base := styles.BaseStyle().Width(g.width).MaxWidth(g.width)
+	base := dialogBody().Width(g.width).MaxWidth(g.width)
 	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), g.width, "…")) }
 	rows := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(interfaceCopy(m.modelTitle()), g.width, "…"))}
 	label := config.Text("Buscar: ", "Search: ")
-	m.search.Width = max(1, g.width-ansi.StringWidth(label))
+	m.search.SetWidth(max(1, g.width-ansi.StringWidth(label)))
 	m.search.Placeholder = config.Text("Nome ou ID", "Name or ID")
 	rows = append(rows, base.Render(label+m.search.View()))
 	note := m.note
@@ -239,6 +242,9 @@ func (m *modelDialogCmp) catalogView() string {
 	if len(m.filtered) == 0 && !m.loading {
 		hint = config.Text("Tab provedor · Ctrl+R tenta · Ctrl+P edita · Esc", "Tab provider · Ctrl+R retry · Ctrl+P edit · Esc")
 	}
+	if g.height >= 14 {
+		rows = append(rows, styles.PanelDivider(g.width))
+	}
 	rows = append(rows, line(hint))
 	if m.details && g.height >= 18 {
 		if len(m.reasoningModel().ReasoningChoices()) > 0 {
@@ -247,7 +253,7 @@ func (m *modelDialogCmp) catalogView() string {
 		rows = append(rows, line(config.Text("Alt+←/→ ou Tab/Shift+Tab provedor · Ctrl+R atualiza", "Alt+←/→ or Tab/Shift+Tab provider · Ctrl+R refresh")))
 		rows = append(rows, line(config.Text("Ctrl+A função · Ctrl+T testar · Ctrl+P conexão", "Ctrl+A role · Ctrl+T probe · Ctrl+P connection")))
 	}
-	frame := styles.BaseStyle().Padding(g.padY, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderNormal()).Render(strings.Join(rows, "\n"))
+	frame := styles.Panel().Padding(g.padY, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 	return lipgloss.NewStyle().MaxWidth(g.width + 6).MaxHeight(g.height).Render(frame)
 }
 
@@ -300,7 +306,7 @@ func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme,
 		}
 		row := (*base)
 		if i == m.selectedIdx {
-			row = row.Background(t.Primary()).Foreground(t.Background()).Bold(true)
+			row = row.Background(t.BorderDim()).Foreground(t.Text()).Bold(true)
 		}
 		(*rows) = append((*rows), row.Render(ansi.Truncate(interfaceCopy(rendered), g.width, "…")))
 	}

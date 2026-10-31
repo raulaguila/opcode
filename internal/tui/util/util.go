@@ -3,8 +3,15 @@ package util
 import (
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
+
+// Components compose string views; only the application root owns tea.View.
+type Model interface {
+	Init() tea.Cmd
+	Update(tea.Msg) (Model, tea.Cmd)
+	View() string
+}
 
 func CmdHandler(msg tea.Msg) tea.Cmd {
 	return func() tea.Msg {

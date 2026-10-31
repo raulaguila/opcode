@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/localstate"
 )
@@ -20,24 +19,24 @@ const customPreviewName = "_opcode_custom_preview"
 const customThemeLimit = 16 << 10
 
 type CustomPalette struct {
-	Base       string                 `json:"base"`
-	Primary    lipgloss.AdaptiveColor `json:"primary"`
-	Text       lipgloss.AdaptiveColor `json:"text"`
-	Muted      lipgloss.AdaptiveColor `json:"muted"`
-	Background lipgloss.AdaptiveColor `json:"background"`
+	Base       string        `json:"base"`
+	Primary    AdaptiveColor `json:"primary"`
+	Text       AdaptiveColor `json:"text"`
+	Muted      AdaptiveColor `json:"muted"`
+	Background AdaptiveColor `json:"background"`
 }
 type customTheme struct {
 	Theme
 	palette CustomPalette
 }
 
-func (t *customTheme) Primary() lipgloss.AdaptiveColor         { return t.palette.Primary }
-func (t *customTheme) Text() lipgloss.AdaptiveColor            { return t.palette.Text }
-func (t *customTheme) TextEmphasized() lipgloss.AdaptiveColor  { return t.palette.Text }
-func (t *customTheme) TextMuted() lipgloss.AdaptiveColor       { return t.palette.Muted }
-func (t *customTheme) Background() lipgloss.AdaptiveColor      { return t.palette.Background }
-func (t *customTheme) MarkdownText() lipgloss.AdaptiveColor    { return t.palette.Text }
-func (t *customTheme) MarkdownHeading() lipgloss.AdaptiveColor { return t.palette.Primary }
+func (t *customTheme) Primary() AdaptiveColor         { return t.palette.Primary }
+func (t *customTheme) Text() AdaptiveColor            { return t.palette.Text }
+func (t *customTheme) TextEmphasized() AdaptiveColor  { return t.palette.Text }
+func (t *customTheme) TextMuted() AdaptiveColor       { return t.palette.Muted }
+func (t *customTheme) Background() AdaptiveColor      { return t.palette.Background }
+func (t *customTheme) MarkdownText() AdaptiveColor    { return t.palette.Text }
+func (t *customTheme) MarkdownHeading() AdaptiveColor { return t.palette.Primary }
 func CustomThemePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -80,7 +79,7 @@ func ValidateCustomPalette(p CustomPalette) error {
 	if p.Base == CustomThemeName || p.Base == customPreviewName || GetTheme(p.Base) == nil {
 		return fmt.Errorf("invalid base theme")
 	}
-	for _, pair := range []lipgloss.AdaptiveColor{p.Primary, p.Text, p.Muted, p.Background} {
+	for _, pair := range []AdaptiveColor{p.Primary, p.Text, p.Muted, p.Background} {
 		if !literalColor.MatchString(pair.Light) || !literalColor.MatchString(pair.Dark) {
 			return fmt.Errorf("colors must be literal #RRGGBB for light and dark modes")
 		}
@@ -234,14 +233,14 @@ func LoadCustomTheme() error {
 
 func validateCustomPaletteState(p *CustomPalette, base Theme) (extractedResult0 error, handled bool) {
 	for _, mode := range []string{"light", "dark"} {
-		choose := func(c lipgloss.AdaptiveColor) string {
+		choose := func(c AdaptiveColor) string {
 			if mode == "light" {
 				return c.Light
 			}
 			return c.Dark
 		}
 		bg := choose(p.Background)
-		for label, fg := range map[string]lipgloss.AdaptiveColor{"primary": p.Primary, "text": p.Text, "muted": p.Muted} {
+		for label, fg := range map[string]AdaptiveColor{"primary": p.Primary, "text": p.Text, "muted": p.Muted} {
 			if colorContrast(choose(fg), bg) < 4.5 {
 				return fmt.Errorf("%s/%s contrast must be at least 4.5:1", mode, label), true
 			}

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -98,7 +98,7 @@ func TestSessionPagesVisualTurnsAndPageUpRevealsCompleteDurableHistory(t *testin
 	require.Equal(t, "72", m.history.first)
 	m.viewport.GotoTop()
 	oldHeight := len(m.transcriptLines)
-	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	require.Empty(t, m.history.first)
 	require.Equal(t, max(0, len(m.transcriptLines)-oldHeight-m.viewport.Height), m.viewport.YOffset)
 	assertTranscriptReference(t, m)
@@ -116,11 +116,11 @@ func TestSearchMaterializesHistoricalRowsBeforeFindingOldEvidence(t *testing.T) 
 func TestSelectionMaterializesHistoryWithoutMovingVisibleText(t *testing.T) {
 	m := paginatedFixture(t)
 	before := m.viewport.View()
-	m.selectionMouse(tea.MouseMsg{X: 4, Y: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m.selectionMouse(tea.MouseClickMsg{X: 4, Y: 2, Button: tea.MouseLeft})
 	require.Empty(t, m.history.first)
 	require.True(t, m.SelectionDragging())
 	require.Equal(t, before, m.viewport.View())
-	m.selectionMouse(tea.MouseMsg{X: 12, Y: 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m.selectionMouse(tea.MouseReleaseMsg{X: 12, Y: 2, Button: tea.MouseLeft})
 	require.True(t, m.HasSelection())
 	require.NotEmpty(t, m.SelectedText())
 }

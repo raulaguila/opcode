@@ -16,9 +16,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/clipboard"
 	"github.com/raulaguila/opcode/internal/config"
@@ -108,7 +108,7 @@ func (p *chatPage) resetWorkspace() {
 func (p *chatPage) showWorkspace(kind, title, body string) {
 	p.resetWorkspace()
 	p.workspace.kind, p.workspace.title, p.workspace.body = kind, safePanel(title), safePanel(body)
-	p.workspace.view = viewport.New(max(1, p.width-4), max(1, p.height-6))
+	p.workspace.view = viewport.New(viewport.WithWidth(max(1, p.width-4)), viewport.WithHeight(max(1, p.height-6)))
 	p.workspace.view.SetContent(p.workspace.body)
 }
 func (p *chatPage) workspaceAsync(run func(context.Context) (string, bool, error)) tea.Cmd {
@@ -611,7 +611,7 @@ func (p *chatPage) workspaceChoose() (cmd tea.Cmd) {
 	}
 	return nil
 }
-func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
+func (p *chatPage) workspaceKey(msg tea.KeyPressMsg) tea.Cmd {
 	if result0, handled := workspaceKeyContainsStringString(p, &msg); handled {
 		return result0
 	}
@@ -633,11 +633,13 @@ func (p *chatPage) workspaceKey(msg tea.KeyMsg) tea.Cmd {
 }
 func (p *chatPage) workspaceView() string {
 	if p.workspace.kind == "contract" {
-		return ansi.Hardwrap(p.contractView(), max(1, p.width-2), true)
+		return styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary()).
+			Width(max(1, p.width)).Height(max(1, p.height)).MaxWidth(max(1, p.width)).MaxHeight(max(1, p.height)).
+			Render(ansi.Hardwrap(p.contractView(), max(1, p.width-2), true))
 	}
-	w, h := max(1, p.width-4), max(1, p.height-6)
+	w, h := max(1, p.width-4), max(1, p.height-7)
 	t := theme.CurrentTheme()
-	lines := []string{styles.BaseStyle().Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(safePanel(p.workspace.title), w, "…"))}
+	lines := []string{styles.PanelTitle().Render(ansi.Truncate(safePanel(p.workspace.title), w, "…"))}
 	if len(p.workspaceHistory) > 0 {
 		lines = append(lines, ansi.Truncate(safePanel(p.workspaceHistory[len(p.workspaceHistory)-1].title)+" › "+safePanel(p.workspace.title), w, "…"))
 		h--
@@ -659,12 +661,12 @@ func (p *chatPage) workspaceView() string {
 	if p.workspace.details != "" {
 		help = config.Text("D detalhes · ", "D details · ") + help
 	}
-	p.workspace.view.Width = w
-	p.workspace.view.Height = max(1, h)
+	p.workspace.view.SetWidth(w)
+	p.workspace.view.SetHeight(max(1, h))
 	workspaceViewTurn(p, w)
 	if contextPanel(p.workspace.kind) {
 		lines = append(lines, ansi.Truncate(config.Text("1 Orçamento · 2 Índice · 3 Alocação · 4 Diagnóstico", "1 Budget · 2 Index · 3 Allocation · 4 Diagnostics"), w, "…"))
-		p.workspace.view.Height = max(1, p.workspace.view.Height-1)
+		p.workspace.view.SetHeight(max(1, p.workspace.view.Height()-1))
 	}
 	lines = append(lines, p.workspace.view.View())
 	if p.workspace.loading {
@@ -673,8 +675,8 @@ func (p *chatPage) workspaceView() string {
 	if p.workspace.note != "" {
 		lines = append(lines, ansi.Truncate(safePanel(p.workspace.note), w, "…"))
 	}
-	lines = append(lines, ansi.Truncate(help, w, "…"))
-	return styles.BaseStyle().Padding(1, 2).Width(max(1, p.width-4)).Height(max(1, p.height-2)).Render(strings.Join(lines, "\n"))
+	lines = append(lines, styles.PanelDivider(w), ansi.Truncate(help, w, "…"))
+	return styles.BaseStyle().Background(t.BackgroundSecondary()).Padding(1, 2).Width(max(1, p.width)).Height(max(1, p.height)).MaxWidth(max(1, p.width)).MaxHeight(max(1, p.height)).Render(strings.Join(lines, "\n"))
 }
 
 func (p *chatPage) handleWorkspaceMessage(text string, attachments []message.Attachment) (tea.Cmd, bool) {
@@ -722,19 +724,19 @@ func (p *chatPage) workspaceMouse(msg tea.MouseMsg) tea.Cmd {
 		return result0
 	}
 
-	if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+	if msg.Mouse().Button == tea.MouseWheelUp || msg.Mouse().Button == tea.MouseWheelDown {
 		p.workspace.view, _ = p.workspace.view.Update(msg)
 		return nil
 	}
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+	if util.MousePressed(msg) && msg.Mouse().Button == tea.MouseLeft {
 		first, rows, start := p.workspaceActionGeometry()
 		shown := min(rows, len(p.workspace.actions))
-		if len(p.workspace.actions) > 3 && msg.Y == first+shown {
+		if len(p.workspace.actions) > 3 && msg.Mouse().Y == first+shown {
 			p.workspace.allActions = !p.workspace.allActions
 			return nil
 		}
-		index := start + msg.Y - first
-		if msg.Y >= first && msg.Y < first+shown && index >= 0 && index < len(p.workspace.actions) {
+		index := start + msg.Mouse().Y - first
+		if msg.Mouse().Y >= first && msg.Mouse().Y < first+shown && index >= 0 && index < len(p.workspace.actions) {
 			p.workspace.selected = index
 			return p.workspaceChoose()
 		}
@@ -830,7 +832,7 @@ func (p *chatPage) openRuntime() tea.Cmd {
 
 func (p *chatPage) workspaceActionGeometry() (first, rows, start int) {
 	first = 2
-	h := max(1, p.height-6)
+	h := max(1, p.height-7)
 	if len(p.workspaceHistory) > 0 {
 		first++
 		h--
@@ -884,14 +886,14 @@ func workspaceChooseCaseDiffFile(p *chatPage, item *workspaceAction) (extractedR
 
 }
 
-func workspaceKeyContainsStringString(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+func workspaceKeyContainsStringString(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 tea.Cmd, handled bool) {
 	if contextPanel(p.workspace.kind) && strings.Contains("1234", msg.String()) && len(msg.String()) == 1 {
 		return p.contextTab(msg.String()), true
 	}
 	return extractedResult0, false
 }
 
-func workspaceKeyLoadingStringEsc(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+func workspaceKeyLoadingStringEsc(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 tea.Cmd, handled bool) {
 	if p.workspace.loading && msg.String() != "esc" {
 		p.workspace.view, _ = p.workspace.view.Update((*msg))
 		return nil, true
@@ -903,10 +905,10 @@ func workspaceViewWorkspaceActions(p *chatPage, w int, h *int, t theme.Theme, li
 	if len(p.workspace.actions) > 0 {
 		_, maxRows, start := p.workspaceActionGeometry()
 		for i := start; i < min(len(p.workspace.actions), start+maxRows); i++ {
-			style := styles.BaseStyle().Width(w)
+			style := styles.BaseStyle().Background(t.BackgroundSecondary()).Width(w)
 			mark := " "
 			if i == p.workspace.selected {
-				style = style.Background(t.Primary()).Foreground(t.Background())
+				style = styles.SelectedRow().Width(w)
 				mark = "›"
 			}
 			(*lines) = append((*lines), style.Render(ansi.Truncate(mark+" "+panelText(p.workspace.actions[i].label), w, "…")))
@@ -943,17 +945,17 @@ func workspaceMouseContract(p *chatPage, msg *tea.MouseMsg) (extractedResult0 te
 		if p.workspace.itemEditor != nil {
 			return nil, true
 		}
-		if msg.Button == tea.MouseButtonWheelUp {
-			return p.contractKey(tea.KeyMsg{Type: tea.KeyUp}), true
+		if (*msg).Mouse().Button == tea.MouseWheelUp {
+			return p.contractKey(tea.KeyPressMsg{Code: tea.KeyUp}), true
 		}
-		if msg.Button == tea.MouseButtonWheelDown {
-			return p.contractKey(tea.KeyMsg{Type: tea.KeyDown}), true
+		if (*msg).Mouse().Button == tea.MouseWheelDown {
+			return p.contractKey(tea.KeyPressMsg{Code: tea.KeyDown}), true
 		}
 		count := max(1, min(len(p.workspace.fields), (p.height-7)/2))
 		start := max(0, min(p.workspace.focus-count+1, len(p.workspace.fields)-count))
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.Y >= 2 && msg.Y < 2+count*2 {
+		if util.MousePressed((*msg)) && (*msg).Mouse().Button == tea.MouseLeft && (*msg).Mouse().Y >= 2 && (*msg).Mouse().Y < 2+count*2 {
 			p.workspace.fields[p.workspace.focus].Blur()
-			p.workspace.focus = start + (msg.Y-2)/2
+			p.workspace.focus = start + ((*msg).Mouse().Y-2)/2
 			return p.workspace.fields[p.workspace.focus].Focus(), true
 		}
 		return nil, true
@@ -1032,7 +1034,7 @@ func workspaceChooseCaseCopy(p *chatPage, item *workspaceAction) (extractedResul
 
 }
 
-func (p *chatPage) workspaceNavigationKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (p *chatPage) workspaceNavigationKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "m":
 		p.workspace.allActions = !p.workspace.allActions
@@ -1068,7 +1070,7 @@ func (p *chatPage) workspaceNavigationKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-func (p *chatPage) workspaceActionKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (p *chatPage) workspaceActionKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "t":
 		return workspaceKeyChatPageT(p), true

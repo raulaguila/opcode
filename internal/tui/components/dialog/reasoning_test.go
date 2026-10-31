@@ -1,11 +1,12 @@
 package dialog
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestReasoningChooserOnlyEditsActiveAdvertisedModel(t *testing.T) {
@@ -28,19 +29,19 @@ func TestReasoningChooserOnlyEditsActiveAdvertisedModel(t *testing.T) {
 	models.SupportedModels["reasoning-fixture"] = models.Model{ID: "reasoning-fixture", Provider: models.ProviderLocal, CanReason: true, API: "responses", ReasoningLevels: []string{"low", "high"}}
 	m := NewModelDialogCmp().(*modelDialogCmp)
 	m.target = config.AgentCoder
-	m.reasoningUpdate(tea.KeyMsg{Type: tea.KeyCtrlE})
+	m.reasoningUpdate(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
 	require.True(t, m.reasoningOpen)
-	m.reasoningUpdate(tea.KeyMsg{Type: tea.KeyDown})
-	cmd, handled := m.reasoningUpdate(tea.KeyMsg{Type: tea.KeyEnter})
+	m.reasoningUpdate(tea.KeyPressMsg{Code: tea.KeyDown})
+	cmd, handled := m.reasoningUpdate(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.True(t, handled)
 	require.Equal(t, "high", cmd().(ReasoningSelectedMsg).Effort)
 	require.Equal(t, "low", cfg.Agents[config.AgentCoder].ReasoningEffort, "a highlighted choice must not persist before application handles confirmation")
 	changed := models.SupportedModels["reasoning-fixture"]
 	changed.ReasoningLevels = []string{"low"}
 	models.SupportedModels["reasoning-fixture"] = changed
-	cmd, _ = m.reasoningUpdate(tea.KeyMsg{Type: tea.KeyEnter})
+	cmd, _ = m.reasoningUpdate(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Equal(t, "low", cmd().(ReasoningSelectedMsg).Effort)
-	m.reasoningUpdate(tea.KeyMsg{Type: tea.KeyEsc})
+	m.reasoningUpdate(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, m.reasoningOpen)
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	require.Equal(t, 60, m.width)

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
@@ -96,9 +96,9 @@ func TestPromptHistoryRestoresOriginalDraftAndAttachments(t *testing.T) {
 	m.textarea.SetValue("work in progress")
 	m.attachments = []message.Attachment{{FileName: "draft.png", Content: []byte("kept")}}
 	m.history = []string{"old request"}
-	require.True(t, m.promptHistoryKey(tea.KeyMsg{Type: tea.KeyUp}))
+	require.True(t, m.promptHistoryKey(tea.KeyPressMsg{Code: tea.KeyUp}))
 	require.Equal(t, "old request", m.textarea.Value())
-	require.True(t, m.promptHistoryKey(tea.KeyMsg{Type: tea.KeyDown}))
+	require.True(t, m.promptHistoryKey(tea.KeyPressMsg{Code: tea.KeyDown}))
 	require.Equal(t, "work in progress", m.textarea.Value())
 	require.Equal(t, "draft.png", m.attachments[0].FileName)
 	require.Equal(t, []byte("kept"), m.attachments[0].Content)
@@ -151,7 +151,7 @@ func TestPreparedDraftIsInvalidatedByNewInput(t *testing.T) {
 	m.session = session.Session{ID: "origin"}
 	m.textarea.SetValue("original")
 	require.NoError(t, m.PrepareSessionDraft("target"))
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" changed")})
+	m.Update(tea.KeyPressMsg{Code: []rune(" changed")[0], Text: " changed"})
 	require.Nil(t, m.preparedDraft)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "state", "composer-drafts.json"), []byte("broken"), 0600))
 	require.Error(t, m.PrepareSessionDraft("target"))
@@ -189,7 +189,7 @@ func TestManyUnicodeDraftsStayCanonicalAndDoNotFillTheSessionIndex(t *testing.T)
 		id := strconv.Itoa(index)
 		m.Update(SessionSelectedMsg(session.Session{ID: id}))
 		require.Equal(t, id, m.session.ID)
-		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Paste: true, Runes: []rune(draft)})
+		m.Update(tea.PasteMsg{Content: draft})
 		require.Equal(t, draft, m.textarea.Value())
 		require.NoError(t, m.PersistDraft())
 	}

@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -76,7 +76,7 @@ type providerTestMsg struct {
 	err     error
 }
 type ProviderDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 	Open() tea.Cmd
 	Close()
@@ -178,11 +178,11 @@ func (m *providerDialogCmp) setFields(labels, values []string) {
 	m.fields = make([]textinput.Model, len(labels))
 	m.focus = 0
 	for i := range labels {
-		f := textinput.New()
+		f := newDialogInput()
 		f.CharLimit = 512
 		f.Prompt = ""
 		f.SetValue(values[i])
-		f.Width = max(8, m.contentWidth()-3)
+		f.SetWidth(max(8, m.contentWidth()-3))
 		if i == 0 {
 			f.Focus()
 		}
@@ -304,7 +304,7 @@ func (m *providerDialogCmp) save() tea.Cmd {
 	return util.CmdHandler(ProviderSettingsSavedMsg{ProviderChanged: changed, Provider: result.destination, Disabled: result.disabled})
 }
 
-func (m *providerDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *providerDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch result := msg.(type) {
 	case providerVaultRollbackMsg:
 		m.saving = false
@@ -354,7 +354,7 @@ func (m *providerDialogCmp) View() string {
 	}
 	t := theme.CurrentTheme()
 	width := m.contentWidth()
-	base := styles.BaseStyle().Width(width)
+	base := dialogBody().Width(width)
 	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), width, "…")) }
 	title := "Connections and preferences"
 	if m.screen == "provider" {
@@ -385,7 +385,7 @@ func (m *providerDialogCmp) View() string {
 		lines = append(lines, line(config.Text("TLS sem validação: certificado e identidade não verificados.", "Insecure TLS: certificate and server identity are not verified.")))
 	}
 	lines = append(lines, m.noteLines(note)...)
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 func (m *providerDialogCmp) BindingKeys() []key.Binding {
 	return []key.Binding{key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")), key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", "test connection")), key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))}
@@ -395,13 +395,13 @@ func (m *providerDialogCmp) listRows() int {
 	if m.height == 0 {
 		return 10
 	}
-	return max(1, min(10, m.height-8))
+	return max(1, min(10, m.height-9))
 }
 func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {
 		return m.fieldCount()
 	}
-	available := m.height - 10
+	available := m.height - 11
 	if m.screen == "provider" && len(m.fields) > 9 && m.fields[9].Value() == "true" {
 		available--
 	}

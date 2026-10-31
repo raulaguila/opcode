@@ -1,12 +1,14 @@
 package chat
 
 import (
+	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/rivo/uniseg"
 )
@@ -40,21 +42,21 @@ func (m *messagesCmp) ClearSelection() {
 }
 
 func (m *messagesCmp) selectionMouse(msg tea.MouseMsg) {
-	if msg.Action == tea.MouseActionRelease && m.cancelPendingHistoryNavigation(historyMouseSelection) {
+	if util.MouseReleased(msg) && m.cancelPendingHistoryNavigation(historyMouseSelection) {
 		return
 	}
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+	if util.MousePressed(msg) && msg.Mouse().Button == tea.MouseLeft {
 		m.beginMouseSelection(msg)
 		return
 	}
-	if !m.selection.dragging || (msg.Action != tea.MouseActionMotion && msg.Action != tea.MouseActionRelease) {
+	if !m.selection.dragging || (!util.MouseMoved(msg) && !util.MouseReleased(msg)) {
 		return
 	}
-	row := max(0, min(msg.Y-1, m.viewport.Height-1)) + m.viewport.YOffset
-	point := textPoint{max(0, min(msg.X-1, m.width-1)), min(row, len(m.transcriptLines)-1)}
+	row := max(0, min(msg.Mouse().Y-1, m.viewport.Height-1)) + m.viewport.YOffset
+	point := textPoint{max(0, min(msg.Mouse().X-1, m.width-1)), min(row, len(m.transcriptLines)-1)}
 	m.selection.focus = point
 	m.selection.moved = m.selection.moved || point != m.selection.anchor
-	if msg.Action == tea.MouseActionRelease {
+	if util.MouseReleased(msg) {
 		if !m.selection.moved {
 			m.ClearSelection()
 		} else {
@@ -69,11 +71,11 @@ func (m *messagesCmp) beginMouseSelection(msg tea.MouseMsg) {
 		return
 	}
 	m.loadEarlierHistory(true)
-	row := msg.Y - 1 + m.viewport.YOffset // Container padding.
-	if m.rendering || len(m.messages) == 0 || row < 0 || row >= len(m.transcriptLines) || msg.Y < 1 || msg.Y > m.viewport.Height {
+	row := msg.Mouse().Y - 1 + m.viewport.YOffset // Container padding.
+	if m.rendering || len(m.messages) == 0 || row < 0 || row >= len(m.transcriptLines) || msg.Mouse().Y < 1 || msg.Mouse().Y > m.viewport.Height {
 		return
 	}
-	point := textPoint{max(0, min(msg.X-1, m.width-1)), row}
+	point := textPoint{max(0, min(msg.Mouse().X-1, m.width-1)), row}
 	m.selection = textSelection{anchor: point, focus: point, dragging: true}
 }
 
@@ -152,7 +154,7 @@ func (m *messagesCmp) highlightSelection(content string) string {
 		}
 		span := ansi.Strip(ansi.Cut(line, left, right))
 		highlight := style.Render(span)
-		if lipgloss.ColorProfile() == termenv.Ascii {
+		if theme.ColorProfile() == colorprofile.Ascii {
 			// NO_COLOR disables the palette, not text selection. Lipgloss also
 			// drops Reverse in its ASCII profile; retain this color-free attribute.
 			highlight = "\x1b[7m" + span + "\x1b[27m"

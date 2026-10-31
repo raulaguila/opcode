@@ -5,9 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -104,17 +103,17 @@ func TestQuestionExchangeStripsTerminalControlsFromHistoricalQuestionAndAnswer(t
 }
 
 func TestQuestionExchangeUsesDistinctPipeAndKeepsLabelsWithoutColor(t *testing.T) {
-	previous, previousDark, previousTheme := lipgloss.ColorProfile(), lipgloss.HasDarkBackground(), theme.CurrentThemeName()
+	previous, previousDark, previousTheme := theme.ColorProfile(), theme.HasDarkBackground(), theme.CurrentThemeName()
 	t.Cleanup(func() {
-		lipgloss.SetColorProfile(previous)
-		lipgloss.SetHasDarkBackground(previousDark)
+		theme.SetColorProfile(previous)
+		theme.SetHasDarkBackground(previousDark)
 		_ = theme.PreviewTheme(previousTheme)
 	})
 	for _, dark := range []bool{false, true} {
-		lipgloss.SetHasDarkBackground(dark)
+		theme.SetHasDarkBackground(dark)
 		for _, name := range []string{"catppuccin", "gruvbox"} {
 			require.NoError(t, theme.PreviewTheme(name))
-			lipgloss.SetColorProfile(termenv.TrueColor)
+			theme.SetColorProfile(colorprofile.TrueColor)
 			m := exchangeFixture(`{"question":"A question?"}`, "A free answer")
 			var exchange uiMessage
 			for _, item := range m.uiMessages {
@@ -126,7 +125,7 @@ func TestQuestionExchangeUsesDistinctPipeAndKeepsLabelsWithoutColor(t *testing.T
 			body := "Agent question\n\nA question?\n\nYou answered: A free answer"
 			require.NotEqual(t, renderMessage(body, true, false, 80), exchange.content)
 			require.NotEqual(t, renderMessage(body, false, false, 80), exchange.content)
-			lipgloss.SetColorProfile(termenv.Ascii)
+			theme.SetColorProfile(colorprofile.Ascii)
 			m.resetRenderCache()
 			m.renderView()
 			require.Contains(t, timelineText(m), "Agent question")

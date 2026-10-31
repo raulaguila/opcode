@@ -1,7 +1,6 @@
 package theme
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/stretchr/testify/require"
 	"math"
 	"strconv"
@@ -36,7 +35,7 @@ func TestOpcodeMutedTextRemainsReadableOnBothBackgrounds(t *testing.T) {
 
 func TestOpcodeSemanticColorsHaveContrastInBothThemes(t *testing.T) {
 	palette := NewOpcodeTheme()
-	colors := map[string]lipgloss.AdaptiveColor{"text": palette.Text(), "muted": palette.TextMuted(), "selected": palette.Primary(), "secondary": palette.Secondary(), "accent": palette.Accent(), "warning": palette.Warning(), "error": palette.Error(), "success": palette.Success(), "info": palette.Info()}
+	colors := map[string]AdaptiveColor{"text": palette.Text(), "muted": palette.TextMuted(), "selected": palette.Primary(), "secondary": palette.Secondary(), "accent": palette.Accent(), "warning": palette.Warning(), "error": palette.Error(), "success": palette.Success(), "info": palette.Info()}
 	luminance := func(hex string) float64 {
 		n, err := strconv.ParseUint(hex[1:], 16, 24)
 		require.NoError(t, err)
@@ -53,7 +52,7 @@ func TestOpcodeSemanticColorsHaveContrastInBothThemes(t *testing.T) {
 		return result
 	}
 	for name, fg := range colors {
-		for _, bg := range []lipgloss.AdaptiveColor{palette.Background(), palette.BackgroundSecondary()} {
+		for _, bg := range []AdaptiveColor{palette.Background(), palette.BackgroundSecondary()} {
 			for mode, pair := range map[string][2]string{"light": {fg.Light, bg.Light}, "dark": {fg.Dark, bg.Dark}} {
 				a, b := luminance(pair[0]), luminance(pair[1])
 				require.GreaterOrEqual(t, (max(a, b)+0.05)/(min(a, b)+0.05), 4.5, name+" "+mode+" "+pair[1])

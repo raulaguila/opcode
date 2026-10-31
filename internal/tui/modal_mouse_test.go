@@ -2,10 +2,11 @@ package tui
 
 import (
 	"fmt"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/tui/components/core"
@@ -29,12 +30,12 @@ func TestPermissionClickMatchesRenderedRootAtEverySize(t *testing.T) {
 			approval.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1] - 1})
 			request := permission.PermissionRequest{ID: "exact-request", ToolName: "test_lsp_connection", Path: "/workspace/" + strings.Repeat("nested/", 15), Params: map[string]string{"command": "/bin/bash"}}
 			approval.SetPermissions(request)
-			a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: &modalTestPage{body: strings.Repeat(" \n", size[1]-2)}}, status: status.(core.StatusCmp), width: size[0], height: size[1] - 1, permissions: approval, showPermissions: true}
-			frame := ansi.Strip(a.View())
+			a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: &modalTestPage{body: strings.Repeat(" \n", size[1]-2)}}, status: status.(core.StatusCmp), width: size[0], height: size[1] - 1, permissions: approval, showPermissions: true}
+			frame := ansi.Strip(a.View().Content)
 			found := false
 			for y, line := range strings.Split(frame, "\n") {
 				if before, _, ok := strings.Cut(line, "Allow (a)"); ok {
-					_, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(before), Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+					_, cmd := a.Update(tea.MouseClickMsg{X: ansi.StringWidth(before), Y: y, Button: tea.MouseLeft})
 					require.NotNil(t, cmd, "visible approval target must be clickable:\n%s", frame)
 					response := cmd().(dialog.PermissionResponseMsg)
 					require.Equal(t, dialog.PermissionAllow, response.Action)
@@ -51,10 +52,10 @@ func TestQuitMouseDoesNotReplaceThemeDialog(t *testing.T) {
 	status, _ := core.NewStatusCmp(nil).Update(tea.WindowSizeMsg{Width: 80})
 	quit := dialog.NewQuitCmp()
 	themes := dialog.NewThemeDialogCmp()
-	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: &inputPage{}}, status: status.(core.StatusCmp), width: 80, height: 23, quit: quit, themeDialog: themes, showQuit: true}
-	for y, line := range strings.Split(ansi.Strip(a.View()), "\n") {
+	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: &inputPage{}}, status: status.(core.StatusCmp), width: 80, height: 23, quit: quit, themeDialog: themes, showQuit: true}
+	for y, line := range strings.Split(ansi.Strip(a.View().Content), "\n") {
 		if before, _, ok := strings.Cut(line, "Continue"); ok {
-			u, cmd := a.Update(tea.MouseMsg{X: ansi.StringWidth(before), Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+			u, cmd := a.Update(tea.MouseClickMsg{X: ansi.StringWidth(before), Y: y, Button: tea.MouseLeft})
 			after := u.(appModel)
 			require.Same(t, themes, after.themeDialog)
 			require.Same(t, quit, after.quit)
@@ -69,8 +70,8 @@ func TestQuitMouseDoesNotReplaceThemeDialog(t *testing.T) {
 func TestSSHPasteNeverInvokesServerClipboard(t *testing.T) {
 	t.Setenv("SSH_CONNECTION", "fixture")
 	p := &inputPage{}
-	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]tea.Model{page.ChatPage: p}}
-	_, cmd := a.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
+	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: p}}
+	_, cmd := a.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
 	require.NotNil(t, cmd)
 	require.Empty(t, p.received)
 }

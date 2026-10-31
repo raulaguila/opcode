@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
@@ -19,7 +19,7 @@ func TestGatewayAdvertisedContextAppearsInModelPicker(t *testing.T) {
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"data":[{"id":"alias","max_model_len":131072,"openai":{"max_model_len":131072}}]}`)), Request: req}, nil
 	})
 	m.Update(m.Open()())
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	require.NotNil(t, cmd)
 	m.Update(cmd())
 	require.Contains(t, m.View(), "Office gateway")

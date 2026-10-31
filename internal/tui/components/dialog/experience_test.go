@@ -3,12 +3,13 @@ package dialog
 import (
 	"context"
 	"fmt"
-	"github.com/charmbracelet/bubbles/key"
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/permission"
@@ -22,19 +23,19 @@ func TestSearchableSettingsEditResetAndAdvancedFilter(t *testing.T) {
 	m.settings()
 	m.settingsFilter.SetValue("sidebar")
 	require.Len(t, m.filteredSettings(), 1)
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Equal(t, "setting", m.screen)
 	m.fields[0].SetValue("hidden")
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	require.NotNil(t, cmd)
 	require.Equal(t, "hidden", config.Get().TUI.Sidebar)
 	m.settingsFilter.SetValue("sidebar")
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	require.Equal(t, "hidden", config.Get().TUI.Sidebar)
 	m.settingsFilter.SetValue("maxSteps")
 	require.Empty(t, m.filteredSettings())
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	require.Len(t, m.filteredSettings(), 1)
 }
 func TestSettingsGeometryAtSmallAndLargeTerminalSizes(t *testing.T) {
@@ -55,10 +56,10 @@ func TestPermissionReviewModesAndFullscreenDoNotApprove(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.SetPermissions(permission.PermissionRequest{ID: "review", ToolName: tools.EditToolName, Path: "project", Params: tools.EditPermissionsParams{Diff: "--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-old\n+new\n"}})
 	require.Contains(t, m.View(), "-old")
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	_, cmd := m.Update(tea.KeyPressMsg{Text: "t"})
 	require.Nil(t, cmd)
 	require.Equal(t, "unified", m.diffMode)
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	_, cmd = m.Update(tea.KeyPressMsg{Text: "f"})
 	require.Nil(t, cmd)
 	require.True(t, m.fullscreen)
 	for _, size := range []tea.WindowSizeMsg{{Width: 36, Height: 18}, {Width: 80, Height: 24}, {Width: 160, Height: 40}} {
@@ -87,7 +88,7 @@ func TestPreferencesAndPermissionControlsUseSelectedLocale(t *testing.T) {
 	require.Contains(t, m.View(), "Configurar provedor")
 	require.Contains(t, m.View(), "URL da API")
 	require.NotContains(t, m.View(), "ID da conexão")
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	require.Contains(t, m.View(), "ID da conexão")
 	require.NotContains(t, m.View(), "API key environment variable")
 	permissionUI := NewPermissionDialogCmp().(*permissionDialogCmp)
@@ -108,7 +109,7 @@ func TestHelpCanScrollAllBindingsOnSmallTerminal(t *testing.T) {
 	m.SetBindings(bindings)
 	require.LessOrEqual(t, lipgloss.Width(m.View()), 36)
 	require.LessOrEqual(t, lipgloss.Height(m.View()), 14)
-	m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnd})
 	require.Contains(t, m.View(), "action 29")
 }
 
@@ -117,18 +118,18 @@ func TestModelProbeRequiresExplicitSecondConfirmationAndRejectsStaleResults(t *t
 	cmd := m.Open()
 	m.Update(cmd())
 	require.NotEmpty(t, m.filtered)
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
 	require.Nil(t, cmd)
 	require.True(t, m.probeConfirm)
 	require.Contains(t, m.View(), "Provider charges may apply")
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Nil(t, cmd)
 	require.False(t, m.probeConfirm)
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.NotNil(t, cmd)
 	require.True(t, m.probeRunning)
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	note := m.note
 	result := cmd().(ModelProbeResultMsg)
 	require.ErrorIs(t, result.err, context.Canceled)

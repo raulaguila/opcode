@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/charmbracelet/glamour/ansi"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/glamour/v2/ansi"
 	terminalansi "github.com/charmbracelet/x/ansi"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -43,7 +42,7 @@ func renderMarkdownBlocks(content string, width, proseWidth int, cache *Markdown
 		}
 		node = next
 	}
-	return strings.Join(output, "\n\n")
+	return TerminalOutput(strings.Join(output, "\n\n"))
 }
 
 type markdownBlockRenderer struct {
@@ -83,7 +82,7 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 			b.style = generateMarkdownStyleConfig()
 			b.styled = true
 		}
-		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: measure, Styles: b.style, ColorProfile: lipgloss.ColorProfile()}), 1000)))
+		r = renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{WordWrap: measure, Styles: b.style}), 1000)))
 		b.renderers[measure] = r
 	}
 	block := ast.NewDocument()

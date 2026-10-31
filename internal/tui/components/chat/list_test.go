@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -32,15 +32,15 @@ func scrollableMessages(t *testing.T) *messagesCmp {
 }
 
 func wheel(button tea.MouseButton) tea.MouseMsg {
-	return tea.MouseMsg{X: 3, Y: 3, Button: button, Action: tea.MouseActionPress}
+	return tea.MouseWheelMsg{X: 3, Y: 3, Button: button}
 }
 
 func TestMouseWheelScrollsMessages(t *testing.T) {
 	m := scrollableMessages(t)
 	bottom := m.viewport.YOffset
-	m.Update(wheel(tea.MouseButtonWheelUp))
+	m.Update(wheel(tea.MouseWheelUp))
 	require.Less(t, m.viewport.YOffset, bottom)
-	m.Update(wheel(tea.MouseButtonWheelDown))
+	m.Update(wheel(tea.MouseWheelDown))
 	require.Equal(t, bottom, m.viewport.YOffset)
 }
 
@@ -49,7 +49,7 @@ func TestMessageUpdatesRespectScrollPosition(t *testing.T) {
 		t.Run(map[bool]string{false: "reading history", true: "following response"}[follow], func(t *testing.T) {
 			m := scrollableMessages(t)
 			if !follow {
-				m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+				m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 				require.False(t, m.viewport.AtBottom())
 			}
 			offset := m.viewport.YOffset
@@ -73,9 +73,9 @@ func TestMessageUpdatesRespectScrollPosition(t *testing.T) {
 
 func TestReturningToBottomResumesFollowingResponse(t *testing.T) {
 	m := scrollableMessages(t)
-	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	require.False(t, m.viewport.AtBottom())
-	m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	require.True(t, m.viewport.AtBottom())
 	updated := m.messages[0]
 	updated.Parts = []message.ContentPart{message.TextContent{Text: strings.Repeat("new line\n\n", 100)}}
@@ -87,7 +87,7 @@ func TestResizingForQuestionPanelKeepsFollowingLatestResponse(t *testing.T) {
 	m := scrollableMessages(t)
 	m.SetSize(50, 8)
 	require.True(t, m.viewport.AtBottom(), "shrinking chat for a question must keep the latest response visible")
-	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	offset := m.viewport.YOffset
 	m.SetSize(48, 7)
 	require.Equal(t, offset, m.viewport.YOffset, "resizing must preserve someone reading history")
@@ -95,7 +95,7 @@ func TestResizingForQuestionPanelKeepsFollowingLatestResponse(t *testing.T) {
 
 func TestSendingMessageReturnsToBottom(t *testing.T) {
 	m := scrollableMessages(t)
-	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.CreatedEvent, Payload: message.Message{
 		ID: "user", SessionID: "session", Role: message.User,
 		Parts: []message.ContentPart{message.TextContent{Text: "new question"}},
@@ -106,8 +106,8 @@ func TestSendingMessageReturnsToBottom(t *testing.T) {
 func TestPageNavigationPreservesEditorText(t *testing.T) {
 	editor := NewEditorCmp(&app.App{}).(*editorCmp)
 	editor.textarea.SetValue("unfinished question")
-	for _, typ := range []tea.KeyType{tea.KeyPgUp, tea.KeyPgDown} {
-		editor.Update(tea.KeyMsg{Type: typ})
+	for _, typ := range []rune{tea.KeyPgUp, tea.KeyPgDown} {
+		editor.Update(tea.KeyPressMsg{Code: typ})
 		require.Equal(t, "unfinished question", editor.textarea.Value())
 	}
 }
@@ -118,7 +118,12 @@ type scrollProgram struct {
 }
 
 func (m *scrollProgram) Init() tea.Cmd { return nil }
-func (m *scrollProgram) View() string  { return m.messages.viewport.View() }
+func (m *scrollProgram) View() tea.View {
+	v := tea.NewView(m.messages.viewport.View())
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
+}
 func (m *scrollProgram) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(tea.MouseMsg); ok {
 		m.messages.Update(msg)
@@ -136,7 +141,7 @@ func TestTerminalWheelInputScrollsMessages(t *testing.T) {
 	defer cancel()
 	var output bytes.Buffer
 	program := tea.NewProgram(harness,
-		tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion(),
+		tea.WithContext(ctx),
 		tea.WithInput(strings.NewReader("\x1b[<64;4;4M")), // SGR wheel-up event
 		tea.WithOutput(&output), tea.WithoutSignalHandler(),
 	)

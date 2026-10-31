@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"image/color"
 	"io"
 	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
+	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/aymanbagabas/go-udiff"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/theme"
@@ -245,7 +246,7 @@ func pairLines(lines []DiffLine) []linePair {
 // -------------------------------------------------------------------------
 
 // SyntaxHighlight applies syntax highlighting to text based on file extension
-func SyntaxHighlight(w io.Writer, source, fileName, formatter string, bg lipgloss.TerminalColor) error {
+func SyntaxHighlight(w io.Writer, source, fileName, formatter string, bg color.Color) error {
 	t := theme.CurrentTheme()
 
 	// Determine the language lexer to use
@@ -454,15 +455,15 @@ func SyntaxHighlight(w io.Writer, source, fileName, formatter string, bg lipglos
 }
 
 // getColor returns the appropriate hex color string based on terminal background
-func getColor(adaptiveColor lipgloss.AdaptiveColor) string {
-	if lipgloss.HasDarkBackground() {
+func getColor(adaptiveColor theme.AdaptiveColor) string {
+	if theme.HasDarkBackground() {
 		return adaptiveColor.Dark
 	}
 	return adaptiveColor.Light
 }
 
 // highlightLine applies syntax highlighting to a single line
-func highlightLine(fileName string, line string, bg lipgloss.TerminalColor) string {
+func highlightLine(fileName string, line string, bg color.Color) string {
 	var buf bytes.Buffer
 	err := SyntaxHighlight(&buf, line, fileName, "terminal16m", bg)
 	if err != nil {
@@ -486,7 +487,7 @@ func createStyles(t theme.Theme) (removedLineStyle, addedLineStyle, contextLineS
 // -------------------------------------------------------------------------
 
 // applyHighlighting applies intra-line highlighting to a piece of text
-func applyHighlighting(content string, segments []Segment, segmentType LineType, highlightBg lipgloss.AdaptiveColor) string {
+func applyHighlighting(content string, segments []Segment, segmentType LineType, highlightBg theme.AdaptiveColor) string {
 	// Find all ANSI sequences in the content
 	ansiRegex := regexp.MustCompile(`\x1b(?:[@-Z\\-_]|\[[0-9?]*(?:;[0-9?]*)*[@-~])`)
 	ansiMatches := ansiRegex.FindAllStringIndex(content, -1)
@@ -741,7 +742,7 @@ func GenerateDiff(beforeContent, afterContent, fileName string) (string, int, in
 	return unified, additions, removals
 }
 
-func applyHighlightingState(content string, segments []Segment, segmentType LineType, ansiMatches [][]int, ansiSequences map[int]string, sb *strings.Builder, inSelection *bool, currentPos *int, bgColor lipgloss.Color, fgColor lipgloss.Color) {
+func applyHighlightingState(content string, segments []Segment, segmentType LineType, ansiMatches [][]int, ansiSequences map[int]string, sb *strings.Builder, inSelection *bool, currentPos *int, bgColor color.Color, fgColor color.Color) {
 	for i := 0; i < len(content); {
 		// Check if we're at an ANSI sequence
 		isAnsi := false

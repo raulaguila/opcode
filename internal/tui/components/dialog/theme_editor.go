@@ -2,15 +2,16 @@ package dialog
 
 import (
 	"fmt"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"strings"
+
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
-	"strings"
 )
 
 type themeEditor struct {
@@ -31,9 +32,9 @@ func (t *themeDialogCmp) openEditor() tea.Cmd {
 		return util.ReportError(err)
 	}
 	e := &themeEditor{palette: palette, restore: name}
-	for _, color := range []lipgloss.AdaptiveColor{palette.Primary, palette.Text, palette.Muted, palette.Background} {
+	for _, color := range []theme.AdaptiveColor{palette.Primary, palette.Text, palette.Muted, palette.Background} {
 		for _, value := range []string{color.Light, color.Dark} {
-			f := textinput.New()
+			f := newDialogInput()
 			f.Prompt = ""
 			f.CharLimit = 7
 			f.SetValue(value)
@@ -46,14 +47,14 @@ func (t *themeDialogCmp) openEditor() tea.Cmd {
 }
 func (e *themeEditor) candidate() theme.CustomPalette {
 	p := e.palette
-	colors := []*lipgloss.AdaptiveColor{&p.Primary, &p.Text, &p.Muted, &p.Background}
+	colors := []*theme.AdaptiveColor{&p.Primary, &p.Text, &p.Muted, &p.Background}
 	for i, c := range colors {
 		c.Light = e.fields[2*i].Value()
 		c.Dark = e.fields[2*i+1].Value()
 	}
 	return p
 }
-func (t *themeDialogCmp) editorUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (t *themeDialogCmp) editorUpdate(msg tea.Msg) (util.Model, tea.Cmd) {
 	e := t.editor
 	if result0, result1, handled := editorUpdateTeaKeyMsg(t, msg, e); handled {
 		return result0, result1
@@ -79,7 +80,7 @@ func (t *themeDialogCmp) editorRows() (rows, start int) {
 	if height <= 0 {
 		height = 24
 	}
-	rows = max(1, min(8, (height-10)/2))
+	rows = max(1, min(8, (height-11)/2))
 	start = max(0, t.editor.focus-rows+1)
 	return
 }
@@ -92,7 +93,7 @@ func (t *themeDialogCmp) editorWidth() int {
 func (t *themeDialogCmp) editorView() string {
 	e := t.editor
 	width := t.editorWidth()
-	line := func(s string) string { return styles.BaseStyle().Width(width).Render(ansi.Truncate(s, width, "…")) }
+	line := func(s string) string { return dialogBody().Width(width).Render(ansi.Truncate(s, width, "…")) }
 	rows, start := t.editorRows()
 	lines := []string{line(config.Text("Editar tema · #RRGGBB", "Edit theme · #RRGGBB")), line(config.Text("Base: ", "Base: ") + e.palette.Base)}
 	names := []string{config.Text("Destaque", "Primary"), config.Text("Texto", "Text"), config.Text("Texto secundário", "Muted text"), config.Text("Fundo", "Background")}
@@ -102,14 +103,14 @@ func (t *themeDialogCmp) editorView() string {
 			mode = config.Text("escuro", "dark")
 		}
 		label := fmt.Sprintf("%s%s · %s", selectionMark(i == e.focus), names[i/2], mode)
-		e.fields[i].Width = max(1, width-2)
+		e.fields[i].SetWidth(max(1, width-2))
 		lines = append(lines, line(label), line(e.fields[i].View()))
 	}
-	lines = append(lines, line(config.Text("[Salvar] Ctrl+S · [Cancelar] Esc · Tab campo", "[Save] Ctrl+S · [Cancel] Esc · Tab field")), line(e.note))
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
+	lines = append(lines, styles.PanelDivider(width), line(config.Text("[Salvar] Ctrl+S · [Cancelar] Esc · Tab campo", "[Save] Ctrl+S · [Cancel] Esc · Tab field")), line(e.note))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
 }
 
-func editorUpdateThemeDialogCmpCtrlS(t *themeDialogCmp, e *themeEditor) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func editorUpdateThemeDialogCmpCtrlS(t *themeDialogCmp, e *themeEditor) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if err := theme.SaveCustomPalette(e.candidate()); err != nil {
 		e.note = err.Error()
 		return t, nil, true
@@ -130,19 +131,19 @@ func editorUpdateThemeDialogCmpCtrlS(t *themeDialogCmp, e *themeEditor) (extract
 
 }
 
-func editorUpdateTeaMouseMsg(t *themeDialogCmp, msg tea.Msg, e *themeEditor) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func editorUpdateTeaMouseMsg(t *themeDialogCmp, msg tea.Msg, e *themeEditor) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if mouse, ok := msg.(tea.MouseMsg); ok {
 		if clickedLabel(t.editorView(), config.Text("[Salvar]", "[Save]"), mouse) {
-			returned1Value0, returned1Value1 := t.editorUpdate(tea.KeyMsg{Type: tea.KeyCtrlS})
+			returned1Value0, returned1Value1 := t.editorUpdate(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 			return returned1Value0, returned1Value1, true
 		}
 		if clickedLabel(t.editorView(), config.Text("[Cancelar]", "[Cancel]"), mouse) {
-			returned2Value0, returned2Value1 := t.editorUpdate(tea.KeyMsg{Type: tea.KeyEsc})
+			returned2Value0, returned2Value1 := t.editorUpdate(tea.KeyPressMsg{Code: tea.KeyEsc})
 			return returned2Value0, returned2Value1, true
 		}
 		rows, start := t.editorRows()
-		i := start + (mouse.Y-4)/2
-		if mouse.Action == tea.MouseActionPress && mouse.Button == tea.MouseButtonLeft && mouse.Y >= 4 && mouse.Y < 4+rows*2 && i < len(e.fields) && mouse.X >= 3 && mouse.X < t.editorWidth()+3 {
+		i := start + (mouse.Mouse().Y-4)/2
+		if leftClick(mouse) && mouse.Mouse().Y >= 4 && mouse.Mouse().Y < 4+rows*2 && i < len(e.fields) && mouse.Mouse().X >= 3 && mouse.Mouse().X < t.editorWidth()+3 {
 			e.fields[e.focus].Blur()
 			e.focus = i
 			return t, e.fields[i].Focus(), true
@@ -152,8 +153,8 @@ func editorUpdateTeaMouseMsg(t *themeDialogCmp, msg tea.Msg, e *themeEditor) (ex
 	return extractedResult0, extractedResult1, false
 }
 
-func editorUpdateTeaKeyMsg(t *themeDialogCmp, msg tea.Msg, e *themeEditor) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if k, ok := msg.(tea.KeyMsg); ok {
+func editorUpdateTeaKeyMsg(t *themeDialogCmp, msg tea.Msg, e *themeEditor) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
+	if k, ok := msg.(tea.KeyPressMsg); ok {
 		switch k.String() {
 		case "esc":
 			if err := theme.DiscardCustomPreview(e.restore); err != nil {

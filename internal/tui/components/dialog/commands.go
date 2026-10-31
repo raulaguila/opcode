@@ -4,10 +4,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/commands"
@@ -29,7 +29,7 @@ type Command struct {
 func (ci Command) Render(selected bool, width int) string {
 	ci.Title, ci.Description = commands.Presentation(ci.ID, ci.Title, ci.Description)
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	descStyle := baseStyle.Width(width).Foreground(t.TextMuted())
 	itemStyle := baseStyle.Width(width).
@@ -38,12 +38,12 @@ func (ci Command) Render(selected bool, width int) string {
 
 	if selected {
 		itemStyle = itemStyle.
-			Background(t.Primary()).
-			Foreground(t.Background()).
+			Background(t.BorderDim()).
+			Foreground(t.Text()).
 			Bold(true)
 		descStyle = descStyle.
-			Background(t.Primary()).
-			Foreground(t.Background())
+			Background(t.BorderDim()).
+			Foreground(t.Text())
 	}
 
 	title := itemStyle.Padding(0, 1).Render(ci.Title)
@@ -64,7 +64,7 @@ type CloseCommandDialogMsg struct{}
 
 // CommandDialog interface for the command selection dialog
 type CommandDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 	SetCommands(commands []Command)
 }
@@ -99,15 +99,15 @@ func (c *commandDialogCmp) Init() tea.Cmd {
 	return c.listView.Init()
 }
 
-func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (c *commandDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateCaseTeaKeyMsgCase(c, &msg); handled {
 			return result0, result1
 		}
 	case tea.MouseMsg:
-		return updateCommandDialogCmpMouseMsg(c, &msg)
+		return updateCommandDialogCmpMouseMsg(c, msg)
 	case tea.WindowSizeMsg:
 		c.width = msg.Width
 		c.height = msg.Height
@@ -133,13 +133,13 @@ func (c *commandDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (c *commandDialogCmp) View() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	maxWidth := 64
 	if c.width > 0 {
 		maxWidth = max(8, min(maxWidth, c.width-8))
 	}
-	c.search.Width = maxWidth - 2
+	c.search.SetWidth(maxWidth - 2)
 
 	title := baseStyle.
 		Foreground(t.Primary()).
@@ -156,7 +156,7 @@ func (c *commandDialogCmp) View() string {
 	_, selected := c.listView.GetSelectedItem()
 	count := 8
 	if c.height > 0 {
-		count = max(1, min(count, c.height-10))
+		count = max(1, min(count, c.height-11))
 	}
 	start := max(0, selected-count+1)
 	viewStart(c, t, &baseStyle, maxWidth, &rows, items, selected, count, start)
@@ -172,14 +172,13 @@ func (c *commandDialogCmp) View() string {
 	if c.activeID != "" {
 		hint = config.Text("↑↓ escolher · Enter aplicar modo · Esc voltar", "↑↓ select · Enter apply mode · Esc back")
 	}
-	rows = append(rows, ansi.Truncate(hint, maxWidth, "…"))
+	rows = append(rows, styles.PanelDivider(maxWidth), ansi.Truncate(hint, maxWidth, "…"))
 	content := lipgloss.JoinVertical(lipgloss.Left, rows...)
 
 	return baseStyle.Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(t.Background()).
+		Border(lipgloss.NormalBorder()).
+		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
-		Width(lipgloss.Width(content) + 4).
 		Render(content)
 }
 
@@ -201,7 +200,7 @@ func (c *commandDialogCmp) SetContext(title, activeID string) {
 	for i, item := range c.listView.GetItems() {
 		if item.ID == activeID {
 			for range i {
-				c.listView.Update(tea.KeyMsg{Type: tea.KeyDown})
+				c.listView.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 			}
 			break
 		}
@@ -236,7 +235,7 @@ func NewCommandDialogCmp() CommandDialog {
 		"No commands available",
 		false,
 	)
-	search := textinput.New()
+	search := newDialogInput()
 	search.Prompt = "/ "
 	search.Placeholder = config.Text("Buscar comando", "Search commands")
 	search.CharLimit = 128
@@ -246,8 +245,8 @@ func NewCommandDialogCmp() CommandDialog {
 	}
 }
 
-func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
+	if leftClick(msg) {
 		items := c.listView.GetItems()
 		_, selected := c.listView.GetSelectedItem()
 		count := 8
@@ -255,11 +254,11 @@ func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg *tea.MouseMsg) (ext
 			count = max(1, min(8, c.height-10))
 		}
 		start := max(0, selected-count+1)
-		row := msg.Y - 5
+		row := msg.Mouse().Y - 5
 		if c.activeID != "" {
-			row = msg.Y - 3
+			row = msg.Mouse().Y - 3
 		}
-		if msg.X >= 3 && row >= 0 && row < count && start+row < len(items) {
+		if msg.Mouse().X >= 3 && row >= 0 && row < count && start+row < len(items) {
 			return c, util.CmdHandler(CommandSelectedMsg{Command: items[start+row]})
 		}
 	}
@@ -267,7 +266,7 @@ func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg *tea.MouseMsg) (ext
 
 }
 
-func updateCaseTeaKeyMsgCase(c *commandDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateCaseTeaKeyMsgCase(c *commandDialogCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	switch {
 	case key.Matches((*msg), commandKeys.Enter):
 		selectedItem, idx := c.listView.GetSelectedItem()
@@ -305,7 +304,7 @@ func viewStart(c *commandDialogCmp, t theme.Theme, baseStyle *lipgloss.Style, ma
 		mark := "  "
 		if i == selected {
 			mark = "› "
-			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
+			style = style.Foreground(t.Text()).Background(t.BorderDim()).Bold(true)
 		}
 		(*rows) = append((*rows), style.Render(ansi.Truncate(mark+name, maxWidth, "…")))
 	}

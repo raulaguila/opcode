@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
@@ -21,7 +21,6 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/tui/image"
 	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
@@ -115,33 +114,33 @@ func (f *filepickerCmp) Init() tea.Cmd {
 	return nil
 }
 
-func (f *filepickerCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (f *filepickerCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		f.width = msg.Width
 		f.height = msg.Height
-		f.viewport.Width = max(1, msg.Width/2-8)
-		f.viewport.Height = max(1, msg.Height-8)
+		f.viewport.SetWidth(max(1, msg.Width/2-8))
+		f.viewport.SetHeight(max(1, msg.Height-8))
 		f.getCurrentFileBelowCursor()
 	case tea.MouseMsg:
-		rows := max(1, f.height-9)
+		rows := max(1, f.height-10)
 		start := max(0, f.cursor-rows+1)
-		row := msg.Y - 4
-		if msg.Button == tea.MouseButtonWheelUp {
+		row := msg.Mouse().Y - 4
+		if msg.Mouse().Button == tea.MouseWheelUp {
 			f.cursor = max(0, f.cursor-1)
 			f.getCurrentFileBelowCursor()
 		}
-		if msg.Button == tea.MouseButtonWheelDown {
+		if msg.Mouse().Button == tea.MouseWheelDown {
 			f.cursor = min(max(0, len(f.dirs)-1), f.cursor+1)
 			f.getCurrentFileBelowCursor()
 		}
-		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.X >= 3 && msg.X < f.listWidth()+3 && row >= 0 && row < rows && start+row < len(f.dirs) {
+		if leftClick(msg) && msg.Mouse().X >= 3 && msg.Mouse().X < f.listWidth()+3 && row >= 0 && row < rows && start+row < len(f.dirs) {
 			f.cursor = start + row
 			f.getCurrentFileBelowCursor()
 		}
 		return f, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateFilepickerCmpKeyMsg(f, &cmd, &msg); handled {
 			return result0, result1
 		}
@@ -149,7 +148,7 @@ func (f *filepickerCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return f, cmd
 }
 
-func (f *filepickerCmp) addAttachmentToMessage() (tea.Model, tea.Cmd) {
+func (f *filepickerCmp) addAttachmentToMessage() (util.Model, tea.Cmd) {
 	modeInfo := GetSelectedModel(config.Get())
 	if !modeInfo.SupportsAttachments {
 		logging.ErrorPersist(fmt.Sprintf("Model %s doesn't support attachments", modeInfo.Name))
@@ -199,7 +198,7 @@ func (f *filepickerCmp) View() string {
 	if wide {
 		listWidth = max(1, width/2-6)
 	}
-	rows := max(1, height-9)
+	rows := max(1, height-10)
 	start := max(0, f.cursor-rows+1)
 	lines := []string{config.Text("Anexar arquivo", "Attach file"), ansi.Truncate(f.cwd.View(), listWidth, "…")}
 	if len(f.dirs) == 0 {
@@ -211,27 +210,27 @@ func (f *filepickerCmp) View() string {
 			name += "/"
 		}
 		mark := "  "
-		style := styles.BaseStyle()
+		style := dialogBody()
 		if i == f.cursor {
 			mark = "› "
-			style = style.Background(theme.CurrentTheme().Primary()).Foreground(theme.CurrentTheme().Background())
+			style = styles.SelectedRow()
 		}
 		lines = append(lines, style.Width(listWidth).Render(ansi.Truncate(mark+name, listWidth, "…")))
 	}
-	lines = append(lines, config.Text("Enter anexa/abre · ← volta · I caminho · Esc", "Enter attach/open · ← back · I path · Esc"))
+	lines = append(lines, styles.PanelDivider(listWidth), config.Text("Enter anexa/abre · ← volta · I caminho · Esc", "Enter attach/open · ← back · I path · Esc"))
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], listWidth, "…")
 	}
-	frame := styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
+	frame := styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
 	if wide {
-		preview := styles.BaseStyle().Padding(1).Width(max(1, width-lipgloss.Width(frame)-2)).MaxHeight(max(1, height-2)).Render(f.viewport.View())
+		preview := dialogBody().Padding(1).Width(max(1, width-lipgloss.Width(frame)-2)).MaxHeight(max(1, height-2)).Render(f.viewport.View())
 		frame = lipgloss.JoinHorizontal(lipgloss.Top, frame, preview)
 	}
 	return lipgloss.NewStyle().MaxWidth(width).MaxHeight(height).Render(frame)
 }
 
 type FilepickerCmp interface {
-	tea.Model
+	util.Model
 	ToggleFilepicker(showFilepicker bool)
 	IsCWDFocused() bool
 }
@@ -248,11 +247,10 @@ func NewFilepickerCmp(app *app.App) FilepickerCmp {
 	homepath := config.WorkingDirectory()
 	baseDir := DirNode{parent: nil, directory: homepath}
 	dirs := readDir(homepath, false)
-	viewport := viewport.New(0, 0)
-	currentDirectory := textinput.New()
+	viewport := viewport.New()
+	currentDirectory := newDialogInput()
 	currentDirectory.CharLimit = 200
-	currentDirectory.Width = 44
-	currentDirectory.Cursor.Blink = true
+	currentDirectory.SetWidth(44)
 	currentDirectory.SetValue(baseDir.directory)
 	return &filepickerCmp{cwdDetails: &baseDir, dirs: dirs, cursorChain: make(stack, 0), viewport: viewport, cwd: currentDirectory, app: app}
 }
@@ -270,7 +268,7 @@ func (f *filepickerCmp) getCurrentFileBelowCursor() {
 		fullPath := f.cwdDetails.directory + "/" + dir.Name()
 
 		go func() {
-			imageString, err := image.ImagePreview(f.viewport.Width-4, fullPath)
+			imageString, err := image.ImagePreview(f.viewport.Width()-4, fullPath)
 			if err != nil {
 				logging.Error(err.Error())
 				f.viewport.SetContent("Preview unavailable")
@@ -344,7 +342,7 @@ func (f *filepickerCmp) listWidth() int {
 	return max(1, f.width-6)
 }
 
-func updateFilepickerCmpKeyMsg(f *filepickerCmp, cmd *tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateFilepickerCmpKeyMsg(f *filepickerCmp, cmd *tea.Cmd, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if f.cwd.Focused() {
 		f.cwd, (*cmd) = f.cwd.Update((*msg))
 	}
@@ -392,7 +390,7 @@ func updateFilepickerCmpKeyMsg(f *filepickerCmp, cmd *tea.Cmd, msg *tea.KeyMsg) 
 	return extractedResult0, extractedResult1, false
 }
 
-func updateFilepickerCmpKeyMsgEnter(f *filepickerCmp, cmd *tea.Cmd) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateFilepickerCmpKeyMsgEnter(f *filepickerCmp, cmd *tea.Cmd) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	var path string
 	var isPathDir bool
 	if f.cwd.Focused() {
@@ -443,7 +441,7 @@ func updateFilepickerCmpKeyMsgForward(f *filepickerCmp) {
 	}
 }
 
-func updateFilepickerCmpKeyMsgDown(f *filepickerCmp, msg *tea.KeyMsg) {
+func updateFilepickerCmpKeyMsgDown(f *filepickerCmp, msg *tea.KeyPressMsg) {
 	if !f.cwd.Focused() || msg.String() == downArrow {
 		if f.cursor < len(f.dirs)-1 {
 			f.cursor++
@@ -452,7 +450,7 @@ func updateFilepickerCmpKeyMsgDown(f *filepickerCmp, msg *tea.KeyMsg) {
 	}
 }
 
-func updateFilepickerCmpKeyMsgMatchesFilePickerKeyMapUp(f *filepickerCmp, msg *tea.KeyMsg) {
+func updateFilepickerCmpKeyMsgMatchesFilePickerKeyMapUp(f *filepickerCmp, msg *tea.KeyPressMsg) {
 	if !f.cwd.Focused() || msg.String() == upArrow {
 		if f.cursor > 0 {
 			f.cursor--

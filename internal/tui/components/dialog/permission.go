@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/permission"
@@ -35,7 +35,7 @@ type PermissionResponseMsg struct {
 
 // PermissionDialogCmp interface for permission dialog component
 type PermissionDialogCmp interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 	SetPermissions(permission permission.PermissionRequest) tea.Cmd
 }
@@ -60,7 +60,7 @@ var permissionsKeys = permissionsMapping{
 		key.WithHelp("→", "switch options"),
 	),
 	EnterSpace: key.NewBinding(
-		key.WithKeys("enter", " "),
+		key.WithKeys("enter", "space"),
 		key.WithHelp("enter/space", "confirm"),
 	),
 	Allow: key.NewBinding(
@@ -103,7 +103,7 @@ func (p *permissionDialogCmp) Init() tea.Cmd {
 	return p.contentViewPort.Init()
 }
 
-func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (p *permissionDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -114,8 +114,8 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.markdownCache = make(map[string]string)
 		p.diffCache = make(map[string]string)
 	case tea.MouseMsg:
-		return updatePermissionDialogCmpMouseMsg(p, &msg)
-	case tea.KeyMsg:
+		return updatePermissionDialogCmpMouseMsg(p, msg)
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateCaseTeaKeyMsg(p, &cmds, &msg); handled {
 			return result0, result1
 		}
@@ -148,10 +148,10 @@ func (p *permissionDialogCmp) renderButtons() string {
 	total := 4
 	for i, label := range labels {
 		mark := "  "
-		style := styles.BaseStyle().Padding(0, 1).Background(t.Background()).Foreground(t.Primary())
+		style := dialogBody().Padding(0, 1).Background(t.BackgroundSecondary()).Foreground(t.Primary())
 		if i == p.selectedOption {
 			mark = "› "
-			style = style.Background(t.Primary()).Foreground(t.Background()).Bold(true)
+			style = style.Background(t.BorderDim()).Foreground(t.Text()).Bold(true)
 		}
 		buttons[i] = style.Render(mark + label)
 		total += lipgloss.Width(buttons[i])
@@ -169,17 +169,17 @@ func (p *permissionDialogCmp) renderButtons() string {
 		p.buttonHits[i] = permissionButtonHit{x, 0, lipgloss.Width(button)}
 		x += lipgloss.Width(button) + 2
 	}
-	return styles.BaseStyle().Render(strings.Repeat(" ", offset)) + strings.Join(buttons, "  ")
+	return dialogBody().Render(strings.Repeat(" ", offset)) + strings.Join(buttons, "  ")
 }
 
 func (p *permissionDialogCmp) renderHeader() string {
 	lines := []string{config.Text("Ferramenta: ", "Tool: ") + p.permission.ToolName, config.Text("Escopo: ", "Scope: ") + p.permission.Path}
-	return styles.BaseStyle().Width(max(1, p.width-4)).Render(strings.Join(lines, "\n"))
+	return dialogBody().Width(max(1, p.width-4)).Render(strings.Join(lines, "\n"))
 }
 
 func (p *permissionDialogCmp) renderBashContent() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	if pr, ok := p.permission.Params.(tools.BashPermissionsParams); ok {
 		content := fmt.Sprintf("```bash\n%s\n```", pr.Command)
@@ -192,7 +192,7 @@ func (p *permissionDialogCmp) renderBashContent() string {
 		})
 
 		finalContent := baseStyle.
-			Width(p.contentViewPort.Width).
+			Width(p.contentViewPort.Width()).
 			Render(renderedContent)
 		p.contentViewPort.SetContent(finalContent)
 		return p.styleViewport()
@@ -223,7 +223,7 @@ func (p *permissionDialogCmp) renderWriteContent() string {
 
 func (p *permissionDialogCmp) renderFetchContent() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	if pr, ok := p.permission.Params.(tools.FetchPermissionsParams); ok {
 		content := fmt.Sprintf("```bash\n%s\n```", pr.URL)
@@ -236,7 +236,7 @@ func (p *permissionDialogCmp) renderFetchContent() string {
 		})
 
 		finalContent := baseStyle.
-			Width(p.contentViewPort.Width).
+			Width(p.contentViewPort.Width()).
 			Render(renderedContent)
 		p.contentViewPort.SetContent(finalContent)
 		return p.styleViewport()
@@ -246,7 +246,7 @@ func (p *permissionDialogCmp) renderFetchContent() string {
 
 func (p *permissionDialogCmp) renderDefaultContent() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	content := tools.RedactCredentials(p.permission.Description)
 	if p.permission.Params != nil {
@@ -267,7 +267,7 @@ func (p *permissionDialogCmp) renderDefaultContent() string {
 	})
 
 	finalContent := baseStyle.
-		Width(p.contentViewPort.Width).
+		Width(p.contentViewPort.Width()).
 		Render(renderedContent)
 	p.contentViewPort.SetContent(finalContent)
 
@@ -288,7 +288,7 @@ func (p *permissionDialogCmp) styleViewport() string {
 
 func (p *permissionDialogCmp) render() string {
 	t := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	title := baseStyle.
 		Bold(true).
@@ -301,8 +301,8 @@ func (p *permissionDialogCmp) render() string {
 	buttons := p.renderButtons()
 
 	// Calculate content height dynamically based on window size
-	p.contentViewPort.Height = max(1, p.height-lipgloss.Height(headerContent)-lipgloss.Height(buttons)-5-lipgloss.Height(title))
-	p.contentViewPort.Width = max(1, p.width-4)
+	p.contentViewPort.SetHeight(max(1, p.height-lipgloss.Height(headerContent)-lipgloss.Height(buttons)-6-lipgloss.Height(title)))
+	p.contentViewPort.SetWidth(max(1, p.width-4))
 
 	// Render content based on tool type
 	var contentFinal string
@@ -329,14 +329,15 @@ func (p *permissionDialogCmp) render() string {
 		headerContent,
 		contentFinal,
 		buttons,
-		styles.BaseStyle().Width(max(1, p.width-4)).Render(p.permissionHint()),
+		styles.PanelDivider(max(1, p.width-4)),
+		dialogBody().Width(max(1, p.width-4)).Render(p.permissionHint()),
 		baseStyle.Render(strings.Repeat(" ", max(0, p.width-4))),
 	)
 
 	return baseStyle.
 		Padding(1, 0, 0, 1).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(t.Background()).
+		Border(lipgloss.NormalBorder()).
+		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
 		Width(p.width).
 		Height(p.height).
@@ -417,7 +418,7 @@ func (c *permissionDialogCmp) GetOrSetMarkdown(key string, generator func() (str
 
 func NewPermissionDialogCmp() PermissionDialogCmp {
 	// Create viewport for content
-	contentViewport := viewport.New(0, 0)
+	contentViewport := viewport.New()
 
 	return &permissionDialogCmp{
 		contentViewPort: contentViewport,
@@ -437,26 +438,30 @@ func (p *permissionDialogCmp) permissionHint() string {
 	}
 }
 
-func updatePermissionDialogCmpMouseMsg(p *permissionDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+func updatePermissionDialogCmpMouseMsg(p *permissionDialogCmp, msg tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
+	if leftClick(msg) {
 		for i, hit := range p.buttonHits {
-			if msg.Y == p.buttonY+hit.y && msg.X >= hit.x && msg.X < hit.x+hit.width {
+			if msg.Mouse().Y == p.buttonY+hit.y && msg.Mouse().X >= hit.x && msg.Mouse().X < hit.x+hit.width {
 				p.selectedOption = i
 				return p, p.selectCurrentOption()
 			}
 		}
 	}
-	if msg.Button == tea.MouseButtonWheelUp {
+	if msg.Mouse().Button == tea.MouseWheelUp {
 		p.contentViewPort.ScrollUp(3)
 	}
-	if msg.Button == tea.MouseButtonWheelDown {
+	if msg.Mouse().Button == tea.MouseWheelDown {
 		p.contentViewPort.ScrollDown(3)
 	}
 	return p, nil
 
 }
 
-func updateCaseTeaKeyMsg(p *permissionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateCaseTeaKeyMsg(p *permissionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
+	// Native key text can contain "a" even for Alt+A. Consent shortcuts
+	// must match the complete keystroke, including its modifiers.
+	bindingKey := *msg
+	bindingKey.Text = ""
 	if msg.String() == "f" {
 		p.fullscreen = !p.fullscreen
 		p.SetSize()
@@ -484,18 +489,18 @@ func updateCaseTeaKeyMsg(p *permissionDialogCmp, cmds *[]tea.Cmd, msg *tea.KeyMs
 		return p, nil, true
 	}
 	switch {
-	case key.Matches((*msg), permissionsKeys.Right) || key.Matches((*msg), permissionsKeys.Tab):
+	case key.Matches(bindingKey, permissionsKeys.Right) || key.Matches(bindingKey, permissionsKeys.Tab):
 		p.selectedOption = (p.selectedOption + 1) % 3
 		return p, nil, true
-	case key.Matches((*msg), permissionsKeys.Left):
+	case key.Matches(bindingKey, permissionsKeys.Left):
 		p.selectedOption = (p.selectedOption + 2) % 3
-	case key.Matches((*msg), permissionsKeys.EnterSpace):
+	case key.Matches(bindingKey, permissionsKeys.EnterSpace):
 		return p, p.selectCurrentOption(), true
-	case key.Matches((*msg), permissionsKeys.Allow):
+	case key.Matches(bindingKey, permissionsKeys.Allow):
 		return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionAllow, Permission: p.permission}), true
-	case key.Matches((*msg), permissionsKeys.AllowSession):
+	case key.Matches(bindingKey, permissionsKeys.AllowSession):
 		return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionAllowForSession, Permission: p.permission}), true
-	case key.Matches((*msg), permissionsKeys.Deny):
+	case key.Matches(bindingKey, permissionsKeys.Deny):
 		return p, util.CmdHandler(PermissionResponseMsg{Action: PermissionDeny, Permission: p.permission}), true
 	default:
 		// Pass other keys to viewport

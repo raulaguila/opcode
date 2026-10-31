@@ -1,23 +1,24 @@
 package dialog
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
-	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/session"
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/session"
+	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMenusHandleEmptyListsAndOutsideClicks(t *testing.T) {
 	settingsDialog(t)
-	f := &filepickerCmp{cwd: textinput.New(), viewport: viewport.New(80, 22), cwdDetails: &DirNode{directory: t.TempDir()}}
-	for _, key := range []tea.KeyMsg{{Type: tea.KeyEnter}, {Type: tea.KeyRunes, Runes: []rune("l")}} {
+	f := &filepickerCmp{cwd: newDialogInput(), viewport: viewport.New(viewport.WithWidth(80), viewport.WithHeight(22)), cwdDetails: &DirNode{directory: t.TempDir()}}
+	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEnter}, {Text: "l"}} {
 		require.NotPanics(t, func() { f.Update(key) })
 	}
 	m := NewProviderDialogCmp().(*providerDialogCmp)
@@ -26,7 +27,7 @@ func TestMenusHandleEmptyListsAndOutsideClicks(t *testing.T) {
 	m.height = 24
 	for _, point := range [][2]int{{5, 4 + len(config.ProviderPresets)}, {-1, 4}, {5, 100}} {
 		require.NotPanics(t, func() {
-			m.Update(tea.MouseMsg{X: point[0], Y: point[1], Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+			m.Update(tea.MouseClickMsg{X: point[0], Y: point[1], Button: tea.MouseLeft})
 		})
 		require.Equal(t, "presets", m.screen)
 	}
@@ -34,7 +35,7 @@ func TestMenusHandleEmptyListsAndOutsideClicks(t *testing.T) {
 func TestSecondaryMenusFitAndPreserveFocus(t *testing.T) {
 	settingsDialog(t)
 	for _, size := range []tea.WindowSizeMsg{{Width: 60, Height: 20}, {Width: 80, Height: 24}, {Width: 120, Height: 36}} {
-		f := &filepickerCmp{cwd: textinput.New(), viewport: viewport.New(80, 22), cwdDetails: &DirNode{directory: t.TempDir()}}
+		f := &filepickerCmp{cwd: newDialogInput(), viewport: viewport.New(viewport.WithWidth(80), viewport.WithHeight(22)), cwdDetails: &DirNode{directory: t.TempDir()}}
 		f.Update(size)
 		require.LessOrEqual(t, lipgloss.Width(f.View()), size.Width)
 		require.LessOrEqual(t, lipgloss.Height(f.View()), size.Height)
@@ -42,12 +43,12 @@ func TestSecondaryMenusFitAndPreserveFocus(t *testing.T) {
 		m.SetSize(size.Width, size.Height)
 		require.LessOrEqual(t, lipgloss.Width(m.View()), size.Width)
 		require.LessOrEqual(t, lipgloss.Height(m.View()), size.Height)
-		u, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		u, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		m = u.(MultiArgumentsDialogCmp)
 		u, _ = m.Update(size)
 		m = u.(MultiArgumentsDialogCmp)
 		m.Init()
-		u, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ação")})
+		u, _ = m.Update(tea.KeyPressMsg{Text: "ação"})
 		m = u.(MultiArgumentsDialogCmp)
 		require.Equal(t, "ação", m.inputs[1].Value())
 		require.Empty(t, m.inputs[0].Value())
@@ -67,15 +68,15 @@ func TestSessionAndThemeSelectionRemainVisible(t *testing.T) {
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	require.Contains(t, ansi.Strip(m.View()), "›")
-	before := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.Ascii)
-	defer lipgloss.SetColorProfile(before)
+	before := theme.ColorProfile()
+	theme.SetColorProfile(colorprofile.Ascii)
+	defer theme.SetColorProfile(before)
 	theme := NewThemeDialogCmp().(*themeDialogCmp)
 	theme.Init()
 	v := theme.View()
 	theme.selectedIdx = (theme.selectedIdx + 1) % len(theme.themes)
 	require.NotEqual(t, v, theme.View())
-	_, cmd := NewQuitCmp().Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := NewQuitCmp().Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.NotNil(t, cmd)
 	require.IsType(t, CloseQuitMsg{}, cmd())
 }
@@ -99,29 +100,29 @@ func TestFormDraftAndCompleteErrorArePreserved(t *testing.T) {
 	m := settingsDialog(t)
 	m.edit(nil)
 	m.fields[1].SetValue("My edited provider")
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "list", m.screen)
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	m.Update(tea.KeyPressMsg{Text: "r"})
 	require.Equal(t, "My edited provider", m.fields[1].Value())
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	m.note = strings.Repeat("long error ", 100)
 	require.LessOrEqual(t, lipgloss.Height(m.View()), 20)
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
 	require.True(t, m.noteFull)
 	require.LessOrEqual(t, lipgloss.Height(m.View()), 20)
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "My edited provider", m.fields[1].Value())
 }
 func TestPairEditorRejectsDuplicateNamesAndKeepsLiteralReferences(t *testing.T) {
 	a, err := newPairList(`{"Authorization":"TOKEN_ENV"}`)
 	require.NoError(t, err)
 	a.add("X-Custom=OTHER_ENV")
-	done, save, _ := a.update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	done, save, _ := a.update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	require.True(t, done)
 	require.True(t, save)
 	require.JSONEq(t, `{"Authorization":"TOKEN_ENV","X-Custom":"OTHER_ENV"}`, a.value())
 	a.add("Authorization=DUP_ENV")
-	done, save, _ = a.update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	done, save, _ = a.update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	require.False(t, done)
 	require.False(t, save)
 }
@@ -130,7 +131,7 @@ func TestModeChooserDoesNotHaveInvisibleSearch(t *testing.T) {
 	m := NewCommandDialogCmp().(*commandDialogCmp)
 	m.SetCommands([]Command{{ID: "mode-ask", Title: "Ask"}, {ID: "mode-plan", Title: "Plan"}, {ID: "mode-execute", Title: "Execute"}})
 	m.SetContext("Work mode", "mode-ask")
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("zzzz")})
+	m.Update(tea.KeyPressMsg{Text: "zzzz"})
 	require.Len(t, m.listView.GetItems(), 3)
 	require.Empty(t, m.search.Value())
 }
@@ -140,7 +141,7 @@ func TestDetailsDoNotSwallowProbeCompletion(t *testing.T) {
 	m.edit(nil)
 	m.testing = true
 	m.note = "working"
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
 	require.True(t, m.noteFull)
 	request := m.request
 	m.Update(providerTestMsg{request: request, count: 3})
@@ -154,8 +155,8 @@ func TestResumedDraftRejectsCancelledProbeResult(t *testing.T) {
 	m.edit(nil)
 	request := m.request
 	m.fields[1].SetValue("draft")
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Text: "r"})
 	require.Greater(t, m.request, request)
 	m.note = "preserved"
 	m.Update(providerTestMsg{request: request, count: 8})

@@ -3,7 +3,7 @@ package chat
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
@@ -32,14 +32,14 @@ func TestTurnProcessCanCollapseWithoutHidingResponse(t *testing.T) {
 	require.Contains(t, ansi.Strip(m.viewport.View()), "visible response")
 	m.Update(ToggleProcessMsg{})
 	require.NotContains(t, ansi.Strip(m.viewport.View()), "process details")
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
 	action, ok := cmd().(ResponseActionsMsg)
 	require.True(t, ok)
 	require.Equal(t, "visible response", action.Text)
 }
 func TestUnreadIndicatorAndJumpToLatest(t *testing.T) {
 	m := scrollableMessages(t)
-	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	old := m.viewport.YOffset
 	updated := m.messages[0]
 	updated.AppendContent("new streaming text")

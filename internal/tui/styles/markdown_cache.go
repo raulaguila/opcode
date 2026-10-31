@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/yuin/goldmark/ast"
 )
@@ -29,7 +28,7 @@ type MarkdownCache struct {
 
 func (c *MarkdownCache) Reset() { *c = MarkdownCache{} }
 func (c *MarkdownCache) Render(content string, width, prose int) string {
-	identity := markdownIdentity{width: width, prose: prose, profile: int(lipgloss.ColorProfile()), dark: lipgloss.HasDarkBackground(), name: theme.CurrentThemeName()}
+	identity := markdownIdentity{width: width, prose: prose, profile: int(theme.ColorProfile()), dark: theme.HasDarkBackground(), name: theme.CurrentThemeName()}
 	value := reflect.ValueOf(theme.CurrentTheme())
 	if value.Kind() == reflect.Pointer {
 		identity.theme = value.Pointer()

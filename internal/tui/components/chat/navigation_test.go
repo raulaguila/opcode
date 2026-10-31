@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
@@ -18,7 +18,7 @@ func TestTranscriptDefaultsYieldToExistingGlobalShortcut(t *testing.T) {
 	t.Cleanup(func() { config.DefaultKeybindings["models"] = previous })
 	for _, key := range []rune{'f', 's'} {
 		config.DefaultKeybindings["models"] = "alt+" + string(key)
-		require.False(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{key}}))
+		require.False(t, m.TranscriptKey(tea.KeyPressMsg{Mod: tea.ModAlt, Code: key}))
 		require.False(t, m.find.open)
 		require.False(t, m.selection.keyboard)
 	}
@@ -31,22 +31,22 @@ func TestTranscriptDefaultsYieldToExistingGlobalShortcut(t *testing.T) {
 func TestKeyboardSelectionExtendsWholeUnicodeGraphemes(t *testing.T) {
 	m := selectionFixture(t)
 	m.StartSearch("ação")
-	require.True(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'s'}}))
+	require.True(t, m.TranscriptKey(tea.KeyPressMsg{Mod: tea.ModAlt, Code: 's'}))
 	for range 3 {
-		require.True(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyShiftRight}))
+		require.True(t, m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift}))
 	}
 	require.Equal(t, "ação", m.SelectedText())
 	require.False(t, m.find.open)
 	require.True(t, m.selection.keyboard)
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Empty(t, m.SelectedText())
-	require.False(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyLeft}), "ordinary arrows belong to the composer")
+	require.False(t, m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyLeft}), "ordinary arrows belong to the composer")
 	m.StartSearch("漢字")
 	m.ToggleKeyboardSelection()
 	require.Equal(t, "漢", m.SelectedText())
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyShiftRight})
+	m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
 	require.Equal(t, "漢字", m.SelectedText())
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyLeft})
+	m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyLeft})
 	require.Equal(t, "漢", m.SelectedText(), "plain arrow moves a single-cell selection")
 }
 
@@ -57,14 +57,14 @@ func TestTranscriptSearchIsBoundedLiteralAndNavigable(t *testing.T) {
 	m.StartSearch("[LITERAL]")
 	require.Len(t, m.find.matches, 2)
 	require.Equal(t, 0, m.find.matches[m.find.selected].row)
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Equal(t, 2, m.find.matches[m.find.selected].row)
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyUp})
+	m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyUp})
 	require.Equal(t, 0, m.find.matches[m.find.selected].row)
 	require.Contains(t, ansi.Strip(m.View()), "1/2")
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m.TranscriptKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	require.True(t, m.find.open, "Ctrl+C in query focus cannot quit")
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyEsc})
+	m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, m.find.open)
 	m.transcriptLines = make([]string, 400)
 	for i := range m.transcriptLines {
@@ -73,7 +73,7 @@ func TestTranscriptSearchIsBoundedLiteralAndNavigable(t *testing.T) {
 	m.StartSearch("match")
 	require.Len(t, m.find.matches, 200)
 	require.True(t, m.find.limited)
-	m.TranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Paste: true, Runes: []rune(strings.Repeat("x", 400) + "\n")})
+	m.TranscriptPaste(tea.PasteMsg{Content: strings.Repeat("x", 400) + "\n"})
 	require.LessOrEqual(t, len([]rune(m.find.query)), 128)
 	require.NotContains(t, m.find.query, "\n")
 }

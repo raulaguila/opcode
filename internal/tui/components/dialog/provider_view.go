@@ -3,10 +3,11 @@ package dialog
 import (
 	"slices"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
@@ -23,11 +24,11 @@ func (m *providerDialogCmp) providerBodyLines(t theme.Theme, width int, base lip
 	for i := start; i < min(len(m.rows), start+rows); i++ {
 		style := base
 		if i == m.selected {
-			style = style.Foreground(t.Background()).Background(t.Primary()).Bold(true)
+			style = style.Foreground(t.Text()).Background(t.BorderDim()).Bold(true)
 		}
 		lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+m.providerRowLabel(m.rows[i]), width, "…")))
 	}
-	lines = append(lines, line(config.Text("N Adicionar · Enter Editar · [Excluir] D · Esc", "N Add · Enter Edit · [Delete] D · Esc")))
+	lines = append(lines, styles.PanelDivider(width), line(config.Text("N Adicionar · Enter Editar · [Excluir] D · Esc", "N Add · Enter Edit · [Delete] D · Esc")))
 	return append(lines, line(config.Text("[Preferências] P · [Integrações] I", "[Preferences] P · [Integrations] I")))
 }
 
@@ -59,10 +60,10 @@ func (m *providerDialogCmp) providerFormLines(width int, line func(string) strin
 			label = "› " + label
 		}
 		lines = append(lines, line(label))
-		m.fields[i].Width = max(8, width-2)
+		m.fields[i].SetWidth(max(8, width-2))
 		lines = append(lines, line(choiceView(m.fields[i], fieldOptions(m.labels[i]))))
 	}
-	return append(lines, line(m.providerFormHint()))
+	return append(lines, styles.PanelDivider(width), line(m.providerFormHint()))
 }
 
 func (m *providerDialogCmp) providerFormHint() string {

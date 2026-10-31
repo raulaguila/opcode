@@ -1,10 +1,10 @@
 package tui
 
 import (
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"fmt"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
@@ -101,7 +101,7 @@ type appModel struct {
 	unfocused       bool
 	currentPage     page.PageID
 	previousPage    page.PageID
-	pages           map[page.PageID]tea.Model
+	pages           map[page.PageID]util.Model
 	loadedPages     map[page.PageID]bool
 	status          core.StatusCmp
 	app             *app.App
@@ -155,7 +155,7 @@ func (a appModel) Init() tea.Cmd {
 	var cmds []tea.Cmd
 	cmd := a.pages[a.currentPage].Init()
 	a.loadedPages[a.currentPage] = true
-	cmds = append(cmds, cmd)
+	cmds = append(cmds, cmd, tea.RequestBackgroundColor)
 	cmd = a.status.Init()
 	cmds = append(cmds, cmd)
 	cmd = a.quit.Init()
@@ -204,6 +204,12 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 			}
 		}
 	}()
+	if cmd, handled := a.appearanceMessage(msg); handled {
+		return a, cmd
+	}
+	if pasted, ok := msg.(tea.PasteMsg); ok {
+		return a, a.pasteMessage(pasted)
+	}
 	if cmd, handled := a.productivityMessage(msg); handled {
 		return a, cmd
 	}
@@ -217,7 +223,7 @@ func (a appModel) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 
 func (a *appModel) routeEvent(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch msg.(type) {
-	case tea.FocusMsg, tea.BlurMsg, dialog.ModelCatalogLoadedMsg, dialog.ModelProbeResultMsg, tea.MouseMsg, tea.WindowSizeMsg, tea.KeyMsg:
+	case tea.FocusMsg, tea.BlurMsg, dialog.ModelCatalogLoadedMsg, dialog.ModelProbeResultMsg, tea.MouseMsg, tea.WindowSizeMsg, tea.KeyPressMsg:
 		return a.routeInput(msg)
 	case util.InfoMsg, pubsub.Event[logging.LogMessage], util.ClearStatusMsg:
 		return a.routeStatus(msg)
@@ -266,7 +272,7 @@ func (a *appModel) routeInput(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return *a, resize, true
 	// Status
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateAppModelKeyMsg(a, &cmd, &msg); handled {
 			return result0, result1, true
 		}
@@ -639,7 +645,7 @@ func (a *appModel) deliverEvent(msg tea.Msg, initial tea.Cmd) tea.Cmd {
 		{a.showCommandDialog, routeCommands, true}, {a.showModelDialog, routeModels, true},
 		{a.showInitDialog, routeInit, true}, {a.showThemeDialog, routeTheme, true},
 	}
-	_, key := msg.(tea.KeyMsg)
+	_, key := msg.(tea.KeyPressMsg)
 	for _, entry := range routes {
 		if !entry.show {
 			continue
@@ -711,7 +717,7 @@ func New(app *app.App, initial ...session.Session) tea.Model {
 		themeDialog:   dialog.NewThemeDialogCmp(),
 		app:           app,
 		commands:      []dialog.Command{},
-		pages: map[page.PageID]tea.Model{
+		pages: map[page.PageID]util.Model{
 			page.ChatPage: page.NewChatPage(app),
 			page.LogsPage: page.NewLogsPage(),
 		},

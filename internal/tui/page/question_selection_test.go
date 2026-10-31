@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/stretchr/testify/require"
@@ -34,22 +34,22 @@ func TestCustomAnswerIsLastSelectableRowAndRequiresText(t *testing.T) {
 		}()
 		require.Eventually(t, func() bool { p.refreshWorkflow(); return p.workflow.question.ID != "" }, time.Second, time.Millisecond)
 		for range 3 {
-			p.questionKey(tea.KeyMsg{Type: tea.KeyDown})
+			p.questionKey(tea.KeyPressMsg{Code: tea.KeyDown})
 		}
 		require.Equal(t, 2, p.workflow.choice)
 		require.True(t, p.workflow.answer.Focused())
 		require.Empty(t, p.workflow.answer.Value())
 		require.Contains(t, ansi.Strip(p.workflowView()), "› ● ")
-		flattenCommands(p.questionKey(tea.KeyMsg{Type: tea.KeyEnter}))
+		flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 		select {
 		case value := <-done:
 			t.Fatalf("empty custom row submitted %q", value)
 		default:
 		}
-		p.questionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Minha opção 漢字")})
-		flattenCommands(p.questionKey(tea.KeyMsg{Type: tea.KeyEnter}))
+		p.questionKey(tea.KeyPressMsg{Code: []rune("Minha opção 漢字")[0], Text: "Minha opção 漢字"})
+		flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 		if batch {
-			flattenCommands(p.questionKey(tea.KeyMsg{Type: tea.KeyEnter}))
+			flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 		}
 		assertCustomAnswerDelivered(t, done, batch)
 	}
@@ -80,13 +80,13 @@ func TestInactiveTextDraftCannotOverrideSelectedChoice(t *testing.T) {
 	p.workflow.question = interaction.Question{ID: "q", Choices: item.Choices}
 	p.workflow.answer.SetValue("draft")
 	p.workflow.choice = 2
-	p.questionKey(tea.KeyMsg{Type: tea.KeyUp})
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeyUp})
 	require.False(t, p.workflow.answer.Focused())
 	require.Equal(t, "draft", p.workflow.answer.Value())
 	answer := p.selectedQuestionAnswer(item)
 	require.Equal(t, []string{"B"}, answer.Choices)
 	require.Empty(t, answer.Text)
-	p.questionKey(tea.KeyMsg{Type: tea.KeyDown})
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeyDown})
 	require.Equal(t, "draft", p.selectedQuestionAnswer(item).Text)
 }
 

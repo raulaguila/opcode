@@ -1,26 +1,27 @@
 package page
 
 import (
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/stretchr/testify/require"
 )
 
 func TestQuestionCardDividerSeparatesControlsInEveryAnswerView(t *testing.T) {
-	before, dark := lipgloss.ColorProfile(), lipgloss.HasDarkBackground()
-	t.Cleanup(func() { lipgloss.SetColorProfile(before); lipgloss.SetHasDarkBackground(dark) })
+	before, dark := theme.ColorProfile(), theme.HasDarkBackground()
+	t.Cleanup(func() { theme.SetColorProfile(before); theme.SetHasDarkBackground(dark) })
 	for _, variant := range []struct {
-		profile termenv.Profile
+		profile colorprofile.Profile
 		dark    bool
-	}{{termenv.Ascii, true}, {termenv.Ascii, false}, {termenv.TrueColor, true}, {termenv.TrueColor, false}} {
-		lipgloss.SetColorProfile(variant.profile)
-		lipgloss.SetHasDarkBackground(variant.dark)
+	}{{colorprofile.Ascii, true}, {colorprofile.Ascii, false}, {colorprofile.TrueColor, true}, {colorprofile.TrueColor, false}} {
+		theme.SetColorProfile(variant.profile)
+		theme.SetHasDarkBackground(variant.dark)
 		for _, kind := range []string{"choices", "text", "review", "details"} {
 			p := workflowPage(t)
 			p.SetSize(90, 30)

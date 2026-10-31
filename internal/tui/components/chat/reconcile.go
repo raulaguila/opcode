@@ -1,8 +1,8 @@
 package chat
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/tui/util"

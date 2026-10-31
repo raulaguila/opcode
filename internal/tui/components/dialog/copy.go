@@ -1,8 +1,9 @@
 package dialog
 
 import (
-	"github.com/raulaguila/opcode/internal/config"
 	"strings"
+
+	"github.com/raulaguila/opcode/internal/config"
 )
 
 // Translate only application-owned copy. User text, provider errors and model

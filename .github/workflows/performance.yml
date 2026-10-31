@@ -92,6 +92,19 @@ jobs:
             cmp -- "$fixture" "$PERFORMANCE_ROOT/baseline/$fixture"
           done
           printf '%s\n' "${fixtures[@]}" > "$PERFORMANCE_ROOT/results/fixtures.txt"
+          # Charm v2 changed module paths; keep the same benchmark operations
+          # when the comparison revision still uses v1. Normalize imports only.
+          if ! rg -q 'charm.land/bubbletea/v2 ' "$PERFORMANCE_ROOT/baseline/go.mod" &&
+             rg -q 'github.com/charmbracelet/bubbletea ' "$PERFORMANCE_ROOT/baseline/go.mod"; then
+            for fixture in "${fixtures[@]}"; do
+              sed -i \
+                -e 's|"charm.land/bubbletea/v2"|"github.com/charmbracelet/bubbletea"|g' \
+                -e 's|"charm.land/lipgloss/v2"|"github.com/charmbracelet/lipgloss"|g' \
+                "$PERFORMANCE_ROOT/baseline/$fixture"
+            done
+            printf '%s\n' 'Baseline-only import normalization: Charm v2 paths to v1; benchmark bodies unchanged.' \
+              > "$PERFORMANCE_ROOT/results/fixture-import-normalization.txt"
+          fi
       - name: Download modules and compile both revisions serially
         run: |
           set -euo pipefail

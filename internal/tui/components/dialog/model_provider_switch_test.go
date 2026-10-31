@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
@@ -15,10 +15,10 @@ import (
 func TestProviderNavigationLoadsDistinctCatalogsAndRejectsLateResults(t *testing.T) {
 	for _, keys := range []struct {
 		name           string
-		next, previous tea.KeyMsg
+		next, previous tea.KeyPressMsg
 	}{
-		{"alt arrows", tea.KeyMsg{Type: tea.KeyRight, Alt: true}, tea.KeyMsg{Type: tea.KeyLeft, Alt: true}},
-		{"tab fallback", tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyShiftTab}},
+		{"alt arrows", tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt}, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt}},
+		{"tab fallback", tea.KeyPressMsg{Code: tea.KeyTab}, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}},
 	} {
 		t.Run(keys.name, func(t *testing.T) {
 			m := catalogDialog(t)
@@ -44,7 +44,7 @@ func TestProviderNavigationLoadsDistinctCatalogsAndRejectsLateResults(t *testing
 			m.Update(m.Open()())
 			require.Equal(t, models.ProviderLocal, m.provider)
 			require.Len(t, m.availableProviders, 2)
-			m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("local")})
+			m.Update(tea.KeyPressMsg{Text: "local"})
 			_, cmd := m.Update(keys.next)
 			require.Equal(t, models.ModelProvider("profile:office"), m.provider)
 			require.Empty(t, m.search.Value(), "previous provider's filter must not hide the new catalog")
@@ -72,7 +72,7 @@ func TestProviderNavigationExplainsWhenOnlyOneConnectionIsEnabled(t *testing.T) 
 	m := catalogDialog(t)
 	config.Get().ProviderProfiles = nil
 	m.Update(m.Open()())
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRight, Alt: true})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
 	require.Nil(t, cmd)
 	require.Contains(t, m.note, "only enabled provider")
 	require.Contains(t, m.note, "Ctrl+P")

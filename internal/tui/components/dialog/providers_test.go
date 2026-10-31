@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/spf13/viper"
@@ -67,7 +67,7 @@ func TestProviderDialogCancellationAndLateResultDoNotDiscardDraft(t *testing.T) 
 	cmd := m.test()
 	require.NotNil(t, cmd)
 	require.True(t, m.testing)
-	_, closed := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, closed := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Nil(t, closed)
 	require.False(t, m.testing)
 	result := cmd().(providerTestMsg)
@@ -110,7 +110,7 @@ func TestProviderPreferencesAreEditableAndBoundedOnSmallScreen(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 36, Height: 16})
 	m.preferences()
 	for range m.fields {
-		m.Update(tea.KeyMsg{Type: tea.KeyTab})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		require.LessOrEqual(t, lipgloss.Width(m.View()), 36)
 		require.LessOrEqual(t, lipgloss.Height(m.View()), 16)
 	}
@@ -131,9 +131,9 @@ func TestModelPickerShowsNamedProfilesFavoritesAndIndependentRoles(t *testing.T)
 	require.Equal(t, "qwen:7b", m.filtered[0].APIModel)
 	require.Contains(t, m.View(), "Studio")
 	require.Contains(t, m.View(), "fallback estimate")
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	m.Update(tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
 	require.Contains(t, m.View(), "fallback estimate")
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	require.Equal(t, config.AgentTask, m.target)
 	selected := m.choose()().(ModelSelectedMsg)
 	require.Equal(t, config.AgentTask, selected.Agent)

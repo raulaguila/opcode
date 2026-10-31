@@ -5,8 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/commands"
@@ -83,7 +82,7 @@ func (m *editorCmp) SlashMenuOpen() bool {
 	return open
 }
 
-func (m *editorCmp) slashKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (m *editorCmp) slashKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	if !m.SlashMenuOpen() {
 		return nil, false
 	}
@@ -132,12 +131,12 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 		return styles.BaseStyle().Foreground(theme.CurrentTheme().TextMuted()).Render(ansi.Truncate(config.Text(" Nenhum comando encontrado · Esc fecha", " No commands found · Esc closes"), width, "…"))
 	}
 	selected := min(m.slash.selected, len(options)-1)
-	if width < 20 || maxHeight < 4 {
+	if width < 20 || maxHeight < 5 {
 		return styles.BaseStyle().Foreground(theme.CurrentTheme().Primary()).Render(ansi.Truncate("› "+strings.TrimSpace(options[selected].text), width, "…"))
 	}
 	t := theme.CurrentTheme()
 	rowWidth := width - 2
-	count := min(8, len(options), maxHeight-3)
+	count := min(8, len(options), maxHeight-4)
 	start := max(0, min(selected-count+1, len(options)-count))
 	var rows []string
 	for i := start; i < start+count; i++ {
@@ -147,14 +146,15 @@ func (m *editorCmp) SlashMenuView(width, maxHeight int) string {
 			mark = "›"
 		}
 		label := mark + " " + strings.TrimSpace(option.text) + "  " + option.description
-		style := styles.BaseStyle().Width(rowWidth).Foreground(t.Text()).Background(t.Background())
+		style := styles.BaseStyle().Width(rowWidth).Foreground(t.Text()).Background(t.BackgroundSecondary())
 		if i == selected {
-			style = style.Background(t.Primary()).Foreground(t.Background()).Bold(true)
+			style = styles.SelectedRow().Width(rowWidth).Bold(true)
 		}
 		rows = append(rows, style.Render(ansi.Truncate(label, rowWidth, "…")))
 	}
-	rows = append(rows, styles.BaseStyle().Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text(" ↑/↓ escolhe · Tab completa · Enter seleciona · Esc fecha", " ↑/↓ choose · Tab complete · Enter select · Esc close"), rowWidth, "…")))
-	return styles.BaseStyle().Border(lipgloss.RoundedBorder()).BorderForeground(t.BorderNormal()).Width(rowWidth).Render(strings.Join(rows, "\n"))
+	rows = append(rows, styles.PanelDivider(rowWidth))
+	rows = append(rows, styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.TextMuted()).Render(ansi.Truncate(config.Text(" ↑/↓ escolhe · Tab completa · Enter seleciona · Esc fecha", " ↑/↓ choose · Tab complete · Enter select · Esc close"), rowWidth, "…")))
+	return styles.Panel().Width(width).Render(strings.Join(rows, "\n"))
 }
 
 func slashOptionsWithState(priorities []string, query string, options *[]slashOption) (extractedResult0 []slashOption, extractedResult1 bool, handled bool) {

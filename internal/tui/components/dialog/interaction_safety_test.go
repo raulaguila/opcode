@@ -1,14 +1,15 @@
 package dialog
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 func TestApprovalResetsConsentAndSupportsEscapeAndExactMouseTargets(t *testing.T) {
@@ -18,13 +19,13 @@ func TestApprovalResetsConsentAndSupportsEscapeAndExactMouseTargets(t *testing.T
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
 		request := permission.PermissionRequest{ID: "first", ToolName: "test", Path: "/project", Params: map[string]string{"action": "exact"}}
 		m.SetPermissions(request)
-		_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 		require.Equal(t, PermissionDeny, cmd().(PermissionResponseMsg).Action)
 		m.selectedOption = 1
 		request.ID = "second"
 		m.SetPermissions(request)
 		require.Equal(t, 2, m.selectedOption)
-		_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 		require.Equal(t, PermissionDeny, cmd().(PermissionResponseMsg).Action)
 		// Use the actual rendered label, not the component's hit rectangles.
 		view := ansi.Strip(m.View())
@@ -32,7 +33,7 @@ func TestApprovalResetsConsentAndSupportsEscapeAndExactMouseTargets(t *testing.T
 		for y, line := range strings.Split(view, "\n") {
 			if before, _, ok := strings.Cut(line, "Allow (a)"); ok {
 				x := ansi.StringWidth(before)
-				_, cmd = m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+				_, cmd = m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
 				require.NotNil(t, cmd)
 				response := cmd().(PermissionResponseMsg)
 				require.Equal(t, PermissionAllow, response.Action)
@@ -42,6 +43,54 @@ func TestApprovalResetsConsentAndSupportsEscapeAndExactMouseTargets(t *testing.T
 		}
 		require.True(t, clicked)
 	}
+}
+
+func TestNativeSpaceConfirmsOnlyTheSelectedConsentChoice(t *testing.T) {
+	settingsDialog(t)
+	space := tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+	quit := NewQuitCmp()
+	_, cmd := quit.Update(space)
+	require.NotNil(t, cmd)
+	require.IsType(t, CloseQuitMsg{}, cmd(), "space keeps Continue as the default")
+	quit.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	_, cmd = quit.Update(space)
+	require.IsType(t, ConfirmQuitMsg{}, cmd())
+
+	approval := NewPermissionDialogCmp()
+	request := permission.PermissionRequest{ID: "space", ToolName: "test", Path: "/project"}
+	approval.SetPermissions(request)
+	_, cmd = approval.Update(space)
+	require.NotNil(t, cmd)
+	require.Equal(t, PermissionDeny, cmd().(PermissionResponseMsg).Action)
+	approval.SetPermissions(request)
+	approval.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	approval.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	_, cmd = approval.Update(space)
+	response := cmd().(PermissionResponseMsg)
+	require.Equal(t, PermissionAllow, response.Action)
+	require.Equal(t, request, response.Permission)
+}
+
+func TestNativeKeyTextDoesNotDiscardConsentShortcutModifiers(t *testing.T) {
+	settingsDialog(t)
+	for _, mod := range []tea.KeyMod{tea.ModAlt, tea.ModCtrl, tea.ModShift, tea.ModMeta} {
+		approval := NewPermissionDialogCmp().(*permissionDialogCmp)
+		approval.SetPermissions(permission.PermissionRequest{ID: "modifiers", ToolName: "test"})
+		for _, code := range []rune{'a', 's', 'd', tea.KeyEnter, tea.KeySpace} {
+			_, cmd := approval.Update(tea.KeyPressMsg{Code: code, Text: string(code), Mod: mod})
+			require.Nil(t, cmd, "modified key must not approve or answer a permission: %v/%v", mod, code)
+			require.Equal(t, 2, approval.selectedOption)
+		}
+	}
+	quit := NewQuitCmp()
+	for _, mod := range []tea.KeyMod{tea.ModAlt, tea.ModCtrl, tea.ModMeta} {
+		_, cmd := quit.Update(tea.KeyPressMsg{Code: 'y', Text: "y", Mod: mod})
+		require.Nil(t, cmd, "modified Y must not quit")
+		_, cmd = NewInitDialogCmp().Update(tea.KeyPressMsg{Code: 'y', Text: "y", Mod: mod})
+		require.Nil(t, cmd, "modified Y must not initialize a project")
+	}
+	_, cmd := NewInitDialogCmp().Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	require.True(t, cmd().(CloseInitDialogMsg).Initialize, "plain Y still initializes explicitly")
 }
 
 func TestDisabledProviderVisibleAndEnableRequiresExplicitSave(t *testing.T) {
@@ -56,7 +105,7 @@ func TestDisabledProviderVisibleAndEnableRequiresExplicitSave(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, profile.Disabled)
 	m.focus = 8
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	_, profile, err = m.readProfile()
 	require.NoError(t, err)
 	require.False(t, profile.Disabled)
@@ -88,12 +137,12 @@ func TestProviderBasicMouseFocusMatchesVisibleInput(t *testing.T) {
 		found := false
 		for y, line := range strings.Split(ansi.Strip(m.View()), "\n") {
 			if strings.Contains(line, tc.label) {
-				m.Update(tea.MouseMsg{X: 5, Y: y + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+				m.Update(tea.MouseClickMsg{X: 5, Y: y + 1, Button: tea.MouseLeft})
 				require.Equal(t, tc.field, m.focus)
 				require.True(t, m.fields[tc.field].Focused(), tc.label)
 				if tc.field != 8 {
-					m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
-					m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("typed")})
+					m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+					m.Update(tea.KeyPressMsg{Text: "typed"})
 					require.Contains(t, m.fields[tc.field].Value(), "typed")
 				}
 				found = true

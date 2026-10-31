@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -33,7 +33,7 @@ func TestSQLiteHistoryInitialReadAndPageUpAreBounded(t *testing.T) {
 	require.Equal(t, "000999", m.currentMsgID)
 	require.True(t, m.history.more)
 	m.viewport.GotoTop()
-	_, command := m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	_, command := m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	require.NotNil(t, command)
 	runSQLiteHistoryCommand(m, command)
 	require.Len(t, m.messages, transcriptPageMessages*2)
@@ -61,13 +61,13 @@ func TestSQLiteSearchLoadsAllHistoricalPagesAsCommands(t *testing.T) {
 func TestSQLiteSelectionLoadsHistoryBeforeRecordingCoordinates(t *testing.T) {
 	m := sqliteTranscriptFixture(t, 200)
 	before := m.viewport.View()
-	m.selectionMouse(tea.MouseMsg{X: 4, Y: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m.selectionMouse(tea.MouseClickMsg{X: 4, Y: 2, Button: tea.MouseLeft})
 	require.False(t, m.SelectionDragging())
 	runSQLiteHistoryCommand(m, PendingHistoryCommand(m))
 	require.Len(t, m.messages, 200)
 	require.True(t, m.SelectionDragging())
 	require.Equal(t, before, m.viewport.View())
-	m.selectionMouse(tea.MouseMsg{X: 12, Y: 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m.selectionMouse(tea.MouseReleaseMsg{X: 12, Y: 2, Button: tea.MouseLeft})
 	require.True(t, m.HasSelection())
 	require.NotEmpty(t, m.SelectedText())
 }

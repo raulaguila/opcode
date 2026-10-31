@@ -1,16 +1,17 @@
 package dialog
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	"os"
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
-	"os"
-	"strings"
-	"testing"
 )
 
 func TestGenericPermissionShowsTargetAndRedactsSecretsWithoutChangingRequest(t *testing.T) {
@@ -26,7 +27,8 @@ func TestGenericPermissionShowsTargetAndRedactsSecretsWithoutChangingRequest(t *
 		require.Contains(t, view, want)
 	}
 	require.NotContains(t, view, "private-permission-secret")
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	require.NotNil(t, cmd)
 	response := cmd().(PermissionResponseMsg)
 	require.Equal(t, PermissionAllowForSession, response.Action)
 	require.Equal(t, request, response.Permission, "rendering must not change the approved operation")
@@ -38,9 +40,9 @@ func TestChoiceFieldsAndArgumentsPreserveUnsavedConfiguration(t *testing.T) {
 	m.focus = 8
 	before, err := os.ReadFile(viper.ConfigFileUsed())
 	require.NoError(t, err)
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	require.Equal(t, "false", m.fields[8].Value())
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("invalid")})
+	m.Update(tea.KeyPressMsg{Text: "invalid"})
 	require.Equal(t, "false", m.fields[8].Value())
 	require.Contains(t, ansi.Strip(m.View()), "‹ Off ›")
 	after, err := os.ReadFile(viper.ConfigFileUsed())
@@ -52,12 +54,12 @@ func TestChoiceFieldsAndArgumentsPreserveUnsavedConfiguration(t *testing.T) {
 	args.focus()
 	args.fields[1].SetValue("ação 漢字")
 	require.JSONEq(t, `["--name","ação 漢字","$(not a shell)"]`, args.value())
-	done, save, _ := args.update(tea.KeyMsg{Type: tea.KeyEsc})
+	done, save, _ := args.update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.True(t, done)
 	require.False(t, save)
-	args.update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	args.update(tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl})
 	require.Len(t, args.fields, 4)
-	args.update(tea.KeyMsg{Type: tea.KeyBackspace, Alt: true})
+	args.update(tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModAlt})
 	require.Len(t, args.fields, 3)
 }
 func TestThemePreviewDoesNotWriteConfigurationAndEscRestores(t *testing.T) {
@@ -69,7 +71,7 @@ func TestThemePreviewDoesNotWriteConfigurationAndEscRestores(t *testing.T) {
 	m := NewThemeDialogCmp().(*themeDialogCmp)
 	m.Init()
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	require.NotNil(t, cmd)
 	changed := cmd().(ThemeChangedMsg)
 	require.True(t, changed.Preview)
@@ -77,7 +79,7 @@ func TestThemePreviewDoesNotWriteConfigurationAndEscRestores(t *testing.T) {
 	after, err := os.ReadFile(viper.ConfigFileUsed())
 	require.NoError(t, err)
 	require.Equal(t, before, after)
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	restore := cmd().(CloseThemeDialogMsg)
 	require.Equal(t, original, restore.RestoreTheme)
 }

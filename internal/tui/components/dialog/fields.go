@@ -1,11 +1,12 @@
 package dialog
 
 import (
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/raulaguila/opcode/internal/config"
 	"slices"
 	"strings"
+
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"github.com/raulaguila/opcode/internal/config"
 )
 
 // Known enums are edited as choices. Persisted values and validation remain in
@@ -44,7 +45,7 @@ func settingOptions(path string) []string {
 	return nil
 }
 func choiceKey(field *textinput.Model, options []string, msg tea.Msg) bool {
-	k, ok := msg.(tea.KeyMsg)
+	k, ok := msg.(tea.KeyPressMsg)
 	if !ok || len(options) == 0 {
 		return false
 	}
@@ -52,11 +53,11 @@ func choiceKey(field *textinput.Model, options []string, msg tea.Msg) bool {
 	switch k.String() {
 	case "left":
 		step = -1
-	case "right", " ":
+	case "right", "space":
 		step = 1
 	default:
 		// Navigation and save/cancel belong to the surrounding form.
-		return k.Type == tea.KeyRunes || k.Type == tea.KeyBackspace || k.Type == tea.KeyDelete
+		return k.Text != "" || k.Code == tea.KeyBackspace || k.Code == tea.KeyDelete
 	}
 	i := max(slices.Index(options, field.Value()), 0)
 	field.SetValue(options[(i+step+len(options))%len(options)])

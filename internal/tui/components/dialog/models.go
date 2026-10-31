@@ -8,10 +8,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/cursor"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/tui/layout"
@@ -32,7 +31,7 @@ type ModelCatalogLoadedMsg struct {
 }
 
 type ModelDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 	Open() tea.Cmd
 	Close()
@@ -174,7 +173,7 @@ func (m *modelDialogCmp) load() tea.Cmd {
 		return ModelCatalogLoadedMsg{request, found, err}
 	}
 }
-func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *modelDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	if cmd, handled := m.reasoningUpdate(msg); handled {
 		return m, cmd
 	}
@@ -195,13 +194,13 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.keepVisible()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateModelDialogCmpKeyMsg(m, &msg); handled {
 			return result0, result1
 		}
 	case tea.MouseMsg:
 		// The app translates mouse coordinates into this centered dialog.
-		if result0, result1, handled := updateModelDialogCmpMouseMsg(m, &msg); handled {
+		if result0, result1, handled := updateModelDialogCmpMouseMsg(m, msg); handled {
 			return result0, result1
 		}
 	default:
@@ -215,13 +214,13 @@ func (m *modelDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *modelDialogCmp) updateSearch(msg tea.Msg) tea.Cmd {
 	before := m.search.Value()
-	if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyRunes {
-		key.Runes = []rune(strings.Map(func(r rune) rune {
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.Text != "" {
+		key.Text = strings.Map(func(r rune) rune {
 			if unicode.IsControl(r) {
 				return -1
 			}
 			return r
-		}, string(key.Runes)))
+		}, key.Text)
 		msg = key
 	}
 	var cmd tea.Cmd
@@ -409,33 +408,35 @@ func getModelsForProvider(provider models.ModelProvider) []models.Model {
 	return found
 }
 func NewModelDialogCmp() ModelDialog {
-	search := textinput.New()
+	search := newDialogInput()
 	search.Prompt = ""
 	search.Placeholder = config.Text("Buscar modelos", "Search models")
 	search.CharLimit = 256
-	search.Cursor.SetMode(cursor.CursorStatic)
+	inputStyle := search.Styles()
+	inputStyle.Cursor.Blink = false
+	search.SetStyles(inputStyle)
 	return &modelDialogCmp{search: search}
 }
 
 func (m *modelDialogCmp) SetSetup(enabled bool) { m.setup = enabled }
 
-func updateModelDialogCmpMouseMsg(m *modelDialogCmp, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
-	if msg.Button == tea.MouseButtonWheelUp {
+func updateModelDialogCmpMouseMsg(m *modelDialogCmp, msg tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
+	if msg.Mouse().Button == tea.MouseWheelUp {
 		m.move(-1)
 	}
-	if msg.Button == tea.MouseButtonWheelDown {
+	if msg.Mouse().Button == tea.MouseWheelDown {
 		m.move(1)
 	}
 	geometry := m.geometry()
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= geometry.contentX && msg.X < geometry.contentX+geometry.width {
-		if msg.Y == geometry.titleY && len(m.availableProviders) > 1 {
-			if msg.X < geometry.contentX+geometry.width/2 {
+	if leftClick(msg) && msg.Mouse().X >= geometry.contentX && msg.Mouse().X < geometry.contentX+geometry.width {
+		if msg.Mouse().Y == geometry.titleY && len(m.availableProviders) > 1 {
+			if msg.Mouse().X < geometry.contentX+geometry.width/2 {
 				return m, m.switchProvider(-1), true
 			}
 			return m, m.switchProvider(1), true
 		}
-		index := msg.Y - geometry.listY + m.scrollOffset
-		if msg.Y >= geometry.listY && msg.Y < geometry.listY+geometry.rows && index >= 0 && index < len(m.filtered) {
+		index := msg.Mouse().Y - geometry.listY + m.scrollOffset
+		if msg.Mouse().Y >= geometry.listY && msg.Mouse().Y < geometry.listY+geometry.rows && index >= 0 && index < len(m.filtered) {
 			m.selectedIdx = index
 			return m, m.choose(), true
 		}
@@ -443,7 +444,7 @@ func updateModelDialogCmpMouseMsg(m *modelDialogCmp, msg *tea.MouseMsg) (extract
 	return extractedResult0, extractedResult1, false
 }
 
-func updateModelDialogCmpDefault(m *modelDialogCmp, msg *ModelCatalogLoadedMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateModelDialogCmpDefault(m *modelDialogCmp, msg *ModelCatalogLoadedMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if msg.request != m.request {
 		return m, nil, true
 	}
@@ -473,7 +474,7 @@ func updateModelDialogCmpDefault(m *modelDialogCmp, msg *ModelCatalogLoadedMsg) 
 	return extractedResult0, extractedResult1, false
 }
 
-func updateModelDialogCmpKeyMsg(m *modelDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateModelDialogCmpKeyMsg(m *modelDialogCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	switch {
 	case msg.String() == "ctrl+d":
 		m.details = !m.details
@@ -483,10 +484,10 @@ func updateModelDialogCmpKeyMsg(m *modelDialogCmp, msg *tea.KeyMsg) (extractedRe
 		m.move(-1)
 	case key.Matches((*msg), modelKeys.Down):
 		m.move(1)
-	case msg.Type == tea.KeyPgUp:
+	case msg.Code == tea.KeyPgUp:
 		m.selectedIdx = max(0, m.selectedIdx-m.visibleRows())
 		m.keepVisible()
-	case msg.Type == tea.KeyPgDown:
+	case msg.Code == tea.KeyPgDown:
 		m.selectedIdx = max(0, min(len(m.filtered)-1, m.selectedIdx+m.visibleRows()))
 		m.keepVisible()
 	case key.Matches((*msg), modelKeys.Left):
@@ -574,10 +575,10 @@ func filterFaFb(fa bool, fb bool) (extractedResult0 int, handled bool) {
 	return extractedResult0, false
 }
 
-func updateSelecting(m *modelDialogCmp, msg tea.Msg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateSelecting(m *modelDialogCmp, msg tea.Msg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if m.selecting {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			if key.Type == tea.KeyEsc {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			if key.Code == tea.KeyEsc {
 				m.Close()
 				return m, util.CmdHandler(CloseModelDialogMsg{}), true
 			}

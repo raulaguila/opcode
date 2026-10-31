@@ -1,10 +1,11 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/page"
-	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/tui/styles"
 )
 
 // baseView is shared by rendering and mouse hit testing so both use the same
@@ -30,7 +31,7 @@ func (a appModel) baseView() string {
 	return lipgloss.JoinVertical(lipgloss.Top, components...)
 }
 
-func (a appModel) View() string {
+func (a appModel) View() tea.View {
 	appView := a.baseView()
 
 	if a.showFilepicker {
@@ -41,21 +42,14 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 
 	}
 
 	// Show compacting status overlay
 	if a.isCompacting {
-		t := theme.CurrentTheme()
-		style := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(t.BorderFocused()).
-			BorderBackground(t.Background()).
-			Padding(1, 2).
-			Background(t.Background()).
-			Foreground(t.Text())
+		style := styles.Panel().Padding(1, 2)
 
 		overlay := style.Render("Summarizing\n" + a.compactingMessage)
 		col, row := a.dialogOrigin(overlay)
@@ -64,23 +58,11 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 	}
 
 	viewShowHelp(&a, &appView)
-
-	if a.showQuit {
-		overlay := a.quit.View()
-		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(
-			col,
-			row,
-			overlay,
-			appView,
-			true,
-		)
-	}
 
 	if a.showSessionDialog {
 		overlay := a.sessionDialog.View()
@@ -90,7 +72,7 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 	}
 
@@ -102,7 +84,7 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 	}
 
@@ -114,7 +96,7 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 	}
 
@@ -126,7 +108,7 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 	}
 
@@ -138,7 +120,7 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 	}
 
@@ -150,36 +132,40 @@ func (a appModel) View() string {
 			row,
 			overlay,
 			appView,
-			true,
+			false,
 		)
 	}
 
 	if a.showProviderDialog {
 		overlay := a.providerDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
+		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
 	}
 	if a.showIntegrationDialog {
 		overlay := a.integrationDialog.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
+		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
 	}
 	// Authorization always appears above settings/probes that requested it.
 	if a.showPermissions {
 		overlay := a.permissions.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
+		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
 	}
 
 	if a.showQuit {
 		overlay := a.quit.View()
 		col, row := a.dialogOrigin(overlay)
-		appView = layout.PlaceOverlay(col, row, overlay, appView, true)
+		appView = layout.PlaceOverlay(col, row, overlay, appView, false)
 	}
 	if a.width > 0 {
 		appView = lipgloss.NewStyle().MaxWidth(a.width).MaxHeight(a.height + 1).Render(appView)
 	}
-	return appView
+	view := tea.NewView(styles.TerminalOutput(appView))
+	view.AltScreen = true
+	view.MouseMode = tea.MouseModeCellMotion
+	view.ReportFocus = true
+	return view
 }
 
 func (a appModel) modelDialogOrigin() (int, int) {
@@ -208,7 +194,7 @@ func viewShowHelp(a *appModel, appView *string) {
 			row,
 			overlay,
 			(*appView),
-			true,
+			false,
 		)
 	}
 }

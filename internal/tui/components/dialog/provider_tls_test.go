@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/spf13/viper"
@@ -22,7 +22,7 @@ func TestCompatiblePresetTLSAndUniqueIdentity(t *testing.T) {
 			m.selected = i
 		}
 	}
-	m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Equal(t, "openai-compatible-2", m.fields[0].Value())
 	require.Equal(t, "chat_completions", m.fields[5].Value())
 	require.Equal(t, "false", m.fields[9].Value())

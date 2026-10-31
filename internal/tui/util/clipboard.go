@@ -1,6 +1,6 @@
 package util
 
-import tea "github.com/charmbracelet/bubbletea"
+import tea "charm.land/bubbletea/v2"
 
 // CopyTextMsg is emitted only by explicit UI copy actions. Result is optional;
 // a selection keeps its highlight regardless of clipboard availability.

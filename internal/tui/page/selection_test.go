@@ -3,7 +3,7 @@ package page
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/stretchr/testify/require"
 )
@@ -24,29 +24,29 @@ func TestSelectionCopyAndEscapeDoNotCancelAgent(t *testing.T) {
 	p := workflowPage(t)
 	selection := &selectionProbe{text: "only the selected text"}
 	p.transcript = selection
-	cmd, handled := p.SelectionKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	cmd, handled := p.SelectionKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	require.True(t, handled)
 	require.Equal(t, "only the selected text", cmd().(util.CopyTextMsg).Text)
 	require.NotEmpty(t, selection.text, "copy does not clear a highlight")
-	cmd, handled = p.SelectionKey(tea.KeyMsg{Type: tea.KeyEsc})
+	cmd, handled = p.SelectionKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.True(t, handled)
 	require.Nil(t, cmd)
 	require.Empty(t, selection.text)
-	_, handled = p.SelectionKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, handled = p.SelectionKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	require.False(t, handled, "ordinary quit behavior remains when nothing is selected")
 	selection.selected = true
-	cmd, handled = p.SelectionKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	cmd, handled = p.SelectionKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	require.True(t, handled, "whitespace-only selection cannot trigger quit")
 	require.Nil(t, cmd, "do not copy empty text over the clipboard")
-	_, handled = p.SelectionKey(tea.KeyMsg{Type: tea.KeyEsc})
+	_, handled = p.SelectionKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.True(t, handled)
 	selection.text = "selected"
 	p.terminal.focused = true
-	_, handled = p.SelectionKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, handled = p.SelectionKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	require.False(t, handled, "Ctrl+C in a PTY must still interrupt the child")
 	p.terminal.focused = false
 	p.showWorkspace("actions", "Actions", "")
-	_, handled = p.SelectionKey(tea.KeyMsg{Type: tea.KeyEsc})
+	_, handled = p.SelectionKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, handled, "focused panels retain Escape")
 	require.Zero(t, p.app.CoderAgent.(*workflowProbe).canceled)
 }
@@ -58,8 +58,8 @@ func TestSelectionCapturesReleaseOverHeaderAndOutsidePanel(t *testing.T) {
 		p.transcript = &selectionProbe{dragging: true}
 		capture := &mouseMessages{}
 		p.messages = capture
-		p.Update(tea.MouseMsg{X: point[0], Y: point[1], Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+		p.Update(tea.MouseReleaseMsg{X: point[0], Y: point[1], Button: tea.MouseLeft})
 		require.Len(t, capture.received, 1)
-		require.Equal(t, tea.MouseActionRelease, capture.received[0].(tea.MouseMsg).Action)
+		require.True(t, util.MouseReleased(capture.received[0].(tea.MouseMsg)))
 	}
 }

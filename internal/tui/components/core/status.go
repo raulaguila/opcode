@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -19,7 +19,7 @@ import (
 )
 
 type StatusCmp interface {
-	tea.Model
+	util.Model
 	ViewFor(util.FooterState) string
 	ActionAt(int, util.FooterState) string
 }
@@ -32,7 +32,7 @@ type statusCmp struct {
 }
 
 func (m statusCmp) Init() tea.Cmd { return nil }
-func (m statusCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m statusCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case util.EnhancedKeyboardMsg:
 		m.enhancedKeyboard = msg.Supported

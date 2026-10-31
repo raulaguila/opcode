@@ -1,14 +1,15 @@
 package layout
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
 type Container interface {
-	tea.Model
+	util.Model
 	Sizeable
 	Bindings
 }
@@ -16,7 +17,7 @@ type container struct {
 	width  int
 	height int
 
-	content tea.Model
+	content util.Model
 
 	// Style options
 	paddingTop    int
@@ -35,7 +36,7 @@ func (c *container) Init() tea.Cmd {
 	return c.content.Init()
 }
 
-func (c *container) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (c *container) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	u, cmd := c.content.Update(msg)
 	c.content = u
 	return c, cmd
@@ -47,32 +48,17 @@ func (c *container) View() string {
 	}
 	t := theme.CurrentTheme()
 	style := lipgloss.NewStyle()
-	width := c.width
-	height := c.height
 
 	style = style.Background(t.Background())
 
 	// Apply border if any side is enabled
 	if c.borderTop || c.borderRight || c.borderBottom || c.borderLeft {
-		// Adjust width and height for borders
-		if c.borderTop {
-			height--
-		}
-		if c.borderBottom {
-			height--
-		}
-		if c.borderLeft {
-			width--
-		}
-		if c.borderRight {
-			width--
-		}
 		style = style.Border(c.borderStyle, c.borderTop, c.borderRight, c.borderBottom, c.borderLeft)
 		style = style.BorderBackground(t.Background()).BorderForeground(t.BorderNormal())
 	}
 	style = style.
-		Width(width).
-		Height(height).
+		Width(c.width).
+		Height(c.height).
 		PaddingTop(c.paddingTop).
 		PaddingRight(c.paddingRight).
 		PaddingBottom(c.paddingBottom).
@@ -126,7 +112,7 @@ func (c *container) BindingKeys() []key.Binding {
 
 type ContainerOption func(*container)
 
-func NewContainer(content tea.Model, options ...ContainerOption) Container {
+func NewContainer(content util.Model, options ...ContainerOption) Container {
 
 	c := &container{
 		content:     content,

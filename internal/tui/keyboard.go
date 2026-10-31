@@ -1,284 +1,44 @@
 package tui
 
 import (
-	"bytes"
 	"io"
-	"reflect"
-	"strconv"
-	"strings"
 	"sync"
-	"unicode"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/term"
-	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
-// Keyboard bridges enhanced terminal keys to Bubble Tea v1's legacy key events.
-// It enables disambiguation only after a terminal acknowledges CSI-u support.
-type Keyboard struct {
-	mu                     sync.Mutex
-	output                 io.Writer
-	probe, queried, pushed bool
+// TerminalWriter serializes renderer output and explicit terminal writes such
+// as OSC 52. Bubble Tea owns keyboard decoding and terminal mode lifecycle.
+type TerminalWriter struct {
+	mu     sync.Mutex
+	output io.Writer
 }
 
-var _ term.File = (*Keyboard)(nil)
+var _ term.File = (*TerminalWriter)(nil)
 
-func NewKeyboard(output io.Writer) *Keyboard {
-	k := &Keyboard{output: output}
-	if file, ok := output.(interface{ Fd() uintptr }); ok {
-		k.probe = term.IsTerminal(file.Fd())
-	}
-	return k
+func NewTerminalWriter(output io.Writer) *TerminalWriter {
+	return &TerminalWriter{output: output}
 }
 
-func (k *Keyboard) Close() error {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	return k.closeLocked()
-}
+// Close satisfies terminal capability detection without owning the supplied file.
+func (*TerminalWriter) Close() error { return nil }
 
-func (k *Keyboard) closeLocked() error {
-	k.queried = false
-	if !k.pushed {
-		return nil
-	}
-	k.pushed = false
-	_, err := io.WriteString(k.output, ansi.PopKittyKeyboard(1))
-	return err
-}
-
-func (k *Keyboard) Fd() uintptr {
-	if file, ok := k.output.(interface{ Fd() uintptr }); ok {
+func (w *TerminalWriter) Fd() uintptr {
+	if file, ok := w.output.(interface{ Fd() uintptr }); ok {
 		return file.Fd()
 	}
 	return ^uintptr(0)
 }
 
-func (k *Keyboard) Read(raw []byte) (int, error) {
-	if reader, ok := k.output.(io.Reader); ok {
+func (w *TerminalWriter) Read(raw []byte) (int, error) {
+	if reader, ok := w.output.(io.Reader); ok {
 		return reader.Read(raw)
 	}
 	return 0, io.EOF
 }
 
-func (k *Keyboard) Write(raw []byte) (int, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	// Kitty keeps separate stacks for the main and alternate screens. Pop while
-	// still in the alternate screen, including external-editor and error exits.
-	if bytes.Contains(raw, []byte("\x1b[?1049l")) {
-		_ = k.closeLocked()
-	}
-	return k.output.Write(raw)
-}
-
-func (k *Keyboard) Filter(_ tea.Model, msg tea.Msg) tea.Msg {
-	if _, ok := msg.(tea.WindowSizeMsg); ok {
-		k.mu.Lock()
-		if k.probe && !k.queried {
-			k.queried = true
-			_, _ = io.WriteString(k.output, ansi.RequestKittyKeyboard)
-		}
-		k.mu.Unlock()
-	}
-	typ := reflect.TypeOf(msg)
-	if typ == nil || typ.PkgPath() != "github.com/charmbracelet/bubbletea" {
-		return msg
-	}
-	// v1 keeps unrecognized CSI events private. Confine that compatibility
-	// boundary here; ordinary keys and bracketed paste are never reinterpreted.
-	if typ.Name() != "unknownCSISequenceMsg" || typ.Kind() != reflect.Slice || typ.Elem().Kind() != reflect.Uint8 {
-		return msg
-	}
-	raw := string(reflect.ValueOf(msg).Bytes())
-	if result0, handled := filterHasSuffixRawU(k, raw); handled {
-		return result0
-	}
-	if key, ok := enhancedKey(raw); ok {
-		return key
-	}
-	return msg
-}
-
-func enhancedKey(raw string) (tea.Msg, bool) {
-	if !strings.HasPrefix(raw, "\x1b[") {
-		return nil, false
-	}
-	body := strings.TrimPrefix(raw, "\x1b[")
-	var code, modifier string
-	switch {
-	case strings.HasSuffix(body, "u"):
-		if result0, result1, handled := enhancedKeyU(body, &code, &modifier); handled {
-			return result0, result1
-		}
-	case strings.HasSuffix(body, "~"):
-		if result0, result1, handled := enhancedKeyStringsHasSuffixBody(body, &code, &modifier); handled {
-			return result0, result1
-		}
-	default:
-		return nil, false
-	}
-	n, err := strconv.Atoi(code)
-	if result0, result1, handled := enhancedKeyXd800NXdfff(n, err); handled {
-		return result0, result1
-	}
-	mod, err := strconv.Atoi(modifier)
-	if result0, result1, handled := enhancedKeyModMod(err, mod); handled {
-		return result0, result1
-	}
-	bits := (mod - 1) &^ 192 // Caps/Num Lock do not change shortcut modifiers.
-	if bits&^7 != 0 {
-		return nil, false
-	}
-	return decodeEnhancedKey(n, bits)
-}
-
-func decodeEnhancedKey(n, bits int) (tea.Msg, bool) {
-	key := tea.KeyMsg{Alt: bits&2 != 0}
-	switch n {
-	case 57352, 57353, 57356, 57357:
-		enhancedKeyCase(n, bits, &key)
-	case 57350, 57351: // CSI-u left/right functional keys.
-		enhancedKey57350(n, bits, &key)
-	case 13:
-		key.Type = tea.KeyEnter
-		if bits&5 != 0 {
-			// Legacy Ctrl+Enter is Ctrl+J; keep that mapping for other panels.
-			key.Type = tea.KeyCtrlJ
-		}
-	case 9:
-		key.Type = tea.KeyTab
-		if bits&1 != 0 {
-			key.Type = tea.KeyShiftTab
-		}
-	case 27:
-		key.Type = tea.KeyEsc
-	case 127:
-		key.Type = tea.KeyBackspace
-	default:
-		if result0, result1, handled := enhancedKeyDefault(n, bits, &key); handled {
-			return result0, result1
-		}
-	}
-	return key, true
-}
-
-func enhancedKeyU(body string, code *string, modifier *string) (extractedResult0 tea.Msg, extractedResult1 bool, handled bool) {
-	parts := strings.Split(strings.TrimSuffix(body, "u"), ";")
-	if len(parts) < 1 || len(parts) > 2 {
-		return nil, false, true
-	}
-	(*code), (*modifier) = parts[0], "1"
-	if len(parts) == 2 {
-		(*modifier) = parts[1]
-	}
-	if strings.Contains((*modifier), ":") {
-		fields := strings.Split((*modifier), ":")
-		if len(fields) != 2 {
-			return nil, false, true
-		}
-		if fields[1] == "3" {
-			return nil, true, true
-		} // Releases must not submit twice.
-		if fields[1] != "1" && fields[1] != "2" {
-			return nil, false, true
-		}
-		(*modifier) = fields[0]
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func enhancedKeyDefault(n int, bits int, key *tea.KeyMsg) (extractedResult0 tea.Msg, extractedResult1 bool, handled bool) {
-	if bits&4 != 0 {
-		if n < 32 || n > 127 {
-			return nil, false, true
-		}
-		key.Type = tea.KeyType(n & 31)
-	} else if n < 32 {
-		key.Type = tea.KeyType(n)
-	} else {
-		if n >= 57344 && n <= 63743 {
-			return nil, false, true
-		} // Kitty functional-key range.
-		r := rune(n)
-		if bits&1 != 0 {
-			r = unicode.ToUpper(r)
-		}
-		key.Type, key.Runes = tea.KeyRunes, []rune{r}
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func enhancedKey57350(n int, bits int, key *tea.KeyMsg) {
-	types := []tea.KeyType{tea.KeyLeft, tea.KeyShiftLeft, tea.KeyCtrlLeft, tea.KeyCtrlShiftLeft}
-	if n == 57351 {
-		types = []tea.KeyType{tea.KeyRight, tea.KeyShiftRight, tea.KeyCtrlRight, tea.KeyCtrlShiftRight}
-	}
-	index := 0
-	if bits&1 != 0 {
-		index++
-	}
-	if bits&4 != 0 {
-		index += 2
-	}
-	key.Type = types[index]
-}
-
-func enhancedKeyXd800NXdfff(n int, err error) (extractedResult0 tea.Msg, extractedResult1 bool, handled bool) {
-	if err != nil || n < 0 || n > unicode.MaxRune || n >= 0xd800 && n <= 0xdfff {
-		return nil, false, true
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func filterHasSuffixRawU(k *Keyboard, raw string) (extractedResult0 tea.Msg, handled bool) {
-	if strings.HasPrefix(raw, "\x1b[?") && strings.HasSuffix(raw, "u") {
-		if flags, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(raw, "\x1b[?"), "u")); err == nil && flags >= 0 && flags <= 31 {
-			k.mu.Lock()
-			if k.probe && k.queried && !k.pushed {
-				if _, err := io.WriteString(k.output, ansi.PushKittyKeyboard(1)); err == nil {
-					k.pushed = true
-				}
-			}
-			supported := k.pushed
-			k.mu.Unlock()
-			return util.EnhancedKeyboardMsg{Supported: supported}, true
-		}
-	}
-	return extractedResult0, false
-}
-
-func enhancedKeyModMod(err error, mod int) (extractedResult0 tea.Msg, extractedResult1 bool, handled bool) {
-	if err != nil || mod < 1 || mod > 256 {
-		return nil, false, true
-	}
-	return extractedResult0, extractedResult1, false
-}
-
-func enhancedKeyStringsHasSuffixBody(body string, code *string, modifier *string) (extractedResult0 tea.Msg, extractedResult1 bool, handled bool) {
-	parts := strings.Split(strings.TrimSuffix(body, "~"), ";")
-	if len(parts) != 3 || parts[0] != "27" {
-		return nil, false, true
-	}
-	(*modifier), (*code) = parts[1], parts[2]
-	return extractedResult0, extractedResult1, false
-}
-
-func enhancedKeyCase(n int, bits int, key *tea.KeyMsg) {
-	choices := map[int][]tea.KeyType{
-		57352: {tea.KeyUp, tea.KeyShiftUp, tea.KeyCtrlUp, tea.KeyCtrlShiftUp},
-		57353: {tea.KeyDown, tea.KeyShiftDown, tea.KeyCtrlDown, tea.KeyCtrlShiftDown},
-		57356: {tea.KeyHome, tea.KeyShiftHome, tea.KeyCtrlHome, tea.KeyCtrlShiftHome},
-		57357: {tea.KeyEnd, tea.KeyShiftEnd, tea.KeyCtrlEnd, tea.KeyCtrlShiftEnd},
-	}
-	index := 0
-	if bits&1 != 0 {
-		index++
-	}
-	if bits&4 != 0 {
-		index += 2
-	}
-	key.Type = choices[n][index]
+func (w *TerminalWriter) Write(raw []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.output.Write(raw)
 }

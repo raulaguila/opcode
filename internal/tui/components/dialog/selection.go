@@ -1,9 +1,10 @@
 package dialog
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func selectionMark(selected bool) string {
@@ -13,18 +14,18 @@ func selectionMark(selected bool) string {
 	return "  "
 }
 func clickedLabel(view, label string, m tea.MouseMsg) bool {
-	if m.Button != tea.MouseButtonLeft || m.Action != tea.MouseActionPress {
+	if !leftClick(m) {
 		return false
 	}
 	lines := strings.Split(ansi.Strip(view), "\n")
-	if m.Y < 0 || m.Y >= len(lines) {
+	if m.Mouse().Y < 0 || m.Mouse().Y >= len(lines) {
 		return false
 	}
-	line := lines[m.Y]
+	line := lines[m.Mouse().Y]
 	before, _, ok := strings.Cut(line, label)
 	if !ok {
 		return false
 	}
 	x := ansi.StringWidth(before)
-	return m.X >= x && m.X < x+ansi.StringWidth(label)
+	return m.Mouse().X >= x && m.Mouse().X < x+ansi.StringWidth(label)
 }

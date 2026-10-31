@@ -2,15 +2,14 @@ package styles
 
 import (
 	"fmt"
+	"image/color"
 	"regexp"
 	"strings"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
 
-func getColorRGB(c lipgloss.TerminalColor) (uint8, uint8, uint8) {
+func getColorRGB(c color.Color) (uint8, uint8, uint8) {
 	r, g, b, a := c.RGBA()
 
 	// Un-premultiply alpha if needed
@@ -26,7 +25,7 @@ func getColorRGB(c lipgloss.TerminalColor) (uint8, uint8, uint8) {
 
 // ForceReplaceBackgroundWithLipgloss replaces any ANSI background color codes
 // in `input` with a single 24‑bit background (48;2;R;G;B).
-func ForceReplaceBackgroundWithLipgloss(input string, newBgColor lipgloss.TerminalColor) string {
+func ForceReplaceBackgroundWithLipgloss(input string, newBgColor color.Color) string {
 	// Precompute our new-bg sequence once
 	r, g, b := getColorRGB(newBgColor)
 	newBg := fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
@@ -59,6 +58,10 @@ func ForceReplaceBackgroundWithLipgloss(input string, newBgColor lipgloss.Termin
 }
 
 func rewriteBackgroundParameters(raw string, start int, end int, sb *strings.Builder) {
+	// An empty SGR parameter means reset, including the compact ESC[m form.
+	if start == end {
+		sb.WriteByte('0')
+	}
 	for i := start; i < end; {
 		// find the next ';' or end
 		j := i
@@ -81,6 +84,9 @@ func rewriteBackgroundParameters(raw string, start int, end int, sb *strings.Bui
 		appendANSIParameter(sb, token, keep)
 		// advance past this token (and the semicolon)
 		i = j + 1
+	}
+	if end > start && raw[end-1] == ';' {
+		appendANSIParameter(sb, "0", true)
 	}
 }
 
@@ -124,6 +130,9 @@ func advanceANSIColorIndex(raw string, end int, m *int) {
 
 func appendANSIParameter(sb *strings.Builder, token string, keep bool) {
 	if keep {
+		if token == "" {
+			token = "0"
+		}
 		if sb.Len() > 0 {
 			sb.WriteByte(';')
 		}

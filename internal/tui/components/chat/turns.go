@@ -2,10 +2,11 @@ package chat
 
 import (
 	"fmt"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -394,12 +395,12 @@ func (m *messagesCmp) renderedProcessExpanded(id string) bool {
 	return false
 }
 func (m *messagesCmp) transcriptMouse(msg tea.MouseMsg) tea.Cmd {
-	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+	if !util.MousePressed(msg) || msg.Mouse().Button != tea.MouseLeft {
 		m.selectionMouse(msg)
 		return nil
 	}
 	// The message container adds a top and left padding cell.
-	row := msg.Y - 1 + m.viewport.YOffset
+	row := msg.Mouse().Y - 1 + m.viewport.YOffset
 	for _, hit := range m.hits {
 		if row >= hit.start && row < hit.end {
 			if hit.kind == "process" {
@@ -412,7 +413,7 @@ func (m *messagesCmp) transcriptMouse(msg tea.MouseMsg) tea.Cmd {
 			}
 		}
 	}
-	if m.unread && msg.Y >= m.height-2 {
+	if m.unread && msg.Mouse().Y >= m.height-2 {
 		m.ClearSelection()
 		m.unread = false
 		m.viewport.GotoBottom()

@@ -1,5 +1,13 @@
 # Trabalhar pela interface
 
+Os menus compartilham a apresentação do painel de pergunta: bordas retas,
+superfície distinta, títulos de destaque, seleção discreta e uma divisória
+antes dos controles quando há espaço. Permissões continuam começando em
+Recusar/Cancelar e avisos/diffs mantêm cores próprias. Telas de terminal e
+workspace não ganham bordas externas que desloquem suas coordenadas.
+Temas claros, escuros e `NO_COLOR` preservam rótulos e marcadores de seleção.
+As adaptações do conjunto Charm v2 estão no [guia de dependências](dependencies.md).
+
 Digite `/` no começo do campo para ver os comandos. Use `↑`/`↓` para escolher,
 `Tab` para completar, `Enter` para executar e `Esc` para fechar as sugestões.
 `Ctrl+K` abre a paleta. Os painéis mantêm o rascunho enquanto você consulta o

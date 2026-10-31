@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	md "github.com/JohannesKaufmann/html-to-markdown"
+	md "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/raulaguila/opcode/internal/permission"
 )
@@ -162,9 +162,7 @@ func extractTextFromHTML(html string) (string, error) {
 }
 
 func convertHTMLToMarkdown(html string) (string, error) {
-	converter := md.NewConverter("", true, nil)
-
-	markdown, err := converter.ConvertString(html)
+	markdown, err := md.ConvertString(html)
 	if err != nil {
 		return "", err
 	}

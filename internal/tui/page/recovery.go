@@ -1,9 +1,10 @@
 package page
 
 import (
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
@@ -46,12 +47,12 @@ func (p *chatPage) insertComposerPanel(view string) string {
 	return strings.Join(lines, "\n")
 }
 func (p *chatPage) recoveryMouse(msg tea.MouseMsg) tea.Cmd {
-	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+	if !util.MousePressed(msg) || msg.Mouse().Button != tea.MouseLeft {
 		return nil
 	}
 	_, height := p.layout.GetSize()
 	_, editorHeight := p.editor.GetSize()
-	if msg.Y != height-editorHeight+p.workflowHeight()+1 {
+	if msg.Mouse().Y != height-editorHeight+p.workflowHeight()+1 {
 		return nil
 	}
 	actions := recoveryActions(p.recovery.err)
@@ -64,7 +65,7 @@ func (p *chatPage) recoveryMouse(msg tea.MouseMsg) tea.Cmd {
 		if idx >= 0 {
 			pos = ansi.StringWidth(actions[:idx])
 		}
-		if pos >= 0 && pos <= msg.X && pos > best {
+		if pos >= 0 && pos <= msg.Mouse().X && pos > best {
 			best = pos
 			chosen = command
 		}

@@ -2,13 +2,14 @@ package dialog
 
 import (
 	"errors"
-	tea "github.com/charmbracelet/bubbletea"
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 func TestModelCatalogOpensSavedConnectionAndReturnsAfterEditing(t *testing.T) {
@@ -21,8 +22,8 @@ func TestModelCatalogOpensSavedConnectionAndReturnsAfterEditing(t *testing.T) {
 	m.Update(ModelCatalogLoadedMsg{request: m.request, err: errors.New("provider unavailable")})
 	require.Contains(t, ansi.Strip(m.View()), "Office")
 	require.Contains(t, ansi.Strip(m.View()), "query failed")
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("qwen")})
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m.Update(tea.KeyPressMsg{Text: "qwen"})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
 	open := cmd().(OpenProviderDialogMsg)
 	require.Equal(t, models.ModelProvider("profile:office"), open.Provider)
 	require.True(t, open.ReturnToModels)
@@ -64,7 +65,7 @@ func TestModelContextSeparatesCatalogAndActiveLimitsWithoutProbing(t *testing.T)
 	require.Contains(t, lines, "advertised")
 	require.Contains(t, lines, "Effective: 32k")
 	require.Contains(t, lines, "server allocation")
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	require.Contains(t, strings.Join(m.modelDetailLines(), "\n"), "Effective: available after activation")
 	require.NotContains(t, strings.Join(m.modelDetailLines(), "\n"), "32k")
 	m.target = config.AgentTitle

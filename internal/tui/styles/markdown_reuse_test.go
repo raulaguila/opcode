@@ -5,9 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/glamour/ansi"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/glamour/v2/ansi"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/stretchr/testify/require"
 	"github.com/yuin/goldmark"
@@ -48,7 +47,7 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 		block := ast.NewDocument()
 		block.AppendChild(block, node)
 		r := renderer.NewRenderer(renderer.WithNodeRenderers(util.Prioritized(ansi.NewRenderer(ansi.Options{
-			WordWrap: measure, Styles: generateMarkdownStyleConfig(), ColorProfile: lipgloss.ColorProfile(),
+			WordWrap: measure, Styles: generateMarkdownStyleConfig(),
 		}), 1000)))
 		var out bytes.Buffer
 		if err := r.Render(&out, source, block); err != nil {
@@ -61,7 +60,7 @@ func markdownBlocksReference(content string, width, proseWidth int) string {
 		}
 		node = next
 	}
-	return strings.Join(blocks, "\n\n")
+	return TerminalOutput(strings.Join(blocks, "\n\n"))
 }
 
 func markdownListReference(list *ast.List, content string, source []byte, width, proseWidth int) string {
@@ -74,12 +73,12 @@ func markdownListReference(list *ast.List, content string, source []byte, width,
 }
 
 func TestMarkdownRendererReuseMatchesFreshBlockRenderers(t *testing.T) {
-	profile, dark := lipgloss.ColorProfile(), lipgloss.HasDarkBackground()
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile); lipgloss.SetHasDarkBackground(dark) })
-	for _, color := range []termenv.Profile{termenv.Ascii, termenv.TrueColor} {
-		lipgloss.SetColorProfile(color)
+	profile, dark := theme.ColorProfile(), theme.HasDarkBackground()
+	t.Cleanup(func() { theme.SetColorProfile(profile); theme.SetHasDarkBackground(dark) })
+	for _, color := range []colorprofile.Profile{colorprofile.Ascii, colorprofile.TrueColor} {
+		theme.SetColorProfile(color)
 		for _, background := range []bool{false, true} {
-			lipgloss.SetHasDarkBackground(background)
+			theme.SetHasDarkBackground(background)
 			for _, source := range markdownReuseFixtures() {
 				require.Equal(t, markdownBlocksReference(source, 120, 48), RenderMarkdownBlocks(source, 120, 48))
 			}
@@ -96,9 +95,9 @@ func markdownReuseFixtures() []string {
 }
 
 func TestMarkdownReuseReadsCurrentThemeForEachCall(t *testing.T) {
-	name, profile := theme.CurrentThemeName(), lipgloss.ColorProfile()
-	t.Cleanup(func() { _ = theme.PreviewTheme(name); lipgloss.SetColorProfile(profile) })
-	lipgloss.SetColorProfile(termenv.TrueColor)
+	name, profile := theme.CurrentThemeName(), theme.ColorProfile()
+	t.Cleanup(func() { _ = theme.PreviewTheme(name); theme.SetColorProfile(profile) })
+	theme.SetColorProfile(colorprofile.TrueColor)
 	source := "## Theme\n\nA [source](https://example.test) with **emphasis**.\n"
 	for _, name := range []string{"gruvbox", "catppuccin"} {
 		require.NoError(t, theme.PreviewTheme(name))

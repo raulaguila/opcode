@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/interaction"
@@ -68,12 +68,12 @@ func TestWorkflowCommandsChangeModeAndBlockHumanTerminal(t *testing.T) {
 
 func TestSlashEscapeClosesMenuBeforeCancelingAgent(t *testing.T) {
 	p := workflowPage(t)
-	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	p.Update(tea.KeyPressMsg{Code: []rune("/")[0], Text: "/"})
 	require.True(t, p.slashMenuOpen())
-	p.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	p.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, p.slashMenuOpen())
 	require.Zero(t, p.app.CoderAgent.(*workflowProbe).canceled)
-	p.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	p.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, 1, p.app.CoderAgent.(*workflowProbe).canceled)
 }
 func TestRejectedModeReportsFailureToEditor(t *testing.T) {
@@ -130,7 +130,7 @@ func TestQuestionUsesRealSelectionOrFreeTextWithoutSubmittingChat(t *testing.T) 
 				}
 			}()
 			require.Eventually(t, func() bool { p.refreshWorkflow(); return p.workflow.question.ID != "" }, time.Second, time.Millisecond)
-			flattenCommands(p.questionKey(tea.KeyMsg{Type: tea.KeyEnter}))
+			flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 			select {
 			case <-done:
 				t.Fatal("Enter answered without an explicit choice")
@@ -139,11 +139,11 @@ func TestQuestionUsesRealSelectionOrFreeTextWithoutSubmittingChat(t *testing.T) 
 			want := "SQLite"
 			if free {
 				want = "Minha opção"
-				p.questionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(want)})
+				p.questionKey(tea.KeyPressMsg{Code: []rune(want)[0], Text: want})
 			} else {
-				p.questionKey(tea.KeyMsg{Type: tea.KeyDown})
+				p.questionKey(tea.KeyPressMsg{Code: tea.KeyDown})
 			}
-			flattenCommands(p.questionKey(tea.KeyMsg{Type: tea.KeyEnter}))
+			flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 			require.Equal(t, want, <-done)
 			require.Empty(t, p.workflow.question.ID)
 		})

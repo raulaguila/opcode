@@ -1,9 +1,9 @@
 package page
 
 import (
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -34,7 +34,7 @@ func TestContractFormPreservesDraftDoesNotRaiseModeAndRejectsBusyEdits(t *testin
 	require.Equal(t, "contract", p.workspace.kind)
 	p.workspace.fields[0].SetValue("main.go")
 	p.workspace.fields[1].SetValue("Expected change; Preserve behavior")
-	flattenCommands(p.workspaceKey(tea.KeyMsg{Type: tea.KeyCtrlS}))
+	flattenCommands(p.workspaceKey(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}))
 	saved, err := probe.store.Get(context.Background(), "s")
 	require.NoError(t, err)
 	require.Equal(t, workflow.Ask, saved.Mode)
@@ -66,9 +66,9 @@ func TestSetupIsOptionalRequiresConfirmationAndEscapePreservesDraft(t *testing.T
 	require.Nil(t, p.workspaceChoose())
 	require.Equal(t, "setup-probe-confirm", p.workspace.kind)
 	require.False(t, p.workspace.loading)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "setup-details", p.workspace.kind)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, p.WorkspaceFocused())
 	draft, _ := p.composer.(chat.DraftControl).Draft()
 	require.Equal(t, "draft", draft)
@@ -111,9 +111,9 @@ func TestContractFormKeepsFocusedFieldsAndDraftOnSmallTerminal(t *testing.T) {
 	p.workspace.fields[0].SetValue("a-very-long-file-name-that-scrolls.go")
 	require.LessOrEqual(t, lipgloss.Width(p.workspaceView()), 36)
 	require.LessOrEqual(t, lipgloss.Height(p.workspaceView()), 14)
-	p.workspaceMouse(tea.MouseMsg{Action: tea.MouseActionPress, Button: tea.MouseButtonLeft, Y: 5})
+	p.workspaceMouse(tea.MouseClickMsg{Button: tea.MouseLeft, Y: 5})
 	require.Equal(t, 1, p.workspace.focus)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyTab})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyTab})
 	require.Equal(t, 2, p.workspace.focus)
 	require.Contains(t, p.workspace.fields[0].Value(), "a-very-long")
 }

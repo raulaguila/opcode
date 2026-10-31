@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/db"
@@ -98,20 +98,20 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 		}
 	}
 	wait("Connections and preferences")
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	program.Send(testTextKey(string([]rune("n")), 0))
 	wait("Add connection")
-	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	wait("Configure provider")
 	// Basic setup starts with Name; the next visible field is the endpoint.
-	program.Send(tea.KeyMsg{Type: tea.KeyTab})
-	program.Send(tea.KeyMsg{Type: tea.KeyCtrlU})
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("http://local.invalid/v1")})
+	program.Send(tea.KeyPressMsg{Code: tea.KeyTab, Mod: 0})
+	program.Send(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+	program.Send(testTextKey(string([]rune("http://local.invalid/v1")), 0))
 	wait("http://local.invalid/v1")
-	program.Send(tea.KeyMsg{Type: tea.KeyCtrlS})
+	program.Send(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	wait("Provider catalog · 2 models")
-	program.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("llama3.1:8b")})
+	program.Send(testTextKey(string([]rune("llama3.1:8b")), 0))
 	wait("Search: llama3.1:8b")
-	program.Send(tea.KeyMsg{Type: tea.KeyEnter})
+	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	wait("Model changed to")
 	program.Quit()
 	require.NoError(t, <-done)

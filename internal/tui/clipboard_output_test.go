@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/clipboard"
 	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -14,7 +14,7 @@ import (
 
 func TestOSC52UsesSerializedTerminalWriter(t *testing.T) {
 	var out bytes.Buffer
-	writer := NewKeyboard(&out)
+	writer := NewTerminalWriter(&out)
 	sequence, err := clipboard.OSC52("ação")
 	require.NoError(t, err)
 	a := appModel{terminalOutput: writer}
@@ -32,7 +32,7 @@ func TestExplicitSelectionCopyFallsBackThroughSerializedTerminalOutput(t *testin
 	t.Setenv("SSH_TTY", "")
 	t.Setenv("PATH", t.TempDir())
 	var out bytes.Buffer
-	a := appModel{terminalOutput: NewKeyboard(&out)}
+	a := appModel{terminalOutput: NewTerminalWriter(&out)}
 	text := "selected text only"
 	cmd, handled := a.productivityMessage(util.CopyTextMsg{Text: text})
 	require.True(t, handled)

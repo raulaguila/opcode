@@ -2,14 +2,15 @@ package dialog
 
 import (
 	"encoding/json"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"sort"
+	"strings"
+
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/styles"
-	"sort"
-	"strings"
 )
 
 type argumentList struct {
@@ -35,7 +36,7 @@ func newArgumentList(raw string) (*argumentList, error) {
 	return a, nil
 }
 func (a *argumentList) add(v string) {
-	f := textinput.New()
+	f := newDialogInput()
 	f.Prompt = ""
 	f.CharLimit = max(4096, len([]rune(v)))
 	f.SetValue(v)
@@ -52,7 +53,7 @@ func (a *argumentList) focus() {
 	}
 }
 func (a *argumentList) update(msg tea.Msg) (done, save bool, cmd tea.Cmd) {
-	if k, ok := msg.(tea.KeyMsg); ok {
+	if k, ok := msg.(tea.KeyPressMsg); ok {
 		switch k.String() {
 		case "esc":
 			return true, false, nil
@@ -99,14 +100,14 @@ func (a *argumentList) value() string {
 }
 func (a *argumentList) view(width, height int) string {
 	width = max(1, width)
-	rows := max(1, height-9)
+	rows := max(1, height-10)
 	start := max(0, a.selected-rows+1)
 	lines := []string{config.Text("Argumentos · um por linha", "Arguments · one per row"), config.Text("Sem interpretação pelo shell; espaços pertencem ao argumento.", "No shell parsing; spaces belong to the argument.")}
 	if a.pairs {
 		lines = []string{config.Text("Variáveis · nome=VARIAVEL", "Variables · name=VARIABLE"), config.Text("Informe nomes de variáveis de ambiente, sem segredos", "Enter environment variable names, without secrets")}
 	}
 	for i := start; i < min(len(a.fields), start+rows); i++ {
-		a.fields[i].Width = max(1, width-4)
+		a.fields[i].SetWidth(max(1, width-4))
 		mark := "  "
 		if i == a.selected {
 			mark = "› "
@@ -116,14 +117,14 @@ func (a *argumentList) view(width, height int) string {
 	if len(a.fields) == 0 {
 		lines = append(lines, config.Text("Nenhum argumento. Ctrl+N adiciona.", "No arguments. Ctrl+N adds one."))
 	}
-	lines = append(lines, config.Text("Ctrl+N adiciona · Alt+Backspace remove", "Ctrl+N add · Alt+Backspace remove"), config.Text("Tab campo · Ctrl+S aplicar ao formulário · Esc cancelar", "Tab field · Ctrl+S apply to form · Esc cancel"))
+	lines = append(lines, styles.PanelDivider(width), config.Text("Ctrl+N adiciona · Alt+Backspace remove", "Ctrl+N add · Alt+Backspace remove"), config.Text("Tab campo · Ctrl+S aplicar ao formulário · Esc cancelar", "Tab field · Ctrl+S apply to form · Esc cancel"))
 	if a.note != "" {
 		lines = append(lines, a.note)
 	}
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
 }
 
 func newPairList(raw string) (*argumentList, error) {
@@ -187,7 +188,7 @@ func updateArgumentListCtrlS(a *argumentList) (extractedResult0 bool, extractedR
 
 }
 
-func updateFields(a *argumentList, k *tea.KeyMsg) {
+func updateFields(a *argumentList, k *tea.KeyPressMsg) {
 	if len(a.fields) > 0 {
 		delta := 1
 		if k.String() == "up" || k.String() == "shift+tab" {

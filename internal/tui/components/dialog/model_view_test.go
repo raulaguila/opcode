@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -33,10 +33,10 @@ func populatedModelDialog(t *testing.T) *modelDialogCmp {
 func TestModelSearchHasIndependentFocusAndEditableCursor(t *testing.T) {
 	m := populatedModelDialog(t)
 	require.True(t, m.search.Focused())
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("mdel")})
-	m.Update(tea.KeyMsg{Type: tea.KeyHome})
-	m.Update(tea.KeyMsg{Type: tea.KeyRight})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
+	m.Update(tea.KeyPressMsg{Text: "mdel"})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyHome})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m.Update(tea.KeyPressMsg{Text: "o"})
 	require.Equal(t, "model", m.query)
 	require.Len(t, m.filtered, 16)
 	require.Equal(t, models.ProviderLocal, m.provider, "arrows edit the search rather than switching provider")
@@ -46,18 +46,18 @@ func TestModelSearchHasIndependentFocusAndEditableCursor(t *testing.T) {
 
 func TestModelCurrentMarkerDoesNotFollowHighlightAndListScrolls(t *testing.T) {
 	m := populatedModelDialog(t)
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	view := ansi.Strip(m.View())
 	require.Contains(t, view, "✓ "+m.modelLabel(m.filtered[0]))
 	require.Contains(t, view, "›   Model 1")
 	require.Contains(t, view, "2 of 16")
 	require.Contains(t, view, "↓")
-	m.Update(tea.KeyMsg{Type: tea.KeyPgDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	require.Greater(t, m.scrollOffset, 0)
 	require.Contains(t, ansi.Strip(m.View()), "12 of 16")
-	m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown})
+	m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	require.Equal(t, 12, m.selectedIdx)
-	m.Update(tea.KeyMsg{Type: tea.KeyPgUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	require.Equal(t, 2, m.selectedIdx)
 }
 
@@ -80,7 +80,7 @@ func TestModelLayoutAndMouseShareCompactGeometry(t *testing.T) {
 			g := m.geometry()
 			rows := strings.Split(ansi.Strip(m.View()), "\n")
 			require.Contains(t, rows[g.listY+1], m.modelLabel(m.filtered[1]))
-			_, cmd := m.Update(tea.MouseMsg{X: g.contentX, Y: g.listY + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+			_, cmd := m.Update(tea.MouseClickMsg{X: g.contentX, Y: g.listY + 1, Button: tea.MouseLeft})
 			require.NotNil(t, cmd)
 			require.Equal(t, m.filtered[1].ID, cmd().(ModelSelectedMsg).Model.ID)
 		})
@@ -107,13 +107,13 @@ func TestModelDetailsUnknownCapabilitiesAndConsistentLanguage(t *testing.T) {
 func TestSelectingModelCannotBeChangedUntilCancelled(t *testing.T) {
 	m := populatedModelDialog(t)
 	m.selecting = true
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Nil(t, cmd)
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	require.Equal(t, 0, m.selectedIdx)
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ignored")})
+	m.Update(tea.KeyPressMsg{Text: "ignored"})
 	require.Empty(t, m.query)
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.IsType(t, CloseModelDialogMsg{}, cmd())
 	require.False(t, m.selecting)
 }
@@ -127,7 +127,7 @@ func TestModelPreferencesAndRoleSelectionRemainIndependent(t *testing.T) {
 	require.Equal(t, models.ModelID("model-09"), m.filtered[2].ID)
 	require.Equal(t, models.ModelID("model-00"), m.filtered[m.selectedIdx].ID)
 	config.Get().Agents[config.AgentTask] = config.Agent{Model: "model-09"}
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	require.Equal(t, config.AgentTask, m.target)
 	require.Equal(t, models.ModelID("model-09"), m.filtered[m.selectedIdx].ID)
 	require.Equal(t, models.ModelID("model-00"), config.Get().Agents[config.AgentCoder].Model)

@@ -3,14 +3,14 @@ package chat
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/stretchr/testify/require"
 )
 
 func TestClosingFindCancelsOnlyDeferredSearchNavigation(t *testing.T) {
-	for _, key := range []tea.KeyMsg{{Type: tea.KeyEsc}, {Type: tea.KeyRunes, Alt: true, Runes: []rune{'f'}}} {
+	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEsc}, {Mod: tea.ModAlt, Code: 'f'}} {
 		t.Run(key.String(), func(t *testing.T) {
 			m := sqliteTranscriptFixture(t, 400)
 			m.StartSearch("Historical evidence message 0.")
@@ -36,7 +36,7 @@ func TestClosingFindKeepsGapReconciliation(t *testing.T) {
 	command := PendingHistoryCommand(m)
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: m.messages[len(m.messages)-1], ReconcileRequired: true})
 	require.True(t, m.reconcile.needed)
-	require.True(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyEsc}))
+	require.True(t, m.TranscriptKey(tea.KeyPressMsg{Code: tea.KeyEsc}))
 	runSQLiteHistoryCommand(m, command)
 	require.False(t, m.find.open)
 	require.False(t, m.reconcile.needed, "the authoritative retry must finish after find closes")
@@ -45,7 +45,7 @@ func TestClosingFindKeepsGapReconciliation(t *testing.T) {
 }
 
 func TestDeferredKeyboardSelectionCanBeCanceled(t *testing.T) {
-	for _, key := range []tea.KeyMsg{{Type: tea.KeyEsc}, {Type: tea.KeyRunes, Alt: true, Runes: []rune{'s'}}} {
+	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEsc}, {Mod: tea.ModAlt, Code: 's'}} {
 		t.Run(key.String(), func(t *testing.T) {
 			m := sqliteTranscriptFixture(t, 400)
 			m.ToggleKeyboardSelection()
@@ -66,7 +66,7 @@ func TestClosingFindPreservesDifferentDeferredSelection(t *testing.T) {
 	m.StartSearch("history")
 	command := PendingHistoryCommand(m)
 	m.ToggleKeyboardSelection()
-	require.True(t, m.TranscriptKey(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'f'}}))
+	require.True(t, m.TranscriptKey(tea.KeyPressMsg{Mod: tea.ModAlt, Code: 'f'}))
 	require.False(t, m.find.open)
 	runSQLiteHistoryCommand(m, command)
 	require.True(t, m.selection.keyboard, "closing find must not cancel a separately requested selection")

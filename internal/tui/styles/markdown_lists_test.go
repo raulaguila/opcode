@@ -1,20 +1,20 @@
 package styles
 
 import (
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMarkdownListsHangWrappedTextAfterMarker(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
-	for _, color := range []termenv.Profile{termenv.Ascii, termenv.TrueColor} {
-		lipgloss.SetColorProfile(color)
+	profile := theme.ColorProfile()
+	t.Cleanup(func() { theme.SetColorProfile(profile) })
+	for _, color := range []colorprofile.Profile{colorprofile.Ascii, colorprofile.TrueColor} {
+		theme.SetColorProfile(color)
 		for _, source := range []string{
 			"- " + strings.Repeat("wrapped words ", 8),
 			"9. " + strings.Repeat("wrapped words ", 8) + "\n10. Final item",
@@ -95,10 +95,10 @@ func TestMarkdownListMarginRetainsInternalWhitespace(t *testing.T) {
 }
 
 func TestMarkdownListCodeRetainsSourceBlankEdges(t *testing.T) {
-	profile := lipgloss.ColorProfile()
-	t.Cleanup(func() { lipgloss.SetColorProfile(profile) })
-	for _, color := range []termenv.Profile{termenv.Ascii, termenv.TrueColor} {
-		lipgloss.SetColorProfile(color)
+	profile := theme.ColorProfile()
+	t.Cleanup(func() { theme.SetColorProfile(profile) })
+	for _, color := range []colorprofile.Profile{colorprofile.Ascii, colorprofile.TrueColor} {
+		theme.SetColorProfile(color)
 		for _, code := range []string{
 			"\n      \n   first\n\n     \n   last\n    \n\n",
 			"\n    \n\n",

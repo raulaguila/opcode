@@ -1,11 +1,11 @@
 package chat
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
@@ -80,7 +80,7 @@ func (m *messagesCmp) Init() tea.Cmd {
 	return tea.Batch(m.viewport.Init(), m.spinner.Tick)
 }
 
-func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *messagesCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case messageReloadMsg:
@@ -128,12 +128,12 @@ func (m *messagesCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.unread = false
 		m.viewport.GotoBottom()
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateMessagesCmpKeyMsg(m, &cmds, &msg); handled {
 			return result0, result1
 		}
 	case tea.MouseMsg:
-		if msg.Button == tea.MouseButtonLeft || msg.Action == tea.MouseActionRelease {
+		if msg.Mouse().Button == tea.MouseLeft || util.MouseReleased(msg) {
 			cmd := m.transcriptMouse(msg)
 			return m, tea.Batch(cmd, m.HistoryCommand())
 		}
@@ -203,8 +203,8 @@ func (m *messagesCmp) SetSize(width, height int) tea.Cmd {
 	m.height = height
 	m.viewport.Width = width
 	m.viewport.Height = max(0, height-1)
-	m.attachments.Width = width + 40
-	m.attachments.Height = 3
+	m.attachments.SetWidth(width + 40)
+	m.attachments.SetHeight(3)
 	m.rerender()
 	if follow {
 		m.viewport.GotoBottom()
@@ -249,11 +249,11 @@ func (m *messagesCmp) BindingKeys() []key.Binding {
 	}
 }
 
-func NewMessagesCmp(app *app.App) tea.Model {
+func NewMessagesCmp(app *app.App) util.Model {
 	s := spinner.New()
 	s.Spinner = spinner.Pulse
 	vp := newTranscriptViewport(0, 0)
-	attachmets := viewport.New(0, 0)
+	attachmets := viewport.New(viewport.WithWidth(0), viewport.WithHeight(0))
 	vp.KeyMap.PageUp = messageKeys.PageUp
 	vp.KeyMap.PageDown = messageKeys.PageDown
 	vp.KeyMap.HalfPageUp = messageKeys.HalfPageUp
@@ -305,7 +305,7 @@ func updateMessagesCmpMessage(m *messagesCmp, msg *pubsub.Event[message.Message]
 	}
 }
 
-func updateMessagesCmpKeyMsg(m *messagesCmp, cmds *[]tea.Cmd, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateMessagesCmpKeyMsg(m *messagesCmp, cmds *[]tea.Cmd, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if m.TranscriptKey((*msg)) {
 		return m, m.HistoryCommand(), true
 	}

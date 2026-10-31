@@ -1,9 +1,10 @@
 package page
 
 import (
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +15,7 @@ type mouseMessages struct {
 }
 
 func (m *mouseMessages) GetSize() (int, int) { return 70, 20 }
-func (m *mouseMessages) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *mouseMessages) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	m.received = append(m.received, msg)
 	return m, nil
 }
@@ -35,7 +36,7 @@ func TestChatWheelOnlyReachesMessagesUnderPointer(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			messages := &mouseMessages{}
 			p := &chatPage{messages: messages, showCompletionDialog: tc.completion}
-			p.Update(tea.MouseMsg{X: tc.x, Y: tc.y, Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+			p.Update(tea.MouseWheelMsg{X: tc.x, Y: tc.y, Button: tea.MouseWheelUp})
 			require.Len(t, messages.received, tc.want)
 		})
 	}

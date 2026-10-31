@@ -1,5 +1,18 @@
 # Histórico de versões
 
+## Em desenvolvimento — 2026-10-30
+
+- Interface migrada para Bubble Tea/Bubbles/Lip Gloss/Glamour v2, com eventos
+  nativos de teclado, mouse e colagem e compatibilidade dos temas existentes.
+- Menus e formulários alinhados ao painel de pergunta: bordas retas, seleção
+  discreta e divisórias nos controles, preservando cores de avisos/permissões.
+- Seleção preservada em `NO_COLOR` e resets compactos do Markdown tratados
+  corretamente, mantendo o peso normal dos parágrafos após títulos e ênfases.
+- Dependências de runtime e testes atualizadas; FTS5 registrado por conexão
+  dos índices de código/memória e conversão HTML migrada para a API v2.
+- Lip Gloss fixado em commit oficial que reduz alocações de escrita. Motivo,
+  hash e procedimento para trocar por release em [Dependências](docs/dependencies.md).
+
 ## 0.2.0 — 2026-10-28
 
 - Configuração em `~/.opcode/config.json` e `.opcode/config.json`, com template

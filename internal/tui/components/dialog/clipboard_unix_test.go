@@ -3,13 +3,14 @@
 package dialog
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/raulaguila/opcode/internal/tui/commands"
-	"github.com/stretchr/testify/require"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/raulaguila/opcode/internal/tui/commands"
+	"github.com/stretchr/testify/require"
 )
 
 // Run against an isolated clipboard executable before clipboard package init.
@@ -33,13 +34,13 @@ func TestAsyncClipboardReachesPaletteAndSettings(t *testing.T) {
 		entries = append(entries, Command{ID: c.ID, Title: c.Title, Description: c.Description})
 	}
 	palette.SetCommands(entries)
-	_, paste := palette.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
+	_, paste := palette.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
 	require.NotNil(t, paste)
 	palette.Update(paste())
 	require.Equal(t, "permissions", palette.search.Value())
 	require.Equal(t, "permissions", palette.listView.GetItems()[0].ID)
 	settings.settings()
-	_, paste = settings.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
+	_, paste = settings.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
 	require.NotNil(t, paste)
 	settings.Update(paste())
 	require.Equal(t, "permissions", settings.settingsFilter.Value())
@@ -48,7 +49,7 @@ func TestAsyncClipboardReachesPaletteAndSettings(t *testing.T) {
 	settings.settingPath = "tui.language"
 	settings.setFields([]string{"Text"}, []string{""})
 	settings.settingPath = "tui.keybindings.models" // An unrestricted text field, not an enum.
-	_, paste = settings.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
+	_, paste = settings.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
 	require.NotNil(t, paste)
 	settings.Update(paste())
 	require.Equal(t, "permissions", settings.fields[0].Value())

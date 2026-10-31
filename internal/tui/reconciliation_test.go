@@ -2,10 +2,10 @@ package tui
 
 import (
 	"context"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -34,7 +34,7 @@ func TestPermissionOverflowReconcilesWithoutApprovingOrDroppingPending(t *testin
 	source := service.(pendingSnapshotSource)
 	require.Eventually(t, func() bool { return len(source.PendingRequestsAll()) == 70 }, time.Second, time.Millisecond)
 	pane := &agentEventCommandProbe{}
-	model := appModel{app: &app.App{Permissions: service}, pages: map[page.PageID]tea.Model{page.ChatPage: pane}, permissions: dialog.NewPermissionDialogCmp()}
+	model := appModel{app: &app.App{Permissions: service}, pages: map[page.PageID]util.Model{page.ChatPage: pane}, permissions: dialog.NewPermissionDialogCmp()}
 	_, _, _ = model.routePermission(pubsub.Event[permission.PermissionRequest]{ReconcileRequired: true})
 	require.True(t, model.showPermissions)
 	require.NotEmpty(t, model.activePermissionID)
@@ -86,7 +86,7 @@ func TestSessionRecoveryCannotRegressAnUpdateReceivedDuringQuery(t *testing.T) {
 
 func TestRecoveredSessionUsesNormalEventDelivery(t *testing.T) {
 	pane := &agentEventCommandProbe{}
-	model := appModel{selectedSession: session.Session{ID: "active"}, pages: map[page.PageID]tea.Model{page.ChatPage: pane}}
+	model := appModel{selectedSession: session.Session{ID: "active"}, pages: map[page.PageID]util.Model{page.ChatPage: pane}}
 	command := model.applyRecoveredSessions(sessionsRecoveredMsg{selectedID: "active", sessions: []session.Session{{ID: "active", Title: "recovered"}}})
 	require.NotNil(t, command)
 	event, ok := command().(pubsub.Event[session.Session])

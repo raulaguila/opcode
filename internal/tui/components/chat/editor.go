@@ -9,10 +9,10 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
@@ -182,7 +182,7 @@ func (m *editorCmp) send() tea.Cmd {
 	)
 }
 
-func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *editorCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.invalidatePreparedDraft(msg)
 
@@ -223,7 +223,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.attachments = append(m.attachments, msg.Attachment)
 	case SessionClearedMsg:
 		return updateEditorCmpDefaultCaseCase(m)
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateEditorCmpKeyMsg(m, &msg); handled {
 			return result0, result1
 		}
@@ -234,12 +234,12 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *editorCmp) invalidatePreparedDraft(msg tea.Msg) {
 	switch msg.(type) {
-	case tea.KeyMsg, dialog.AttachmentAddedMsg, dialog.CompletionSelectedMsg, editorResultMsg, RestoreDraftMsg, SubmissionResultMsg:
+	case tea.KeyPressMsg, tea.PasteMsg, dialog.AttachmentAddedMsg, dialog.CompletionSelectedMsg, editorResultMsg, RestoreDraftMsg, SubmissionResultMsg:
 		m.preparedDraft = nil
 	}
 }
 
-func (m *editorCmp) updateTextarea(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *editorCmp) updateTextarea(msg tea.Msg) (util.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	previous := m.textarea.Value()
 	m.textarea, cmd = m.textarea.Update(msg)
@@ -332,15 +332,18 @@ func CreateTextArea(existing *textarea.Model) textarea.Model {
 	textMutedColor := t.TextMuted()
 
 	ta := textarea.New()
-	ta.BlurredStyle.Base = styles.BaseStyle().Background(bgColor).Foreground(textColor)
-	ta.BlurredStyle.CursorLine = styles.BaseStyle().Background(bgColor)
-	ta.BlurredStyle.Placeholder = styles.BaseStyle().Background(bgColor).Foreground(textMutedColor)
-	ta.BlurredStyle.Text = styles.BaseStyle().Background(bgColor).Foreground(textColor)
-	ta.FocusedStyle.Base = styles.BaseStyle().Background(bgColor).Foreground(textColor)
-	ta.FocusedStyle.CursorLine = styles.BaseStyle().Background(bgColor)
-	ta.FocusedStyle.Placeholder = styles.BaseStyle().Background(bgColor).Foreground(textMutedColor)
-	ta.FocusedStyle.Text = styles.BaseStyle().Background(bgColor).Foreground(textColor)
+	ta.SetVirtualCursor(true)
+	inputStyles := ta.Styles()
+	inputStyles.Blurred.Base = styles.BaseStyle().Background(bgColor).Foreground(textColor)
+	inputStyles.Blurred.CursorLine = styles.BaseStyle().Background(bgColor)
+	inputStyles.Blurred.Placeholder = styles.BaseStyle().Background(bgColor).Foreground(textMutedColor)
+	inputStyles.Blurred.Text = styles.BaseStyle().Background(bgColor).Foreground(textColor)
+	inputStyles.Focused.Base = styles.BaseStyle().Background(bgColor).Foreground(textColor)
+	inputStyles.Focused.CursorLine = styles.BaseStyle().Background(bgColor)
+	inputStyles.Focused.Placeholder = styles.BaseStyle().Background(bgColor).Foreground(textMutedColor)
+	inputStyles.Focused.Text = styles.BaseStyle().Background(bgColor).Foreground(textColor)
 
+	ta.SetStyles(inputStyles)
 	ta.Prompt = " "
 	ta.ShowLineNumbers = false
 	ta.CharLimit = -1
@@ -355,7 +358,7 @@ func CreateTextArea(existing *textarea.Model) textarea.Model {
 	return ta
 }
 
-func NewEditorCmp(app *app.App) tea.Model {
+func NewEditorCmp(app *app.App) util.Model {
 	root, path := draftLocation()
 	return newEditorWithDraftStorage(app, root, path)
 }
@@ -393,7 +396,7 @@ func (m *editorCmp) attachmentRows(width int) int {
 	return max(1, strings.Count(content, "\n")+1)
 }
 
-func updateEditorCmpKeyMsg(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateEditorCmpKeyMsg(m *editorCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if result0, result1, result2, handled := updateEditorCmpKeyMsgAltEnd(m, msg); handled {
 		return result0, result1, result2
 	}
@@ -403,7 +406,7 @@ func updateEditorCmpKeyMsg(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.
 	if m.promptHistoryKey((*msg)) {
 		return m, nil, true
 	}
-	if key.Matches((*msg), editorMaps.NewLine) || msg.Type == tea.KeyCtrlJ {
+	if key.Matches((*msg), editorMaps.NewLine) {
 		m.textarea.InsertString("\n")
 		return m, nil, true
 	}
@@ -436,7 +439,7 @@ func updateEditorCmpKeyMsg(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.
 	return extractedResult0, extractedResult1, false
 }
 
-func updateEditorCmpDefault(m *editorCmp, msg *SubmissionResultMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateEditorCmpDefault(m *editorCmp, msg *SubmissionResultMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if msg.KeepDraft {
 		return m, nil, true
 	}
@@ -460,7 +463,7 @@ func updateEditorCmpDefault(m *editorCmp, msg *SubmissionResultMsg) (extractedRe
 
 }
 
-func updateEditorCmpDefaultCase(m *editorCmp, msg *SessionSelectedMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateEditorCmpDefaultCase(m *editorCmp, msg *SessionSelectedMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if msg.ID != m.session.ID {
 		if err := m.PrepareSessionDraft(msg.ID); err != nil {
 			return m, util.ReportError(err)
@@ -481,7 +484,7 @@ func updateEditorCmpDefaultCase(m *editorCmp, msg *SessionSelectedMsg) (extracte
 
 }
 
-func updateEditorCmpDefaultCaseCase(m *editorCmp) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateEditorCmpDefaultCaseCase(m *editorCmp) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if m.session.ID != "" {
 		if err := m.PrepareSessionDraft(""); err != nil {
 			return m, util.ReportError(err)
@@ -507,9 +510,9 @@ func updateEditorCmpDefaultCaseCase(m *editorCmp) (extractedResult0 tea.Model, e
 
 }
 
-func updateEditorCmpKeyMsgUnicodeIsDigitRunes(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if m.deleteMode && len(msg.Runes) > 0 && unicode.IsDigit(msg.Runes[0]) {
-		num := int(msg.Runes[0] - '0')
+func updateEditorCmpKeyMsgUnicodeIsDigitRunes(m *editorCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if m.deleteMode && len(msg.Text) == 1 && unicode.IsDigit(rune(msg.Text[0])) {
+		num := int(msg.Text[0] - '0')
 		m.deleteMode = false
 		if num < 10 && len(m.attachments) > num {
 			if num == 0 {
@@ -523,7 +526,7 @@ func updateEditorCmpKeyMsgUnicodeIsDigitRunes(m *editorCmp, msg *tea.KeyMsg) (ex
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateEditorCmpDefaultError(m *editorCmp, msg *SubmissionResultMsg, sameSession bool) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateEditorCmpDefaultError(m *editorCmp, msg *SubmissionResultMsg, sameSession bool) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if msg.Error == nil {
 		if !sameSession && m.submissionText != "" {
 			if err := m.persistDraftValue(m.submissionSession, editorDraft{}); err != nil {
@@ -545,7 +548,7 @@ func updateEditorCmpDefaultError(m *editorCmp, msg *SubmissionResultMsg, sameSes
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateEditorCmpKeyMsgMatchesMessageKeysPageDown(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateEditorCmpKeyMsgMatchesMessageKeysPageDown(m *editorCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if key.Matches((*msg), messageKeys.PageUp) || key.Matches((*msg), messageKeys.PageDown) ||
 		key.Matches((*msg), messageKeys.HalfPageUp) || key.Matches((*msg), messageKeys.HalfPageDown) {
 		return m, nil, true, true
@@ -553,7 +556,7 @@ func updateEditorCmpKeyMsgMatchesMessageKeysPageDown(m *editorCmp, msg *tea.KeyM
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateEditorCmpKeyMsgMatchesEditorMapsSend(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateEditorCmpKeyMsgMatchesEditorMapsSend(m *editorCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if m.textarea.Focused() && key.Matches((*msg), editorMaps.Send) {
 		value := m.textarea.Value()
 		if len(value) > 0 && value[len(value)-1] == '\\' {
@@ -568,7 +571,7 @@ func updateEditorCmpKeyMsgMatchesEditorMapsSend(m *editorCmp, msg *tea.KeyMsg) (
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateCaseRestoreDraftMsg(m *editorCmp, msg *RestoreDraftMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateCaseRestoreDraftMsg(m *editorCmp, msg *RestoreDraftMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if m.textarea.Value() != "" || len(m.attachments) > 0 {
 		return m, util.ReportWarn("O rascunho atual foi preservado; limpe-o antes de editar a instrução")
 	}
@@ -579,14 +582,14 @@ func updateCaseRestoreDraftMsg(m *editorCmp, msg *RestoreDraftMsg) (extractedRes
 
 }
 
-func updateEditorCmpKeyMsgAltEnd(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateEditorCmpKeyMsgAltEnd(m *editorCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if msg.String() == "alt+end" || msg.String() == "ctrl+b" || msg.String() == "ctrl+y" {
 		return m, nil, true, true
 	}
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateEditorCmpKeyMsgMatchesEditorMapsOpenEditor(m *editorCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateEditorCmpKeyMsgMatchesEditorMapsOpenEditor(m *editorCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if key.Matches((*msg), editorMaps.OpenEditor) {
 		if m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID) {
 			return m, util.ReportWarn("Agent is working, please wait..."), true, true

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -19,7 +19,7 @@ func (m *providerDialogCmp) settings() tea.Cmd {
 	m.Close()
 	m.screen = "settings"
 	m.selected = 0
-	m.settingsFilter = textinput.New()
+	m.settingsFilter = newDialogInput()
 	m.settingsFilter.Prompt = config.Text("Buscar: ", "Search: ")
 	m.settingsFilter.CharLimit = 100
 	m.settingsFilter.Focus()
@@ -72,7 +72,7 @@ type UserPreferencesChangedMsg struct{}
 
 func (m *providerDialogCmp) experienceView() string {
 	width := m.contentWidth()
-	base := styles.BaseStyle().Width(width)
+	base := dialogBody().Width(width)
 	line := func(s string) string { return base.Render(ansi.Truncate(s, width, "…")) }
 	lines := []string{}
 	title := config.Text("Preferências", "Preferences")
@@ -94,10 +94,10 @@ func (m *providerDialogCmp) experienceView() string {
 		v := config.EffectiveSetting(m.settingPath)
 		lines = append(lines, line(config.Text("Origem: ", "Origin: ")+localizedOrigin(v.Origin)), line(localizedSettingLabel(m.labels[0])), line(choiceView(m.fields[0], settingOptions(m.settingPath))))
 	}
-	title = styles.BaseStyle().Foreground(theme.CurrentTheme().Primary()).Bold(true).Render(title)
+	title = dialogBody().Foreground(theme.CurrentTheme().Primary()).Bold(true).Render(title)
 	lines = append([]string{line(title)}, lines...)
-	lines = append(lines, line(m.note))
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	lines = dialogFooter(lines, width, m.height, line(m.note))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func localizedSettingLabel(s string) string {
@@ -213,14 +213,14 @@ func experienceViewProviderDialogCmpSettings(m *providerDialogCmp, width int, li
 	if m.screen == "effective" {
 		(*title) = config.Text("Valores efetivos e origem", "Effective values and origins")
 	}
-	m.settingsFilter.Width = max(4, width-10)
+	m.settingsFilter.SetWidth(max(4, width-10))
 	(*lines) = append((*lines), line(m.settingsFilter.View()))
-	rows := max(1, m.height-11)
+	rows := max(1, m.height-12)
 	experienceViewProviderDialogCmpSettingsSettings(m, line, lines, rows)
 }
 
 func experienceUpdateTeaKeyMsg(m *providerDialogCmp, msg tea.Msg) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
-	key, ok := msg.(tea.KeyMsg)
+	key, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil, false, false
 	}
@@ -272,7 +272,7 @@ func experienceUpdateTeaKeyMsg(m *providerDialogCmp, msg tea.Msg) (extractedResu
 	return nil, true, true
 }
 
-func experienceUpdateTeaKeyMsgSetting(m *providerDialogCmp, msg tea.Msg, key *tea.KeyMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
+func experienceUpdateTeaKeyMsgSetting(m *providerDialogCmp, msg tea.Msg, key *tea.KeyPressMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
 	if m.screen == "setting" {
 		if choiceKey(&m.fields[0], settingOptions(m.settingPath), msg) {
 			return nil, true, true, true
@@ -296,16 +296,16 @@ func experienceUpdateTeaKeyMsgSetting(m *providerDialogCmp, msg tea.Msg, key *te
 
 func experienceUpdateTeaMouseMsg(m *providerDialogCmp, msg tea.Msg) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
 	if mouse, ok := msg.(tea.MouseMsg); ok {
-		if mouse.Button == tea.MouseButtonWheelUp {
+		if mouse.Mouse().Button == tea.MouseWheelUp {
 			m.selected = max(0, m.selected-1)
 		}
-		if mouse.Button == tea.MouseButtonWheelDown {
+		if mouse.Mouse().Button == tea.MouseWheelDown {
 			m.selected++
 			if m.screen == "presets" {
 				m.selected = min(m.selected, max(0, len(config.ProviderPresets)-1))
 			}
 		}
-		if result0, result1, result2, handled := experienceUpdateTeaMouseMsgMouseXContentWidth(m, &mouse); handled {
+		if result0, result1, result2, handled := experienceUpdateTeaMouseMsgMouseXContentWidth(m, mouse); handled {
 			return result0, result1, result2
 		}
 		return nil, true, true
@@ -313,7 +313,7 @@ func experienceUpdateTeaMouseMsg(m *providerDialogCmp, msg tea.Msg) (extractedRe
 	return extractedResult0, extractedResult1, false
 }
 
-func experienceUpdateTeaKeyMsgPresets(m *providerDialogCmp, key *tea.KeyMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
+func experienceUpdateTeaKeyMsgPresets(m *providerDialogCmp, key *tea.KeyPressMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
 	if m.screen == "presets" {
 		switch key.String() {
 		case "up":
@@ -362,24 +362,24 @@ func experienceViewProviderDialogCmpSettingsSettings(m *providerDialogCmp, line 
 	}
 }
 
-func experienceUpdateTeaMouseMsgMouseXContentWidth(m *providerDialogCmp, mouse *tea.MouseMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
-	if mouse.Button == tea.MouseButtonLeft && mouse.Action == tea.MouseActionPress && mouse.Y >= 4 && mouse.X >= 3 && mouse.X < m.contentWidth()+3 {
+func experienceUpdateTeaMouseMsgMouseXContentWidth(m *providerDialogCmp, mouse tea.MouseMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
+	if leftClick(mouse) && mouse.Mouse().Y >= 4 && mouse.Mouse().X >= 3 && mouse.Mouse().X < m.contentWidth()+3 {
 		if m.screen == "setting" {
 			return nil, true, true, true
 		}
-		if m.screen == "presets" && mouse.Y-4 >= len(config.ProviderPresets) {
+		if m.screen == "presets" && mouse.Mouse().Y-4 >= len(config.ProviderPresets) {
 			return nil, true, true, true
 		}
 		offset := 4
 		if m.screen == "settings" {
 			offset = 5
 		}
-		if mouse.Y < offset {
+		if mouse.Mouse().Y < offset {
 			return nil, true, true, true
 		}
-		start := max(0, m.selected-max(1, m.height-11)+1)
-		m.selected = max(0, mouse.Y-offset+start)
-		returned1Value0, returned1Value1 := m.experienceUpdate(tea.KeyMsg{Type: tea.KeyEnter})
+		start := max(0, m.selected-max(1, m.height-12)+1)
+		m.selected = max(0, mouse.Mouse().Y-offset+start)
+		returned1Value0, returned1Value1 := m.experienceUpdate(tea.KeyPressMsg{Code: tea.KeyEnter})
 		return returned1Value0, returned1Value1, true, true
 	}
 	return extractedResult0, extractedResult1, extractedResult2, false
@@ -393,7 +393,7 @@ func filterEffectiveSettings(q string, values *[]config.EffectiveValue) {
 	}
 }
 
-func experienceUpdateTeaKeyMsgEffective(m *providerDialogCmp, msg tea.Msg, key *tea.KeyMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
+func experienceUpdateTeaKeyMsgEffective(m *providerDialogCmp, msg tea.Msg, key *tea.KeyPressMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
 	if m.screen == "effective" {
 		switch key.String() {
 		case "up":

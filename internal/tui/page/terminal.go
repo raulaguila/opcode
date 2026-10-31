@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -106,7 +106,7 @@ func (p *chatPage) refreshTerminal() {
 }
 func (p *chatPage) resizeTerminal() bool {
 	t := &p.terminal
-	cols, rows := max(10, p.width-2), max(3, p.height-3)
+	cols, rows := max(10, p.width-2), p.terminalRows()
 	if !t.focused || (t.resizedID == t.selected && t.cols == cols && t.rows == rows) {
 		return false
 	}
@@ -116,16 +116,25 @@ func (p *chatPage) resizeTerminal() bool {
 	t.resizedID, t.cols, t.rows = t.selected, cols, rows
 	return true
 }
+
+func (p *chatPage) terminalRows() int {
+	rows := p.height - 3 // title, divider and controls
+	if len(p.terminal.processes) > 1 {
+		rows--
+	}
+	return max(3, rows)
+}
 func (p *chatPage) installTerminalSnapshot(snapshot tools.ProcessSnapshot) {
 	t := &p.terminal
 	changed := t.snapshot.ID != snapshot.ID || t.snapshot.Stdout != snapshot.Stdout || t.snapshot.Stderr != snapshot.Stderr
 	t.snapshot = snapshot
-	if t.logs.Width == 0 {
-		t.logs = viewport.New(max(1, p.width-2), max(1, p.height-3))
+	if t.logs.Width() == 0 {
+		t.logs = viewport.New(viewport.WithWidth(max(1, p.width-2)), viewport.WithHeight(p.terminalRows()))
 		changed = true
 	}
 	follow := t.logs.AtBottom()
-	t.logs.Width, t.logs.Height = max(1, p.width-2), max(1, p.height-3)
+	t.logs.SetWidth(max(1, p.width-2))
+	t.logs.SetHeight(p.terminalRows())
 	if changed {
 		t.logs.SetContent(snapshot.Stdout + snapshot.Stderr)
 	}
@@ -211,7 +220,7 @@ func (p *chatPage) startTerminal() tea.Cmd {
 	if strings.HasSuffix(path, "/bash") || path == "bash" {
 		command += " --noprofile --norc -i"
 	}
-	params := tools.ProcessParams{Command: command, PTY: true, Timeout: tools.MaxTimeout, Cols: max(10, p.width-2), Rows: max(3, p.height-3)}
+	params := tools.ProcessParams{Command: command, PTY: true, Timeout: tools.MaxTimeout, Cols: max(10, p.width-2), Rows: p.terminalRows()}
 	manager, permissions := p.app.Processes, p.app.Permissions
 	cmds = append(cmds, func() tea.Msg {
 		defer cancel()
@@ -221,7 +230,7 @@ func (p *chatPage) startTerminal() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (p *chatPage) terminalKey(msg tea.KeyMsg) tea.Cmd {
+func (p *chatPage) terminalKey(msg tea.KeyPressMsg) tea.Cmd {
 	t := &p.terminal
 	switch msg.String() {
 	case "ctrl+n":
@@ -256,44 +265,73 @@ func (p *chatPage) terminalKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func terminalInput(msg tea.KeyMsg) string {
-	var data string
-	switch msg.Type {
-	case tea.KeyRunes:
-		data = string(msg.Runes)
-	case tea.KeyEnter:
-		data = "\r"
-	case tea.KeyBackspace:
-		data = "\x7f"
-	case tea.KeyUp:
-		data = "\x1b[A"
-	case tea.KeyDown:
-		data = "\x1b[B"
-	case tea.KeyRight:
-		data = "\x1b[C"
-	case tea.KeyLeft:
-		data = "\x1b[D"
-	case tea.KeyHome:
-		data = "\x1b[H"
-	case tea.KeyEnd:
-		data = "\x1b[F"
-	case tea.KeyPgUp:
-		data = "\x1b[5~"
-	case tea.KeyPgDown:
-		data = "\x1b[6~"
-	case tea.KeyDelete:
-		data = "\x1b[3~"
-	case tea.KeyInsert:
-		data = "\x1b[2~"
-	default:
-		if msg.Type >= 0 && msg.Type <= 31 {
-			data = string(rune(msg.Type))
+func terminalInput(msg tea.KeyPressMsg) string {
+	data := terminalKeySequence(msg.Code)
+	if data == "" {
+		data = msg.Text
+		if data == "" && msg.Code >= 32 && msg.Code <= 0x10ffff {
+			data = string(msg.Code)
 		}
 	}
-	if msg.Alt && data != "" {
+	if msg.Mod&tea.ModCtrl != 0 {
+		if control := terminalControlInput(msg.Code); control != "" {
+			data = control
+		}
+	}
+	if msg.Code == tea.KeyTab && msg.Mod&tea.ModShift != 0 {
+		data = "\x1b[Z"
+	}
+	if msg.Mod&tea.ModAlt != 0 && data != "" {
 		data = "\x1b" + data
 	}
 	return data
+}
+
+func terminalControlInput(code rune) string {
+	if code >= 'a' && code <= 'z' {
+		code -= 'a' - 'A'
+	}
+	if code == ' ' {
+		return "\x00"
+	}
+	if code >= '@' && code <= '_' {
+		return string(code & 0x1f)
+	}
+	return ""
+}
+
+func terminalKeySequence(code rune) string {
+	switch code {
+	case tea.KeyEnter:
+		return "\r"
+	case tea.KeyTab:
+		return "\t"
+	case tea.KeyEscape:
+		return "\x1b"
+	case tea.KeyBackspace:
+		return "\x7f"
+	case tea.KeyUp:
+		return "\x1b[A"
+	case tea.KeyDown:
+		return "\x1b[B"
+	case tea.KeyRight:
+		return "\x1b[C"
+	case tea.KeyLeft:
+		return "\x1b[D"
+	case tea.KeyHome:
+		return "\x1b[H"
+	case tea.KeyEnd:
+		return "\x1b[F"
+	case tea.KeyPgUp:
+		return "\x1b[5~"
+	case tea.KeyPgDown:
+		return "\x1b[6~"
+	case tea.KeyDelete:
+		return "\x1b[3~"
+	case tea.KeyInsert:
+		return "\x1b[2~"
+	}
+	return ""
 }
 
 func (p *chatPage) terminalView(full bool) string {
@@ -329,7 +367,7 @@ func (p *chatPage) terminalView(full bool) string {
 
 func terminalViewFull(p *chatPage, full bool, t *terminalPanel, width int, style *lipgloss.Style, header *string) (extractedResult0 string, handled bool) {
 	if full {
-		(*header) += " · " + config.Text("Entrada no terminal", "Terminal input")
+		(*header) = ansi.Truncate((*header)+" · "+config.Text("Entrada no terminal", "Terminal input"), width, "…")
 		if len(t.processes) > 1 {
 			labels := []string{}
 			for _, process := range t.processes {
@@ -349,9 +387,9 @@ func terminalViewFull(p *chatPage, full bool, t *terminalPanel, width int, style
 		if t.selected == "" && !t.starting {
 			body = config.Text("Ctrl+N inicia um terminal após aprovação.", "Ctrl+N starts a terminal after approval.")
 		}
-		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-1-lipgloss.Height((*header)))).MaxHeight(max(1, p.height-1-lipgloss.Height((*header)))).Render(body)
+		body = lipgloss.NewStyle().Width(width).MaxWidth(width).Height(max(1, p.height-2-lipgloss.Height((*header)))).MaxHeight(max(1, p.height-2-lipgloss.Height((*header)))).Render(body)
 		footer := ansi.Truncate(config.Text("Ctrl+P conversa • Ctrl+N novo • Alt+←/→ troca • Ctrl+X encerra • Ctrl+C interrompe", "Ctrl+P chat • Ctrl+N new • Alt+←/→ switch • Ctrl+X stop • Ctrl+C interrupt"), width, "…")
-		return style.Render(lipgloss.JoinVertical(lipgloss.Left, (*header), body, footer)), true
+		return style.Render(lipgloss.JoinVertical(lipgloss.Left, styles.PanelTitle().Width(width).Render((*header)), body, styles.PanelDivider(width), styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary()).Foreground(theme.CurrentTheme().TextMuted()).Render(footer))), true
 	}
 	return extractedResult0, false
 }
@@ -374,7 +412,7 @@ func terminalViewFullTSnapshotPTY(t *terminalPanel, width int, body *string) {
 	}
 }
 
-func terminalKeyLeftAltRight(p *chatPage, msg *tea.KeyMsg, t *terminalPanel) (extractedResult0 tea.Cmd) {
+func terminalKeyLeftAltRight(p *chatPage, msg *tea.KeyPressMsg, t *terminalPanel) (extractedResult0 tea.Cmd) {
 	if len(t.processes) > 0 {
 		index := 0
 		for i, process := range t.processes {

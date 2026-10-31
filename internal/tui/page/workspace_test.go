@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
@@ -58,11 +58,11 @@ func TestQueueEditorDoesNotRemoveInstructionUntilDraftCanBeReplaced(t *testing.T
 	a.items = []agent.QueuedInstruction{{ID: "queued", Content: "next instruction", Attachments: []message.Attachment{{FileName: "note.txt", Content: []byte("attached")}}}}
 	p.editor.Update(chat.RestoreDraftMsg{Text: "current draft"})
 	p.openQueue()
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEnter})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Zero(t, a.taken)
 	require.Contains(t, p.workspace.note, config.Text("rascunho", "draft"))
 	// Removing is explicit and leaves the current draft intact.
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyDelete})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyDelete})
 	require.Equal(t, 1, a.taken)
 	draft, _ := p.composer.(chat.DraftControl).Draft()
 	require.Equal(t, "current draft", draft)
@@ -71,7 +71,7 @@ func TestQueueEditRestoresAttachmentsAndConsumptionRaceReportsError(t *testing.T
 	p, a := workspacePage(t)
 	a.items = []agent.QueuedInstruction{{ID: "q", Content: "edit this", Attachments: []message.Attachment{{FileName: "note.txt", Content: []byte("data")}}}}
 	p.openQueue()
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEnter})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	draft, attachments := p.composer.(chat.DraftControl).Draft()
 	require.Equal(t, "edit this", draft)
 	require.Equal(t, "data", string(attachments[0].Content))
@@ -80,7 +80,7 @@ func TestQueueEditRestoresAttachmentsAndConsumptionRaceReportsError(t *testing.T
 	a.items = []agent.QueuedInstruction{{ID: "q", Content: "gone"}}
 	p.openQueue()
 	a.items = nil
-	require.NotNil(t, p.workspaceKey(tea.KeyMsg{Type: tea.KeyEnter}))
+	require.NotNil(t, p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 	require.True(t, p.WorkspaceFocused())
 	require.Empty(t, p.workspace.actions)
 }
@@ -88,7 +88,7 @@ func TestContextPanelIgnoresStaleResultsAndPreventsRepeatedOperations(t *testing
 	p, a := workspacePage(t)
 	cmd := p.openContext(true)
 	require.True(t, p.workspace.loading)
-	require.Nil(t, p.workspaceKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")}))
+	require.Nil(t, p.workspaceKey(tea.KeyPressMsg{Code: []rune("c")[0], Text: "c"}))
 	result := cmd().(WorkspaceResultMsg)
 	require.Equal(t, 1, a.compact)
 	p.workspaceResult(result)

@@ -1,8 +1,8 @@
 package page
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
@@ -29,15 +29,15 @@ func TestWorkspaceBackRestoresPositionAndRejectsLateResults(t *testing.T) {
 	cmd := p.workspaceChoose()
 	require.NotNil(t, cmd)
 	require.Equal(t, "context", p.workspace.kind)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "changes", p.workspace.kind)
 	require.Equal(t, selected, p.workspace.selected)
-	require.Equal(t, 8, p.workspace.view.YOffset)
+	require.Equal(t, 8, p.workspace.view.YOffset())
 	// Late I/O must not replace the parent after returning.
 	p.workspaceResult(cmd().(WorkspaceResultMsg))
 	require.Equal(t, "changes", p.workspace.kind)
 	require.NotContains(t, p.workspace.body, "Estimated room")
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, p.WorkspaceFocused())
 }
 
@@ -64,7 +64,7 @@ func TestPlanActionsRequireExplicitExecutionAndPreserveDraft(t *testing.T) {
 	p.planAction("execute-plan")
 	require.Equal(t, workflow.Plan, p.mode())
 	require.Zero(t, probe.submitted)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Zero(t, probe.submitted)
 	p.planAction("adjust-plan")
 	text, _ := p.composer.(chat.DraftControl).Draft()
@@ -95,10 +95,10 @@ func TestContextDetailsAreExplicitAndDoNotCompact(t *testing.T) {
 	require.Contains(t, p.workspace.body, config.Text("Há espaço estimado", "Estimated room"))
 	require.NotContains(t, p.workspace.body, "\"context_window\"")
 	require.Contains(t, p.workspace.details, "\"context_window\"")
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	p.workspaceKey(tea.KeyPressMsg{Code: []rune("d")[0], Text: "d"})
 	require.True(t, p.workspace.showDetails)
 	require.Zero(t, a.compact)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	p.workspaceKey(tea.KeyPressMsg{Code: []rune("d")[0], Text: "d"})
 	require.False(t, p.workspace.showDetails)
 }
 
@@ -118,9 +118,9 @@ func TestTaskPanelsReturnAndRefreshWithoutLosingDraft(t *testing.T) {
 	require.Equal(t, "contract-kinds", p.workspace.kind)
 	p.workspaceChoose()
 	require.Equal(t, "contract", p.workspace.kind)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "contract-kinds", p.workspace.kind)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "task", p.workspace.kind)
 	require.Equal(t, selected, p.workspace.selected)
 	_, err = p.app.Workflows.UpdatePlan(context.Background(), "s", "Updated objective", []workflow.Step{{Title: "Inspect", Status: "completed"}}, []string{"Explained"}, nil)
@@ -156,11 +156,11 @@ func TestContractListEditorPreservesAcceptanceItems(t *testing.T) {
 	p := workflowPage(t)
 	p.editContract("explain")
 	p.workspace.focus = 1
-	p.contractKey(tea.KeyMsg{Type: tea.KeyEnter})
+	p.contractKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.NotNil(t, p.workspace.itemEditor)
-	p.workspace.itemEditor.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
-	p.contractKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Explain A; preserve B")})
-	p.contractKey(tea.KeyMsg{Type: tea.KeyCtrlS})
+	p.workspace.itemEditor.Update(tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl})
+	p.contractKey(tea.KeyPressMsg{Code: []rune("Explain A; preserve B")[0], Text: "Explain A; preserve B"})
+	p.contractKey(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	require.Nil(t, p.workspace.itemEditor)
 	require.Equal(t, []string{"Explain A; preserve B"}, p.contractItems(1))
 	require.Equal(t, "contract", p.workspace.kind)
@@ -188,15 +188,15 @@ func TestWorkspaceMouseOnlyChoosesVisibleActions(t *testing.T) {
 	}
 	first, rows, _ := p.workspaceActionGeometry()
 	require.Equal(t, 3, rows)
-	p.workspaceMouse(tea.MouseMsg{Y: first + rows, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	p.workspaceMouse(tea.MouseClickMsg{Y: first + rows, Button: tea.MouseLeft})
 	require.True(t, p.workspace.allActions)
 	require.Zero(t, p.workspace.selected)
 	p.workspace.allActions = false
-	p.workspaceMouse(tea.MouseMsg{Y: first + rows + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	p.workspaceMouse(tea.MouseClickMsg{Y: first + rows + 1, Button: tea.MouseLeft})
 	require.Zero(t, p.workspace.selected)
 	p.editContract("explain")
 	p.workspace.focus = 1
-	p.contractKey(tea.KeyMsg{Type: tea.KeyEnter})
-	p.workspaceMouse(tea.MouseMsg{Y: 2, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	p.contractKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	p.workspaceMouse(tea.MouseClickMsg{Y: 2, Button: tea.MouseLeft})
 	require.Equal(t, 1, p.workspace.focus)
 }

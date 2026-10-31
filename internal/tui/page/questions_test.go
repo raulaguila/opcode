@@ -1,11 +1,11 @@
 package page
 
 import (
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"encoding/json"
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/interaction"
@@ -76,14 +76,14 @@ func TestQuestionPanelFocusedChoiceAndFullDetailsRemainReachable(t *testing.T) {
 	p.workflow.choice = 19
 	view := ansi.Strip(p.workflowView())
 	require.Contains(t, view, "› ● Option 20")
-	p.questionKey(tea.KeyMsg{Type: tea.KeyF2})
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeyF2})
 	_ = p.workflowView()
 	for range 20 {
-		p.questionKey(tea.KeyMsg{Type: tea.KeyPgDown})
+		p.questionKey(tea.KeyPressMsg{Code: tea.KeyPgDown})
 	}
 	require.Contains(t, ansi.Strip(p.workflowView()), "LASTOPTION")
 	require.Equal(t, 19, p.workflow.choice)
-	p.questionKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, p.workflow.details)
 	require.Zero(t, p.app.CoderAgent.(*workflowProbe).canceled, "Esc in details only returns to the question")
 }
@@ -106,9 +106,9 @@ func TestQuestionBatchReviewsEditsAndPreservesComposer(t *testing.T) {
 		}
 	}()
 	require.Eventually(t, func() bool { p.refreshWorkflow(); return p.workflow.question.ID != "" }, time.Second, time.Millisecond)
-	key := func(kind tea.KeyType) { flattenCommands(p.questionKey(tea.KeyMsg{Type: kind})) }
+	key := func(kind rune) { flattenCommands(p.questionKey(tea.KeyPressMsg{Code: kind})) }
 	runeKey := func(value string) {
-		flattenCommands(p.questionKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(value)}))
+		flattenCommands(p.questionKey(tea.KeyPressMsg{Code: []rune(value)[0], Text: value}))
 	}
 	key(tea.KeyEnter)
 	require.Zero(t, p.workflow.questionIndex, "empty answer must not advance")
@@ -126,7 +126,7 @@ func TestQuestionBatchReviewsEditsAndPreservesComposer(t *testing.T) {
 		t.Fatal("review advanced without explicit final send")
 	default:
 	}
-	key(tea.KeyShiftTab)
+	flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}))
 	require.Equal(t, "razão inicial", p.workflow.answer.Value())
 	p.workflow.answer.SetValue("razão revisada")
 	key(tea.KeyEnter)

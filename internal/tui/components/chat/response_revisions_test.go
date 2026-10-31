@@ -3,7 +3,7 @@ package chat
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"
 )
@@ -67,9 +67,9 @@ func TestRevisionPromotesOnlyValidatedCandidateAndKeepsPreviousAvailable(t *test
 	require.Contains(t, timelineText(m), "CORRECTED_TEXT")
 	require.Contains(t, timelineText(m), "View previous version")
 	require.Equal(t, "CORRECTED_TEXT README.md:1", m.LatestResponse())
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune("v")})
+	m.Update(tea.KeyPressMsg{Mod: tea.ModAlt, Code: []rune("v")[0]})
 	require.Contains(t, timelineText(m), "ORIGINAL_TEXT")
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune("v")})
+	m.Update(tea.KeyPressMsg{Mod: tea.ModAlt, Code: []rune("v")[0]})
 	require.NotContains(t, timelineText(m), "ORIGINAL_TEXT")
 	m.resetRenderCache()
 	m.renderView()

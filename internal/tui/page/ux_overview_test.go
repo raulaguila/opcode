@@ -1,8 +1,8 @@
 package page
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"errors"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -39,6 +39,6 @@ func TestTaskOverviewAndContextTabsPreserveDraftAndDoNotCompact(t *testing.T) {
 	p.workspaceResult(cmd().(WorkspaceResultMsg))
 	require.Contains(t, p.workspaceView(), config.Text("1 Orçamento", "1 Budget"))
 	require.Zero(t, a.compact)
-	p.workspaceKey(tea.KeyMsg{Type: tea.KeyEsc})
+	p.workspaceKey(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.False(t, p.WorkspaceFocused())
 }

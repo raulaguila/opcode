@@ -5,24 +5,23 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLiveMarkdownCacheMatchesEveryFullSnapshot(t *testing.T) {
-	profile, dark, name := lipgloss.ColorProfile(), lipgloss.HasDarkBackground(), theme.CurrentThemeName()
+	profile, dark, name := theme.ColorProfile(), theme.HasDarkBackground(), theme.CurrentThemeName()
 	t.Cleanup(func() {
-		lipgloss.SetColorProfile(profile)
-		lipgloss.SetHasDarkBackground(dark)
+		theme.SetColorProfile(profile)
+		theme.SetHasDarkBackground(dark)
 		_ = theme.PreviewTheme(name)
 	})
 	// Monokai's code colors avoid the highlighter's nondeterministic equidistant
 	// terminal256 palette choices. Keep the oracle byte-exact for every prefix.
 	require.NoError(t, theme.PreviewTheme("monokai"))
-	for _, color := range []termenv.Profile{termenv.Ascii, termenv.TrueColor} {
-		lipgloss.SetColorProfile(color)
+	for _, color := range []colorprofile.Profile{colorprofile.Ascii, colorprofile.TrueColor} {
+		theme.SetColorProfile(color)
 		for _, source := range append(markdownReuseFixtures(), "A paragraph.\n\n```go\nprintln(1)\n```\n\nA tail with [ref].\n\n[ref]: https://example.test/source#L2\n") {
 			var cache MarkdownCache
 			for end := 1; end <= len(source); end++ {

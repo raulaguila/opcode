@@ -1,13 +1,14 @@
 package chat
 
 import (
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/muesli/termenv"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -39,13 +40,12 @@ func responsePoint(t *testing.T, m *messagesCmp, text string) textPoint {
 
 func selectDrag(t *testing.T, m *messagesCmp, from, to textPoint) {
 	t.Helper()
-	for _, step := range []struct {
-		at     textPoint
-		action tea.MouseAction
-	}{
-		{from, tea.MouseActionPress}, {to, tea.MouseActionMotion}, {to, tea.MouseActionRelease},
+	for _, msg := range []tea.MouseMsg{
+		tea.MouseClickMsg{X: from.x + 1, Y: from.row - m.viewport.YOffset + 1, Button: tea.MouseLeft},
+		tea.MouseMotionMsg{X: to.x + 1, Y: to.row - m.viewport.YOffset + 1, Button: tea.MouseLeft},
+		tea.MouseReleaseMsg{X: to.x + 1, Y: to.row - m.viewport.YOffset + 1, Button: tea.MouseLeft},
 	} {
-		_, cmd := m.Update(tea.MouseMsg{X: step.at.x + 1, Y: step.at.row - m.viewport.YOffset + 1, Button: tea.MouseButtonLeft, Action: step.action})
+		_, cmd := m.Update(msg)
 		require.Nil(t, cmd, "selection must never open response actions or copy automatically")
 	}
 }
@@ -53,9 +53,9 @@ func selectDrag(t *testing.T, m *messagesCmp, from, to textPoint) {
 func TestResponseClickDoesNotOpenActionsAndDragSelectsUnicode(t *testing.T) {
 	m := selectionFixture(t)
 	start := responsePoint(t, m, "ação")
-	_, cmd := m.Update(tea.MouseMsg{X: start.x + 1, Y: start.row + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	_, cmd := m.Update(tea.MouseClickMsg{X: start.x + 1, Y: start.row + 1, Button: tea.MouseLeft})
 	require.Nil(t, cmd)
-	m.Update(tea.MouseMsg{X: start.x + 1, Y: start.row + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	m.Update(tea.MouseReleaseMsg{X: start.x + 1, Y: start.row + 1, Button: tea.MouseLeft})
 	require.Empty(t, m.SelectedText(), "a click alone does not select or copy")
 	end := responsePoint(t, m, " omega")
 	end.x--
@@ -67,7 +67,7 @@ func TestResponseClickDoesNotOpenActionsAndDragSelectsUnicode(t *testing.T) {
 	require.Equal(t, lipgloss.Height(before), lipgloss.Height(m.View()))
 	selectDrag(t, m, end, start)
 	require.Equal(t, "ação 漢字 👩‍💻", m.SelectedText(), "reverse drag selects the same graphemes")
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
 	require.IsType(t, ResponseActionsMsg{}, cmd(), "actions remain an explicit keyboard operation")
 }
 
@@ -80,9 +80,9 @@ func TestSelectionSnapsWideAndCombiningGraphemes(t *testing.T) {
 }
 
 func TestSelectionHighlightWithoutColors(t *testing.T) {
-	previous := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.Ascii)
-	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
+	previous := theme.ColorProfile()
+	theme.SetColorProfile(colorprofile.Ascii)
+	t.Cleanup(func() { theme.SetColorProfile(previous) })
 	m := selectionFixture(t)
 	first := responsePoint(t, m, "alpha")
 	before := m.View()
@@ -128,8 +128,8 @@ func TestSelectionUsesScrolledCoordinatesAndClampsOutsideRelease(t *testing.T) {
 	first := textPoint{3, m.viewport.YOffset + 1}
 	selectDrag(t, m, first, textPoint{first.x + 5, first.row})
 	require.NotEmpty(t, m.SelectedText())
-	m.Update(tea.MouseMsg{X: 4, Y: 2, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	m.Update(tea.MouseMsg{X: 999, Y: 999, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	m.Update(tea.MouseClickMsg{X: 4, Y: 2, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: 999, Y: 999, Button: tea.MouseLeft})
 	require.False(t, m.SelectionDragging())
 	require.NotEmpty(t, m.SelectedText())
 }

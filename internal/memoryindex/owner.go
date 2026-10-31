@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ncruces/go-sqlite3/driver"
+	"github.com/ncruces/go-sqlite3/ext/fts5"
 	"github.com/raulaguila/opcode/internal/localstate"
 )
 
@@ -77,7 +79,7 @@ func openChecked(ctx context.Context, directory, project string) (*sql.DB, proje
 	if err != nil {
 		return nil, projectionIdentity{}, err
 	}
-	db, err := sql.Open("sqlite3", filepath.Join(dir, name))
+	db, err := driver.Open(filepath.Join(dir, name), fts5.Register)
 	if err != nil {
 		return nil, projectionIdentity{}, err
 	}

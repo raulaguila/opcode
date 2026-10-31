@@ -45,7 +45,12 @@ não são agrupadas como revisões por proximidade ou conteúdo.
 Perguntas usam painel com borda, superfície distinta, estado de espera e seleção
 explícita, preservando a distinção entre responder e autorizar uma ferramenta.
 O painel tem borda reta e divisória acima dos controles; o estado de espera
-permanece no rodapé. O chat renderiza títulos sem marcadores Markdown, com
+permanece no rodapé. Menus e formulários usam a mesma superfície elevada,
+borda reta, seleção discreta e divisória acima dos controles quando há espaço.
+Avisos, diffs e permissões mantêm suas cores semânticas e escolhas explícitas.
+O conjunto visual usa Charm v2, com teclado, mouse e colagem nativos, preservando
+temas personalizados e configuração. Ver [dependências](docs/dependencies.md).
+O chat renderiza títulos sem marcadores Markdown, com
 ênfases neutras no tema Opcode e linhas de listas alinhadas depois do marcador.
 A resposta livre é a última opção selecionável; o foco indica se será enviada
 uma sugestão ou o texto, sem um rascunho inativo substituir a escolha. Após o

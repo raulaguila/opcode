@@ -3,7 +3,7 @@ package dialog
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/stretchr/testify/require"
 )
@@ -13,11 +13,11 @@ func TestProviderDraftResumeRetainsModelIdentityAndCurrentGeometry(t *testing.T)
 	m.edit(nil)
 	m.fields[providerNameField].SetValue("Preserved draft")
 	request := m.request
-	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	model, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Same(t, m, model)
 	require.Equal(t, "list", m.screen)
 	m.Update(tea.WindowSizeMsg{Width: 58, Height: 20})
-	model, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	model, _ = m.Update(tea.KeyPressMsg{Text: "r"})
 	require.Same(t, m, model)
 	require.Equal(t, "provider", m.screen)
 	require.Equal(t, "Preserved draft", m.fields[providerNameField].Value())
@@ -33,16 +33,16 @@ func TestIntegrationArgumentEditorPreservesDraftAndResumesCurrentGeometry(t *tes
 	m.fields[m.focus].Blur()
 	m.focus = 3
 	m.fields[m.focus].Focus()
-	model, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Same(t, m, model)
 	require.NotNil(t, m.arguments)
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Nil(t, m.arguments)
 	require.Equal(t, `["--old"]`, m.fields[3].Value())
-	m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Equal(t, "list", m.screen)
 	m.Update(tea.WindowSizeMsg{Width: 61, Height: 22})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	m.Update(tea.KeyPressMsg{Text: "r"})
 	require.Equal(t, "edit", m.screen)
 	require.Equal(t, "fixture", m.fields[2].Value())
 	require.Equal(t, 61, m.width)
@@ -52,12 +52,12 @@ func TestIntegrationArgumentEditorPreservesDraftAndResumesCurrentGeometry(t *tes
 func TestProviderMouseAndKeyboardFocusUseTheSameVisibleFields(t *testing.T) {
 	m := settingsDialog(t)
 	m.edit(nil)
-	_, _ = m.Update(tea.MouseMsg{X: 4, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	_, _ = m.Update(tea.MouseClickMsg{X: 4, Y: 5, Button: tea.MouseLeft})
 	require.Equal(t, providerURLField, m.focus)
-	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	require.Equal(t, providerAuthField, m.focus)
 	m.fields[providerAuthField].SetValue("environment")
-	m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	require.Equal(t, providerEnvironmentField, m.focus)
 	_, _, err := m.readProfile()
 	require.ErrorContains(t, err, "environment variable")

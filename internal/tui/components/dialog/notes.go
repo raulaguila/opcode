@@ -1,12 +1,13 @@
 package dialog
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/styles"
-	"strings"
 )
 
 func (m *providerDialogCmp) noteUpdate(msg tea.Msg) bool {
@@ -19,10 +20,10 @@ func (m *providerDialogCmp) noteUpdate(msg tea.Msg) bool {
 			m.width, m.height = event.Width, event.Height
 			return true
 		case tea.MouseMsg:
-			if event.Button == tea.MouseButtonWheelUp {
+			if event.Mouse().Button == tea.MouseWheelUp {
 				m.noteOffset = max(0, m.noteOffset-1)
 			}
-			if event.Button == tea.MouseButtonWheelDown {
+			if event.Mouse().Button == tea.MouseWheelDown {
 				m.noteOffset++
 			}
 			return true
@@ -39,16 +40,16 @@ func (m *providerDialogCmp) noteLines(note string) []string {
 }
 func (m *providerDialogCmp) noteView() string {
 	width := m.contentWidth()
-	rows := max(1, m.height-7)
+	rows := max(1, m.height-8)
 	lines := strings.Split(ansi.Wrap(interfaceCopy(m.note), width, ""), "\n")
 	m.noteOffset = min(m.noteOffset, max(0, len(lines)-rows))
 	body := append([]string{config.Text("Detalhes", "Details")}, lines[m.noteOffset:min(len(lines), m.noteOffset+rows)]...)
-	body = append(body, config.Text("↑↓ rola · Esc volta", "↑↓ scroll · Esc back"))
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).Width(width + 4).Render(strings.Join(body, "\n"))
+	body = append(body, styles.PanelDivider(width), config.Text("↑↓ rola · Esc volta", "↑↓ scroll · Esc back"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(body, "\n"))
 }
 
 func noteUpdateTeaKeyMsg(m *providerDialogCmp, msg tea.Msg) (extractedResult0 bool, handled bool) {
-	if k, ok := msg.(tea.KeyMsg); ok {
+	if k, ok := msg.(tea.KeyPressMsg); ok {
 		if k.String() == "ctrl+d" && m.note != "" && m.screen != "list" {
 			m.noteFull = !m.noteFull
 			m.noteOffset = 0

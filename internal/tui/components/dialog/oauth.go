@@ -2,13 +2,14 @@ package dialog
 
 import (
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/tui/styles"
 	"strings"
 	"time"
 	"unicode"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/tui/styles"
 )
 
 type OAuthHandler func(context.Context, string, string, func(string) error) (string, error)
@@ -78,7 +79,7 @@ func (m *integrationDialogCmp) updateOAuth(msg integrationOAuthMsg) tea.Cmd {
 }
 func (m *integrationDialogCmp) oauthView() string {
 	width := m.contentWidth()
-	rows := max(1, m.height-7)
+	rows := max(1, m.height-10)
 	all := []string{}
 	for _, line := range m.result {
 		line = ansi.Strip(line)
@@ -96,8 +97,8 @@ func (m *integrationDialogCmp) oauthView() string {
 	m.resultOffset = min(m.resultOffset, max(0, len(all)-rows))
 	lines := []string{ansi.Truncate(config.Text("Autenticação MCP · ↑↓ rola", "MCP authentication · ↑↓ scrolls"), width, "…")}
 	lines = append(lines, all[m.resultOffset:min(len(all), m.resultOffset+rows)]...)
-	lines = append(lines, ansi.Truncate(m.note, width, "…"))
-	return styles.BaseStyle().Padding(1, 2).Render(joinLines(lines))
+	lines = append(lines, styles.PanelDivider(width), ansi.Truncate(m.note, width, "…"))
+	return styles.Panel().Padding(1, 2).Render(joinLines(lines))
 }
 
 func joinLines(lines []string) string {

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
-	_ "github.com/ncruces/go-sqlite3/embed"
 	appconfig "github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"

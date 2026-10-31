@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/completions"
 	"github.com/raulaguila/opcode/internal/config"
@@ -83,7 +83,7 @@ func (p *chatPage) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
+func (p *chatPage) Update(msg tea.Msg) (updated util.Model, result tea.Cmd) {
 	defer func() { updateCallback(&p, &result) }()
 	var cmds []tea.Cmd
 	updateSidebarVisibleSidebar(p, msg, &cmds)
@@ -150,10 +150,12 @@ func (p *chatPage) Update(msg tea.Msg) (updated tea.Model, result tea.Cmd) {
 		if result0, result1, handled := updateChatPageSessionSelectedMsg(p, &cmds, &msg); handled {
 			return result0, result1
 		}
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateChatPageKeyMsg(p, &msg); handled {
 			return result0, result1
 		}
+	case tea.PasteMsg:
+		return p, p.paste(msg)
 	}
 	if result0, result1, handled := updateShowCompletionDialog(p, msg, &cmds); handled {
 		return result0, result1
@@ -312,7 +314,7 @@ func (p *chatPage) BindingKeys() []key.Binding {
 	return bindings
 }
 
-func NewChatPage(app *app.App) tea.Model {
+func NewChatPage(app *app.App) util.Model {
 	cg := completions.NewFileAndFolderContextGroup()
 	completionDialog := dialog.NewCompletionDialogCmp(cg)
 
@@ -345,7 +347,7 @@ func (p *chatPage) slashMenuOpen() bool {
 	return p.composer != nil && !p.terminal.focused && p.workflow.question.ID == "" && !p.showCompletionDialog && p.composer.SlashMenuOpen()
 }
 
-func updateChatPageMouseMsg(p *chatPage, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateChatPageMouseMsg(p *chatPage, msg *tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if p.WorkspaceFocused() {
 		return p, p.workspaceMouse((*msg)), true
 	}
@@ -359,10 +361,10 @@ func updateChatPageMouseMsg(p *chatPage, msg *tea.MouseMsg) (extractedResult0 te
 		return result0, result1, result2
 	}
 	if p.height >= 12 {
-		if msg.Y == 0 {
+		if (*msg).Mouse().Y == 0 {
 			return p, nil, true
 		}
-		msg.Y--
+		*msg = util.TranslateMouse(*msg, 0, -1)
 	}
 	// Mouse coordinates are relative to the terminal. The message panel
 	// starts at the top left; don't scroll it over the editor or sidebar.
@@ -379,7 +381,7 @@ func updateChatPageMouseMsg(p *chatPage, msg *tea.MouseMsg) (extractedResult0 te
 	if result0, result1, result2, handled := updateChatPageMouseMsgYYHeight(p, msg, width, height); handled {
 		return result0, result1, result2
 	}
-	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+	if util.MousePressed((*msg)) && (*msg).Mouse().Button == tea.MouseLeft {
 		if selection, ok := p.transcript.(chat.SelectionControl); ok {
 			selection.ClearSelection()
 		}
@@ -388,7 +390,7 @@ func updateChatPageMouseMsg(p *chatPage, msg *tea.MouseMsg) (extractedResult0 te
 
 }
 
-func updateChatPageKeyMsg(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateChatPageKeyMsg(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if p.WorkspaceFocused() {
 		return p, p.workspaceKey((*msg)), true
 	}
@@ -432,7 +434,7 @@ func updateChatPageKeyMsg(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Mo
 	return extractedResult0, extractedResult1, false
 }
 
-func updateChatPageDefault(p *chatPage, msg *AgentOutcomeMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateChatPageDefault(p *chatPage, msg *AgentOutcomeMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if msg.SessionID == p.session.ID {
 		p.refreshWorkflow()
 		p.outcome = msg.Outcome
@@ -448,7 +450,7 @@ func updateChatPageDefault(p *chatPage, msg *AgentOutcomeMsg) (extractedResult0 
 
 }
 
-func updateChatPageCommandRunCustomMsg(p *chatPage, msg *dialog.CommandRunCustomMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateChatPageCommandRunCustomMsg(p *chatPage, msg *dialog.CommandRunCustomMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if p.app.CoderAgent.IsBusy() {
 		return p, util.ReportWarn("Agent is busy, please wait before executing a command..."), true
 	}
@@ -471,7 +473,7 @@ func updateChatPageCommandRunCustomMsg(p *chatPage, msg *dialog.CommandRunCustom
 	return extractedResult0, extractedResult1, false
 }
 
-func updateChatPageSessionSelectedMsg(p *chatPage, cmds *[]tea.Cmd, msg *chat.SessionSelectedMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateChatPageSessionSelectedMsg(p *chatPage, cmds *[]tea.Cmd, msg *chat.SessionSelectedMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if msg.ID != p.session.ID {
 		if err := p.PrepareSessionDraft(msg.ID); err != nil {
 			return p, util.ReportError(err), true
@@ -497,7 +499,7 @@ func updateChatPageSessionSelectedMsg(p *chatPage, cmds *[]tea.Cmd, msg *chat.Se
 	return extractedResult0, extractedResult1, false
 }
 
-func updateChatPageDefaultCase(p *chatPage, msg *ActivityMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateChatPageDefaultCase(p *chatPage, msg *ActivityMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if msg.SessionID == p.session.ID {
 		if p.progress != msg.State {
 			p.refreshWorkflow()
@@ -517,7 +519,7 @@ func updateChatPageSession(p *chatPage, msg *pubsub.Event[session.Session]) {
 	}
 }
 
-func updateChatPageDefaultCaseCase(p *chatPage, msg *TerminalStartedMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateChatPageDefaultCaseCase(p *chatPage, msg *TerminalStartedMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if msg.sessionID != p.session.ID {
 		return p, nil
 	}
@@ -532,7 +534,7 @@ func updateChatPageDefaultCaseCase(p *chatPage, msg *TerminalStartedMsg) (extrac
 
 }
 
-func updateChatPageDefaultCaseCaseCase(p *chatPage, msg *WorkflowCommandMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd) {
+func updateChatPageDefaultCaseCaseCase(p *chatPage, msg *WorkflowCommandMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if p.session.ID == "" {
 		session, err := p.app.Sessions.Create(context.Background(), "New Session")
 		if err != nil {
@@ -556,16 +558,16 @@ func updateSidebarVisibleSidebar(p *chatPage, msg tea.Msg, cmds *[]tea.Cmd) {
 	}
 }
 
-func updateChatPageMouseMsgYPanelStartComposerPanelHeight(p *chatPage, msg *tea.MouseMsg, panelStart int) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if msg.Y >= panelStart && msg.Y < panelStart+p.composerPanelHeight() {
-		if msg.Y >= panelStart+p.workflowHeight() {
+func updateChatPageMouseMsgYPanelStartComposerPanelHeight(p *chatPage, msg *tea.MouseMsg, panelStart int) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if (*msg).Mouse().Y >= panelStart && (*msg).Mouse().Y < panelStart+p.composerPanelHeight() {
+		if (*msg).Mouse().Y >= panelStart+p.workflowHeight() {
 			return p, p.recoveryMouse((*msg)), true, true
 		}
 		if p.workflow.expanded && p.workflow.question.ID == "" {
-			if msg.Button == tea.MouseButtonWheelUp {
+			if (*msg).Mouse().Button == tea.MouseWheelUp {
 				p.workflow.offset = max(0, p.planOffset()-1)
 			}
-			if msg.Button == tea.MouseButtonWheelDown {
+			if (*msg).Mouse().Button == tea.MouseWheelDown {
 				p.workflow.offset = min(max(0, len(p.planRows())-1), p.planOffset()+1)
 			}
 		}
@@ -574,14 +576,14 @@ func updateChatPageMouseMsgYPanelStartComposerPanelHeight(p *chatPage, msg *tea.
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateShowCompletionDialog(p *chatPage, msg tea.Msg, cmds *[]tea.Cmd) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateShowCompletionDialog(p *chatPage, msg tea.Msg, cmds *[]tea.Cmd) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if p.showCompletionDialog {
 		context, contextCmd := p.completionDialog.Update(msg)
 		p.completionDialog = context.(dialog.CompletionDialog)
 		(*cmds) = append((*cmds), contextCmd)
 
 		// Doesn't forward event if enter key is pressed
-		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 			if keyMsg.String() == "enter" {
 				return p, tea.Batch((*cmds)...), true
 			}
@@ -590,7 +592,7 @@ func updateShowCompletionDialog(p *chatPage, msg tea.Msg, cmds *[]tea.Cmd) (extr
 	return extractedResult0, extractedResult1, false
 }
 
-func updateChatPageKeyMsgAltUp(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateChatPageKeyMsgAltUp(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if p.workflow.expanded && (msg.String() == "alt+up" || msg.String() == "alt+down") {
 		step := 1
 		if msg.String() == "alt+up" {
@@ -602,12 +604,12 @@ func updateChatPageKeyMsgAltUp(p *chatPage, msg *tea.KeyMsg) (extractedResult0 t
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateChatPageMouseMsgTranscriptChatSelectionControl(p *chatPage, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateChatPageMouseMsgTranscriptChatSelectionControl(p *chatPage, msg *tea.MouseMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if selection, ok := p.transcript.(chat.SelectionControl); ok && selection.SelectionDragging() &&
-		(msg.Action == tea.MouseActionMotion || msg.Action == tea.MouseActionRelease) {
+		(util.MouseMoved((*msg)) || util.MouseReleased((*msg))) {
 		// Capture the drag even when its endpoint leaves the message panel.
 		if p.height >= 12 {
-			msg.Y--
+			*msg = util.TranslateMouse(*msg, 0, -1)
 		}
 		updated, cmd := p.messages.Update((*msg))
 		p.messages = updated.(layout.Container)
@@ -616,7 +618,7 @@ func updateChatPageMouseMsgTranscriptChatSelectionControl(p *chatPage, msg *tea.
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateChatPageKeyMsgStringShortcutSidebar(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateChatPageKeyMsgStringShortcutSidebar(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if msg.String() == config.Shortcut("sidebar") {
 		if config.Get() != nil {
 			next := "hidden"
@@ -632,8 +634,8 @@ func updateChatPageKeyMsgStringShortcutSidebar(p *chatPage, msg *tea.KeyMsg) (ex
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
-func updateChatPageMouseMsgYYHeight(p *chatPage, msg *tea.MouseMsg, width int, height int) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
-	if !p.showCompletionDialog && msg.X >= 0 && msg.X < width && msg.Y >= 0 && msg.Y < height {
+func updateChatPageMouseMsgYYHeight(p *chatPage, msg *tea.MouseMsg, width int, height int) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+	if !p.showCompletionDialog && (*msg).Mouse().X >= 0 && (*msg).Mouse().X < width && (*msg).Mouse().Y >= 0 && (*msg).Mouse().Y < height {
 		updated, cmd := p.messages.Update((*msg))
 		p.messages = updated.(layout.Container)
 		return p, cmd, true, true

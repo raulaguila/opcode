@@ -3,7 +3,7 @@ package page
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/stretchr/testify/require"
@@ -15,9 +15,12 @@ type navigationProbe struct {
 	selectedKeys int
 }
 
-func (n *navigationProbe) TranscriptKey(msg tea.KeyMsg) bool { n.selectedKeys++; return msg.Alt }
-func (n *navigationProbe) StartSearch(s string)              { n.query = s }
-func (n *navigationProbe) ToggleKeyboardSelection()          { n.selected = true }
+func (n *navigationProbe) TranscriptKey(msg tea.KeyPressMsg) bool {
+	n.selectedKeys++
+	return msg.Mod&tea.ModAlt != 0
+}
+func (n *navigationProbe) StartSearch(s string)     { n.query = s }
+func (n *navigationProbe) ToggleKeyboardSelection() { n.selected = true }
 
 func TestTranscriptNavigationPreservesComposerAndPTYKeys(t *testing.T) {
 	p := workflowPage(t)
@@ -25,7 +28,7 @@ func TestTranscriptNavigationPreservesComposerAndPTYKeys(t *testing.T) {
 	p.transcript = probe
 	p.editor.Update(chat.RestoreDraftMsg{Text: "draft preserved"})
 	before := ansi.Strip(p.editor.View())
-	_, handled := p.SelectionKey(tea.KeyMsg{Type: tea.KeyRunes, Alt: true, Runes: []rune{'f'}})
+	_, handled := p.SelectionKey(tea.KeyPressMsg{Mod: tea.ModAlt, Code: 'f'})
 	require.True(t, handled)
 	require.Equal(t, before, ansi.Strip(p.editor.View()))
 	p.workspaceCommand("search", "needle")
@@ -34,7 +37,7 @@ func TestTranscriptNavigationPreservesComposerAndPTYKeys(t *testing.T) {
 	require.True(t, probe.selected)
 	count := probe.selectedKeys
 	p.terminal.focused = true
-	_, handled = p.SelectionKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, handled = p.SelectionKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	require.False(t, handled)
 	require.Equal(t, count, probe.selectedKeys)
 }

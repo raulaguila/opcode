@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/interaction"
@@ -74,13 +74,16 @@ func (p *chatPage) questionAnswerField(item interaction.QuestionItem, width int)
 		prefix := "  ○ "
 		if p.customQuestionAnswer(len(item.Choices)) {
 			prefix = "› ● "
-			style = style.Foreground(t.Text()).Background(t.BorderDim())
+			style = styles.SelectedRow()
 		}
 		p.workflow.answer.Prompt = prefix + config.Text("Outra resposta: ", "Other answer: ")
 	}
-	p.workflow.answer.Width = max(1, width-lipgloss.Width(p.workflow.answer.Prompt)-1)
+	p.workflow.answer.SetWidth(max(1, width-lipgloss.Width(p.workflow.answer.Prompt)-1))
 	p.workflow.answer.Placeholder = ""
-	p.workflow.answer.TextStyle, p.workflow.answer.PromptStyle = style, style
+	inputStyles := p.workflow.answer.Styles()
+	inputStyles.Focused.Text, inputStyles.Focused.Prompt = style, style
+	inputStyles.Blurred.Text, inputStyles.Blurred.Prompt = style, style
+	p.workflow.answer.SetStyles(inputStyles)
 	return style.Width(width).Render(ansi.Truncate(p.workflow.answer.View(), width, "…"))
 }
 
@@ -125,8 +128,7 @@ func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) 
 		}
 		line := fmt.Sprintf("%s %s %s", cursor, mark, panelText(choice))
 		if cursor == "›" {
-			t := theme.CurrentTheme()
-			line = styles.BaseStyle().Foreground(t.Text()).Background(t.BorderDim()).Bold(true).PaddingRight(max(0, width-ansi.StringWidth(line))).Render(line)
+			line = styles.SelectedRow().Bold(true).PaddingRight(max(0, width-ansi.StringWidth(line))).Render(line)
 		}
 		rows = append(rows, line)
 	}
@@ -182,7 +184,6 @@ func (c questionContent) visibleRows(height int, divider string) []string {
 func (p *chatPage) questionPanelView(height int) string {
 	width := max(1, p.width-4)
 	c := p.questionPanelContent(width)
-	t := theme.CurrentTheme()
 	title := config.Text("Pergunta para você", "Question for you")
 	if height < 5 {
 		rows := append([]string{title}, c.visibleRows(height-1, "")...)
@@ -191,25 +192,18 @@ func (p *chatPage) questionPanelView(height int) string {
 		}
 		return strings.Join(rows, "\n")
 	}
-	rows := []string{styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Primary()).Bold(true).Render(title)}
+	rows := []string{styles.PanelTitle().Render(title)}
 	bodyHeight := height - 2 - len(rows)
 	if p.workflow.details {
 		rows = append(rows, p.questionDetailsRows(c, width, bodyHeight)...)
 	} else {
-		rows = append(rows, c.visibleRows(bodyHeight, questionPanelDivider(width))...)
+		rows = append(rows, c.visibleRows(bodyHeight, styles.PanelDivider(width))...)
 	}
 	for i := range rows {
 		rows[i] = ansi.Truncate(rows[i], width, "…")
 	}
-	return styles.BaseStyle().Foreground(t.Text()).Background(t.BackgroundSecondary()).
-		Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).
-		BorderBackground(t.BackgroundSecondary()).Padding(0, 1).Width(max(1, p.width-2)).
+	return styles.Panel().Padding(0, 1).Width(max(1, p.width)).
 		Render(strings.Join(rows, "\n"))
-}
-
-func questionPanelDivider(width int) string {
-	t := theme.CurrentTheme()
-	return styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.TextMuted()).Render(strings.Repeat("─", width))
 }
 
 func (p *chatPage) questionDetailsRows(c questionContent, width, height int) []string {
@@ -223,12 +217,12 @@ func (p *chatPage) questionDetailsRows(c questionContent, width, height int) []s
 	for _, choice := range c.choices {
 		full = append(full, ansi.Wrap(choice, width, ""))
 	}
-	p.workflow.detailView.Width = width
+	p.workflow.detailView.SetWidth(width)
 	tail := []string{config.Text("F2/Esc volta · ↑↓/PgUp/PgDn rola", "F2/Esc back · ↑↓/PgUp/PgDn scroll")}
 	if height >= 5 {
-		tail = append([]string{questionPanelDivider(width)}, tail...)
+		tail = append([]string{styles.PanelDivider(width)}, tail...)
 	}
-	p.workflow.detailView.Height = height - len(tail)
+	p.workflow.detailView.SetHeight(height - len(tail))
 	p.workflow.detailView.SetContent(strings.Join(full, "\n"))
 	return append(strings.Split(p.workflow.detailView.View(), "\n"), tail...)
 }

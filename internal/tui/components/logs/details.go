@@ -2,13 +2,14 @@ package logs
 
 import (
 	"fmt"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -16,7 +17,7 @@ import (
 )
 
 type DetailComponent interface {
-	tea.Model
+	util.Model
 	layout.Sizeable
 	layout.Bindings
 }
@@ -36,7 +37,7 @@ func (i *detailCmp) Init() tea.Cmd {
 	return nil
 }
 
-func (i *detailCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (i *detailCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case selectedLogMsg:
 		if msg.ID != i.currentLog.ID {
@@ -67,7 +68,7 @@ func (i *detailCmp) updateContent() {
 	content.WriteString("\n\n")
 
 	// Message with styling
-	messageStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Text())
+	messageStyle := styles.PanelTitle()
 	content.WriteString(messageStyle.Render("Message:"))
 	content.WriteString("\n")
 	content.WriteString(lipgloss.NewStyle().Padding(0, 2).Render(i.currentLog.Message))
@@ -75,7 +76,7 @@ func (i *detailCmp) updateContent() {
 
 	// Attributes section
 	if len(i.currentLog.Attributes) > 0 {
-		attrHeaderStyle := lipgloss.NewStyle().Bold(true).Foreground(t.Text())
+		attrHeaderStyle := styles.PanelTitle()
 		content.WriteString(attrHeaderStyle.Render("Attributes:"))
 		content.WriteString("\n")
 
@@ -116,7 +117,7 @@ func getLevelStyle(level string) lipgloss.Style {
 
 func (i *detailCmp) View() string {
 	t := theme.CurrentTheme()
-	return styles.ForceReplaceBackgroundWithLipgloss(i.viewport.View(), t.Background())
+	return styles.ForceReplaceBackgroundWithLipgloss(i.viewport.View(), t.BackgroundSecondary())
 }
 
 func (i *detailCmp) GetSize() (int, int) {
@@ -126,8 +127,8 @@ func (i *detailCmp) GetSize() (int, int) {
 func (i *detailCmp) SetSize(width int, height int) tea.Cmd {
 	i.width = width
 	i.height = height
-	i.viewport.Width = i.width
-	i.viewport.Height = i.height
+	i.viewport.SetWidth(i.width)
+	i.viewport.SetHeight(i.height)
 	i.updateContent()
 	return nil
 }
@@ -138,6 +139,6 @@ func (i *detailCmp) BindingKeys() []key.Binding {
 
 func NewLogsDetails() DetailComponent {
 	return &detailCmp{
-		viewport: viewport.New(0, 0),
+		viewport: viewport.New(viewport.WithWidth(0), viewport.WithHeight(0)),
 	}
 }

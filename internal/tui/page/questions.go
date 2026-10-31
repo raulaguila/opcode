@@ -1,7 +1,7 @@
 package page
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
@@ -39,7 +39,7 @@ func (p *chatPage) restoreBatchAnswer() {
 	p.focusQuestionInput(len(p.workflow.question.Questions[i].Choices))
 }
 
-func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
+func (p *chatPage) batchQuestionKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
 	if key == "f2" {
 		p.workflow.details = !p.workflow.details
@@ -69,7 +69,7 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyMsg) tea.Cmd {
 	switch key {
 	case "up", "down":
 		return p.navigateQuestionAnswer(key, len(item.Choices))
-	case " ":
+	case "space":
 		if result0, handled := batchQuestionKeyChatPageDefault(p, &item); handled {
 			return result0
 		}
@@ -113,7 +113,7 @@ func batchQuestionKeyIndexQQuestions(p *chatPage, key string, q *interaction.Que
 	return extractedResult0, false
 }
 
-func batchQuestionKeyWorkflowDetails(p *chatPage, msg *tea.KeyMsg, key string) (extractedResult0 tea.Cmd, handled bool) {
+func batchQuestionKeyWorkflowDetails(p *chatPage, msg *tea.KeyPressMsg, key string) (extractedResult0 tea.Cmd, handled bool) {
 	if p.workflow.details {
 		if key == "esc" || key == "enter" {
 			p.workflow.details = false

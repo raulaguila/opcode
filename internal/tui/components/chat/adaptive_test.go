@@ -1,8 +1,8 @@
 package chat
 
 import (
+	"charm.land/lipgloss/v2"
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"

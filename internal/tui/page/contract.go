@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
+	"github.com/raulaguila/opcode/internal/tui/styles"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
@@ -57,7 +59,7 @@ func (p *chatPage) editContract(kind string) tea.Cmd {
 	for _, value := range []string{strings.Join(current.Targets, ", "), strings.Join(current.Acceptance, "; "), strings.Join(current.Checks, ", ")} {
 		f := textinput.New()
 		f.CharLimit = 4000
-		f.Width = max(8, p.width-8)
+		f.SetWidth(max(8, p.width-8))
 		f.SetValue(value)
 		p.workspace.fields = append(p.workspace.fields, f)
 	}
@@ -78,7 +80,7 @@ func splitContractField(s, separator string) []string {
 	}
 	return result
 }
-func (p *chatPage) contractKey(msg tea.KeyMsg) tea.Cmd {
+func (p *chatPage) contractKey(msg tea.KeyPressMsg) tea.Cmd {
 	if result0, handled := contractKeyWorkspaceItemEditor(p, &msg); handled {
 		return result0
 	}
@@ -111,18 +113,27 @@ func (p *chatPage) contractView() string {
 		return p.workspace.itemEditor.View(max(1, p.width-8), p.height)
 	}
 	labels := []string{config.Text("Arquivos relativos (vírgula, opcional)", "Relative files (comma separated, optional)"), config.Text("Critérios de aceite (ponto e vírgula)", "Acceptance criteria (semicolon separated)"), config.Text("Verificações configuradas (vírgula)", "Configured checks (comma separated)")}
-	lines := []string{p.workspace.title, config.Text("Não amplia o modo atual nem dispensa aprovações.", "Does not widen the current mode or waive approvals.")}
-	count := max(1, min(len(p.workspace.fields), (p.height-7)/2))
+	lines := []string{styles.PanelTitle().Render(p.workspace.title), config.Text("Não amplia o modo atual nem dispensa aprovações.", "Does not widen the current mode or waive approvals.")}
+	count := max(1, min(len(p.workspace.fields), (p.height-8)/2))
 	start := max(0, min(p.workspace.focus-count+1, len(p.workspace.fields)-count))
 	for i := start; i < start+count; i++ {
 		f := p.workspace.fields[i]
-		f.Width = max(1, p.width-6)
-		lines = append(lines, labels[i], f.View())
+		f.SetWidth(max(1, p.width-6))
+		style := styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary())
+		inputStyles := f.Styles()
+		inputStyles.Focused.Text, inputStyles.Focused.Prompt = style, style
+		inputStyles.Blurred.Text, inputStyles.Blurred.Prompt = style, style
+		f.SetStyles(inputStyles)
+		label := labels[i]
+		if i == p.workspace.focus {
+			label = "› " + label
+		}
+		lines = append(lines, label, f.View())
 	}
 	if p.workspace.note != "" {
 		lines = append(lines, panelText(p.workspace.note))
 	}
-	lines = append(lines, fmt.Sprintf(config.Text("Modo atual: %s · Enter edita itens · Tab campo · Ctrl+S salva · Esc volta", "Current mode: %s · Enter edit items · Tab field · Ctrl+S save · Esc back"), modeLabel(p.mode())))
+	lines = append(lines, styles.PanelDivider(max(1, p.width-2)), fmt.Sprintf(config.Text("Modo atual: %s · Enter edita itens · Tab campo · Ctrl+S salva · Esc volta", "Current mode: %s · Enter edit items · Tab field · Ctrl+S save · Esc back"), modeLabel(p.mode())))
 	for i, line := range lines {
 		lines[i] = ansi.Truncate(line, max(1, p.width-2), "…")
 	}
@@ -181,7 +192,7 @@ func contractKeyChatPageCtrlS(p *chatPage) (extractedResult0 tea.Cmd) {
 
 }
 
-func contractKeyWorkspaceItemEditor(p *chatPage, msg *tea.KeyMsg) (extractedResult0 tea.Cmd, handled bool) {
+func contractKeyWorkspaceItemEditor(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 tea.Cmd, handled bool) {
 	if e := p.workspace.itemEditor; e != nil {
 		done, save, cmd := e.Update((*msg))
 		if done {

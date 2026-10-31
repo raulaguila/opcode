@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/spf13/viper"
@@ -60,9 +60,9 @@ func TestModelDialogDiscoversSearchesAndSelectsWithoutPublishingRegistry(t *test
 	m.Update(cmd())
 	require.Len(t, m.filtered, 2)
 	require.NotContains(t, models.SupportedModels, models.ModelID("local.qwen:7b"))
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("qwen")})
+	m.Update(tea.KeyPressMsg{Text: "qwen"})
 	require.Len(t, m.filtered, 1)
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.NotNil(t, cmd)
 	selected := cmd().(ModelSelectedMsg).Model
 	require.Equal(t, "qwen:7b", selected.APIModel)
@@ -93,13 +93,13 @@ func TestModelDialogIgnoresStaleResponsesAndCancelsWhenClosed(t *testing.T) {
 func TestModelDialogMouseSelectionFilteringAndSmallLayout(t *testing.T) {
 	m := catalogDialog(t)
 	m.Update(m.Open()())
-	_, cmd := m.Update(tea.MouseMsg{X: 4, Y: 6, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	_, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: 6, Button: tea.MouseLeft})
 	require.NotNil(t, cmd)
 	require.Equal(t, "qwen:7b", cmd().(ModelSelectedMsg).Model.APIModel)
 	m.Update(m.Open()()) // Selecting closes the dialog; reopen before editing its search.
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("missing")})
+	m.Update(tea.KeyPressMsg{Text: "missing"})
 	require.Contains(t, m.View(), "No models found")
-	_, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Nil(t, cmd)
 	m.Update(tea.WindowSizeMsg{Width: 36, Height: 16})
 	require.LessOrEqual(t, lipgloss.Width(m.View()), 36)
@@ -114,7 +114,7 @@ func TestModelDialogMouseSelectionFilteringAndSmallLayout(t *testing.T) {
 func TestModelSearchPasteCannotExpandTheDialogOrExceedLimit(t *testing.T) {
 	m := catalogDialog(t)
 	m.Update(m.Open()())
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("llama\n\x1b[31m" + strings.Repeat("é", 300))})
+	m.Update(tea.KeyPressMsg{Text: "llama\n\x1b[31m" + strings.Repeat("é", 300)})
 	require.NotContains(t, m.query, "\n")
 	require.NotContains(t, m.query, "\x1b")
 	require.LessOrEqual(t, len(m.query), 256)

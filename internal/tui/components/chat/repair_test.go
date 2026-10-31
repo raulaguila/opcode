@@ -1,7 +1,7 @@
 package chat
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/message"
@@ -33,13 +33,13 @@ func TestEditorOwnsEditingKeysAndIgnoresConversationKeys(t *testing.T) {
 	m := NewEditorCmp(&app.App{}).(*editorCmp)
 	m.textarea.SetValue("draft")
 	m.textarea.CursorEnd()
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlU})
+	m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
 	require.Empty(t, m.textarea.Value())
 	m.textarea.SetValue("first\nlast")
-	m.Update(tea.KeyMsg{Type: tea.KeyCtrlEnd})
-	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("!")})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnd, Mod: tea.ModCtrl})
+	m.Update(tea.KeyPressMsg{Code: []rune("!")[0], Text: "!"})
 	require.Equal(t, "first\nlast!", m.textarea.Value())
-	for _, k := range []tea.KeyMsg{{Type: tea.KeyEnd, Alt: true}, {Type: tea.KeyPgUp, Alt: true}, {Type: tea.KeyPgDown, Alt: true}} {
+	for _, k := range []tea.KeyPressMsg{{Code: tea.KeyEnd, Mod: tea.ModAlt}, {Code: tea.KeyPgUp, Mod: tea.ModAlt}, {Code: tea.KeyPgDown, Mod: tea.ModAlt}} {
 		m.Update(k)
 	}
 	require.Equal(t, "first\nlast!", m.textarea.Value())

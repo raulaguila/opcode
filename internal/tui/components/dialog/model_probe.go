@@ -7,8 +7,8 @@ import (
 	"time"
 	"unicode"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diagnostic"
@@ -68,7 +68,6 @@ func (m *modelDialogCmp) modelProbeUpdate(msg tea.Msg) (tea.Cmd, bool) {
 }
 func (m *modelDialogCmp) probeView() string {
 	width := m.contentWidth()
-	base := styles.BaseStyle()
 	lines := []string{config.Text("Teste real de ferramentas", "Real tool capability probe")}
 	if len(m.filtered) > 0 {
 		lines = append(lines, fmt.Sprintf(config.Text("Modelo: %s", "Model: %s"), m.filtered[m.selectedIdx].APIModel))
@@ -94,14 +93,16 @@ func (m *modelDialogCmp) probeView() string {
 			rendered = append(rendered, ansi.Wrap(line, width, ""))
 		}
 	}
-	frame := base.Padding(m.geometry().padY, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().BorderNormal()).Render(joinLines(rendered))
+	last := len(rendered) - 1
+	rendered = dialogFooter(rendered[:last], width, m.height, rendered[last])
+	frame := styles.Panel().Padding(m.geometry().padY, 2).Border(lipgloss.NormalBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(joinLines(rendered))
 	return lipgloss.NewStyle().MaxWidth(width + 6).MaxHeight(m.geometry().height).Render(frame)
 }
 
 func modelProbeUpdateTeaKeyMsg(m *modelDialogCmp, msg tea.Msg) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {
-	if key, ok := msg.(tea.KeyMsg); ok {
+	if key, ok := msg.(tea.KeyPressMsg); ok {
 		if m.probeRunning {
-			if key.Type == tea.KeyEsc {
+			if key.Code == tea.KeyEsc {
 				m.Close()
 				m.search.Focus()
 				m.note = config.Text("Teste cancelado; seleção preservada.", "Probe cancelled; selection preserved.")
@@ -120,14 +121,14 @@ func modelProbeUpdateTeaKeyMsg(m *modelDialogCmp, msg tea.Msg) (extractedResult0
 	return extractedResult0, extractedResult1, false
 }
 
-func modelProbeUpdateTeaKeyMsgProbeConfirm(m *modelDialogCmp, key *tea.KeyMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
+func modelProbeUpdateTeaKeyMsgProbeConfirm(m *modelDialogCmp, key *tea.KeyPressMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
 	if m.probeConfirm {
-		if key.Type == tea.KeyEsc {
+		if key.Code == tea.KeyEsc {
 			m.probeConfirm = false
 			m.search.Focus()
 			return nil, true, true, true
 		}
-		if key.Type == tea.KeyEnter {
+		if key.Code == tea.KeyEnter {
 			return m.startModelProbe(), true, true, true
 		}
 		return nil, true, true, true

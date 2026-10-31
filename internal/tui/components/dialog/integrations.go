@@ -8,9 +8,9 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/layout"
@@ -28,7 +28,7 @@ type integrationProbeMsg struct {
 	err     error
 }
 type IntegrationDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 	Open() tea.Cmd
 	Close()
@@ -158,7 +158,7 @@ func (m *integrationDialogCmp) saveIntegration() tea.Cmd {
 	m.Close()
 	return util.CmdHandler(IntegrationSettingsSavedMsg{Kind: candidate.Kind})
 }
-func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *integrationDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	if m.noteUpdate(msg) {
 		return m, nil
 	}
@@ -174,7 +174,7 @@ func (m *integrationDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		action := m.handleIntegrationKey(msg)
 		if action.handled {
 			return m, action.command
@@ -200,7 +200,7 @@ func (m *integrationDialogCmp) View() string {
 	}
 	t := theme.CurrentTheme()
 	width := m.contentWidth()
-	base := styles.BaseStyle().Width(width)
+	base := dialogBody().Width(width)
 	line := func(s string) string {
 		s = strings.Map(func(r rune) rune {
 			if unicode.IsControl(r) {
@@ -232,8 +232,9 @@ func (m *integrationDialogCmp) View() string {
 	if m.screen == "edit" && m.dirty() {
 		lines = append(lines, line(config.Text("Alterações não salvas", "Unsaved changes")))
 	}
+	lines = append(lines, styles.PanelDivider(width))
 	lines = append(lines, m.noteLines(note)...)
-	return styles.BaseStyle().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func (m *integrationDialogCmp) visibleFields() []int {

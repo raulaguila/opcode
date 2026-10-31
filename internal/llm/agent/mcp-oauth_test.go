@@ -147,6 +147,48 @@ func TestOAuthFullPKCEFlowRejectsBadStateAndKeepsIssuer(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ready)
 }
+
+func TestOAuthCallbackRejectsInvalidIssuerBeforeCodeExchange(t *testing.T) {
+	var issuer *httptest.Server
+	var exchanges atomic.Int64
+	issuer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/.well-known/oauth-protected-resource"):
+			json.NewEncoder(w).Encode(map[string]any{"resource": issuer.URL + "/mcp", "authorization_servers": []string{issuer.URL}})
+		case r.URL.Path == "/.well-known/oauth-authorization-server":
+			json.NewEncoder(w).Encode(map[string]any{"issuer": issuer.URL, "authorization_endpoint": issuer.URL + "/authorize", "token_endpoint": issuer.URL + "/token", "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "authorization_response_iss_parameter_supported": true})
+		case r.URL.Path == "/token":
+			exchanges.Add(1)
+			http.Error(w, "code must not be exchanged", http.StatusBadRequest)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer issuer.Close()
+	for _, tc := range []struct {
+		name   string
+		issuer []string
+	}{
+		{name: "missing required issuer"},
+		{name: "different issuer", issuer: []string{issuer.URL + "/lookalike"}},
+		{name: "repeated issuer", issuer: []string{issuer.URL, issuer.URL}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			handler := transport.NewOAuthHandler(transport.OAuthConfig{ClientID: "public-client", RedirectURI: "http://127.0.0.1/callback", PKCEEnabled: true, HTTPClient: oauthHTTPClient()})
+			handler.SetBaseURL(issuer.URL + "/mcp")
+			_, err := handler.GetAuthorizationURL(ctx, "expected-state", "challenge")
+			require.NoError(t, err)
+			callback := make(chan url.Values, 1)
+			callback <- url.Values{"code": {"valid-code"}, "state": {"expected-state"}, "iss": tc.issuer}
+			require.ErrorContains(t, awaitOAuthAuthorization(ctx, handler, "verifier", callback), "code exchange failed")
+			require.Zero(t, exchanges.Load(), "invalid issuer must be rejected before reaching the token endpoint")
+		})
+	}
+}
+
 func TestOAuthResponseLimitPropagatesError(t *testing.T) {
 	body := &oauthLimitedBody{ReadCloser: io.NopCloser(strings.NewReader("12345")), remaining: 4}
 	_, err := io.ReadAll(body)

@@ -1172,3 +1172,44 @@ passaram dez repetições com `-race`. Cliques dos testes em PTY aguardam a posi
 do controle estabilizar para evitar clicar durante uma pintura parcial.
 
 [Evidências e medições](evidence/2026-10-30-markdown-question-ui-validation.json).
+
+
+## Dependências e apresentação Charm v2 — 30/10/2026
+
+Conjunto visual migrado para Bubble Tea/Bubbles/Lip Gloss/Glamour v2 e demais
+dependências usadas pela aplicação/testes atualizadas. Temas personalizados
+preservam seu JSON; menus compartilham bordas retas, seleção discreta e
+divisórias nos controles. Motivos das exceções MCP/Goldmark e procedimento para
+trocar o commit oficial do Lip Gloss por release em [Dependências](dependencies.md).
+
+A rodada final passou em 14 checks: testes normais e integração com `-race -p 1`,
+vet/staticcheck nos dois conjuntos, `gocognit -over 15 .`, verificação de módulos,
+inventário de linguagens, actionlint, govulncheck e builds Linux amd64, Windows
+amd64 e Darwin arm64. Windows/macOS foram compilados; a execução PTY foi Linux.
+O gocognit emitiu sua nota de chamadas não resolvidas na análise apenas do fonte;
+não retornou funções acima do limite. Govulncheck não encontrou vulnerabilidades
+alcançáveis nem em pacotes importados; o aviso de módulo para openpgp sem uso
+fica registrado na evidência.
+
+Os nove cenários explícitos de PTY passaram com o binário final, incluindo
+Ollama local `llama3.1:8b`, catálogos com falha/retentativa, modos, rascunho,
+redimensionamento, Markdown/pergunta, escolha sugerida/texto livre, revisão
+verificada/falha de citação, retomada, busca/seleção/cópia, métricas ao vivo,
+comando aprovado, saída antes do término, entrada pelo PTY e instrução na fila.
+Bubblewrap permaneceu ativo, sem autoaprovação; os endpoints remotos da empresa
+não foram consultados. O contexto 16k é explícito desta fixture local e não
+representa o máximo do modelo nem a descoberta do provedor da empresa.
+
+A inspeção visual detectou e corrigiu dois problemas: reset SGR compacto perdido
+pelo adaptador de fundo, propagando negrito, e filtro NO_COLOR removendo destaque
+de seleção. Testes VT verificam os atributos, além do texto. Os três perfis de
+seleção passaram dez vezes cada. O teste de revisões aguarda o estado persistido
+antes de clicar no link que muda de linha; original, candidato, retomada e limite
+de duas gerações continuam exigidos. Esse fluxo passou dez vezes seguidas.
+Colagem e atalhos com modificadores não concedem permissões implicitamente.
+
+A matriz final dos seis pacotes preservou as 14 fixtures, normalizando apenas
+imports da base Charm v1, e passou nos 32 gates de alocação originais de 10%.
+Há regressões locais de tempo em quatro casos; ver [Desempenho](performance.md).
+Condições, amostras brutas, hashes e resultados estão na
+[evidência da atualização](evidence/2026-10-30-dependency-upgrade-validation.json).

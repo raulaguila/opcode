@@ -74,3 +74,44 @@ A amostragem padrão usa 100 operações por caso e três amostras por revisão.
 Rodadas muito curtas podem ficar dominadas pelo aquecimento/descarte de buffers
 internos de JSON; aumentar a região medida não muda o limite de regressão de 10%.
 Histórico crescente continua usando o mesmo ciclo limitado nos dois lados.
+
+## Atualização das dependências visuais — 30/10/2026
+
+Comparação final com `5eb3ff5`, Go 1.27.3, `GOMAXPROCS=2`, mesmo tema Opcode,
+fundo escuro e TrueColor explicitamente definidos nos dois lados. Matriz de
+32 casos, seis pacotes, 100 operações e três amostras por revisão, sem inferência
+ou testes concorrentes. Fixtures idênticas após normalizar somente imports Charm.
+A base preservada da primeira rodada foi comparada novamente com o candidato
+após os ajustes finais de seleção sem cores e resets de atributos do Markdown.
+
+| Operação | Tempo | Bytes alocados | Quantidade de alocações |
+| --- | --- | --- | --- |
+| Markdown com múltiplos blocos | −37,2% | −32,5% | −47,1% |
+| Chat, último item invalidado | −7,0% | −10,1% | −37,1% |
+| Chat durante streaming | −14,3% | −25,6% | −35,6% |
+| Busca aquecida, 2.000 arquivos | −30,4% | −11,6% | −60,2% |
+| Reconciliação periódica do índice | −3,1% | −1,7% | −6,4% |
+
+O chat aquecido permaneceu em zero bytes/zero alocações. O gate existente de
+10% passou nos **32 casos**, sem regressões de alocações acima desse limite.
+Esses resultados usam o commit **oficial** do Lip Gloss que agrupa escritas;
+a primeira medição da release 2.0.6 aumentava objetos alocados. Motivo do pin
+e procedimento para trocar por release em
+[Dependências](dependencies.md#lip-gloss-substituir-o-commit-por-uma-versão-publicada).
+
+Há regressões de tempo na matriz final: overflow do cache do chat (+25,9%),
+resposta com blocos crescentes (+19,7%), resposta crescente com 1.000 mensagens
+(+11,8%) e tokenização com histórico alterado (+20,2%). O overflow alocou 3,6%
+mais bytes, dentro do limite existente; a tokenização manteve suas alocações.
+Tempo é informado e revisado, sem limiar automático; os critérios não mudaram.
+As amostras locais não medem velocidade do modelo nem garantem melhora em todas
+as cargas. Casos crescentes e tokenização merecem investigação posterior.
+
+A comparação anterior de nove casos em cinco pares alternados de 300 ms ficou
+preservada na evidência como rodada histórica, antes dos últimos ajustes de
+apresentação. A tabela acima usa a matriz final, sem misturar as duas amostragens.
+Ver [evidência](evidence/2026-10-30-dependency-upgrade-validation.json).
+
+O workflow permite comparar com uma base Charm v1: copia as mesmas fixtures,
+verifica sua igualdade e normaliza somente os dois imports visuais no baseline.
+Os corpos dos benchmarks, contagem de amostras e critérios não são relaxados.

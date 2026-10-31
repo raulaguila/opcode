@@ -2,13 +2,14 @@ package dialog
 
 import (
 	"errors"
-	"github.com/spf13/viper"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	"github.com/spf13/viper"
+
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
@@ -46,7 +47,7 @@ func TestVaultProviderSaveAwaitsNativeResultWithoutCancellationOrDuplicateWrites
 	command := m.save()
 	require.NotNil(t, command)
 	require.True(t, m.saving)
-	for _, key := range []tea.KeyMsg{{Type: tea.KeyEsc}, {Type: tea.KeyCtrlS}, {Type: tea.KeyRunes, Runes: []rune("new input")}} {
+	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEsc}, {Code: 's', Mod: tea.ModCtrl}, {Text: "new input"}} {
 		_, cmd := m.Update(key)
 		require.Nil(t, cmd)
 		require.True(t, m.saving)
@@ -109,7 +110,7 @@ func TestVaultProviderCleanupStaysPendingOutsideTheUIUntilNativeResult(t *testin
 	case <-time.After(time.Second):
 		t.Fatal("cleanup command did not start")
 	}
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	require.Nil(t, cmd)
 	require.True(t, m.PendingNativeOperation())
 	require.Equal(t, "provider", m.screen)

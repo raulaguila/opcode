@@ -3,13 +3,13 @@ package dialog
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
-func (m *integrationDialogCmp) handleIntegrationKey(msg tea.KeyMsg) connectionAction {
+func (m *integrationDialogCmp) handleIntegrationKey(msg tea.KeyPressMsg) connectionAction {
 	if action := m.openFocusedJSONEditor(msg); action.handled {
 		return action
 	}
@@ -30,7 +30,7 @@ func (m *integrationDialogCmp) handleIntegrationKey(msg tea.KeyMsg) connectionAc
 	return m.handleIntegrationFormKey(msg)
 }
 
-func (m *integrationDialogCmp) handleIntegrationFormKey(msg tea.KeyMsg) connectionAction {
+func (m *integrationDialogCmp) handleIntegrationFormKey(msg tea.KeyPressMsg) connectionAction {
 	switch msg.String() {
 	case "ctrl+s":
 		return connectionHandled(m.saveIntegration())
@@ -46,7 +46,7 @@ func (m *integrationDialogCmp) handleIntegrationFormKey(msg tea.KeyMsg) connecti
 	return connectionAction{}
 }
 
-func (m *integrationDialogCmp) handleIntegrationListKey(msg tea.KeyMsg) tea.Cmd {
+func (m *integrationDialogCmp) handleIntegrationListKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "ctrl+a":
 		return m.oauthAction("login")
@@ -123,7 +123,7 @@ func (m *integrationDialogCmp) scrollIntegrationResult(key string) {
 	}
 }
 
-func (m *integrationDialogCmp) openFocusedJSONEditor(msg tea.KeyMsg) connectionAction {
+func (m *integrationDialogCmp) openFocusedJSONEditor(msg tea.KeyPressMsg) connectionAction {
 	if m.screen != "edit" || msg.String() != "enter" {
 		return connectionAction{}
 	}
@@ -172,9 +172,13 @@ func (m *integrationDialogCmp) updateIntegrationInput(msg tea.Msg) tea.Cmd {
 	if m.screen != "edit" || len(m.fields) == 0 {
 		return nil
 	}
+	if len(fieldOptions(m.labels[m.focus])) > 0 {
+		return nil
+	}
 	var cmd tea.Cmd
+	before := m.fields[m.focus].Value()
 	m.fields[m.focus], cmd = m.fields[m.focus].Update(msg)
-	if _, ok := msg.(tea.KeyMsg); ok {
+	if before != m.fields[m.focus].Value() {
 		m.invalidateIntegrationTest()
 	}
 	return cmd
@@ -185,18 +189,18 @@ func (m *integrationDialogCmp) handleIntegrationMouse(msg tea.MouseMsg) connecti
 		return action
 	}
 	if m.screen == "list" && len(m.entries) > 0 {
-		if msg.Button == tea.MouseButtonWheelUp {
+		if msg.Mouse().Button == tea.MouseWheelUp {
 			m.selected = max(0, m.selected-1)
 		}
-		if msg.Button == tea.MouseButtonWheelDown {
+		if msg.Mouse().Button == tea.MouseWheelDown {
 			m.selected = min(len(m.entries)-1, m.selected+1)
 		}
 	}
 	if m.screen == "result" {
-		if msg.Button == tea.MouseButtonWheelUp {
+		if msg.Mouse().Button == tea.MouseWheelUp {
 			m.scrollIntegrationResult("up")
 		}
-		if msg.Button == tea.MouseButtonWheelDown {
+		if msg.Mouse().Button == tea.MouseWheelDown {
 			m.scrollIntegrationResult("down")
 		}
 		return connectionHandled(nil)
@@ -210,8 +214,8 @@ func (m *integrationDialogCmp) integrationRowClick(msg tea.MouseMsg) connectionA
 	}
 	rows := m.listRows()
 	start := max(0, m.selected-rows+1)
-	i := msg.Y - 3 + start
-	if msg.Y < 3 || msg.Y >= 3+rows || i < 0 || i >= len(m.entries) {
+	i := msg.Mouse().Y - 3 + start
+	if msg.Mouse().Y < 3 || msg.Mouse().Y >= 3+rows || i < 0 || i >= len(m.entries) {
 		return connectionAction{}
 	}
 	m.selected = i
@@ -223,8 +227,8 @@ func (m *integrationDialogCmp) integrationFieldClick(msg tea.MouseMsg) connectio
 		return connectionAction{}
 	}
 	indices, count, start := m.integrationFieldWindow()
-	i := start + (msg.Y-3)/2
-	if msg.Y < 3 || msg.Y >= 3+count*2 || i >= len(indices) {
+	i := start + (msg.Mouse().Y-3)/2
+	if msg.Mouse().Y < 3 || msg.Mouse().Y >= 3+count*2 || i >= len(indices) {
 		return connectionAction{}
 	}
 	m.fields[m.focus].Blur()
@@ -233,7 +237,7 @@ func (m *integrationDialogCmp) integrationFieldClick(msg tea.MouseMsg) connectio
 }
 
 func (m *providerDialogCmp) isFormClick(msg tea.MouseMsg) bool {
-	return msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= 3 && msg.X < m.contentWidth()+3
+	return leftClick(msg) && msg.Mouse().X >= 3 && msg.Mouse().X < m.contentWidth()+3
 }
 
 func (m *integrationDialogCmp) finishIntegrationProbe(result integrationProbeMsg) {

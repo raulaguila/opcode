@@ -1,9 +1,9 @@
 package dialog
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/layout"
@@ -23,7 +23,7 @@ type CloseThemeDialogMsg struct{ RestoreTheme string }
 
 // ThemeDialog interface for the theme switching dialog
 type ThemeDialog interface {
-	tea.Model
+	util.Model
 	layout.Bindings
 }
 
@@ -88,23 +88,23 @@ func (t *themeDialogCmp) Init() tea.Cmd {
 	return nil
 }
 
-func (t *themeDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (t *themeDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	if t.editor != nil {
 		return t.editorUpdate(msg)
 	}
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		if result0, result1, handled := updateThemeDialogCmpKeyMsg(t, &msg); handled {
 			return result0, result1
 		}
 	case tea.MouseMsg:
 		count := len(t.themes)
 		if t.height > 0 {
-			count = max(1, min(count, t.height-8))
+			count = max(1, min(count, t.height-9))
 		}
 		start := max(0, t.selectedIdx-count+1)
-		row := msg.Y - 4
-		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.X >= 3 && row >= 0 && row < count && start+row < len(t.themes) {
+		row := msg.Mouse().Y - 4
+		if leftClick(msg) && msg.Mouse().X >= 3 && row >= 0 && row < count && start+row < len(t.themes) {
 			t.selectedIdx = start + row
 			return t, t.preview()
 		}
@@ -120,12 +120,12 @@ func (t *themeDialogCmp) View() string {
 		return t.editorView()
 	}
 	currentTheme := theme.CurrentTheme()
-	baseStyle := styles.BaseStyle()
+	baseStyle := dialogBody()
 
 	if len(t.themes) == 0 {
 		return baseStyle.Padding(1, 2).
-			Border(lipgloss.RoundedBorder()).
-			BorderBackground(currentTheme.Background()).
+			Border(lipgloss.NormalBorder()).
+			BorderBackground(currentTheme.BackgroundSecondary()).
 			BorderForeground(currentTheme.TextMuted()).
 			Width(40).
 			Render(config.Text("Nenhum tema disponível", "No themes available"))
@@ -147,7 +147,7 @@ func (t *themeDialogCmp) View() string {
 	themeItems := make([]string, 0, len(t.themes))
 	count := len(t.themes)
 	if t.height > 0 {
-		count = max(1, min(count, t.height-8))
+		count = max(1, min(count, t.height-9))
 	}
 	start := max(0, t.selectedIdx-count+1)
 	for i := start; i < min(len(t.themes), start+count); i++ {
@@ -156,8 +156,8 @@ func (t *themeDialogCmp) View() string {
 
 		if i == t.selectedIdx {
 			itemStyle = itemStyle.
-				Background(currentTheme.Primary()).
-				Foreground(currentTheme.Background()).
+				Background(currentTheme.BorderDim()).
+				Foreground(currentTheme.Text()).
 				Bold(true)
 		}
 
@@ -176,14 +176,14 @@ func (t *themeDialogCmp) View() string {
 		title,
 		baseStyle.Width(maxWidth).Render(""),
 		baseStyle.Width(maxWidth).Render(lipgloss.JoinVertical(lipgloss.Left, themeItems...)),
+		styles.PanelDivider(maxWidth),
 		baseStyle.Width(maxWidth).Render(ansi.Truncate(config.Text("↑↓ prévia · Ctrl+E edita · Enter · Esc", "↑↓ preview · Ctrl+E edit · Enter · Esc"), maxWidth, "…")),
 	)
 
 	return baseStyle.Padding(1, 2).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(currentTheme.Background()).
+		Border(lipgloss.NormalBorder()).
+		BorderBackground(currentTheme.BackgroundSecondary()).
 		BorderForeground(currentTheme.TextMuted()).
-		Width(lipgloss.Width(content) + 4).
 		Render(content)
 }
 
@@ -211,7 +211,7 @@ func (t *themeDialogCmp) preview() tea.Cmd {
 	return util.CmdHandler(ThemeChangedMsg{ThemeName: name, Preview: true})
 }
 
-func updateThemeDialogCmpKeyMsg(t *themeDialogCmp, msg *tea.KeyMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
+func updateThemeDialogCmpKeyMsg(t *themeDialogCmp, msg *tea.KeyPressMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {
 	if msg.String() == "ctrl+e" {
 		return t, t.openEditor(), true
 	}
@@ -236,7 +236,7 @@ func updateThemeDialogCmpKeyMsg(t *themeDialogCmp, msg *tea.KeyMsg) (extractedRe
 	return extractedResult0, extractedResult1, false
 }
 
-func updateThemeDialogCmpKeyMsgMatchesThemeKeysEnter(t *themeDialogCmp) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
+func updateThemeDialogCmpKeyMsgMatchesThemeKeysEnter(t *themeDialogCmp) (extractedResult0 util.Model, extractedResult1 tea.Cmd, extractedResult2 bool, handled bool) {
 	if len(t.themes) > 0 {
 		previousTheme := t.currentTheme
 		selectedTheme := t.themes[t.selectedIdx]

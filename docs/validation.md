@@ -5,6 +5,26 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Correção dos padrões narrativos — 31/10/2026
+
+A correção ficou nos padrões das fixtures, nos testes e na documentação; nenhum
+código de produção mudou. Os mesmos quatro casos com `nemotron-3.5-bolt:e4b`
+passaram nos **44/44 critérios**, mantendo prompts, arquivos, as 32 verificações
+originais e as 12 verificações de relações. É uma rodada local, não uma taxa
+geral de qualidade do modelo.
+
+Os testes adicionais cobrem prosa com fontes entre entrada e retorno, setas
+LaTeX, cabeçalhos com parágrafo e continuação indentada. Cada narrativa correta
+é testada também com resultados trocados e com essa versão contraditória
+acrescentada à resposta. Contraexemplos incluem negação do retorno esperado e
+menção histórica correta seguida de afirmação atual invertida. A suíte completa
+Go, o avaliador com `race`, vet, staticcheck e a checagem de complexidade passaram.
+Permissões e validação de citações não foram alteradas.
+
+As tentativas anteriores permanecem registradas, inclusive uma falha independente
+por omissão do nome de uma função exigida; esse critério não foi removido.
+Resultados: [evidência da correção narrativa](evidence/2026-10-31-narrative-patterns-validation.json).
+
 ## Melhorias pontuais de fontes e leitura — 31/10/2026
 
 A preparação de fluxos ignora pistas que não entregam novas fontes e tenta até

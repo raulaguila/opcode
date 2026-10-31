@@ -2,6 +2,10 @@
 
 ## Em desenvolvimento — 2026-10-31
 
+- Padrões das avaliações aceitam prosa, setas LaTeX e parágrafos de cabeçalhos,
+  preservando rejeição de inversões, negações e contradições explícitas. O motor
+  de avaliação, o agente e a validação de citações permanecem inalterados.
+
 - Preparação de fluxos tenta até três pistas distintas quando a primeira não
   entrega uma nova fonte, mantendo o limite de leituras e orçamento existentes.
 - Prévia de fontes atualiza o mesmo intervalo com Ctrl+R; formatos de referências

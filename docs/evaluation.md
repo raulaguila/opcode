@@ -78,17 +78,20 @@ A suíte adicional `explanation_quality.json` mantém os critérios de termos,
 citações e arquivos e exige pares explícitos `blocked` → `TOOL_DENIED` e
 `ping` → `TOOL_OK`, recusando também pares invertidos explícitos no começo
 de uma linha ou oração da mesma resposta.
-Os padrões aceitam conectores curtos em português/inglês, listas, tabelas e código.
-Também aceitam cabeçalhos explícitos `For/Para entrada:` e
-`Behavior of/Comportamento de entrada:` no começo de uma linha, com até 512
-caracteres de explicação antes do resultado nessa mesma linha, até um separador
-`;` ou quebra de linha. Nesse formato,
-o cabeçalho estabelece a entrada; uma menção negada a outra entrada no texto
-não muda essa associação. Cabeçalhos com resultados invertidos também falham.
-Menções incidentais negadas, como “not blocked”, não são tratadas como um mapa
-explícito de entrada/retorno. Menções distantes ou implícitas não estabelecem a
-relação. É um teste conservador das expectativas desta fixture, sem juiz por
-modelo e sem custo na conversa.
+A prosa entre entrada e retorno não depende de uma lista de conectores. Os
+padrões param no primeiro marcador `TOOL_`, impedindo que um retorno errado seja
+ignorado para encontrar uma menção correta mais adiante. Aceitam setas comuns
+ou LaTeX, listas, tabelas, código, continuação indentada e o parágrafo imediatamente
+após um cabeçalho explícito como `For blocked:`. As buscas continuam limitadas,
+sem atravessar separadores `;` ou parágrafos independentes para formar pares.
+
+Também recusam negações explícitas do retorno esperado, pares contraditórios e
+uma afirmação de retorno atual invertido após uma menção histórica ao valor
+esperado. Menções incidentais como “not blocked” não estabelecem sozinhas uma
+relação. Testes trocam os retornos das narrativas corretas e acrescentam essas
+versões como contradições, exigindo reprovação em ambos os casos. São verificações
+conservadoras dos formatos declarados desta fixture, sem interpretação semântica
+geral, juiz por modelo ou custo adicional na conversa.
 
 Relatórios live também registram `task_status`, necessidade/observação de
 alterações, presença de justificativa sem mudança e nomes limitados/redigidos de

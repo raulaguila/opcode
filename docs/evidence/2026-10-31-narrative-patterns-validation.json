@@ -1,0 +1,1392 @@
+{
+  "date": "2026-10-31",
+  "baseline": "d468772d0479d9c5789f8843d557219c68ab359f",
+  "scope": "Evaluation fixture patterns, regression tests and documentation only",
+  "source_sha256": {
+    "CHANGELOG.md": "430ae393a84c89e10ac25142f17d34357389cd318f09e638514b235e20af2d76",
+    "docs/evaluation.md": "912f3c724eabcef11f89bd7359621ab86ac913a28ef65bc4c3e76cb7a34a9dea",
+    "docs/validation.md": "3c445d322880ed6ab3aab073d8c29e1f37e234e157a7588c377d0ead06a47df0",
+    "internal/evaluation/explanation_quality_test.go": "1582c4d38d40ac3f0bc84ee72a0325f9b111241a2628947db75740d54801c353",
+    "internal/evaluation/testdata/explanation_quality.json": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7"
+  },
+  "production_go_changed": false,
+  "unchanged_permission_citation_engine_and_dependency_files": {
+    "go.mod": "b69606c07b1eb3ed19aae4c407554a7857bcf58e27ce859d77522b07225b1425",
+    "go.sum": "659d9fea2397880cc3968a56605298ebc5d7f8f5751308aa426cfbfa0ecaa74c",
+    "internal/evaluation/response_patterns.go": "af4b687b40a2d4ec0e15c339386c3a7323e9c4b66f24c0fe450824da868825a1",
+    "internal/evaluation/response_citations.go": "0971a1ecf8bad1840cbab8a7d07de6ee7a07b15478b4f82a7abd45dad0ae7e82",
+    "internal/evaluation/evaluation.go": "f5f574703323408d905558ce7f139f09adbb39008d03e43c050e6ba8584837b2",
+    "internal/evaluation/worker.go": "3c6b20f6066ae809c3e4b236b5336e4f6bbe0271bb05e14d1dd6bca019086bdd",
+    "internal/permission/status.go": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944",
+    "internal/permission/permission.go": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14",
+    "internal/llm/agent/citations.go": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c",
+    "internal/llm/agent/citation_revision.go": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c",
+    "internal/llm/agent/citations_messages.go": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7"
+  },
+  "original_32_fact_citation_and_file_checks_unchanged": true,
+  "same_prompts_and_source_files": true,
+  "same_criterion_kinds_and_total_44": true,
+  "go": "1.27.3",
+  "model": "nemotron-3.5-bolt:e4b",
+  "runtime_context": 16384,
+  "max_output_tokens": 2048,
+  "allow_execution": false,
+  "binary_reused_between_runs": true,
+  "binary_sha256": "f47bb793d2b754628c5889168f11b782d3e5b981110c1014ec378ba044e1e35e",
+  "checks": [
+    {
+      "name": "full_go_test",
+      "command": "go test ./...",
+      "exit_code": 0,
+      "log": "?   \tgithub.com/raulaguila/opcode\t[no test files]\nok  \tgithub.com/raulaguila/opcode/cmd\t1.253s\n?   \tgithub.com/raulaguila/opcode/cmd/schema\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/app\t0.326s\nok  \tgithub.com/raulaguila/opcode/internal/artifact\t0.015s\nok  \tgithub.com/raulaguila/opcode/internal/clipboard\t0.050s\n?   \tgithub.com/raulaguila/opcode/internal/completions\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/config\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/db\t0.057s\nok  \tgithub.com/raulaguila/opcode/internal/diagnostic\t0.061s\nok  \tgithub.com/raulaguila/opcode/internal/diff\t0.041s\nok  \tgithub.com/raulaguila/opcode/internal/evaluation\t3.655s\nok  \tgithub.com/raulaguila/opcode/internal/extensions\t0.037s\n?   \tgithub.com/raulaguila/opcode/internal/fileutil\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/format\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/history\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/httpclient\t0.026s\nok  \tgithub.com/raulaguila/opcode/internal/interaction\t0.013s\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t3.534s\nok  \tgithub.com/raulaguila/opcode/internal/llm/models\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/prompt\t0.095s\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t0.463s\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider/integration\t0.062s\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools\t5.440s\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools/shell\t0.051s\nok  \tgithub.com/raulaguila/opcode/internal/localstate\t0.038s\n?   \tgithub.com/raulaguila/opcode/internal/logging\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp\t0.045s\n?   \tgithub.com/raulaguila/opcode/internal/lsp/protocol\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/lsp/util\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp/watcher\t0.006s\nok  \tgithub.com/raulaguila/opcode/internal/memoryindex\t2.251s\nok  \tgithub.com/raulaguila/opcode/internal/message\t1.194s\nok  \tgithub.com/raulaguila/opcode/internal/permission\t0.070s\nok  \tgithub.com/raulaguila/opcode/internal/pubsub\t0.011s\nok  \tgithub.com/raulaguila/opcode/internal/review\t0.662s\nok  \tgithub.com/raulaguila/opcode/internal/server\t0.901s\nok  \tgithub.com/raulaguila/opcode/internal/session\t0.282s\nok  \tgithub.com/raulaguila/opcode/internal/transcript\t0.008s\nok  \tgithub.com/raulaguila/opcode/internal/tui\t4.346s\nok  \tgithub.com/raulaguila/opcode/internal/tui/commands\t0.003s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/chat\t3.826s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/core\t0.014s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/dialog\t1.048s\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/logs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/util\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/image\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/tui/layout\t0.019s\nok  \tgithub.com/raulaguila/opcode/internal/tui/page\t1.403s\nok  \tgithub.com/raulaguila/opcode/internal/tui/styles\t2.195s\nok  \tgithub.com/raulaguila/opcode/internal/tui/theme\t0.248s\nok  \tgithub.com/raulaguila/opcode/internal/tui/util\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/version\t0.003s\nok  \tgithub.com/raulaguila/opcode/internal/workflow\t0.565s\nok  \tgithub.com/raulaguila/opcode/scripts/bench-compare\t0.003s\nok  \tgithub.com/raulaguila/opcode/scripts/build-release\t0.006s\nok  \tgithub.com/raulaguila/opcode/scripts/db-prepared\t0.003s\n?   \tgithub.com/raulaguila/opcode/scripts/language-docs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/scripts/platform-smoke\t[no test files]\n"
+    },
+    {
+      "name": "evaluation_race",
+      "command": "go test -race ./internal/evaluation -count=1",
+      "exit_code": 0,
+      "log": "ok  \tgithub.com/raulaguila/opcode/internal/evaluation\t36.060s\n"
+    },
+    {
+      "name": "narrative_and_counterexample_regressions",
+      "exit_code": 0,
+      "log": "ok  \tgithub.com/raulaguila/opcode/internal/evaluation\t1.765s\n"
+    },
+    {
+      "name": "same_answer_go_rescore",
+      "exit_code": 0,
+      "log": "ok  \tgithub.com/raulaguila/opcode/internal/evaluation\t0.449s\n"
+    },
+    {
+      "name": "vet",
+      "command": "go vet ./internal/evaluation",
+      "exit_code": 0
+    },
+    {
+      "name": "staticcheck",
+      "command": "staticcheck ./internal/evaluation",
+      "exit_code": 0
+    },
+    {
+      "name": "complexity",
+      "command": "gocognit -over 15 internal/evaluation",
+      "exit_code": 0,
+      "note": "Tool warns unresolved calls may undercount recursion. This change adds no production Go functions or recursion."
+    }
+  ],
+  "final_evaluation": {
+    "repeats": 1,
+    "selected_cases": [
+      "distributed_flow_pt",
+      "distributed_flow_en",
+      "homonymous_contract",
+      "historical_document_conflict"
+    ],
+    "version": 1,
+    "mode": "live_provider",
+    "suite_sha256": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7",
+    "cases": [
+      {
+        "criteria_sha256": "71cbc8e8cc0a933152201f76dbc7b99f7155a683fe42c61f4e0504a3a71ea142",
+        "phase_metrics": {
+          "context_ms": 107,
+          "provider_ms": 19836,
+          "tools_ms": 0,
+          "first_token_ms": 19830,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2335,
+          "history": 1930,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3928,
+        "output_tokens": 1357,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 20011,
+        "id": "distributed_flow_pt",
+        "status": "passed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "71cbc8e8cc0a933152201f76dbc7b99f7155a683fe42c61f4e0504a3a71ea142",
+        "phase_metrics": {
+          "context_ms": 58,
+          "provider_ms": 9598,
+          "tools_ms": 0,
+          "first_token_ms": 9594,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 1635,
+          "history": 2071,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3717,
+        "output_tokens": 774,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 0.5,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 9715,
+        "id": "distributed_flow_en",
+        "status": "passed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 5,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "71cbc8e8cc0a933152201f76dbc7b99f7155a683fe42c61f4e0504a3a71ea142",
+        "phase_metrics": {
+          "context_ms": 65,
+          "provider_ms": 14567,
+          "tools_ms": 0,
+          "first_token_ms": 14561,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2178,
+          "history": 2027,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3899,
+        "output_tokens": 1465,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 14701,
+        "id": "homonymous_contract",
+        "status": "passed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "71cbc8e8cc0a933152201f76dbc7b99f7155a683fe42c61f4e0504a3a71ea142",
+        "phase_metrics": {
+          "context_ms": 68,
+          "provider_ms": 14454,
+          "tools_ms": 0,
+          "first_token_ms": 14450,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2178,
+          "history": 2032,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3901,
+        "output_tokens": 1447,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 14581,
+        "id": "historical_document_conflict",
+        "status": "passed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      }
+    ],
+    "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+  },
+  "same_captured_answer_go_rescore": [
+    {
+      "contradiction_rejected": true,
+      "correct_narrative": [
+        true,
+        true,
+        true
+      ],
+      "id": "distributed_flow_pt",
+      "inverted_rejected": true,
+      "new_status": "passed",
+      "old_relations": [
+        false,
+        false,
+        true
+      ],
+      "original_status": "failed"
+    },
+    {
+      "contradiction_rejected": true,
+      "correct_narrative": [
+        true,
+        true,
+        true
+      ],
+      "id": "distributed_flow_en",
+      "inverted_rejected": true,
+      "new_status": "failed",
+      "old_relations": [
+        true,
+        true,
+        true
+      ],
+      "original_status": "failed"
+    },
+    {
+      "contradiction_rejected": true,
+      "correct_narrative": [
+        true,
+        true,
+        true
+      ],
+      "id": "homonymous_contract",
+      "inverted_rejected": true,
+      "new_status": "passed",
+      "old_relations": [
+        false,
+        false,
+        true
+      ],
+      "original_status": "failed"
+    },
+    {
+      "contradiction_rejected": true,
+      "correct_narrative": [
+        true,
+        true,
+        true
+      ],
+      "id": "historical_document_conflict",
+      "inverted_rejected": true,
+      "new_status": "passed",
+      "old_relations": [
+        false,
+        true,
+        true
+      ],
+      "original_status": "failed"
+    }
+  ],
+  "baseline_evaluation": {
+    "repeats": 1,
+    "selected_cases": [
+      "distributed_flow_pt",
+      "distributed_flow_en",
+      "homonymous_contract",
+      "historical_document_conflict"
+    ],
+    "version": 1,
+    "mode": "live_provider",
+    "suite_sha256": "a9ec4c8cf5f403ef0dcf144ecf9a746a245351f026efe0c193d65fa10060cbb5",
+    "cases": [
+      {
+        "criteria_sha256": "b1c0cd1755f84d30152065579cc1723efa92d798148c1bff92e2d5cf2ad5f9e4",
+        "phase_metrics": {
+          "context_ms": 85,
+          "provider_ms": 17067,
+          "tools_ms": 0,
+          "first_token_ms": 17063,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2335,
+          "history": 1930,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3928,
+        "output_tokens": 903,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 17208,
+        "id": "distributed_flow_pt",
+        "status": "failed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": false
+          },
+          {
+            "kind": "response_matches",
+            "passed": false
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "b1c0cd1755f84d30152065579cc1723efa92d798148c1bff92e2d5cf2ad5f9e4",
+        "phase_metrics": {
+          "context_ms": 54,
+          "provider_ms": 9940,
+          "tools_ms": 0,
+          "first_token_ms": 9936,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 1635,
+          "history": 2071,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3717,
+        "output_tokens": 868,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 0.5,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 10047,
+        "id": "distributed_flow_en",
+        "status": "failed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": false
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 5,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "b1c0cd1755f84d30152065579cc1723efa92d798148c1bff92e2d5cf2ad5f9e4",
+        "phase_metrics": {
+          "context_ms": 69,
+          "provider_ms": 12278,
+          "tools_ms": 0,
+          "first_token_ms": 12273,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2174,
+          "history": 2030,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3898,
+        "output_tokens": 1270,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 12431,
+        "id": "homonymous_contract",
+        "status": "failed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": false
+          },
+          {
+            "kind": "response_matches",
+            "passed": false
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "b1c0cd1755f84d30152065579cc1723efa92d798148c1bff92e2d5cf2ad5f9e4",
+        "phase_metrics": {
+          "context_ms": 65,
+          "provider_ms": 8978,
+          "tools_ms": 0,
+          "first_token_ms": 8973,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2174,
+          "history": 2036,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3900,
+        "output_tokens": 807,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 9111,
+        "id": "historical_document_conflict",
+        "status": "failed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": false
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      }
+    ],
+    "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+  },
+  "initial_candidate_evaluation": {
+    "repeats": 1,
+    "selected_cases": [
+      "distributed_flow_pt",
+      "distributed_flow_en",
+      "homonymous_contract",
+      "historical_document_conflict"
+    ],
+    "version": 1,
+    "mode": "live_provider",
+    "suite_sha256": "f019744e6cfdf303a2aff5c9357d927ab0b325b6d35f80e134669911e81af399",
+    "cases": [
+      {
+        "criteria_sha256": "aaf015a6a85b62d5f4f8e3f8892b4ba31b1aeafa6f7524740173858ebc052a61",
+        "phase_metrics": {
+          "context_ms": 62,
+          "provider_ms": 15504,
+          "tools_ms": 0,
+          "first_token_ms": 7770,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2331,
+          "history": 1934,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3927,
+        "output_tokens": 792,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 15602,
+        "id": "distributed_flow_pt",
+        "status": "passed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "aaf015a6a85b62d5f4f8e3f8892b4ba31b1aeafa6f7524740173858ebc052a61",
+        "phase_metrics": {
+          "context_ms": 109,
+          "provider_ms": 9255,
+          "tools_ms": 0,
+          "first_token_ms": 1861,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 1635,
+          "history": 2071,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3717,
+        "output_tokens": 751,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 0.5,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 9417,
+        "id": "distributed_flow_en",
+        "status": "failed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": false
+          },
+          {
+            "kind": "response_matches",
+            "passed": false
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 5,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "aaf015a6a85b62d5f4f8e3f8892b4ba31b1aeafa6f7524740173858ebc052a61",
+        "phase_metrics": {
+          "context_ms": 61,
+          "provider_ms": 10740,
+          "tools_ms": 0,
+          "first_token_ms": 1894,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2178,
+          "history": 2027,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3899,
+        "output_tokens": 878,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 10848,
+        "id": "homonymous_contract",
+        "status": "passed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      },
+      {
+        "criteria_sha256": "aaf015a6a85b62d5f4f8e3f8892b4ba31b1aeafa6f7524740173858ebc052a61",
+        "phase_metrics": {
+          "context_ms": 102,
+          "provider_ms": 10613,
+          "tools_ms": 0,
+          "first_token_ms": 1902,
+          "first_token_samples": 1,
+          "provider_calls": 1,
+          "tool_calls": 0,
+          "repairs": 0
+        },
+        "temperature": 0,
+        "api_model": "nemotron-3.5-bolt:e4b",
+        "protocol": "ollama",
+        "output_reserve": 2048,
+        "prompt_version": "opcode-2026-10-v8",
+        "prompt_profile": "reduced",
+        "context_method": "conservative byte estimate (ASCII 2 bytes/token; non-ASCII 1 byte/token), plus message overhead and 5% safety; not a tokenizer; actual provider JSON including private schemas; component shares are planning estimates, total budget is enforced",
+        "context_components": {
+          "evidence": 2178,
+          "history": 2032,
+          "instructions": 2521,
+          "output": 2048,
+          "safety": 819,
+          "schemas": 3513
+        },
+        "retrieval_strategies": [
+          "lexical BM25 + exact identifiers"
+        ],
+        "application": "opcode",
+        "application_version": "v0.2.1-0.20261031155407-d468772d0479",
+        "context_window": 16384,
+        "input_tokens": 3901,
+        "output_tokens": 939,
+        "retrieval_recall": 1,
+        "retrieval_mrr": 1,
+        "metrics_origin": "native runtime usage and observed tool receipts; title generation excluded",
+        "duration_ms": 10763,
+        "id": "historical_document_conflict",
+        "status": "passed",
+        "criteria": [
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_contains",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "service.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_cites",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "file_contains",
+            "path": "tools_runtime.py",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_matches",
+            "passed": true
+          },
+          {
+            "kind": "response_not_matches",
+            "passed": true
+          }
+        ],
+        "model": "local.nemotron-3.5-bolt:e4b",
+        "tool_calls": 6,
+        "task_status": "idle",
+        "tool_names": [
+          "search_code_index",
+          "view"
+        ]
+      }
+    ],
+    "notice": "Live provider runs in disposable fixtures. Results verify only declared observable criteria; they do not prove general model quality."
+  },
+  "initial_failing_regressions": "--- FAIL: TestNarrativeReturnsPreserveAssociationAndRejectSwappedResults (0.10s)\n    --- FAIL: TestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/*_**Entrada:**_`\"blocked\"`_$\\to$_**Resultado:**_`\"TOOL_DENIED\"`_*_**Entrada:**_`\"ping\"`_$\\to$_**Resultado:**_`\"TOOL_OK\"` (0.00s)\n        explanation_quality_test.go:70: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/evaluation/explanation_quality_test.go:70\n            \tError:      \tNot equal: \n            \t            \texpected: \"passed\"\n            \t            \tactual  : \"failed\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1 +1 @@\n            \t            \t-passed\n            \t            \t+failed\n            \tTest:       \tTestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/*_**Entrada:**_`\"blocked\"`_$\\to$_**Resultado:**_`\"TOOL_DENIED\"`_*_**Entrada:**_`\"ping\"`_$\\to$_**Resultado:**_`\"TOOL_OK\"`\n    --- FAIL: TestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/Input_\"blocked\"_$\\rightarrow$_Result_\"TOOL_DENIED\";_Input_\"ping\"_$\\rightarrow$_Result_\"TOOL_OK\". (0.01s)\n        explanation_quality_test.go:70: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/evaluation/explanation_quality_test.go:70\n            \tError:      \tNot equal: \n            \t            \texpected: \"passed\"\n            \t            \tactual  : \"failed\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1 +1 @@\n            \t            \t-passed\n            \t            \t+failed\n            \tTest:       \tTestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/Input_\"blocked\"_$\\rightarrow$_Result_\"TOOL_DENIED\";_Input_\"ping\"_$\\rightarrow$_Result_\"TOOL_OK\".\n    --- FAIL: TestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/Para_o_input_`blocked`,_a_implementação_em_`tools_runtime.py:4-5`_verifica_a_condição_e_retorna_`TOOL_DENIED`._Para_o_input_`ping`,_a_condição_é_falsa_e_o_fluxo_retorna_`TOOL_OK`_em_`tools_runtime.py:6`. (0.01s)\n        explanation_quality_test.go:70: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/evaluation/explanation_quality_test.go:70\n            \tError:      \tNot equal: \n            \t            \texpected: \"passed\"\n            \t            \tactual  : \"failed\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1 +1 @@\n            \t            \t-passed\n            \t            \t+failed\n            \tTest:       \tTestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/Para_o_input_`blocked`,_a_implementação_em_`tools_runtime.py:4-5`_verifica_a_condição_e_retorna_`TOOL_DENIED`._Para_o_input_`ping`,_a_condição_é_falsa_e_o_fluxo_retorna_`TOOL_OK`_em_`tools_runtime.py:6`.\n    --- FAIL: TestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/For_the_input_blocked,_dispatchTool_inspects_the_actual_branch_and_returns_TOOL_DENIED_(tools_runtime.py:5)._For_the_input_ping,_the_ordinary_branch_returns_TOOL_OK_(tools_runtime.py:6). (0.01s)\n        explanation_quality_test.go:70: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/evaluation/explanation_quality_test.go:70\n            \tError:      \tNot equal: \n            \t            \texpected: \"passed\"\n            \t            \tactual  : \"failed\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1 +1 @@\n            \t            \t-passed\n            \t            \t+failed\n            \tTest:       \tTestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/For_the_input_blocked,_dispatchTool_inspects_the_actual_branch_and_returns_TOOL_DENIED_(tools_runtime.py:5)._For_the_input_ping,_the_ordinary_branch_returns_TOOL_OK_(tools_runtime.py:6).\n    --- FAIL: TestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/Se_a_entrada_é_blocked,_a_implementação_verifica_a_condição_antes_de_produzir_TOOL_DENIED;_para_ping,_segue_o_caminho_normal_e_produz_TOOL_OK. (0.01s)\n        explanation_quality_test.go:70: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/evaluation/explanation_quality_test.go:70\n            \tError:      \tNot equal: \n            \t            \texpected: \"passed\"\n            \t            \tactual  : \"failed\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1 +1 @@\n            \t            \t-passed\n            \t            \t+failed\n            \tTest:       \tTestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/Se_a_entrada_é_blocked,_a_implementação_verifica_a_condição_antes_de_produzir_TOOL_DENIED;_para_ping,_segue_o_caminho_normal_e_produz_TOOL_OK.\n    --- FAIL: TestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/When_the_input_is_blocked,_the_branch_in_tools_runtime.py:4-5_produces_TOOL_DENIED._When_the_input_is_ping,_tools_runtime.py:6_produces_TOOL_OK. (0.01s)\n        explanation_quality_test.go:70: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/evaluation/explanation_quality_test.go:70\n            \tError:      \tNot equal: \n            \t            \texpected: \"passed\"\n            \t            \tactual  : \"failed\"\n            \t            \t\n            \t            \tDiff:\n            \t            \t--- Expected\n            \t            \t+++ Actual\n            \t            \t@@ -1 +1 @@\n            \t            \t-passed\n            \t            \t+failed\n            \tTest:       \tTestNarrativeReturnsPreserveAssociationAndRejectSwappedResults/When_the_input_is_blocked,_the_branch_in_tools_runtime.py:4-5_produces_TOOL_DENIED._When_the_input_is_ping,_tools_runtime.py:6_produces_TOOL_OK.\nFAIL\nFAIL\tgithub.com/raulaguila/opcode/internal/evaluation\t0.123s\nFAIL\n",
+  "method": [
+    "Native Ollama requests were forwarded through a loopback-only diagnostic proxy. Only public message content/tool calls were captured; reasoning was not stored.",
+    "The final evaluation used the same existing binary, fixtures and prompts. No agent/provider prompts, citation checks, permissions, criterion kinds or criterion count changed.",
+    "A temporary Go test overlay reevaluated the identical baseline public answers, then swapped their output labels and appended contradictory versions. The overlay is not shipped.",
+    "The baseline English answer still fails its independent missing-function check when reevaluated with the new patterns. The final fresh English answer satisfied all original checks."
+  ],
+  "limits": [
+    "These are deterministic checks of explicitly associated fixture values, not a semantic judge for arbitrary prose.",
+    "Associations remain bounded to supported clauses/items, indented continuation or an explicit heading and its immediate paragraph.",
+    "One passing four-case local run is not a universal model-quality rate.",
+    "No new PTY run was needed: application/UI/permission/citation production code is byte-for-byte unchanged from the prior validated commit."
+  ]
+}

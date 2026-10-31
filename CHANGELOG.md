@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## Em desenvolvimento — 2026-10-31
+
+- Criação, edição e patch verificam os conteúdos instalados e registram recibos
+  dos arquivos afetados, separados dos recibos de testes. A conclusão de uma
+  escrita simples não depende do limite global do workspace.
+- Alterações externas nos arquivos gravados impedem a confirmação; comandos,
+  hooks, integrações opacas e testes mantêm a verificação ampla. Testes
+  indisponíveis resultam em estado parcial, sem apagar a confirmação da escrita.
+
 ## Em desenvolvimento — 2026-10-30
 
 - Corrigido o vazamento do fundo padrão do terminal após negrito/código inline;

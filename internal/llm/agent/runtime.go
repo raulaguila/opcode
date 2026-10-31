@@ -283,7 +283,7 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 		return nil, err
 	}
 	raw, _ := json.Marshal(taskProjection(task))
-	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
+	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
 	copyHistory := projectReusedSources(history)
 	for i := len(copyHistory) - 1; i >= 0; i-- {
 		if copyHistory[i].Role == message.User {
@@ -451,7 +451,7 @@ func (a *agent) workflowFinishTask(run *generationRun, session string, ctx conte
 		if missing := missingRequiredCalls(run, history); len(missing) > 0 {
 			return nil, fmt.Errorf("required actions lack successful receipts: %s", strings.Join(missing, ", "))
 		}
-		if err := a.observeWorkspace(ctx, session); err != nil {
+		if err := a.observeCompletion(ctx, session); err != nil {
 			return nil, err
 		}
 	}

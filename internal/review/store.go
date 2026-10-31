@@ -227,7 +227,7 @@ func (s *Store) Apply(ctx context.Context, session string, p Preview, permission
 	}
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, session)
 	if onMutation != nil {
-		ctx = tools.WithMutationObserver(ctx, onMutation)
+		ctx = tools.WithMutationObserver(ctx, func([]tools.FileChange) error { return onMutation() })
 	}
 	ctx = tools.WithChangeObserver(ctx, func([]tools.FileChange) error { return s.markApplied(session, p) })
 	_, err = tools.SecureTool(&applyTool{p.Changes}, permissions).Run(ctx, tools.ToolCall{Name: tools.PatchToolName, Input: `{}`})

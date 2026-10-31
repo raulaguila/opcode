@@ -50,15 +50,36 @@ func validationReceiptReport(ctx context.Context, configured map[string]string) 
 	if store == nil {
 		return jsonToolResult(map[string]any{"configured": configured, "available": false, "message": "task receipt storage is unavailable"}), nil
 	}
-	digest, err := WorkspaceDigest(ctx)
-	if err != nil {
-		return NewTextErrorResponse("validation freshness cannot be determined: " + err.Error()), nil
-	}
-	task, err := store.Observe(ctx, session, digest)
+	task, err := store.Get(ctx, session)
 	if err != nil {
 		return ToolResponse{}, err
 	}
-	return jsonToolResult(map[string]any{"configured": configured, "task_revision": task.Revision, "task_digest": task.Digest, "receipts": task.Validation, "validation_problem": task.ValidationProblem(configured)}), nil
+	fileErr := VerifyFileReceipts(ctx, task.FileChanges)
+	if fileErr != nil {
+		if err := store.Mutated(ctx, session); err != nil {
+			return ToolResponse{}, err
+		}
+	}
+	var workspaceErr error
+	if task.NeedsWorkspaceVerification(configured) || fileErr != nil {
+		var digest string
+		digest, workspaceErr = WorkspaceDigest(ctx)
+		if _, err := store.Observe(ctx, session, digest); err != nil {
+			return ToolResponse{}, err
+		}
+	}
+	task, err = store.Get(ctx, session)
+	if err != nil {
+		return ToolResponse{}, err
+	}
+	return jsonToolResult(map[string]any{"configured": configured, "task_revision": task.Revision, "task_digest": task.Digest, "receipts": task.Validation, "validation_problem": task.ValidationProblem(configured), "file_changes": task.FileChanges, "affected_files_verified": fileErr == nil && len(task.FileChanges) > 0, "file_verification_error": verificationError(fileErr), "workspace_verification_error": verificationError(workspaceErr), "file_verification_is_test_validation": false}), nil
+}
+
+func verificationError(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 type checkCandidate struct {

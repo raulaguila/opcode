@@ -1,0 +1,319 @@
+{
+  "date": "2026-10-31",
+  "baseline": "2160f376d25244cf6220674e1992d11e0f378235",
+  "go": "1.27.3",
+  "scope": "Transactional file-effect confirmation separated from workspace and test validation",
+  "source_sha256": {
+    "internal/llm/agent/agent_stream.go": "0feb1819a526bdf9ab28ba0e250a13c6cb6de258ac07a7e863d06d83e5c8fadc",
+    "internal/llm/agent/catalog.go": "30fa609af9bc2042af25d7a320b633e836fe62bf82874730ee54fdbcefb4bf6c",
+    "internal/llm/agent/context_test.go": "6ed9e6f51be85f80f4ecb2008f930c36652652d3d8d3019d61f30d1521cc4dfe",
+    "internal/llm/agent/extensions.go": "99777d34ae7330139a1e2ca7a175de0a873e97a1b8f02c060d1a2578ce9fa129",
+    "internal/llm/agent/generation.go": "ed75c0c3c658a26322b9de074c3832e95f5b369a96ea93d40d68f877e48c574f",
+    "internal/llm/agent/runtime.go": "871842bc7814dab6379a8094fa643ff0a017b1b039cb8c4c00d484aeeef1824c",
+    "internal/llm/tools/mutation.go": "a3bd8013040ed5fef07abb63571fcb3662f4a304544ad554114208e2c6a2d2a7",
+    "internal/llm/tools/transaction.go": "e2e948c78025e9c43e29e16037bb55d465d2d6abe0db3634c038ec5c99acc383",
+    "internal/llm/tools/validation.go": "bc9a48b9d0e043a2544d471b36d1772ad2f459f4e4010a6192abc6f76ee2e077",
+    "internal/llm/tools/workspace_test.go": "9d7d4c864c5d1d954d85f11a1e0a824cbaa84fabc6ccc49c39209633063b40af",
+    "internal/review/store.go": "943d1c95e6c3b90a07f25c2e1f62a403130bcbc45ba6015f815bc9a3d5678aac",
+    "internal/workflow/store.go": "cc39576fac491109c79a64e70b3fbf4e9b4d09f62e2775a954ba0525f294160a",
+    "internal/llm/agent/file_verification.go": "0bd16df359faecca88b416813ffcd6a7ebc492406c0fba956aa12180bfa7aaee",
+    "internal/llm/agent/file_verification_test.go": "57d70ab071e95bbe8ff9e41110bef7ae91cdece87fe76835d1a79d1c8fadb85e",
+    "internal/llm/tools/file_verification.go": "c953727c5682ea2f8c5e84c90688286a09907a7b71fabee67e08917b18b53115",
+    "internal/llm/tools/file_verification_test.go": "1e4981369e5323cab6d7d596fe44d06d0fee8fedb605c622251963bf13bcd952",
+    "internal/workflow/files.go": "a6948d0acc7789bf74d276157216e7f313c1ea6fbb783599aa92ba4cb97caa3d",
+    "internal/workflow/files_test.go": "7e0794f6dd756002a349a518d8437ccf3a31f593c056aca7e934f2d66647aa1d"
+  },
+  "binary_sha256": "ee6f65324dc07a827a22ff9042d42e2fba54b9229258f88b72b4b0f621bc64b2",
+  "protected_source_unchanged": [
+    {
+      "path": "internal/permission/status.go",
+      "sha256": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944"
+    },
+    {
+      "path": "internal/permission/permission.go",
+      "sha256": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14"
+    },
+    {
+      "path": "internal/llm/agent/citations.go",
+      "sha256": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c"
+    },
+    {
+      "path": "internal/llm/agent/citation_revision.go",
+      "sha256": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c"
+    },
+    {
+      "path": "internal/llm/agent/citations_messages.go",
+      "sha256": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7"
+    },
+    {
+      "path": "internal/llm/tools/source_receipt.go",
+      "sha256": "9d577433546bcacb83064f026d2e935361ddba021a14088f0759de699ec7da9e"
+    },
+    {
+      "path": "internal/llm/tools/workspace.go",
+      "sha256": "af1632d60dc8677279b6de0e565204cc95000cb96bebaa6dc30b31115b3cac9d"
+    }
+  ],
+  "dependencies_changed": false,
+  "schema_migration_required": false,
+  "regression_proof": {
+    "large_unrelated_artifact": "A sparse 17 MiB opcode file exceeds the unchanged workspace digest limit. Actual write/edit/patch tools and finish_task still verify and finish the affected files when no checks are required/configured.",
+    "effects": "Installed contents are compared before transaction observers; final hashes and absence of deleted files are checked again. Tool permissions, source-read requirements and rollback remain in place.",
+    "tampering": "Same-size changes with restored mtime fail affected-file completion. Deletion/reappearance and symlink substitutions are rejected.",
+    "tests": "File receipts never become test receipts. Configured/contract checks still require real, current-revision command receipts. Unavailable workspace/check verification preserves confirmed file effects with partial status.",
+    "commands": "Terminal commands, hooks and opaque integrations retain complete workspace verification. A prior scoped write cannot bypass a failed command/workspace check.",
+    "persistence": "Only paths and before/after hashes are stored in the existing workflow JSON; SQLite restart and resume preserve them, while a new independent turn clears them. Creation followed by deletion gives no net-change proof.",
+    "bounds": "128 affected paths per active scope, 16 MiB per final affected-file fingerprint, existing global limits unchanged; malformed and overflowing receipts fail atomically."
+  },
+  "checks": [
+    {
+      "check": "race",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 155.636,
+      "final_affected_package_revalidation": {
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-p",
+          "1",
+          "./internal/workflow",
+          "./internal/llm/agent",
+          "-count=1"
+        ],
+        "exit_code": 0,
+        "seconds": 8.064
+      }
+    },
+    {
+      "check": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 147.412,
+      "final_affected_package_revalidation": {
+        "command": [
+          "go",
+          "test",
+          "-race",
+          "-p",
+          "1",
+          "-tags",
+          "integration",
+          "./internal/workflow",
+          "./internal/llm/agent",
+          "-count=1"
+        ],
+        "exit_code": 0,
+        "seconds": 8.014
+      }
+    },
+    {
+      "check": "vet",
+      "command": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 2.379
+    },
+    {
+      "check": "vet-integration",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.918
+    },
+    {
+      "check": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 2.453
+    },
+    {
+      "check": "staticcheck-integration",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.117
+    },
+    {
+      "check": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.209
+    },
+    {
+      "check": "modules",
+      "command": [
+        "go",
+        "mod",
+        "verify"
+      ],
+      "exit_code": 0,
+      "seconds": 1.468
+    },
+    {
+      "check": "language-docs",
+      "command": [
+        "go",
+        "run",
+        "./scripts/language-docs",
+        "-check"
+      ],
+      "exit_code": 0,
+      "seconds": 0.554
+    },
+    {
+      "check": "workflows",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/actionlint"
+      ],
+      "exit_code": 0,
+      "seconds": 0.007
+    },
+    {
+      "check": "vulnerabilities",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/govulncheck",
+        "-show",
+        "verbose",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 3.026
+    },
+    {
+      "check": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-file-validation/opcode",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 1.274
+    },
+    {
+      "check": "windows",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-file-validation/opcode-windows.exe",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 3.085
+    },
+    {
+      "check": "darwin",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-file-validation/opcode-darwin",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 3.287
+    }
+  ],
+  "check_logs": {
+    "race": "?   \tgithub.com/raulaguila/opcode\t[no test files]\nok  \tgithub.com/raulaguila/opcode/cmd\t12.245s\n?   \tgithub.com/raulaguila/opcode/cmd/schema\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/app\t1.200s\nok  \tgithub.com/raulaguila/opcode/internal/artifact\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/clipboard\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/completions\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/config\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/db\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diagnostic\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diff\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/evaluation\t32.275s\nok  \tgithub.com/raulaguila/opcode/internal/extensions\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/fileutil\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/format\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/history\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/httpclient\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/interaction\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t5.062s\nok  \tgithub.com/raulaguila/opcode/internal/llm/models\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/prompt\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider/integration\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools\t27.222s\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools/shell\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/localstate\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/logging\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/lsp/protocol\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/lsp/util\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp/watcher\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/memoryindex\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/message\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/permission\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/pubsub\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/review\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/server\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/session\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/transcript\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui\t18.484s\nok  \tgithub.com/raulaguila/opcode/internal/tui/commands\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/chat\t24.692s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/core\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/dialog\t4.546s\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/logs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/util\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/image\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/tui/layout\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/page\t3.007s\nok  \tgithub.com/raulaguila/opcode/internal/tui/styles\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/theme\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/util\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/version\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/workflow\t1.087s\nok  \tgithub.com/raulaguila/opcode/scripts/bench-compare\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/build-release\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/db-prepared\t(cached)\n?   \tgithub.com/raulaguila/opcode/scripts/language-docs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/scripts/platform-smoke\t[no test files]\n\nFinal affected-package revalidation after the last turn-scope adjustment:\nok  \tgithub.com/raulaguila/opcode/internal/workflow\t1.098s\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t5.341s\n",
+    "integration": "?   \tgithub.com/raulaguila/opcode\t[no test files]\nok  \tgithub.com/raulaguila/opcode/cmd\t12.195s\n?   \tgithub.com/raulaguila/opcode/cmd/schema\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/app\t1.163s\nok  \tgithub.com/raulaguila/opcode/internal/artifact\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/clipboard\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/completions\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/config\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/db\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diagnostic\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/diff\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/evaluation\t32.338s\nok  \tgithub.com/raulaguila/opcode/internal/extensions\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/fileutil\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/format\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/history\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/httpclient\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/interaction\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t5.167s\nok  \tgithub.com/raulaguila/opcode/internal/llm/models\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/prompt\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/provider/integration\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools\t26.832s\nok  \tgithub.com/raulaguila/opcode/internal/llm/tools/shell\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/localstate\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/logging\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp\t(cached)\n?   \tgithub.com/raulaguila/opcode/internal/lsp/protocol\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/lsp/util\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/lsp/watcher\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/memoryindex\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/message\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/permission\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/pubsub\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/review\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/server\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/session\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/transcript\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui\t18.694s\nok  \tgithub.com/raulaguila/opcode/internal/tui/commands\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/chat\t24.827s\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/core\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/components/dialog\t4.481s\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/logs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/components/util\t[no test files]\n?   \tgithub.com/raulaguila/opcode/internal/tui/image\t[no test files]\nok  \tgithub.com/raulaguila/opcode/internal/tui/layout\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/page\t3.180s\nok  \tgithub.com/raulaguila/opcode/internal/tui/styles\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/theme\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/tui/util\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/version\t(cached)\nok  \tgithub.com/raulaguila/opcode/internal/workflow\t1.122s\nok  \tgithub.com/raulaguila/opcode/scripts/bench-compare\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/build-release\t(cached)\nok  \tgithub.com/raulaguila/opcode/scripts/db-prepared\t(cached)\n?   \tgithub.com/raulaguila/opcode/scripts/language-docs\t[no test files]\n?   \tgithub.com/raulaguila/opcode/scripts/platform-smoke\t[no test files]\n\nFinal affected-package revalidation after the last turn-scope adjustment:\nok  \tgithub.com/raulaguila/opcode/internal/workflow\t1.101s\nok  \tgithub.com/raulaguila/opcode/internal/llm/agent\t5.180s\n",
+    "vet": "",
+    "vet-integration": "",
+    "staticcheck": "",
+    "staticcheck-integration": "",
+    "complexity": "gocognit: note: some calls could not be resolved from the source alone; recursion may be under-counted. Re-run with -exact-recursion for exact results\n",
+    "modules": "all modules verified\n",
+    "language-docs": "",
+    "workflows": "",
+    "vulnerabilities": "Fetching vulnerabilities from the database...\n\nChecking the code against the vulnerabilities...\n\nThe package pattern matched the following 59 root packages:\n  github.com/raulaguila/opcode/internal/httpclient\n  github.com/raulaguila/opcode/internal/llm/models\n  github.com/raulaguila/opcode/internal/localstate\n  github.com/raulaguila/opcode/internal/pubsub\n  github.com/raulaguila/opcode/internal/logging\n  github.com/raulaguila/opcode/internal/config\n  github.com/raulaguila/opcode/internal/db\n  github.com/raulaguila/opcode/internal/artifact\n  github.com/raulaguila/opcode/internal/tui/theme\n  github.com/raulaguila/opcode/internal/diff\n  github.com/raulaguila/opcode/internal/history\n  github.com/raulaguila/opcode/internal/llm/tools/shell\n  github.com/raulaguila/opcode/internal/lsp/protocol\n  github.com/raulaguila/opcode/internal/lsp/util\n  github.com/raulaguila/opcode/internal/lsp\n  github.com/raulaguila/opcode/internal/permission\n  github.com/raulaguila/opcode/internal/workflow\n  github.com/raulaguila/opcode/internal/llm/tools\n  github.com/raulaguila/opcode/internal/extensions\n  github.com/raulaguila/opcode/internal/format\n  github.com/raulaguila/opcode/internal/interaction\n  github.com/raulaguila/opcode/internal/llm/prompt\n  github.com/raulaguila/opcode/internal/memoryindex\n  github.com/raulaguila/opcode/internal/message\n  github.com/raulaguila/opcode/internal/llm/provider\n  github.com/raulaguila/opcode/internal/review\n  github.com/raulaguila/opcode/internal/session\n  github.com/raulaguila/opcode/internal/version\n  github.com/raulaguila/opcode/internal/llm/agent\n  github.com/raulaguila/opcode/internal/lsp/watcher\n  github.com/raulaguila/opcode/internal/app\n  github.com/raulaguila/opcode/internal/diagnostic\n  github.com/raulaguila/opcode/internal/evaluation\n  github.com/raulaguila/opcode/internal/server\n  github.com/raulaguila/opcode/internal/clipboard\n  github.com/raulaguila/opcode/internal/transcript\n  github.com/raulaguila/opcode/internal/tui/commands\n  github.com/raulaguila/opcode/internal/tui/styles\n  github.com/raulaguila/opcode/internal/tui/util\n  github.com/raulaguila/opcode/internal/tui/layout\n  github.com/raulaguila/opcode/internal/tui/components/util\n  github.com/raulaguila/opcode/internal/tui/image\n  github.com/raulaguila/opcode/internal/tui/components/dialog\n  github.com/raulaguila/opcode/internal/tui/components/chat\n  github.com/raulaguila/opcode/internal/tui/components/core\n  github.com/raulaguila/opcode/internal/fileutil\n  github.com/raulaguila/opcode/internal/completions\n  github.com/raulaguila/opcode/internal/tui/components/logs\n  github.com/raulaguila/opcode/internal/tui/page\n  github.com/raulaguila/opcode/internal/tui\n  github.com/raulaguila/opcode/cmd\n  github.com/raulaguila/opcode\n  github.com/raulaguila/opcode/cmd/schema\n  github.com/raulaguila/opcode/internal/llm/provider/integration\n  github.com/raulaguila/opcode/scripts/bench-compare\n  github.com/raulaguila/opcode/scripts/build-release\n  github.com/raulaguila/opcode/scripts/db-prepared\n  github.com/raulaguila/opcode/scripts/language-docs\n  github.com/raulaguila/opcode/scripts/platform-smoke\nGovulncheck scanned the following 105 modules and the go1.27.3 standard library:\n  github.com/raulaguila/opcode\n  charm.land/bubbles/v2@v2.2.1\n  charm.land/bubbletea/v2@v2.1.1\n  charm.land/glamour/v2@v2.0.1\n  charm.land/lipgloss/v2@v2.0.7-0.20261009092946-19f011f1cc57\n  cloud.google.com/go/auth@v0.24.2\n  cloud.google.com/go/compute/metadata@v0.10.0\n  github.com/Azure/azure-sdk-for-go/sdk/azcore@v1.23.3\n  github.com/Azure/azure-sdk-for-go/sdk/azidentity@v1.15.0\n  github.com/Azure/azure-sdk-for-go/sdk/internal@v1.13.0\n  github.com/AzureAD/microsoft-authentication-library-for-go@v1.10.1\n  github.com/JohannesKaufmann/dom@v0.3.1\n  github.com/JohannesKaufmann/html-to-markdown/v2@v2.5.2\n  github.com/PuerkitoBio/goquery@v1.13.0\n  github.com/alecthomas/chroma/v2@v2.27.0\n  github.com/andybalholm/cascadia@v1.3.5\n  github.com/atotto/clipboard@v0.1.4\n  github.com/aws/aws-sdk-go-v2@v1.47.5\n  github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream@v1.7.25\n  github.com/aws/aws-sdk-go-v2/config@v1.33.13\n  github.com/aws/aws-sdk-go-v2/credentials@v1.20.13\n  github.com/aws/aws-sdk-go-v2/feature/ec2/imds@v1.20.5\n  github.com/aws/aws-sdk-go-v2/internal/configsources@v1.5.8\n  github.com/aws/aws-sdk-go-v2/internal/endpoints/v2@v2.8.8\n  github.com/aws/aws-sdk-go-v2/internal/v4a@v1.5.8\n  github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding@v1.13.23\n  github.com/aws/aws-sdk-go-v2/service/internal/presigned-url@v1.14.8\n  github.com/aws/aws-sdk-go-v2/service/signin@v1.12.1\n  github.com/aws/aws-sdk-go-v2/service/sso@v1.39.1\n  github.com/aws/aws-sdk-go-v2/service/ssooidc@v1.44.1\n  github.com/aws/aws-sdk-go-v2/service/sts@v1.51.6\n  github.com/aws/smithy-go@v1.28.7\n  github.com/aymanbagabas/go-osc52/v2@v2.0.1\n  github.com/aymanbagabas/go-udiff@v0.4.1\n  github.com/aymerick/douceur@v0.2.0\n  github.com/bmatcuk/doublestar/v4@v4.10.4\n  github.com/catppuccin/go@v0.3.0\n  github.com/charmbracelet/colorprofile@v0.4.3\n  github.com/charmbracelet/ultraviolet@v0.0.0-20261023060817-a45b7c86333f\n  github.com/charmbracelet/x/ansi@v0.11.9\n  github.com/charmbracelet/x/exp/slice@v0.1.0\n  github.com/charmbracelet/x/term@v0.2.2\n  github.com/charmbracelet/x/termios@v0.1.1\n  github.com/charmbracelet/x/windows@v0.2.2\n  github.com/clipperhouse/displaywidth@v0.11.0\n  github.com/clipperhouse/uax29/v2@v2.7.0\n  github.com/creack/pty@v1.1.24\n  github.com/disintegration/imaging@v1.6.2\n  github.com/dlclark/regexp2/v2@v2.12.0\n  github.com/fsnotify/fsnotify@v1.10.1\n  github.com/go-logfmt/logfmt@v0.6.1\n  github.com/go-viper/mapstructure/v2@v2.5.0\n  github.com/godbus/dbus/v5@v5.2.4\n  github.com/golang-jwt/jwt/v5@v5.3.1\n  github.com/google/jsonschema-go@v0.4.3\n  github.com/google/uuid@v1.6.0\n  github.com/googleapis/enterprise-certificate-proxy@v0.3.24\n  github.com/googleapis/gax-go/v2@v2.27.0\n  github.com/gorilla/css@v1.0.1\n  github.com/hinshun/vt10x@v0.0.0-20220301184237-5011da428d02\n  github.com/kylelemons/godebug@v1.1.0\n  github.com/lithammer/fuzzysearch@v1.1.8\n  github.com/lucasb-eyer/go-colorful@v1.4.1\n  github.com/mark3labs/mcp-go@v1.5.0\n  github.com/mattn/go-isatty@v0.0.24\n  github.com/mattn/go-runewidth@v0.0.31\n  github.com/mfridman/interpolate@v0.0.2\n  github.com/microcosm-cc/bluemonday@v1.0.27\n  github.com/muesli/ansi@v0.0.0-20230316100256-276c6243b2f6\n  github.com/muesli/cancelreader@v0.2.2\n  github.com/muesli/reflow@v0.3.0\n  github.com/muesli/termenv@v0.16.0\n  github.com/ncruces/go-sqlite3@v0.36.0\n  github.com/ncruces/go-sqlite3-wasm/v6@v6.4.35401\n  github.com/ncruces/julianday@v1.0.0\n  github.com/odvcencio/gotreesitter@v0.56.0\n  github.com/pelletier/go-toml/v2@v2.4.3\n  github.com/pkg/browser@v0.0.0-20240102092130-5ac0b6a4141c\n  github.com/pressly/goose/v3@v3.29.0\n  github.com/rivo/uniseg@v0.4.7\n  github.com/sabhiram/go-gitignore@v0.0.0-20210923224102-525f6e181f06\n  github.com/sagikazarmark/locafero@v0.12.0\n  github.com/santhosh-tekuri/jsonschema/v6@v6.0.3\n  github.com/sergi/go-diff@v1.4.0\n  github.com/sethvargo/go-retry@v0.5.0\n  github.com/spf13/afero@v1.15.0\n  github.com/spf13/cast@v1.10.0\n  github.com/spf13/cobra@v1.10.2\n  github.com/spf13/pflag@v1.0.10\n  github.com/spf13/viper@v1.21.0\n  github.com/subosito/gotenv@v1.6.0\n  github.com/tiktoken-go/tokenizer@v0.10.0\n  github.com/xo/terminfo@v1.3.0\n  github.com/yosida95/uritemplate/v3@v3.0.2\n  github.com/yuin/goldmark@v1.8.7\n  github.com/yuin/goldmark-emoji@v1.0.6\n  github.com/zalando/go-keyring@v0.2.8\n  go.uber.org/multierr@v1.11.0\n  go.yaml.in/yaml/v3@v3.0.5\n  golang.org/x/crypto@v0.58.0\n  golang.org/x/image@v0.47.0\n  golang.org/x/net@v0.62.0\n  golang.org/x/sync@v0.24.0\n  golang.org/x/sys@v0.49.0\n  golang.org/x/text@v0.43.0\n\n=== Symbol Results ===\n\nNo vulnerabilities found.\n\n=== Package Results ===\n\nNo other vulnerabilities found.\n\n=== Module Results ===\n\nVulnerability #1: GO-2026-5932\n    The golang.org/x/crypto/openpgp package is unmaintained, unsafe by design,\n    and has known security issues\n  More info: https://pkg.go.dev/vuln/GO-2026-5932\n  Module: golang.org/x/crypto\n    Found in: golang.org/x/crypto@v0.58.0\n    Fixed in: N/A\n\nYour code is affected by 0 vulnerabilities.\nThis scan also found 0 vulnerabilities in packages you import and 1\nvulnerability in modules you require, but your code doesn't appear to call these\nvulnerabilities.\n",
+    "build": "",
+    "windows": "",
+    "darwin": ""
+  },
+  "pty": {
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "-tags",
+      "integration",
+      "./internal/tui",
+      "-run",
+      "^(TestLiveOllamaPTYUI|TestPTYUICompactThemes|TestPTYUITerminalStartupQueries|TestPTYStreamingSpeedBeforeCompletion|TestPTYTranscriptSearchAndKeyboardSelection|TestPTYConversationChronologyQuitAndResume|TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer|TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures|TestPTYMarkdownProposalAndQuestionDivider|TestPTYModelCapabilitiesAndModalNavigation|TestPTYCodeBlocksAndReasoningDetails)$",
+      "-count=1",
+      "-v"
+    ],
+    "exit_code": 0,
+    "seconds": 62.109,
+    "parent_passes": [
+      "--- PASS: TestPTYCodeBlocksAndReasoningDetails (0.66s)",
+      "--- PASS: TestPTYConversationChronologyQuitAndResume (1.70s)",
+      "--- PASS: TestPTYMarkdownProposalAndQuestionDivider (1.41s)",
+      "--- PASS: TestPTYModelCapabilitiesAndModalNavigation (1.39s)",
+      "--- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer (13.06s)",
+      "--- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures (1.70s)",
+      "--- PASS: TestPTYStreamingSpeedBeforeCompletion (2.49s)",
+      "--- PASS: TestPTYTranscriptSearchAndKeyboardSelection (2.63s)",
+      "--- PASS: TestLiveOllamaPTYUI (29.76s)",
+      "--- PASS: TestPTYUICompactThemes (2.36s)",
+      "--- PASS: TestPTYUITerminalStartupQueries (0.00s)"
+    ],
+    "no_skips": true,
+    "model": "nemotron-3.5-bolt:e4b",
+    "runtime_context": 16384,
+    "log": "=== RUN   TestPTYCodeBlocksAndReasoningDetails\n--- PASS: TestPTYCodeBlocksAndReasoningDetails (0.66s)\n=== RUN   TestPTYConversationChronologyQuitAndResume\n    pty_conversation_test.go:65: question panel at 60x20:\n        Opcode · project                                            \n                                                                    \n         │ (README.md:1-2).                                         \n                                                                    \n         › Process · 1 tool call · working                          \n                                                                    \n                                                                    \n        ┌──────────────────────────────────────────────────────────┐\n        │ Question for you                                         │\n        │ Quer implementar as melhorias?                           │\n        │                                                          │\n        │   ○ Sim                                                  │\n        │   ○ Agora não                                            │\n        │   ○ Other answer:                                        │\n        │ ──────────────────────────────────────────────────────── │\n        │ ↑↓ choose or type another answer · F2 · Esc cancel       │\n        └──────────────────────────────────────────────────────────┘\n        ────────────────────────────────────────────────────────────\n         >                                                          \n         Ask ▾       Waiting for your answer · … conversation-fi… ▾ \n--- PASS: TestPTYConversationChronologyQuitAndResume (1.70s)\n=== RUN   TestPTYMarkdownProposalAndQuestionDivider\n--- PASS: TestPTYMarkdownProposalAndQuestionDivider (1.41s)\n=== RUN   TestPTYModelCapabilitiesAndModalNavigation\n--- PASS: TestPTYModelCapabilitiesAndModalNavigation (1.39s)\n=== RUN   TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer\n=== RUN   TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/custom_row\n=== RUN   TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/suggested_choice_ignores_inactive_custom_draft\n--- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer (13.06s)\n    --- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/custom_row (6.50s)\n    --- PASS: TestPTYQuestionCustomRowAndSuggestedChoiceSubmitOnlyActiveAnswer/suggested_choice_ignores_inactive_custom_draft (6.55s)\n=== RUN   TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures\n=== RUN   TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/verified_correction_replaces_primary_and_keeps_history\n=== RUN   TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/failed_correction_preserves_original\n--- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures (1.70s)\n    --- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/verified_correction_replaces_primary_and_keeps_history (0.88s)\n    --- PASS: TestPTYResponseRevisionPromotesOnlyVerifiedRepairAndPreservesFailures/failed_correction_preserves_original (0.82s)\n=== RUN   TestPTYStreamingSpeedBeforeCompletion\n=== RUN   TestPTYStreamingSpeedBeforeCompletion/dark\n=== RUN   TestPTYStreamingSpeedBeforeCompletion/light\n=== RUN   TestPTYStreamingSpeedBeforeCompletion/no-color\n--- PASS: TestPTYStreamingSpeedBeforeCompletion (2.49s)\n    --- PASS: TestPTYStreamingSpeedBeforeCompletion/dark (0.80s)\n    --- PASS: TestPTYStreamingSpeedBeforeCompletion/light (0.83s)\n    --- PASS: TestPTYStreamingSpeedBeforeCompletion/no-color (0.86s)\n=== RUN   TestPTYTranscriptSearchAndKeyboardSelection\n--- PASS: TestPTYTranscriptSearchAndKeyboardSelection (2.63s)\n=== RUN   TestLiveOllamaPTYUI\n    pty_ui_live_test.go:60: local model ready: elapsed=6.786s load=6.563s context=16384\n    pty_ui_live_test.go:170: PTY failed catalog is empty, retry recovers, delete defaults to Cancel and explicit deletion removes connection\n    pty_ui_live_test.go:176: PTY draft, Unicode paste, three resizes, model catalog/search and mode chooser passed\n    pty_ui_live_test.go:231: separate LSP probe explicitly approved in UI; stderr burst suppressed and Ask mode preserved\n    pty_ui_live_test.go:257: overview SHA-256: d46d94f06e0ccb8221251661d051bbf872078ca867049dae5d94edc77049544f\n    pty_ui_live_test.go:258: real Ollama project overview finished with factual content and no raw LSP stderr\n    pty_ui_live_test.go:301: one exact PTY bash command approved through UI; live output appeared before process exit\n    pty_ui_live_test.go:331: real binary PTY: Unicode/paste, 3–8-row composer, resize, model/mode modal focus, Ask evidence, separately approved LSP probe, one approved bash command, live output, terminal input and queued instruction passed\n--- PASS: TestLiveOllamaPTYUI (29.76s)\n=== RUN   TestPTYUICompactThemes\n=== RUN   TestPTYUICompactThemes/dark\n=== RUN   TestPTYUICompactThemes/light\n=== RUN   TestPTYUICompactThemes/no-color\n--- PASS: TestPTYUICompactThemes (2.36s)\n    --- PASS: TestPTYUICompactThemes/dark (0.76s)\n    --- PASS: TestPTYUICompactThemes/light (0.85s)\n    --- PASS: TestPTYUICompactThemes/no-color (0.75s)\n=== RUN   TestPTYUITerminalStartupQueries\n--- PASS: TestPTYUITerminalStartupQueries (0.00s)\nPASS\nok  \tgithub.com/raulaguila/opcode/internal/tui\t58.282s\n",
+    "isolated_home": true,
+    "user_config_changed": false,
+    "enterprise_provider_accessed": false,
+    "context_note": "16384 is an explicit local PTY fixture, not the advertised model maximum",
+    "file_effect_test_note": "New file-effect regressions use a controlled provider with real transactional tools; the existing live Ollama PTY scenarios are also repeated."
+  },
+  "limits": [
+    "The initial best-effort workspace baseline is retained to detect external changes; file-only completion does not depend on it.",
+    "Arbitrary terminal commands and configured checks retain the global workspace fingerprint limits.",
+    "Hashes prove stored contents and freshness, not semantic correctness or test coverage.",
+    "Filesystem verification is not an atomic snapshot against concurrent external writers.",
+    "Windows amd64 and Darwin arm64 were cross-built, not run natively.",
+    "No private provider was accessed and no new performance benchmark was requested or claimed."
+  ]
+}

@@ -37,22 +37,24 @@ type Receipt struct {
 	At       int64  `json:"at"`
 }
 type Task struct {
-	Contract        *Contract `json:"contract,omitempty"`
-	SessionID       string    `json:"session_id"`
-	Mode            Mode      `json:"mode"`
-	Objective       string    `json:"objective,omitempty"`
-	Steps           []Step    `json:"steps,omitempty"`
-	Criteria        []string  `json:"criteria,omitempty"`
-	Checks          []string  `json:"checks,omitempty"`
-	Status          string    `json:"status"`
-	Revision        int64     `json:"revision"`
-	Digest          string    `json:"digest,omitempty"`
-	Changed         bool      `json:"changed"`
-	Validation      []Receipt `json:"validation,omitempty"`
-	Summary         string    `json:"summary,omitempty"`
-	RequiresChanges bool      `json:"requires_changes,omitempty"`
-	StartDigest     string    `json:"start_digest,omitempty"`
-	NoChangeReason  string    `json:"no_change_reason,omitempty"`
+	Contract          *Contract     `json:"contract,omitempty"`
+	SessionID         string        `json:"session_id"`
+	Mode              Mode          `json:"mode"`
+	Objective         string        `json:"objective,omitempty"`
+	Steps             []Step        `json:"steps,omitempty"`
+	Criteria          []string      `json:"criteria,omitempty"`
+	Checks            []string      `json:"checks,omitempty"`
+	Status            string        `json:"status"`
+	Revision          int64         `json:"revision"`
+	Digest            string        `json:"digest,omitempty"`
+	Changed           bool          `json:"changed"`
+	Validation        []Receipt     `json:"validation,omitempty"`
+	FileChanges       []FileReceipt `json:"file_changes,omitempty"`
+	WorkspaceRequired bool          `json:"workspace_required,omitempty"`
+	Summary           string        `json:"summary,omitempty"`
+	RequiresChanges   bool          `json:"requires_changes,omitempty"`
+	StartDigest       string        `json:"start_digest,omitempty"`
+	NoChangeReason    string        `json:"no_change_reason,omitempty"`
 }
 
 // Store owns task state only. It never stores or restores permission grants.
@@ -83,6 +85,7 @@ func clone(t Task) Task {
 	t.Criteria = slices.Clone(t.Criteria)
 	t.Checks = slices.Clone(t.Checks)
 	t.Validation = slices.Clone(t.Validation)
+	t.FileChanges = slices.Clone(t.FileChanges)
 	return t
 }
 func (s *Store) get(ctx context.Context, id string) (Task, error) {
@@ -213,13 +216,8 @@ func (s *Store) InvalidateChecks(ctx context.Context, id string, names []string)
 
 func (s *Store) Mutated(ctx context.Context, id string) error {
 	_, err := s.update(ctx, id, func(t *Task) error {
-		t.Changed = true
-		t.Revision++
-		t.Digest = ""
-		t.Validation = nil
-		if t.Status == "completed" {
-			t.Status = "in_progress"
-		}
+		invalidateTaskChecks(t)
+		t.WorkspaceRequired = true
 		return nil
 	})
 	return err
@@ -243,7 +241,7 @@ func (s *Store) RecordCheck(ctx context.Context, id string, r Receipt) error {
 }
 func (t Task) ValidationProblem(commands map[string]string) string {
 	required := t.requiredValidationNames()
-	if len(required) == 0 && t.Changed {
+	if len(required) == 0 && t.Changed && !(t.HasFileChanges() && !t.WorkspaceRequired && len(commands) == 0) {
 		return "Changes require checks for the current revision; configure checks and run run_checks"
 	}
 
@@ -263,15 +261,25 @@ func (s *Store) Finish(ctx context.Context, id, status, summary string, commands
 func (s *Store) BeginTurn(ctx context.Context, id string, requiresChanges bool, resume ...bool) (Task, error) {
 	return s.update(ctx, id, func(t *Task) error {
 		if len(resume) == 0 || !resume[0] || !t.RequiresChanges || t.Status == "completed" || t.Status == "idle" {
+			if len(t.FileChanges) > 0 && !t.WorkspaceRequired && t.Objective == "" {
+				t.Changed = false
+				t.Status = "idle"
+				t.Summary = ""
+			}
 			t.RequiresChanges = requiresChanges
 			t.StartDigest = t.Digest
 			t.NoChangeReason = ""
+			t.FileChanges = nil
+			t.WorkspaceRequired = false
 		}
 		return nil
 	})
 }
 
 func (t Task) CompletionProblem() string {
+	if t.HasFileChanges() {
+		return ""
+	}
 	if t.Mode == Execute && t.RequiresChanges && (t.StartDigest == "" || t.Digest == "") {
 		return "Implementation cannot be verified: the workspace fingerprint is unavailable"
 	}

@@ -119,10 +119,30 @@ code não contam como aprovação. Reexecutar um check invalida seu recibo anter
 outros checks permanecem disponíveis. Mudar seu comando configurado também
 torna o recibo antigo insuficiente.
 
+Criação, edição e patch conferem o conteúdo efetivamente instalado, antes de
+confirmar a transação. Os recibos guardam somente caminho e hashes anterior/
+posterior; ausência de hash representa arquivo ausente. Na conclusão e em
+`finish_task`, os arquivos afetados são conferidos novamente. Mudanças externas
+com tamanho/mtime preservados, substituições por links e reaparecimento de um
+arquivo removido invalidam essa confirmação. Cada arquivo afetado mantém o limite
+de 16 MiB para a conferência final. A conferência não registra evidência
+de leitura para citações e não concede permissões.
+
+Uma escrita exclusivamente por essas ferramentas pode concluir como arquivo
+salvo/conteúdo verificado quando não há checks configurados ou exigidos.
+Isso **não significa testes aprovados ou correção semântica**. Os recibos de
+arquivos nunca são promovidos a recibos de testes. Se checks forem exigidos e
+a impressão global estiver indisponível, o resultado fica parcial: arquivos
+confirmados, validação de testes pendente. Comandos de terminal, hooks e
+integrações opacas continuam exigindo a observação ampla do workspace.
+
 Uma impressão SHA-256 detecta alterações de conteúdo, criação e remoção dentro
 do workspace, inclusive mudanças externas com tamanho/mtime preservados.
 Edições pelas ferramentas invalidam a validação no commit, incluindo caminhos
-externos explicitamente autorizados. A conclusão consulta novamente os arquivos.
+externos explicitamente autorizados. A preparação ainda tenta observar uma
+base global para detectar mudanças externas;
+a confirmação de escritas com recibos usa o escopo afetado quando não há
+comandos ou checks que exijam a impressão global.
 Mudanças exigem verificações atuais; comandos arbitrários de `bash` não são
 automaticamente promovidos a testes aprovados. Configure os checks necessários:
 
@@ -138,10 +158,21 @@ automaticamente promovidos a testes aprovados. Configure os checks necessários:
 O hash ignora credenciais, links, armazenamento do aplicativo e diretórios de
 dependências/cache/build conhecidos. Limites: 20 mil arquivos, 128 MiB no total e
 16 MiB por arquivo. Se a impressão não puder ser produzida, não é possível
-declarar validação atual. Alterações externas fora do workspace e em diretórios
+declarar validação global/testes atuais. Arquivos grandes não relacionados não
+bloqueiam a confirmação dos arquivos afetados. Alterações externas fora do
+workspace e em diretórios
 excluídos não são detectadas por esse hash. Não há snapshot atômico do filesystem.
 Testes aprovados comprovam sua execução; não comprovam cobertura ou correção
 semântica de todos os critérios.
+
+O relatório `get_validation_report` apresenta `file_changes`,
+`affected_files_verified`, erros de verificação de arquivos/workspace e os
+recibos de testes separadamente. Há no máximo 128 caminhos afetados por tarefa;
+os hashes são mesclados para preservar o estado anterior à primeira edição e
+o resultado da última. Criar e remover o mesmo arquivo não prova uma mudança
+líquida. Retomadas preservam os recibos; uma nova solicitação independente limpa
+esse escopo para que efeitos anteriores não comprovem uma nova implementação.
+Os novos campos usam o JSON de estado existente, sem migração de esquema.
 
 O estado fica na tabela SQLite `agent_workflows`, vinculado à sessão e à raiz
 do projeto, com limite de 256 KiB por sessão. A migração é aditiva e reversível:

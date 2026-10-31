@@ -70,7 +70,7 @@ func taskProjection(t workflow.Task) map[string]any {
 			pending = append(pending, step)
 		}
 	}
-	return map[string]any{"objective": clip(t.Objective, 600), "status": t.Status, "revision": t.Revision, "changed": t.Changed, "next_steps": pending, "criteria_count": len(t.Criteria), "checks": t.Checks, "details_tool": "get_task"}
+	return map[string]any{"objective": clip(t.Objective, 600), "status": t.Status, "revision": t.Revision, "changed": t.Changed, "next_steps": pending, "criteria_count": len(t.Criteria), "checks": t.Checks, "affected_file_count": len(t.FileChanges), "file_changes_verified_at_commit": t.HasFileChanges(), "workspace_verification_required": t.NeedsWorkspaceVerification(checkCommands()), "details_tool": "get_task"}
 }
 
 type toolCatalogQuery struct {

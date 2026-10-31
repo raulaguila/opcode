@@ -240,3 +240,18 @@ ou fatos verificados e não satisfazem os recibos de leitura do repositório. A
 validação existente de citações locais continua obrigatória. Use `fetch` para
 consultar uma fonte necessária, com a aprovação normal. Não há pesquisa web
 automática na preparação das perguntas sobre o projeto.
+
+### Confirmação de escrita e testes
+
+`write`, `edit` e `patch` verificam os conteúdos instalados na transação. A
+conclusão confere novamente os hashes somente dos arquivos afetados quando a
+tarefa não exige validação ampla. Aprovação de escrita, leitura anterior e
+proteções de acesso permanecem obrigatórias. Arquivos removidos também são
+conferidos; alterações externas ou links impedem a confirmação.
+
+A confirmação de conteúdo é independente dos checks: `get_validation_report`
+mostra arquivos confirmados e recibos de testes separadamente. Sem checks
+exigidos/configurados, o agente pode informar arquivo salvo e conteúdo
+verificado, sem afirmar que testes passaram. Comandos, hooks, integrações opacas
+e checks continuam sujeitos à impressão global. Limites e persistência estão
+em [Runtime do agente](agent-runtime.md).

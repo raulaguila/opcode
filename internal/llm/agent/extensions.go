@@ -70,17 +70,28 @@ func (a *agent) runHooks(ctx context.Context, run *generationRun, event, name st
 		if bash == nil {
 			return fmt.Errorf("hook requires the permission-protected bash tool")
 		}
-		seconds := hookTimeout(hook)
-		hookCtx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
-		raw, _ := json.Marshal(tools.BashParams{Command: hook.Command, Timeout: seconds * 1000})
-		response, err := bash.Run(hookCtx, tools.ToolCall{ID: fmt.Sprintf("hook-%d", run.hookRuns), Name: tools.BashToolName, Input: string(raw)})
-		cancel()
-		if err != nil {
+		if err := a.executeHook(ctx, bash, hook, run.hookRuns); err != nil {
 			return fmt.Errorf("%s hook failed: %w", event, err)
 		}
-		if response.IsError {
-			return fmt.Errorf("%s hook command failed: %s", event, clip(tools.RedactCredentials(strings.TrimSpace(response.Content)), 1000))
-		}
+	}
+	return nil
+}
+
+func (a *agent) executeHook(ctx context.Context, bash tools.BaseTool, hook config.HookConfig, number int) error {
+	session, _ := tools.GetContextValues(ctx)
+	if err := a.requireWorkspace(ctx, session); err != nil {
+		return err
+	}
+	seconds := hookTimeout(hook)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(seconds)*time.Second)
+	defer cancel()
+	raw, _ := json.Marshal(tools.BashParams{Command: hook.Command, Timeout: seconds * 1000})
+	response, err := bash.Run(ctx, tools.ToolCall{ID: fmt.Sprintf("hook-%d", number), Name: tools.BashToolName, Input: string(raw)})
+	if err != nil {
+		return err
+	}
+	if response.IsError {
+		return fmt.Errorf("command failed: %s", clip(tools.RedactCredentials(strings.TrimSpace(response.Content)), 1000))
 	}
 	return nil
 }

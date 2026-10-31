@@ -80,10 +80,10 @@ func (a *agent) toolExecutionContext(ctx context.Context, sessionID, messageID s
 	ctx = context.WithValue(ctx, tools.MessageIDContextKey, messageID)
 	ctx = tools.WithWorkflowStore(ctx, a.workflow)
 	if a.workflow != nil {
-		ctx = tools.WithMutationObserver(ctx, func() error {
+		ctx = tools.WithMutationObserver(ctx, func(changes []tools.FileChange) error {
 			saveCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			return a.workflow.Mutated(saveCtx, sessionID)
+			return a.recordFileChanges(saveCtx, sessionID, changes)
 		})
 	}
 
@@ -282,6 +282,11 @@ func (b *toolBatchExecution) prepareChecks(call message.ToolCall) (string, error
 	return task.Digest, nil
 }
 func (b *toolBatchExecution) invoke(tool tools.BaseTool, call message.ToolCall) (tools.ToolResponse, error, error) {
+	if b.agent.workflow != nil && unscopedTool(tool) {
+		if err := b.agent.workflow.RequireWorkspace(b.ctx, b.sessionID); err != nil {
+			return tools.ToolResponse{}, nil, err
+		}
+	}
 	if err := b.agent.runHooks(b.ctx, b.run, "before_tool", call.Name); err != nil {
 		return tools.ToolResponse{}, nil, err
 	}

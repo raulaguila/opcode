@@ -332,10 +332,13 @@ func (a *agent) beginGenerationWorkflow(ctx context.Context, sessionID, content 
 }
 
 func (g *generationState) completionTask() (workflow.Task, error) {
-	fingerprintErr := g.agent.observeWorkspace(g.ctx, g.sessionID)
+	fingerprintErr := g.agent.observeCompletion(g.ctx, g.sessionID)
 	task, err := g.agent.workflow.Get(g.ctx, g.sessionID)
 	if err != nil {
 		return task, err
+	}
+	if errors.Is(fingerprintErr, errWorkspaceVerification) && task.HasFileChanges() && !task.WorkspaceRequired {
+		return g.agent.workflow.FinishWithReason(g.ctx, g.sessionID, "partial", clip("Files saved and affected contents verified; workspace/check validation unavailable: "+fingerprintErr.Error(), 2000), "", nil)
 	}
 	if fingerprintErr != nil && g.run.mode == workflow.Execute && (task.Changed || len(task.Checks) > 0 || task.Status == "completed") {
 		return task, fmt.Errorf("cannot verify current files: %w", fingerprintErr)
@@ -350,7 +353,7 @@ func (g *generationState) completionTask() (workflow.Task, error) {
 	return g.agent.workflow.Get(g.ctx, g.sessionID)
 }
 func (g *generationState) uncheckedChanges(task workflow.Task) bool {
-	return g.run.mode == workflow.Execute && task.Changed && len(task.Checks) == 0 && len(checkCommands()) == 0 && (g.run.contract == nil || len(g.run.contract.Checks) == 0) && task.Objective == "" && task.Status != "partial" && task.Status != "blocked"
+	return g.run.mode == workflow.Execute && task.Changed && !task.HasFileChanges() && len(task.Checks) == 0 && len(checkCommands()) == 0 && (g.run.contract == nil || len(g.run.contract.Checks) == 0) && task.Objective == "" && task.Status != "partial" && task.Status != "blocked"
 }
 func (g *generationState) taskCompletionProblem(task workflow.Task) string {
 	problem := task.CompletionProblem()

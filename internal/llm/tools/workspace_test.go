@@ -59,13 +59,13 @@ func TestFileMutationObserverRunsOnCommitAndFailureRestoresFiles(t *testing.T) {
 	before := "before"
 	require.NoError(t, os.WriteFile(path, []byte(before), 0600))
 	called := 0
-	ctx := WithMutationObserver(toolContext(), func() error { called++; return fmt.Errorf("task storage unavailable") })
+	ctx := WithMutationObserver(toolContext(), func([]FileChange) error { called++; return fmt.Errorf("task storage unavailable") })
 	require.ErrorContains(t, atomicWriteFile(ctx, path, "after", &before), "task storage unavailable")
 	contents, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.Equal(t, "before", string(contents))
 	require.Equal(t, 1, called)
-	ctx = WithMutationObserver(toolContext(), func() error { called++; return nil })
+	ctx = WithMutationObserver(toolContext(), func([]FileChange) error { called++; return nil })
 	require.NoError(t, atomicWriteFile(ctx, path, "after", &before))
 	require.Equal(t, 2, called)
 }

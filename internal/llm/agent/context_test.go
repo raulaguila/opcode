@@ -88,10 +88,14 @@ func TestHookModesPermissionsAndQuota(t *testing.T) {
 	require.NoError(t, a.runHooks(context.Background(), &generationRun{mode: workflow.Execute}, "before_tool", "different"))
 	require.Zero(t, bash.count.Load())
 	run := &generationRun{mode: workflow.Execute}
-	require.NoError(t, a.runHooks(context.Background(), run, "before_tool", "view"))
+	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "s")
+	require.NoError(t, a.runHooks(ctx, run, "before_tool", "view"))
 	require.EqualValues(t, 1, bash.count.Load())
+	task, err := a.workflow.Get(ctx, "s")
+	require.NoError(t, err)
+	require.True(t, task.WorkspaceRequired)
 	run.hookRuns = 16
-	require.ErrorContains(t, a.runHooks(context.Background(), run, "before_tool", "view"), "limit")
+	require.ErrorContains(t, a.runHooks(ctx, run, "before_tool", "view"), "limit")
 }
 func TestSkillCannotBeInvokedByModel(t *testing.T) {
 	a, p, _, _ := runtimeAgent(t, workflow.Ask)
@@ -119,7 +123,8 @@ func TestHookPermissionDenialStopsOperation(t *testing.T) {
 	config.Get().Extensions = config.ExtensionsConfig{Hooks: []config.HookConfig{{Event: "before_tool", Command: "touch must-require-permission"}}}
 	deny := &hookDenyTool{name: "bash"}
 	a.tools = []tools.BaseTool{deny}
-	err := a.runHooks(context.Background(), &generationRun{mode: workflow.Execute}, "before_tool", "write")
+	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "s")
+	err := a.runHooks(ctx, &generationRun{mode: workflow.Execute}, "before_tool", "write")
 	require.ErrorIs(t, err, permission.ErrorPermissionDenied)
 	require.EqualValues(t, 1, deny.count.Load())
 }

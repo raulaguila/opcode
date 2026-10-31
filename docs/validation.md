@@ -1331,3 +1331,34 @@ original de 10% para bytes/alocações, com 14 fixtures idênticas, três amostr
 e 100 operações por caso. Ganhos e variações locais de tempo estão em
 [Desempenho](performance.md). Logs, condições e hashes constam na
 [evidência desta rodada](evidence/2026-10-30-markdown-cost-validation.json).
+
+## Escrita verificada por arquivo e validação de testes — 31/10/2026
+
+A regressão reproduz um workspace com um artefato de 17 MiB: o hash global
+excede seu limite, mas criação, edição e patch de arquivos de texto concluem
+com a conferência exata dos arquivos afetados. O cenário usa as ferramentas
+reais, permissões, histórico, geração controlada e `finish_task`. O relatório
+mostra a confirmação dos arquivos com recibos de testes vazios, sem transformar
+essa confirmação em um teste aprovado.
+
+As regressões também cobrem alteração externa com tamanho e mtime preservados,
+remoção/reaparecimento e symlinks, transação com criação/edição/remoção, falha
+do observador com rollback, limites de 128 caminhos e rejeição atômica de
+recibos inválidos. A persistência SQLite conserva somente caminhos/hashes e
+retomadas; uma nova solicitação limpa os efeitos anteriores. Criar e remover
+o mesmo arquivo não constitui mudança líquida.
+
+Uma escrita negada não gera arquivo ou recibo. Comandos e hooks preservam a
+exigência de observação ampla. Checks exigidos/configurados continuam precisando
+de recibos reais e atuais; quando a observação global está indisponível, arquivos
+confirmados ficam separados da validação de testes pendente, em estado parcial.
+A observação inicial global permanece como tentativa para acompanhar mudanças
+externas; ela não bloqueia a conclusão de uma escrita com escopo comprovado.
+
+As suítes normal e de integração com `-race`, análises estáticas, complexidade,
+módulos, inventário de linguagens, workflows, vulnerabilidades e builds passaram.
+Após o ajuste final de escopo entre turnos, as suítes completas de agente e
+workflow foram repetidas com `-race`, com e sem a tag `integration`. Os resultados
+estão na [evidência desta rodada](evidence/2026-10-31-affected-files-validation.json),
+junto ao fluxo PTY e aos hashes dos fontes preservados de permissões/citações.
+Os builds de Windows/macOS verificam compilação; o PTY executa em Linux.

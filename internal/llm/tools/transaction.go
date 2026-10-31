@@ -93,6 +93,11 @@ func applyFiles(ctx context.Context, changes map[string]fileChange) (failure err
 			return err
 		}
 	}
+	for i, path := range paths {
+		if _, err := validateStagedSource(stages[i].root, stages[i].name, changes[path].next); err != nil {
+			return fmt.Errorf("cannot verify installed file: %w", err)
+		}
+	}
 	return observeFileChanges(ctx, paths, changes)
 }
 
@@ -234,17 +239,16 @@ func rollbackFileStages(stages []*stagedFile, failure error) error {
 }
 
 func observeFileChanges(ctx context.Context, paths []string, changes map[string]fileChange) error {
-	if err := notifyMutation(ctx); err != nil {
-		return err
-	}
-	observer, ok := ctx.Value(changeObserverKey{}).(func([]FileChange) error)
-	if !ok {
-		return nil
-	}
 	snapshot := make([]FileChange, 0, len(paths))
 	for _, path := range paths {
 		change := changes[path]
 		snapshot = append(snapshot, FileChange{Path: path, Before: change.old, After: change.next})
 	}
-	return observer(snapshot)
+	if err := notifyMutation(ctx, snapshot); err != nil {
+		return err
+	}
+	if observer, ok := ctx.Value(changeObserverKey{}).(func([]FileChange) error); ok {
+		return observer(snapshot)
+	}
+	return nil
 }

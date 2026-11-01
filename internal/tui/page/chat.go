@@ -322,6 +322,12 @@ func (p *chatPage) View() string {
 	return layoutView
 }
 
+// ComposerTop is the screen row where the composer frame begins.
+func (p *chatPage) ComposerTop() int {
+	_, editorHeight := p.editor.GetSize()
+	return max(0, p.height-editorHeight)
+}
+
 func (p *chatPage) BindingKeys() []key.Binding {
 	localKeys := keyMap
 	localKeys.Terminal = key.NewBinding(key.WithKeys(config.Shortcut("terminal")), key.WithHelp(config.Shortcut("terminal"), config.Text("terminal / conversa", "terminal / chat")))

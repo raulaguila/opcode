@@ -102,7 +102,7 @@ func (a appModel) View() tea.View {
 	// Authorization always appears above settings/probes that requested it.
 	if a.showPermissions {
 		overlay := a.permissions.View()
-		col, row := a.dialogOrigin(overlay)
+		col, row := a.permissionOrigin(overlay)
 		appView = placeModal(col, row, overlay, appView)
 	}
 

@@ -172,6 +172,18 @@ func (a *appModel) sessionAction(msg dialog.SessionActionMsg) tea.Cmd {
 	}
 	return util.ReportError(fmt.Errorf("%s", config.Text("ação de conversa desconhecida", "unknown conversation action")))
 }
+// permissionOrigin sits the approval right above the composer, so the draft
+// and the conversation stay in view; it falls back to the centered origin.
+func (a appModel) permissionOrigin(overlay string) (int, int) {
+	col, row := a.dialogOrigin(overlay)
+	if page, ok := a.pages[a.currentPage].(interface{ ComposerTop() int }); ok {
+		if top := page.ComposerTop() - lipgloss.Height(overlay); top >= 0 {
+			row = top
+		}
+	}
+	return col, row
+}
+
 func (a appModel) dialogOrigin(overlay string) (int, int) {
 	base := a.baseView()
 	w, h := lipgloss.Width(base), lipgloss.Height(base)

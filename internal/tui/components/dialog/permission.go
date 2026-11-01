@@ -67,16 +67,16 @@ var permissionsKeys = permissionsMapping{
 		key.WithHelp("enter/space", "confirm"),
 	),
 	Allow: key.NewBinding(
-		key.WithKeys("a"),
-		key.WithHelp("a", "allow"),
+		key.WithKeys("a", "1"),
+		key.WithHelp("1/a", "allow"),
 	),
 	AllowSession: key.NewBinding(
-		key.WithKeys("s"),
-		key.WithHelp("s", "allow for session"),
+		key.WithKeys("s", "2"),
+		key.WithHelp("2/s", "allow for session"),
 	),
 	Deny: key.NewBinding(
-		key.WithKeys("d", "esc"),
-		key.WithHelp("d", "deny"),
+		key.WithKeys("d", "esc", "3"),
+		key.WithHelp("3/d", "deny"),
 	),
 	Tab: key.NewBinding(
 		key.WithKeys("tab"),
@@ -150,7 +150,7 @@ type permissionButtonHit struct{ x, y, width int }
 
 func (p *permissionDialogCmp) renderButtons() string {
 	t := theme.CurrentTheme()
-	labels := []string{config.Text("Permitir (a)", "Allow (a)"), config.Text("Repetir escopo exato (s)", "Remember exact scope (s)"), config.Text("Recusar (Esc/d)", "Deny (Esc/d)")}
+	labels := []string{config.Text("1 Permitir (a)", "1 Allow (a)"), config.Text("2 Repetir escopo exato (s)", "2 Remember exact scope (s)"), config.Text("3 Recusar (Esc/d)", "3 Deny (Esc/d)")}
 	buttons := make([]string, len(labels))
 	total := 4
 	for i, label := range labels {

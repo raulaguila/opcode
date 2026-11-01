@@ -28,7 +28,7 @@ func (a appModel) mouseModal() (util.Model, bool) {
 
 func updateAppModelMouseMsg(a *appModel, msg *tea.MouseMsg) (extractedResult0 tea.Model, extractedResult1 tea.Cmd, handled bool) {
 	if a.showPermissions && a.permissions != nil {
-		col, row := a.dialogOrigin(a.permissions.View())
+		col, row := a.permissionOrigin(a.permissions.View())
 		*msg = util.TranslateMouse(*msg, -col, -row)
 		updated, c := a.permissions.Update((*msg))
 		a.permissions = updated.(dialog.PermissionDialogCmp)

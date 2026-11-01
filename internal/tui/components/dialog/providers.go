@@ -124,6 +124,9 @@ func NewProviderDialogCmp(allowSave ...func() error) ProviderDialog {
 }
 func (m *providerDialogCmp) Init() tea.Cmd { return nil }
 
+// Screen names what the dialog shows: "list", "presets", "provider", …
+func (m *providerDialogCmp) Screen() string { return m.screen }
+
 // PendingNativeOperation is queried by the app before quitting. Native vault
 // writes cannot be cancelled; their result must commit or roll back first.
 func (m *providerDialogCmp) PendingNativeOperation() bool { return m.saving }

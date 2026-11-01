@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -16,12 +17,23 @@ import (
 type hosted struct {
 	cmp  util.Model
 	x, y int // where the overlay placed it, for mouse translation
+	back int // the settings section to return to
 }
 
 func (h *hosted) view(*Model) string { return h.cmp.View() }
 
-func (h *hosted) key(_ *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
-	return h.forward(msg), true
+func (h *hosted) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	cmd := h.forward(msg)
+	h.returnWhenListed(m)
+	return cmd, true
+}
+
+// returnWhenListed hands back to the settings panel when the editor goes
+// back to its own connection list.
+func (h *hosted) returnWhenListed(m *Model) {
+	if screen, ok := h.cmp.(interface{ Screen() string }); ok && screen.Screen() == "list" && m.dialog == h {
+		m.openSettingsAt(h.back)
+	}
 }
 
 func (h *hosted) paste(text string) { h.forward(tea.PasteMsg{Content: text}) }
@@ -39,16 +51,25 @@ func (m *Model) saveGuard() error {
 	return nil
 }
 
-func (m *Model) openSettings() tea.Cmd {
+// openProviderForm edits a connection, or starts a new one from the
+// provider presets when provider is empty. The form keeps the existing
+// editor: it owns credentials, the system vault and validation.
+func (m *Model) openProviderForm(provider models.ModelProvider) tea.Cmd {
 	providers := dialog.NewProviderDialogCmp(m.saveGuard)
-	h := &hosted{cmp: providers}
+	h := &hosted{cmp: providers, back: sectionConnections}
 	m.dialog = h
-	return tea.Batch(h.forward(tea.WindowSizeMsg{Width: m.width, Height: m.height}), providers.Open())
+	cmd := tea.Batch(h.forward(tea.WindowSizeMsg{Width: m.width, Height: m.height}), providers.Open())
+	if editor, ok := providers.(interface {
+		OpenForProvider(models.ModelProvider) tea.Cmd
+	}); ok && provider != "" {
+		return tea.Batch(cmd, editor.OpenForProvider(provider))
+	}
+	return tea.Batch(cmd, h.forward(tea.KeyPressMsg{Code: 'n', Text: "n"}))
 }
 
 func (m *Model) openIntegrations() tea.Cmd {
 	integrations := dialog.NewIntegrationDialogCmp(m.app.ProbeIntegration, m.saveGuard)
-	h := &hosted{cmp: integrations}
+	h := &hosted{cmp: integrations, back: sectionIntegrations}
 	m.dialog = h
 	return tea.Batch(h.forward(tea.WindowSizeMsg{Width: m.width, Height: m.height}), integrations.Open())
 }
@@ -57,11 +78,12 @@ func (m *Model) openIntegrations() tea.Cmd {
 // messages meant for the rest of the screen.
 func (m *Model) settingsMessage(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
-	case dialog.CloseProviderDialogMsg, dialog.CloseIntegrationDialogMsg:
-		m.dialog = nil
-		return nil, true
+	case dialog.CloseProviderDialogMsg:
+		return m.openSettingsAt(sectionConnections), true
+	case dialog.CloseIntegrationDialogMsg:
+		return m.openSettingsAt(sectionIntegrations), true
 	case dialog.OpenProviderDialogMsg:
-		return m.openSettings(), true
+		return m.openProviderForm(msg.Provider), true
 	case dialog.OpenIntegrationDialogMsg:
 		return m.openIntegrations(), true
 	case dialog.IntegrationSettingsSavedMsg:
@@ -114,5 +136,7 @@ func (m *Model) hostedMouse(msg tea.MouseMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	return h.forward(util.TranslateMouse(msg, -h.x, -h.y))
+	cmd := h.forward(util.TranslateMouse(msg, -h.x, -h.y))
+	h.returnWhenListed(m)
+	return cmd
 }

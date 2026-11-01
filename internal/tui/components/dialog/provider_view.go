@@ -125,7 +125,7 @@ func (m *providerDialogCmp) providerFormLines(width int, line func(string) strin
 	count, indices := m.formRows(), m.fieldIndices()
 	start := max(0, slices.Index(indices, m.focus)-count+1)
 	var lines []string
-	// One row per field: the label right-aligned in a column, the value beside it.
+	// One row per field: the label in a left column, the value beside it.
 	labelWidth := 10
 	for _, i := range indices[start:min(len(indices), start+count)] {
 		labelWidth = max(labelWidth, ansi.StringWidth(fieldLabel(m.labels[i]))+2)
@@ -135,9 +135,9 @@ func (m *providerDialogCmp) providerFormLines(width int, line func(string) strin
 	for _, i := range indices[start:min(len(indices), start+count)] {
 		name := ansi.Truncate(fieldLabel(m.labels[i]), labelWidth-2, "…")
 		pad := strings.Repeat(" ", max(0, labelWidth-ansi.StringWidth(name)-2))
-		label := styles.PanelHint().Render(pad + "  " + name)
+		label := styles.PanelHint().Render("  " + name + pad)
 		if i == m.focus {
-			label = styles.PanelHint().Render(pad) + styles.PanelTitle().Render("› "+name)
+			label = styles.PanelTitle().Render("› "+name) + styles.PanelHint().Render(pad)
 		}
 		m.fields[i].SetWidth(max(8, valueWidth-1))
 		lines = append(lines, line(label+dialogBody().Render("  ")+choiceRadios(m.fields[i], fieldOptions(m.labels[i]), valueWidth)))

@@ -155,6 +155,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			picker.accept(m, msg)
 		}
 		return m, nil
+	case probeMsg:
+		if panel, ok := m.dialog.(*settingsPanel); ok {
+			panel.probes[msg.provider] = msg
+		}
+		return m, nil
 	case pubsub.Event[message.Message]:
 		m.upsert(msg)
 	case pubsub.Event[session.Session]:

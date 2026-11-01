@@ -202,7 +202,7 @@ func (m MultiArgumentsDialogCmp) View() string {
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
 }
 
 // SetSize sets the size of the component.

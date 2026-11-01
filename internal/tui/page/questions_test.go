@@ -27,7 +27,7 @@ func TestQuestionPanelSeparatesQuestionChoicesAndControls(t *testing.T) {
 		p.workflow.choice = -1
 		p.workflow.batchAnswers = make([]interaction.AnswerItem, 1)
 		view := ansi.Strip(p.workflowView())
-		require.Contains(t, view, "┌", "question needs a square boundary without depending on color")
+		require.Contains(t, view, "╭", "question needs a boundary without depending on color")
 		require.Contains(t, view, config.Text("Pergunta para você", "Question for you"))
 		require.NotContains(t, view, config.Text("Aguardando sua resposta", "Waiting for your answer"), "the footer already exposes the waiting state")
 		require.Contains(t, view, "repository?", "question wraps instead of silently losing its end")
@@ -41,7 +41,7 @@ func TestQuestionPanelSeparatesQuestionChoicesAndControls(t *testing.T) {
 				require.Equal(t, "│", strings.TrimSpace(lines[i-1][:strings.LastIndex(lines[i-1], "│")]), "a blank row separates question and choices")
 			}
 			if strings.Contains(line, "↑↓") {
-				require.Contains(t, lines[i-1], strings.Repeat("─", 20), "a rule separates the choices from keyboard controls")
+				require.True(t, strings.HasPrefix(line, "╰─ "), "keyboard controls sit in the bottom border")
 			}
 		}
 	}

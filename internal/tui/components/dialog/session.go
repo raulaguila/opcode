@@ -85,7 +85,8 @@ func (s *sessionDialogCmp) rows() int {
 	if s.height == 0 {
 		return 10
 	}
-	reserve := 10
+	// Title, count and the main legend live in the frame's borders.
+	reserve := 7
 	if s.height >= 16 {
 		reserve++
 	}
@@ -136,7 +137,7 @@ func (s *sessionDialogCmp) View() string {
 	t := theme.CurrentTheme()
 	base := dialogBody().Width(width)
 	line := func(text string) string { return base.Render(ansi.Truncate(text, width, "…")) }
-	rows := []string{base.Foreground(t.Primary()).Bold(true).Render(config.Text("Conversas", "Conversations")), line(config.Text("Buscar: ", "Search: ") + s.query)}
+	rows := []string{line(config.Text("Buscar: ", "Search: ") + s.query)}
 	if len(s.filtered) == 0 {
 		rows = append(rows, line(config.Text("Nenhuma conversa encontrada", "No conversations found")))
 	}
@@ -148,20 +149,22 @@ func (s *sessionDialogCmp) View() string {
 		}
 		rows = append(rows, line(""), line(preview))
 	}
+	meta := ""
+	hint := config.Text("↑↓ navegar · Enter abrir · Esc fechar", "↑↓ navigate · Enter open · Esc close")
 	if s.editing {
 		rows = append(rows, line(config.Text("Novo título: ", "New title: ")+s.rename))
-		rows = dialogFooter(rows, width, s.height, dialogHint(config.Text("Enter salva · Esc volta", "Enter save · Esc back"), width))
+		hint = config.Text("Enter salva · Esc volta", "Enter save · Esc back")
 	} else {
 		switch n := len(s.filtered); n {
 		case 0: // "Nenhuma conversa encontrada" already says it
 		case 1:
-			rows = append(rows, line(config.Text("1 conversa", "1 conversation")))
+			meta = config.Text("1 conversa", "1 conversation")
 		default:
-			rows = append(rows, line(fmt.Sprintf(config.Text("%d conversas", "%d conversations"), n)))
+			meta = fmt.Sprintf(config.Text("%d conversas", "%d conversations"), n)
 		}
-		rows = dialogFooter(rows, width, s.height, dialogHint(config.Text("↑↓ navegar · Enter abrir · Ctrl+R renomear", "↑↓ navigate · Enter open · Ctrl+R rename"), width), dialogHint(config.Text("Ctrl+A arquivar/restaurar · Ctrl+E exportar", "Ctrl+A archive/restore · Ctrl+E export"), width), dialogHint(config.Text("Ctrl+H mostrar arquivadas · Esc fechar", "Ctrl+H show archived · Esc close"), width))
+		rows = dialogFooter(rows, width, s.height, dialogHint(config.Text("Ctrl+R renomear · Ctrl+A arquivar · Ctrl+E exportar · Ctrl+H arquivadas", "Ctrl+R rename · Ctrl+A archive · Ctrl+E export · Ctrl+H archived"), width))
 	}
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
+	return styles.Frame(strings.Join(rows, "\n"), width, 2, 1, config.Text("Conversas", "Conversations"), meta, hint)
 }
 func (s *sessionDialogCmp) BindingKeys() []key.Binding {
 	return []key.Binding{key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑↓", "conversas"))}
@@ -350,7 +353,7 @@ func updateCaseTeaMouseMsg(s *sessionDialogCmp, msg tea.MouseMsg) (extractedResu
 	if msg.Mouse().Button == tea.MouseWheelDown {
 		s.move(1)
 	}
-	row := msg.Mouse().Y - 4
+	row := msg.Mouse().Y - 3
 	if leftClick(msg) && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
 		s.selectedIdx = s.offset + row
 		return s, s.requestPreview(), true

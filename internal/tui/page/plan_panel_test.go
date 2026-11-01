@@ -25,7 +25,7 @@ func TestPlanPanelUsesSharedSurfaceProgressAndSecondaryControls(t *testing.T) {
 	}}
 	p.SetSize(60, 20)
 	view := ansi.Strip(p.workflowView())
-	require.Contains(t, view, "┌")
+	require.Contains(t, view, "╭")
 	require.Contains(t, view, config.Text("Plano 1/3 concluídas", "Plan 1/3 completed"))
 	require.Contains(t, view, "✓ 1. Inspect")
 	require.Contains(t, view, "→ 2. Verify")
@@ -37,7 +37,7 @@ func TestPlanPanelUsesSharedSurfaceProgressAndSecondaryControls(t *testing.T) {
 	lines := strings.Split(view, "\n")
 	for i, line := range lines {
 		if strings.Contains(line, "Alt+↑/↓") {
-			require.Contains(t, lines[i-1], strings.Repeat("─", 20))
+			require.True(t, strings.HasPrefix(lines[i], "╰─ "), "the legend sits in the bottom border")
 		}
 	}
 }
@@ -105,16 +105,16 @@ func TestPlanPanelLabelsCompletionAndHiddenRows(t *testing.T) {
 		p.workflow.task.Steps = append(p.workflow.task.Steps, workflow.Step{Title: fmt.Sprintf("Step %d", i+1), Status: "pending"})
 	}
 	p.SetSize(60, 20)
-	title := strings.Split(ansi.Strip(p.workflowView()), "\n")[1]
+	title := strings.Split(ansi.Strip(p.workflowView()), "\n")[0]
 	require.Contains(t, title, config.Text("0/20 concluídas", "0/20 completed"))
 	require.Contains(t, title, "↓")
 	require.NotContains(t, title, "↑")
 	p.workflow.offset = 10
-	title = strings.Split(ansi.Strip(p.workflowView()), "\n")[1]
+	title = strings.Split(ansi.Strip(p.workflowView()), "\n")[0]
 	require.Contains(t, title, "↑")
 	require.Contains(t, title, "↓")
 	p.workflow.offset = 1000
-	title = strings.Split(ansi.Strip(p.workflowView()), "\n")[1]
+	title = strings.Split(ansi.Strip(p.workflowView()), "\n")[0]
 	require.Contains(t, title, "↑")
 	require.NotContains(t, title, "↓")
 }

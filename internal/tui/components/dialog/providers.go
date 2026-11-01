@@ -365,8 +365,8 @@ func (m *providerDialogCmp) View() string {
 	if m.screen == "preferences" {
 		title = "Preferences"
 	}
-	lines := []string{base.Foreground(t.Primary()).Bold(true).Render(interfaceCopy(title))}
-	lines = append(lines, m.providerBodyLines(t, width, base, line)...)
+	// The title lives in the frame's top border.
+	lines := m.providerBodyLines(t, width, base, line)
 	note := m.note
 	if note == "" && m.screen == "provider" && m.fields[providerAuthField].Value() == "api_key" {
 		note = config.Text("Ao salvar: chave no JSON local, sem criptografia.", "On save: key in local JSON, unencrypted.")
@@ -388,7 +388,7 @@ func (m *providerDialogCmp) View() string {
 		lines = append(lines, line(config.Text("TLS sem validação: certificado e identidade não verificados.", "Insecure TLS: certificate and server identity are not verified.")))
 	}
 	lines = append(lines, m.noteLines(note)...)
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, lines...), width, 2, 1, interfaceCopy(title), "", "")
 }
 func (m *providerDialogCmp) BindingKeys() []key.Binding {
 	return []key.Binding{key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", config.Text("salvar", "save"))), key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", config.Text("consultar catálogo", "query catalog"))), key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", config.Text("voltar", "back")))}

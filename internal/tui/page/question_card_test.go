@@ -40,10 +40,10 @@ func TestQuestionCardDividerSeparatesControlsInEveryAnswerView(t *testing.T) {
 			}
 			view := ansi.Strip(p.workflowView())
 			lines := strings.Split(view, "\n")
-			require.Contains(t, lines[0], "┌")
-			require.Contains(t, lines[len(lines)-1], "┘")
-			require.Contains(t, lines[len(lines)-3], strings.Repeat("─", 60), kind)
-			require.NotContains(t, lines[len(lines)-2], "─", "keyboard controls are below the divider")
+			require.True(t, strings.HasPrefix(lines[0], "╭─ "), kind)
+			last := lines[len(lines)-1]
+			require.True(t, strings.HasPrefix(last, "╰─ ") && strings.HasSuffix(last, "╯"), kind)
+			require.Greater(t, len(strings.Trim(last, "╰╯─ ")), 4, "keyboard controls sit in the bottom border: %s", kind)
 			require.LessOrEqual(t, lipgloss.Width(view), p.width)
 			require.LessOrEqual(t, lipgloss.Height(view), p.workflowHeight())
 			if kind == "choices" || kind == "details" {

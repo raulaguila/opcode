@@ -91,7 +91,7 @@ func (m *providerDialogCmp) deleteView() string {
 	}
 	lines = append(lines, m.noteLines(m.note)...)
 	lines = dialogFooter(lines, m.contentWidth(), m.height, dialogHint(config.Text("←/→ escolhe · Enter · Esc", "←/→ choose · Enter · Esc"), m.contentWidth()))
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func deleteUpdateConfirm(m *providerDialogCmp, confirm bool) (extractedResult0 tea.Cmd, extractedResult1 bool, handled bool) {

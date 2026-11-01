@@ -100,10 +100,10 @@ func (t *themeDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		count := len(t.themes)
 		if t.height > 0 {
-			count = max(1, min(count, t.height-9))
+			count = max(1, min(count, t.height-4))
 		}
 		start := max(0, t.selectedIdx-count+1)
-		row := msg.Mouse().Y - 4
+		row := msg.Mouse().Y - 2
 		if leftClick(msg) && msg.Mouse().X >= 3 && row >= 0 && row < count && start+row < len(t.themes) {
 			t.selectedIdx = start + row
 			return t, t.preview()
@@ -124,7 +124,7 @@ func (t *themeDialogCmp) View() string {
 
 	if len(t.themes) == 0 {
 		return baseStyle.Padding(1, 2).
-			Border(lipgloss.NormalBorder()).
+			Border(lipgloss.RoundedBorder()).
 			BorderBackground(currentTheme.BackgroundSecondary()).
 			BorderForeground(currentTheme.TextMuted()).
 			Width(40).
@@ -147,7 +147,7 @@ func (t *themeDialogCmp) View() string {
 	themeItems := make([]string, 0, len(t.themes))
 	count := len(t.themes)
 	if t.height > 0 {
-		count = max(1, min(count, t.height-9))
+		count = max(1, min(count, t.height-4))
 	}
 	start := max(0, t.selectedIdx-count+1)
 	for i := start; i < min(len(t.themes), start+count); i++ {
@@ -164,27 +164,8 @@ func (t *themeDialogCmp) View() string {
 		themeItems = append(themeItems, itemStyle.Render(ansi.Truncate(selectionMark(i == t.selectedIdx)+themeName, maxWidth, "…")))
 	}
 
-	title := baseStyle.
-		Foreground(currentTheme.Primary()).
-		Bold(true).
-		Width(maxWidth).
-		Padding(0, 1).
-		Render(config.Text("Escolher tema", "Select Theme"))
-
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		title,
-		baseStyle.Width(maxWidth).Render(""),
-		baseStyle.Width(maxWidth).Render(lipgloss.JoinVertical(lipgloss.Left, themeItems...)),
-		styles.PanelDivider(maxWidth),
-		dialogHint(config.Text("↑↓ prévia · Ctrl+E edita · Enter · Esc", "↑↓ preview · Ctrl+E edit · Enter · Esc"), maxWidth),
-	)
-
-	return baseStyle.Padding(1, 2).
-		Border(lipgloss.NormalBorder()).
-		BorderBackground(currentTheme.BackgroundSecondary()).
-		BorderForeground(currentTheme.TextMuted()).
-		Render(content)
+	// Title and legend live in the frame's borders.
+	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, themeItems...), maxWidth, 2, 1, config.Text("Escolher tema", "Select Theme"), "", config.Text("↑↓ prévia · Ctrl+E edita · Enter · Esc", "↑↓ preview · Ctrl+E edit · Enter · Esc"))
 }
 
 func (t *themeDialogCmp) BindingKeys() []key.Binding {

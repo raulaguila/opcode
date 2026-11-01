@@ -51,7 +51,7 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 			h.paste("/plan")
 			h.send("\r")
 			h.wait("empty styled plan", 5*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "No plan yet") && !strings.Contains(frame, "┌") && ptyUIComposerEmpty(frame)
+				return strings.Contains(frame, "No plan yet") && !strings.Contains(frame, "╭") && ptyUIComposerEmpty(frame)
 			})
 			h.paste("Use update_plan to save the fixture plan and finish_task as planned without modifying files.")
 			h.send("\r")
@@ -72,7 +72,7 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 					return strings.Contains(frame, draft) && strings.Contains(frame, "○ 11. Step 11") && strings.Contains(frame, "Plan 0/14 completed")
 				})
 				frame := h.frame()
-				require.Contains(t, frame, "┌")
+				require.Contains(t, frame, "╭")
 				require.Contains(t, frame, "Alt+↑/↓ scroll")
 				require.Contains(t, frame, "completed ↑", "hidden earlier rows are signaled next to completed count")
 				require.NotContains(t, frame, "Session:")

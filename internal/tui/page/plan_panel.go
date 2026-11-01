@@ -20,7 +20,7 @@ func (p *chatPage) planPanelRows() []string {
 }
 
 func (p *chatPage) planPanelHeight() int {
-	return min(5+min(len(p.planPanelRows()), max(1, min(8, p.height/3))), max(1, p.height-5))
+	return min(max(5, 2+min(len(p.planPanelRows()), max(1, min(8, p.height/3)))), max(1, p.height-5))
 }
 
 func (p *chatPage) planVisibleRows() int {
@@ -28,10 +28,7 @@ func (p *chatPage) planVisibleRows() int {
 	if height < 5 {
 		return max(0, height-1)
 	}
-	if height < 7 {
-		return height - 3
-	}
-	return height - 5
+	return height - 2
 }
 
 func (p *chatPage) planOffset() int {
@@ -75,7 +72,10 @@ func (p *chatPage) planPanelView(height int) string {
 	if offset+limit < len(body) {
 		title += " ↓"
 	}
-	rows := []string{styles.PanelTitle().Render(ansi.Truncate(title, width, "…"))}
+	var rows []string
+	if height < 5 {
+		rows = append(rows, styles.PanelTitle().Render(ansi.Truncate(title, width, "…")))
+	}
 	t := theme.CurrentTheme()
 	for _, row := range body[offset : offset+min(limit, len(body)-offset)] {
 		style := styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Text())
@@ -84,14 +84,16 @@ func (p *chatPage) planPanelView(height int) string {
 		}
 		rows = append(rows, style.Width(width).Render(ansi.Truncate(strings.TrimPrefix(row, " "), width, "…")))
 	}
-	for len(rows) < limit+1 {
-		rows = append(rows, "")
-	}
-	if height >= 7 {
-		rows = append(rows, styles.PanelDivider(width), styles.PanelHint().Render(ansi.Truncate(config.Text("Alt+↑/↓ rola · /task detalhes", "Alt+↑/↓ scroll · /task details"), width, "…")))
-	}
 	if height < 5 {
+		for len(rows) < limit+1 {
+			rows = append(rows, "")
+		}
 		return strings.Join(rows, "\n")
 	}
-	return styles.Panel().Padding(0, 1).Width(max(1, p.width)).Render(strings.Join(rows, "\n"))
+	for len(rows) < height-2 {
+		rows = append(rows, "")
+	}
+	hint := config.Text("Alt+↑/↓ rola · /task detalhes", "Alt+↑/↓ scroll · /task details")
+	// Title and legend sit in the frame's borders.
+	return styles.Frame(strings.Join(rows, "\n"), width, 1, 0, title, "", hint)
 }

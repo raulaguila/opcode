@@ -201,8 +201,8 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 	indices := m.fieldIndices()
 	count := m.formRows()
 	start := max(0, slices.Index(indices, m.focus)-count+1)
-	i := start + (msg.Mouse().Y-3)/2
-	if msg.Mouse().Y < 3 || msg.Mouse().Y >= 3+count*2 || i >= len(indices) {
+	i := start + (msg.Mouse().Y-2)/2
+	if msg.Mouse().Y < 2 || msg.Mouse().Y >= 2+count*2 || i >= len(indices) {
 		return connectionAction{}
 	}
 	m.fields[m.focus].Blur()
@@ -213,8 +213,8 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 func (m *providerDialogCmp) providerRowClick(msg tea.MouseMsg) connectionAction {
 	rows := m.listRows()
 	start := max(0, m.selected-rows+1)
-	i := msg.Mouse().Y - 3 + start
-	if msg.Mouse().Y < 3 || msg.Mouse().Y >= 3+rows || i >= len(m.rows) {
+	i := msg.Mouse().Y - 2 + start
+	if msg.Mouse().Y < 2 || msg.Mouse().Y >= 2+rows || i >= len(m.rows) {
 		return connectionAction{}
 	}
 	m.selected = i

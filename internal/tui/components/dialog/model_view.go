@@ -31,18 +31,16 @@ func (m *modelDialogCmp) geometry() modelGeometry {
 	if height < 18 {
 		pad = 0
 	}
-	helpRows := 1
-	if height >= 14 {
-		helpRows++
-	}
+	// Title, position and the main legend live in the frame's borders.
+	helpRows := 0
 	if m.details && height >= 18 {
-		helpRows += 2
+		helpRows++
 		if len(m.reasoningModel().ReasoningChoices()) > 0 {
 			helpRows++
 		}
 	}
-	overhead := 3 + 1 + helpRows + 2 + pad*2 + len(m.modelDetailLines())
-	return modelGeometry{width: width, height: height, padY: pad, contentX: 3, titleY: 1 + pad, listY: 4 + pad, rows: max(1, min(numVisibleModels, height-overhead))}
+	overhead := 2 + helpRows + 2 + pad*2 + len(m.modelDetailLines())
+	return modelGeometry{width: width, height: height, padY: pad, contentX: 3, titleY: 0, listY: 3 + pad, rows: max(1, min(numVisibleModels, height-overhead))}
 }
 
 func (m *modelDialogCmp) activeModelID() models.ModelID {
@@ -210,7 +208,7 @@ func (m *modelDialogCmp) catalogView() string {
 	t := theme.CurrentTheme()
 	base := dialogBody().Width(g.width).MaxWidth(g.width)
 	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), g.width, "…")) }
-	rows := []string{base.Foreground(t.Primary()).Bold(true).Render(ansi.Truncate(interfaceCopy(m.modelTitle()), g.width, "…"))}
+	var rows []string
 	label := config.Text("Buscar: ", "Search: ")
 	m.search.SetWidth(max(1, g.width-ansi.StringWidth(label)))
 	m.search.Placeholder = config.Text("Nome ou ID", "Name or ID")
@@ -226,7 +224,11 @@ func (m *modelDialogCmp) catalogView() string {
 	for _, detail := range m.modelDetailLines() {
 		rows = append(rows, line(detail))
 	}
-	position := config.Text("0 de 0", "0 of 0")
+	// An empty unfiltered list has no position; the title keeps the room.
+	position := ""
+	if m.query != "" {
+		position = config.Text("0 de 0", "0 of 0")
+	}
 	if len(m.filtered) > 0 {
 		position = fmt.Sprintf(config.Text("%d de %d", "%d of %d"), m.selectedIdx+1, len(m.filtered))
 	}
@@ -239,7 +241,6 @@ func (m *modelDialogCmp) catalogView() string {
 	if m.scrollOffset+g.rows < len(m.filtered) {
 		position += " · ↓"
 	}
-	rows = append(rows, dialogHint(position, g.width))
 	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P conexão · Ctrl+D detalhes · Esc", "Enter choose · Tab provider · Ctrl+P connection · Ctrl+D details · Esc")
 	if g.width < 48 {
 		hint = config.Text("Enter · Ctrl+D detalhes · Esc", "Enter · Ctrl+D details · Esc")
@@ -247,10 +248,6 @@ func (m *modelDialogCmp) catalogView() string {
 	if len(m.filtered) == 0 && !m.loading {
 		hint = config.Text("Tab provedor · Ctrl+R tenta · Ctrl+P conexão · Esc", "Tab provider · Ctrl+R retry · Ctrl+P connection · Esc")
 	}
-	if g.height >= 14 {
-		rows = append(rows, styles.PanelDivider(g.width))
-	}
-	rows = append(rows, dialogHint(hint, g.width))
 	if m.details && g.height >= 18 {
 		if len(m.reasoningModel().ReasoningChoices()) > 0 {
 			rows = append(rows, dialogHint(config.Text("Ctrl+E esforço do modelo ativo", "Ctrl+E active model effort"), g.width))
@@ -258,7 +255,7 @@ func (m *modelDialogCmp) catalogView() string {
 		// Details add only the shortcuts the main legend does not show.
 		rows = append(rows, dialogHint(config.Text("Shift+Tab/Alt+←→ provedor · Ctrl+R atualiza · Ctrl+A função · Ctrl+T testar", "Shift+Tab/Alt+←→ provider · Ctrl+R refresh · Ctrl+A role · Ctrl+T probe"), g.width))
 	}
-	frame := styles.Panel().Padding(g.padY, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
+	frame := styles.Frame(strings.Join(rows, "\n"), g.width, 2, g.padY, interfaceCopy(m.modelTitle()), position, interfaceCopy(hint))
 	return lipgloss.NewStyle().MaxWidth(g.width + 6).MaxHeight(g.height).Render(frame)
 }
 

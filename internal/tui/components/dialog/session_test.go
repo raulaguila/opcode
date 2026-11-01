@@ -40,12 +40,12 @@ func TestSessionSearchRenameArchiveAndExportUseSelectedSession(t *testing.T) {
 }
 func TestSessionMouseSelectionUsesVisibleOffset(t *testing.T) {
 	d := NewSessionDialogCmp().(*sessionDialogCmp)
-	d.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+	d.Update(tea.WindowSizeMsg{Width: 80, Height: 9})
 	d.SetSessions([]session.Session{{ID: "one"}, {ID: "two"}, {ID: "three"}})
 	d.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	d.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	require.Equal(t, 1, d.offset)
-	_, cmd := d.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: 4})
+	_, cmd := d.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: 3})
 	require.Equal(t, "two", cmd().(SessionPreviewRequestMsg).ID)
 	_, cmd = d.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.Equal(t, "two", cmd().(SessionSelectedMsg).Session.ID)

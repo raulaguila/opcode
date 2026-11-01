@@ -45,7 +45,7 @@ func (m *providerDialogCmp) noteView() string {
 	m.noteOffset = min(m.noteOffset, max(0, len(lines)-rows))
 	body := append([]string{config.Text("Detalhes", "Details")}, lines[m.noteOffset:min(len(lines), m.noteOffset+rows)]...)
 	body = append(body, styles.PanelDivider(width), dialogHint(config.Text("↑↓ rola · Esc volta", "↑↓ scroll · Esc back"), width))
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(body, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(body, "\n"))
 }
 
 func noteUpdateTeaKeyMsg(m *providerDialogCmp, msg tea.Msg) (extractedResult0 bool, handled bool) {

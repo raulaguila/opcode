@@ -402,7 +402,7 @@ func (p *permissionDialogCmp) render() string {
 
 	return baseStyle.
 		Padding(1, 0, 0, 1).
-		Border(lipgloss.NormalBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
 		Width(p.width).

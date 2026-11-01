@@ -93,7 +93,7 @@ func TestModelDialogIgnoresStaleResponsesAndCancelsWhenClosed(t *testing.T) {
 func TestModelDialogMouseSelectionFilteringAndSmallLayout(t *testing.T) {
 	m := catalogDialog(t)
 	m.Update(m.Open()())
-	_, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: 6, Button: tea.MouseLeft})
+	_, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: m.geometry().listY + 1, Button: tea.MouseLeft})
 	require.NotNil(t, cmd)
 	require.Equal(t, "qwen:7b", cmd().(ModelSelectedMsg).Model.APIModel)
 	m.Update(m.Open()()) // Selecting closes the dialog; reopen before editing its search.

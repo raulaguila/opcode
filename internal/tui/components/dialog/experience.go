@@ -101,7 +101,7 @@ func (m *providerDialogCmp) experienceView() string {
 		note = dialogHint(m.note, width)
 	}
 	lines = dialogFooter(lines, width, m.height, note)
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func localizedSettingLabel(s string) string {

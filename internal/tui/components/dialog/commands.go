@@ -143,25 +143,22 @@ func (c *commandDialogCmp) geometry() commandGeometry {
 	if c.width > 0 {
 		g.width = max(8, min(g.width, c.width-8))
 	}
-	headers := 3
+	// The title and legend live in the frame's borders.
+	headers := 2
 	if c.activeID != "" {
-		headers = 1
+		headers = 0
 	}
 	if c.height > 0 && c.height < 12 {
 		g.padding = 0
-		if headers == 3 {
-			headers = 2
+		if headers == 2 {
+			headers = 1
 		}
 	}
 	g.firstRow = 1 + g.padding + headers
 	g.details = c.detailLines(g.width)
 	available := 8 + len(g.details)
-	footerRows := 2
-	if c.activeID == "" {
-		footerRows++
-	}
 	if c.height > 0 {
-		available = max(1, c.height-(2+2*g.padding)-headers-footerRows)
+		available = max(1, c.height-(2+2*g.padding)-headers)
 	}
 	if c.approvalID != "" {
 		available = max(1, available-1)
@@ -213,7 +210,7 @@ func (c *commandDialogCmp) View() string {
 	g := c.geometry()
 	base := dialogBody()
 	c.search.SetWidth(g.width - 2)
-	rows := []string{styles.PanelTitle().Width(g.width).Render(c.dialogTitle())}
+	var rows []string
 	if c.activeID == "" {
 		rows = append(rows, base.Width(g.width).Render(c.search.View()))
 		if g.padding > 0 {
@@ -234,15 +231,15 @@ func (c *commandDialogCmp) View() string {
 	for _, detail := range g.details {
 		rows = append(rows, styles.PanelHint().Render(detail))
 	}
+	meta := ""
 	if c.activeID == "" {
-		rows = append(rows, dialogHint(c.positionLabel(g, selected, len(items)), g.width))
+		meta = c.positionLabel(g, selected, len(items))
 	}
 	hint := config.Text("↑↓ escolher · Enter abrir · Esc voltar", "↑↓ select · Enter open · Esc back")
 	if c.activeID != "" {
 		hint = config.Text("↑↓ escolher · Enter aplicar · Esc voltar", "↑↓ select · Enter apply · Esc back")
 	}
-	rows = append(rows, styles.PanelDivider(g.width), dialogHint(hint, g.width))
-	return styles.Panel().Padding(g.padding, 2).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, rows...), g.width, 2, g.padding, c.dialogTitle(), meta, hint)
 }
 
 func (c *commandDialogCmp) positionLabel(g commandGeometry, selected, total int) string {

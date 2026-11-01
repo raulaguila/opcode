@@ -224,7 +224,7 @@ func (f *filepickerCmp) View() string {
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], listWidth, "…")
 	}
-	frame := styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
+	frame := styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
 	if wide {
 		preview := dialogBody().Padding(1).Width(max(1, width-lipgloss.Width(frame)-2)).MaxHeight(max(1, height-2)).Render(f.viewport.View())
 		frame = lipgloss.JoinHorizontal(lipgloss.Top, frame, preview)

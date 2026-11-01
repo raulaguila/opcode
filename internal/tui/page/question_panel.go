@@ -185,7 +185,9 @@ func (c questionContent) visibleRows(height int, divider string) []string {
 		if height >= 5 && divider != "" {
 			tail = append(tail, divider)
 		}
-		tail = append(tail, styles.PanelHint().Render(c.hint))
+		if c.hint != "" {
+			tail = append(tail, styles.PanelHint().Render(c.hint))
+		}
 	}
 	remaining := height - len(tail)
 	gap := len(c.intro) > 0 && (len(c.choices) > 0 || c.input != "") && remaining > len(c.intro)+len(c.choices)
@@ -215,18 +217,20 @@ func (p *chatPage) questionPanelView(height int) string {
 		}
 		return strings.Join(rows, "\n")
 	}
-	rows := []string{styles.PanelTitle().Render(title)}
-	bodyHeight := height - 2 - len(rows)
+	// Title and key legend sit in the frame's borders.
+	hint := c.hint
+	c.hint = ""
+	var rows []string
 	if p.workflow.details {
-		rows = append(rows, p.questionDetailsRows(c, width, bodyHeight)...)
+		hint = config.Text("F2/Esc volta · ↑↓/PgUp/PgDn rola", "F2/Esc back · ↑↓/PgUp/PgDn scroll")
+		rows = p.questionDetailsRows(c, width, height-2)
 	} else {
-		rows = append(rows, c.visibleRows(bodyHeight, styles.PanelDivider(width))...)
+		rows = c.visibleRows(height-2, "")
 	}
-	for i := range rows {
-		rows[i] = ansi.Truncate(rows[i], width, "…")
+	for len(rows) < height-2 {
+		rows = append(rows, "")
 	}
-	return styles.Panel().Padding(0, 1).Width(max(1, p.width)).
-		Render(strings.Join(rows, "\n"))
+	return styles.Frame(strings.Join(rows, "\n"), width, 1, 0, title, "", hint)
 }
 
 func (p *chatPage) questionDetailsRows(c questionContent, width, height int) []string {
@@ -241,11 +245,7 @@ func (p *chatPage) questionDetailsRows(c questionContent, width, height int) []s
 		full = append(full, ansi.Wrap(choice, width, ""))
 	}
 	p.workflow.detailView.SetWidth(width)
-	tail := []string{styles.PanelHint().Render(config.Text("F2/Esc volta · ↑↓/PgUp/PgDn rola", "F2/Esc back · ↑↓/PgUp/PgDn scroll"))}
-	if height >= 5 {
-		tail = append([]string{styles.PanelDivider(width)}, tail...)
-	}
-	p.workflow.detailView.SetHeight(height - len(tail))
+	p.workflow.detailView.SetHeight(height)
 	p.workflow.detailView.SetContent(strings.Join(full, "\n"))
-	return append(strings.Split(p.workflow.detailView.View(), "\n"), tail...)
+	return strings.Split(p.workflow.detailView.View(), "\n")
 }

@@ -86,7 +86,7 @@ func (m *modelDialogCmp) reasoningView() string {
 	for i := range lines {
 		lines[i] = ansi.Truncate(lines[i], width, "…")
 	}
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
 }
 
 func reasoningRole(role config.AgentName) config.AgentName {

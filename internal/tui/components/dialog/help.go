@@ -128,7 +128,7 @@ func keyLabel(keys string) string {
 func (h *helpCmp) View() string {
 	title := config.Text("Atalhos do teclado", "Keyboard shortcuts")
 	hint := config.Text("↑↓/PgUp/PgDn rola · Esc fecha", "↑↓/PgUp/PgDn scroll · Esc closes")
-	return styles.Panel().Width(max(1, h.width)).Padding(1).Render(strings.Join([]string{styles.PanelTitle().Render(title), h.render(), styles.PanelDivider(max(1, h.width-4)), dialogHint(hint, max(1, h.width-4))}, "\n"))
+	return styles.Frame(h.render(), max(1, h.width-4), 1, 1, title, "", interfaceCopy(hint))
 }
 
 type HelpCmp interface {

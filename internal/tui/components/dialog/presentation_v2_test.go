@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDialogCardsShareSquareFrameAndSeparatedControls(t *testing.T) {
+func TestDialogCardsShareRoundedFrameAndSeparatedControls(t *testing.T) {
 	provider := settingsDialog(t)
 	model := catalogDialog(t)
 	command := NewCommandDialogCmp()
@@ -30,9 +30,12 @@ func TestDialogCardsShareSquareFrameAndSeparatedControls(t *testing.T) {
 	}{{"commands", command}, {"models", model}, {"providers", provider}, {"integrations", integration}, {"sessions", sessions}, {"themes", themes}, {"help", NewHelpCmp()}} {
 		item.model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 		view := ansi.Strip(item.model.View())
-		require.Contains(t, view, "┌", item.name)
-		require.Contains(t, view, "┘", item.name)
-		require.GreaterOrEqual(t, strings.Count(view, strings.Repeat("─", 32)), 3, "top, footer divider and bottom: %s", item.name)
+		require.Contains(t, view, "╭", item.name)
+		require.Contains(t, view, "╯", item.name)
+		require.GreaterOrEqual(t, strings.Count(view, strings.Repeat("─", 4)), 2, "top and bottom: %s", item.name)
+		if item.name != "integrations" {
+			require.True(t, strings.HasPrefix(view, "╭─ "), "the title sits in the top border: %s", item.name)
+		}
 		require.LessOrEqual(t, lipgloss.Width(view), 80, item.name)
 		require.LessOrEqual(t, lipgloss.Height(view), 24, item.name)
 	}
@@ -116,9 +119,17 @@ func TestDialogFramesDoNotWrapFullWidthFooterDividers(t *testing.T) {
 		name  string
 		view  func() string
 		frame int
-	}{{"commands", command.View, 6}, {"themes", themes.View, 6}, {"initialize", initialize.View, 6}, {"details", provider.noteView, 6}, {"help", help.View, 4}} {
+	}{{"commands", command.View, 0}, {"themes", themes.View, 0}, {"initialize", initialize.View, 6}, {"details", provider.noteView, 6}, {"help", help.View, 0}} {
 		t.Run(item.name, func(t *testing.T) {
 			view := ansi.Strip(item.view())
+			if item.frame == 0 {
+				// Framed dialogs carry the legend in the bottom border instead of a divider.
+				lines := strings.Split(view, "\n")
+				last := lines[len(lines)-1]
+				require.True(t, strings.HasPrefix(last, "╰─ ") && len(strings.Trim(last, "╰╯─ ")) > 4, last)
+				require.LessOrEqual(t, lipgloss.Width(view), 80)
+				return
+			}
 			dividers := []string{}
 			for _, line := range strings.Split(view, "\n") {
 				inside := strings.TrimSpace(strings.Trim(line, "│"))

@@ -109,7 +109,7 @@ func (t *themeDialogCmp) editorView() string {
 	actions := config.Text("[Salvar] Ctrl+S · [Cancelar] Esc · ", "[Save] Ctrl+S · [Cancel] Esc · ")
 	legend := styles.PanelHint().Render(config.Text("Tab campo", "Tab field"))
 	lines = append(lines, styles.PanelDivider(width), line(actions+legend), line(e.note))
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).Render(strings.Join(lines, "\n"))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).Render(strings.Join(lines, "\n"))
 }
 
 func editorUpdateThemeDialogCmpCtrlS(t *themeDialogCmp, e *themeEditor) (extractedResult0 util.Model, extractedResult1 tea.Cmd, handled bool) {

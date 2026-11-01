@@ -136,7 +136,7 @@ func (q *quitDialogCmp) View() string {
 	)
 
 	return baseStyle.Padding(1, 2).
-		Border(lipgloss.NormalBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
 		Render(content)

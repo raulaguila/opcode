@@ -234,7 +234,7 @@ func (m *integrationDialogCmp) View() string {
 	}
 	lines = append(lines, styles.PanelDivider(width))
 	lines = append(lines, m.integrationNoteLines(note)...)
-	return styles.Panel().Padding(1, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(t.TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
 }
 
 func (m *integrationDialogCmp) integrationNoteLines(note string) []string {

@@ -164,7 +164,7 @@ func (c *completionDialogCmp) View() string {
 	c.listView.SetMaxWidth(maxWidth)
 
 	return baseStyle.Padding(0, 0).
-		Border(lipgloss.NormalBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderBottom(false).
 		BorderRight(false).
 		BorderLeft(false).

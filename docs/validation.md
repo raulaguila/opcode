@@ -5,6 +5,36 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Raciocínio em streaming — 01/11/2026
+
+O bloco existente de raciocínio do modelo passa a abrir durante o turno ativo,
+inclusive antes de existir texto público. Sua identidade acompanha as primeiras
+deltas, a resposta e as ferramentas, sem duplicar o mesmo conteúdo no processo.
+Ao concluir o turno e suas validações, o bloco recolhe e mantém o controle para
+consulta. Expansão/recolhimento manual prevalece; quem rolou para ler mantém o
+bloco aberto e a posição de leitura. Nada é apagado da mensagem persistida.
+
+Somente `ReasoningContent` de uma mensagem do assistente é apresentado. A UI não
+extrai pensamento de prosa nem expõe instruções de reparo como raciocínio. A
+redação de credenciais existente continua aplicada; copiar a resposta mantém o
+Markdown original e exclui raciocínio. Nenhuma mudança nos prompts, provedores,
+validação das citações, permissões ou critérios de avaliação.
+
+As regressões reproduziram antes da correção o raciocínio ausente durante a
+geração e a falta de uma identidade estável. Passaram **1165 testes principais**
+com race detector e integração, vet, staticcheck e `gocognit -over 15 .`.
+As **24 suítes PTY** incluem três variantes com a conexão mantida aberta antes
+da resposta final: automático, expansão manual e leitura de texto anterior.
+Cobrem resize, preservação da leitura, acesso posterior, uma geração sem reparo
+extra, citações e cópia OSC52 exata da resposta final. O fluxo completo com
+Nemotron local no Ollama e o round trip OpenAI-compatible local também passaram.
+
+A chegada de raciocínio separado é controlada no teste de streaming para garantir
+os checkpoints; modelos/provedores podem não enviar esse campo. Sem ele não há
+pensamento fabricado. Capturas VT foram inspecionadas; cores padrão dos PNGs são
+aproximações. Sem novas dependências, configurações ou alterações pessoais.
+Ver [evidência desta rodada](evidence/2026-11-01-live-reasoning-validation.json).
+
 ## Clareza dos controles e estados — 01/11/2026
 
 A revisão implementa seis ajustes de apresentação: legendas com atalhos nas

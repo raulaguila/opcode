@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/hinshun/vt10x"
@@ -60,5 +61,8 @@ func TestCompletedReasoningDoesNotClaimItIsStillWorking(t *testing.T) {
 	require.Contains(t, timelineText(m), config.Text("Raciocínio do modelo", "Model reasoning"))
 	require.NotContains(t, timelineText(m), config.Text("em andamento", "working"))
 	require.Contains(t, timelineText(m), "Public response")
+	require.Contains(t, timelineText(m), "Private reasoning", "provider completion does not finish the application turn")
+	m.app.CoderAgent = revisionTestAgent{}
+	m.Update(tea.FocusMsg{})
 	require.NotContains(t, timelineText(m), "Private reasoning")
 }

@@ -2,6 +2,10 @@
 
 ## Em desenvolvimento — 2026-11-01
 
+- Raciocínio fornecido pelo modelo aparece durante a geração em bloco próprio,
+  recolhendo ao concluir a atividade e suas validações. Expansão manual e leitura
+  preservam o bloco; conteúdo e cópia da resposta final continuam separados.
+
 - Conexões mostram atalhos de salvar, catálogo e opções avançadas com cliques
   alinhados. Falhas de catálogo distinguem autenticação, TLS, rede, tempo e
   formato, com diagnóstico sanitizado em `/error`, separado da recuperação.

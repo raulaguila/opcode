@@ -147,7 +147,7 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	for index, item := range group.messages {
 		answer := answeredQuestions(item, r.messages.renderCache.toolOwners, r.messages.messages)
 		_, hidden := revisions.hidden[index]
-		if !hidden && (publicResponse(item) || len(answer) > 0) {
+		if !hidden && (publicResponse(item) || modelReasoning(item) != "" || len(answer) > 0) {
 			if start >= 0 {
 				r.renderProcessRange(group, start, index, first, false)
 				first, start = false, -1
@@ -164,6 +164,10 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 }
 
 func (r *turnRenderer) renderTimelineItem(items []message.Message, index int, latest bool, answer []answeredQuestion, revisions responseRevisionPlan) {
+	if !publicResponse(items[index]) && modelReasoning(items[index]) != "" {
+		r.renderReasoningDetails(items[index])
+		return
+	}
 	if revision := revisions.roots[index]; revision != nil {
 		r.renderRevision(items, revision, latest)
 		return
@@ -200,7 +204,7 @@ func publicResponse(item message.Message) bool {
 }
 
 func processEvent(item message.Message) bool {
-	return item.IsApplication() || item.Role == message.Tool || len(item.ToolCalls()) > 0 || (item.ReasoningContent().Thinking != "" && !publicResponse(item))
+	return item.IsApplication() || item.Role == message.Tool || len(item.ToolCalls()) > 0
 }
 
 func (r *turnRenderer) renderProcessRange(group turnGroup, start, end int, first, active bool) {
@@ -310,10 +314,6 @@ func (r *turnRenderer) renderProcessMessageContent(item message.Message, index i
 	}
 	if item.Role != message.Assistant {
 		return
-	}
-	if reasoning := item.ReasoningContent().Thinking; reasoning != "" && !publicResponse(item) {
-		label := config.Text("Raciocínio interno", "Internal reasoning")
-		r.appendText(item.ID+":thinking", r.base.Foreground(r.theme.TextMuted()).Render(label+"\n"+toMarkdown(tools.RedactCredentials(reasoning), false, m.width)))
 	}
 	copy := processMessage(item)
 	if len(copy.ToolCalls()) == 0 && copy.Content().String() == "" {

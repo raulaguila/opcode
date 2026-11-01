@@ -1,0 +1,229 @@
+{
+  "date": "2026-11-01",
+  "baseline": "efc418ddbc48c568177f8f69694a9df9a57e2ebd",
+  "binary_sha256": "761d7562747fabccba7e549e82c1f6d1f97e1b3130cd2447f98ca02d925a2d60",
+  "source_sha256": {
+    "CHANGELOG.md": "60c5fc156c04c97da20fd8d0dcde5fe60e52f609d8a4ac5dc7fdb123e040247c",
+    "docs/validation.md": "07c59462a501124d303f51c8a8e74ea44926da728edf93066ff6789758de76f0",
+    "docs/workspace-ui.md": "46b6e81be2d340d98ed59130b2f6e17534b9da8fd538f7191cfac95dd4fd47e4",
+    "internal/tui/components/chat/hint_style_test.go": "02cc8b909f279349275257b4bcbd40c8c7908467269dacd44f49362f05bb790d",
+    "internal/tui/components/chat/presentation_state_test.go": "e9320c64208ef4173ab21f115efc6f61a7d2168e193e313eb98e1ea1f09c262c",
+    "internal/tui/components/chat/reasoning_details.go": "b706f2cdd2f94b7606bdae46c67b3c23b7f5d4dc1f7de792f31bd59d4a8e52a2",
+    "internal/tui/components/chat/reasoning_live_test.go": "644f8b14c75baa32cf1d6dfb7e8f72ac98c9ff7252960414a7759f948ed50c64",
+    "internal/tui/components/chat/response_revisions.go": "6a22ebdcb450dbd46952285d846353428fa4a6faa65a0fb4d455843d41e5aeb4",
+    "internal/tui/components/chat/turns.go": "d1ea4ea3937b4c202d62b9fcebeb505debec675b9e25f1b0f8d8e2b9329955df",
+    "internal/tui/pty_reasoning_live_test.go": "58a5fecaa942dd38570ae570248c8667bcbadbb83e14a4f10d2b1d53672d64e9"
+  },
+  "manifest_scope": "All changed/new files except this evidence file; Go source unchanged since binary build and full validation.",
+  "protected_unchanged_sha256": {
+    "go.mod": "b69606c07b1eb3ed19aae4c407554a7857bcf58e27ce859d77522b07225b1425",
+    "go.sum": "659d9fea2397880cc3968a56605298ebc5d7f8f5751308aa426cfbfa0ecaa74c",
+    "internal/evaluation/testdata/cases.json": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+    "internal/evaluation/testdata/explanation_quality.json": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7",
+    "internal/evaluation/testdata/project_questions.json": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600",
+    "internal/evaluation/testdata/retrieval.json": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "internal/evaluation/testdata/review_evidence.json": "e1f3e5ba75c2f893f41c8b7265ca0271cb418e5c808df494802f6bf89b07bbde",
+    "internal/evaluation/testdata/synonym_navigation.json": "c39b929d82928ec4fc9767da83c1b6c14588aa48f776c93864986c28860082c9",
+    "internal/llm/agent/calibration.go": "195656bcc8d66ace6a3e86854cdf2b6a24bcb61fab87b96c38a27254969bf661",
+    "internal/llm/agent/citation_revision.go": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c",
+    "internal/llm/agent/citations.go": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c",
+    "internal/llm/agent/citations_messages.go": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7",
+    "internal/llm/agent/generation.go": "ed75c0c3c658a26322b9de074c3832e95f5b369a96ea93d40d68f877e48c574f",
+    "internal/llm/agent/provider_failure.go": "6aa96dca2a0d4569aeccf11b936f1ec4a10d743391e3deebc03b44cf8f64c209",
+    "internal/llm/prompt/coder.go": "560709d80d9cdc03579070d67ac310e3ddb009f64dab3d6ecdbdea6357841867",
+    "internal/llm/provider/provider.go": "a20b2bba2b689219cdbdfce04be94f6db9a4968a89e5ccb100521508059f01f6",
+    "internal/llm/tools/access.go": "473cd65951c14b446ce6212e040e06495406536b83e09a6fdd6529972ea0f731",
+    "internal/llm/tools/source_receipt.go": "9d577433546bcacb83064f026d2e935361ddba021a14088f0759de699ec7da9e",
+    "internal/permission/exact_params_test.go": "50c801eb517d8cc1c2a2043d38a4cc367d94dca6be1b02d88b8cb49a6006256e",
+    "internal/permission/permission.go": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14",
+    "internal/permission/permission_test.go": "fa4d5da4ae2c63908c15520fc06039277e17c0dd738624c1f056b74164b6ae7d",
+    "internal/permission/status.go": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944"
+  },
+  "checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-live-reasoning/final/opcode",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.25
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 104.65
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.54
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.17
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.22
+    }
+  ],
+  "live": [
+    {
+      "name": "pty",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-live-reasoning/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestPTY|TestLiveBinary)",
+        "-count=1",
+        "-json",
+        "-timeout=6m"
+      ],
+      "exit_code": 0,
+      "seconds": 48.68
+    },
+    {
+      "name": "native-nemotron",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-live-reasoning/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^TestLiveOllamaPTYUI$",
+        "-count=1",
+        "-json",
+        "-timeout=12m"
+      ],
+      "exit_code": 0,
+      "seconds": 26.11
+    },
+    {
+      "name": "compatible-local",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-live-reasoning/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/llm/provider/integration",
+        "-run",
+        "^TestLiveProviders$",
+        "-count=1",
+        "-json",
+        "-timeout=5m"
+      ],
+      "exit_code": 0,
+      "seconds": 8.28
+    }
+  ],
+  "passed_counts": {
+    "integration.log": {
+      "parent_tests": 1165,
+      "test_nodes": 2518
+    },
+    "pty.jsonl": {
+      "parent_tests": 24,
+      "test_nodes": 228
+    },
+    "native-nemotron.jsonl": {
+      "parent_tests": 1,
+      "test_nodes": 1
+    },
+    "compatible-local.jsonl": {
+      "parent_tests": 1,
+      "test_nodes": 5
+    }
+  },
+  "regression_before_fix": "Thinking-only live message rendered as a collapsed Process; provider reasoning text was absent and no stable reasoning block existed before public text.",
+  "before_fix_log_sha256": "4fa5786c77efbb8057f0f7052774da1edf6a85d496feb16031b4747457a1c005",
+  "pty_gated_cases": [
+    "automatic fold after completion",
+    "manual fold/reopen survives completion",
+    "reading earlier reasoning preserves viewport and expansion"
+  ],
+  "pty_no_additional_inference": true,
+  "pty_exact_final_response_copy": true,
+  "native_model": "nemotron-3.5-bolt:e4b",
+  "native_context_window": 16384,
+  "log_sha256": {
+    "integration.log": "138b810f4f8892c5ce8e685bc967843924d81e78d07618e82b07f8ebcc213ef8",
+    "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "staticcheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "complexity.log": "d95ca46ac1c5ee5a2a58509a36eef3d730a264584d56b864023d831a38ffa7b6",
+    "pty.jsonl": "bfe69ea42b48067164d4eb7a85f1bfc3efad8fe3e789e9da04e54c23985aa36b",
+    "native-nemotron.jsonl": "aefb30d9de8a9bcd58c9b8c1ea04601281e232f9c56c69113e5c3710f47bcdc9",
+    "compatible-local.jsonl": "379267eb1a3b5a13c41eae2501100b8c220f56f39ef49a18cfc4f4e98b6455a3"
+  },
+  "capture_overlay_sha256": "c42f717e1270cd8b9ee380efc76021482481edd5446691230a79d579c69e31f1",
+  "reviewed_vt_captures": [
+    "reasoning-live",
+    "reasoning-complete",
+    "reasoning-manual"
+  ],
+  "capture_notes": "Read-only overlay captures VT cells after existing successful predicates. Production executable unchanged. PNG default terminal colors approximated.",
+  "no_dependency_changes": true,
+  "no_personal_config_changes": true,
+  "no_prompt_or_provider_changes": true,
+  "preserved": [
+    "Source citation validators and receipts",
+    "Exact permissions and Bubblewrap isolation",
+    "Public response Markdown and copy payload",
+    "Manual expansion choices and reading position",
+    "Original provider reasoning retained in message history"
+  ],
+  "limits": [
+    "Only provider-supplied assistant ReasoningContent is shown; no inference from ordinary prose.",
+    "Live reasoning arrival uses a gated local HTTP fixture; real Nemotron full flow is a separate acceptance test.",
+    "UI expansion choices are session-local and are not new persisted preferences.",
+    "No company gateway or paid provider calls; no assistive technology certification."
+  ]
+}

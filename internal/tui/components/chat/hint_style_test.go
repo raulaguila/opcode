@@ -48,7 +48,7 @@ func assertChatHintSurfaces(t *testing.T) {
 	root := chatHintGlyph(t, styles.HintOn(palette.Background()).Render("root"), "root")
 	m := &messagesCmp{width: 100, toggled: map[string]bool{"group": true}}
 	r := turnRenderer{messages: m, base: styles.BaseStyle(), theme: palette}
-	item := message.Message{ID: "answer", Parts: []message.ContentPart{message.ReasoningContent{Thinking: "Raw reasoning stays unchanged"}}}
+	item := message.Message{ID: "answer", Role: message.Assistant, Parts: []message.ContentPart{message.ReasoningContent{Thinking: "Raw reasoning stays unchanged"}}}
 	r.renderActions(item)
 	r.renderReasoningDetails(item)
 	r.renderRevisionToggle("previous", "Older version")

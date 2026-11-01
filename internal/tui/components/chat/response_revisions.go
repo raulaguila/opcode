@@ -116,6 +116,7 @@ func (r *turnRenderer) renderRevision(items []message.Message, revision *respons
 		}
 	}
 	for _, index := range revision.details {
+		r.renderReasoningDetails(items[index])
 		r.renderProcessMessage(items[index], index)
 	}
 }

@@ -767,3 +767,24 @@ validação de respostas e o limite de 4000 bytes, inclusive com texto multibyte
 O título do plano explicita “1/14 concluídas”; ↑ e ↓ indicam conteúdo oculto
 acima ou abaixo. A posição de leitura, a etapa ativa, Alt+↑/↓ e `/task` continuam
 nos controles existentes, sem criar outro painel.
+
+
+### Raciocínio durante a geração
+
+Quando o provedor envia um campo separado de raciocínio, o bloco “Raciocínio do
+modelo” aparece aberto durante a atividade. A mesma identificação acompanha as
+primeiras deltas, o texto público e as chamadas de ferramentas; o conteúdo não
+é duplicado dentro dos detalhes operacionais.
+
+O recolhimento automático acontece quando a atividade termina, após as
+validações do turno. O controle permanece antes da resposta para consultar o
+conteúdo novamente. Expandir/recolher manualmente prevalece sobre o automático;
+rolar para ler também mantém o bloco aberto e a posição de leitura quando a
+resposta termina. Essas escolhas valem para a interface atual, sem nova
+configuração ou alteração da conversa persistida.
+
+Não há extração de pensamento a partir de prosa comum: somente o campo de
+raciocínio da mensagem do provedor é apresentado. Instruções internas da
+aplicação não viram pensamento. Esse texto não constitui uma resposta validada
+nem uma autorização; permissões, citações e avisos continuam independentes.
+A cópia da resposta final preserva seu Markdown original e não inclui raciocínio.

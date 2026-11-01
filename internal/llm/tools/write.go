@@ -131,7 +131,7 @@ func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	)
 
 	permissionPath := filepath.Dir(filePath)
-	p := w.permissions.Request(ctx,
+	p := permission.RequestProjectEdit(ctx, w.permissions,
 		permission.CreatePermissionRequest{
 			SessionID:   sessionID,
 			Path:        permissionPath,
@@ -142,7 +142,7 @@ func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 				FilePath: filePath,
 				Diff:     diff,
 			},
-		},
+		}, filePath,
 	)
 	if !p {
 		return ToolResponse{}, permission.ErrorPermissionDenied

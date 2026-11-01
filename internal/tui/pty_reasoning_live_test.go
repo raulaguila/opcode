@@ -30,6 +30,9 @@ func TestPTYReasoningVisibleBeforeFinalAndRespectsReader(t *testing.T) {
 }
 
 func runPTYLiveReasoning(t *testing.T, mode string) {
+	public := make(chan struct{})
+	var publicOnce sync.Once
+	releasePublic := func() { publicOnce.Do(func() { close(public) }) }
 	finish := make(chan struct{})
 	var once sync.Once
 	release := func() { once.Do(func() { close(finish) }) }
@@ -41,10 +44,11 @@ func runPTYLiveReasoning(t *testing.T, mode string) {
 		}
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		serveLiveReasoning(t, w, r, thinking, finish, &generations)
+		serveLiveReasoning(t, w, r, thinking, public, finish, &generations)
 	}))
 	t.Cleanup(server.Close)
 	t.Cleanup(release)
+	t.Cleanup(releasePublic)
 	home, workspace, _ := conversationWorkspace(t, server.URL)
 	h := newPTYUIHarnessAtSize(t, os.Getenv("OPCODE_EVAL_BINARY"), home, workspace, 120, 36, "SSH_CONNECTION=isolated-reasoning-acceptance")
 	h.wait("initialization", 20*time.Second, func(frame string) bool { return strings.Contains(frame, "Initialize Project") })
@@ -78,6 +82,8 @@ func runPTYLiveReasoning(t *testing.T, mode string) {
 		anchor = firstReasoningLine(h.frame())
 	}
 	require.EqualValues(t, 1, generations.Load())
+	releasePublic()
+	assertPTYReasoningAtPublicText(t, h, mode, visible, anchor)
 	release()
 	h.wait("turn and source validation finished", 20*time.Second, func(frame string) bool {
 		return ptyUIIdleFooter(frame) && strings.Contains(ptyUIFooter(frame), "Completed")
@@ -109,6 +115,20 @@ func runPTYLiveReasoning(t *testing.T, mode string) {
 	h.assertComposer()
 }
 
+func assertPTYReasoningAtPublicText(t *testing.T, h *ptyUIHarness, mode, visible, anchor string) {
+	t.Helper()
+	if mode == "reading" {
+		h.wait("reader position preserved when public text begins", 5*time.Second, func(frame string) bool {
+			return firstReasoningLine(frame) == anchor && !ptyUIIdleFooter(frame)
+		})
+		return
+	}
+	h.wait("public text arrives before provider completion", 10*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Fim da explicação.") && !ptyUIIdleFooter(frame)
+	})
+	require.Equal(t, mode == "manual", strings.Contains(h.frame(), visible), "automatic reasoning folds on public text; manual choices survive")
+}
+
 func firstReasoningLine(frame string) string {
 	for line := range strings.SplitSeq(frame, "\n") {
 		if strings.Contains(line, "REASONING_LINE_") {
@@ -118,7 +138,7 @@ func firstReasoningLine(frame string) string {
 	return ""
 }
 
-func serveLiveReasoning(t *testing.T, w http.ResponseWriter, r *http.Request, thinking string, finish <-chan struct{}, generations *atomic.Int32) {
+func serveLiveReasoning(t *testing.T, w http.ResponseWriter, r *http.Request, thinking string, public, finish <-chan struct{}, generations *atomic.Int32) {
 	if r.URL.Path != "/api/chat" {
 		w.WriteHeader(http.StatusNotFound)
 		return
@@ -139,9 +159,16 @@ func serveLiveReasoning(t *testing.T, w http.ResponseWriter, r *http.Request, th
 	_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"role": "assistant", "thinking": thinking}, "done": false})
 	w.(http.Flusher).Flush()
 	select {
+	case <-public:
+	case <-r.Context().Done():
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"role": "assistant", "content": codeDetailsAnswer}, "done": false})
+	w.(http.Flusher).Flush()
+	select {
 	case <-finish:
 	case <-r.Context().Done():
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"role": "assistant", "content": codeDetailsAnswer}, "done": true, "done_reason": "stop", "eval_count": 32, "eval_duration": 1000000000})
+	_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"role": "assistant", "content": ""}, "done": true, "done_reason": "stop", "eval_count": 32, "eval_duration": 1000000000})
 }

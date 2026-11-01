@@ -184,7 +184,7 @@ func (e *editTool) createNewFile(ctx context.Context, filePath, content string) 
 		filePath,
 	)
 	permissionPath := filepath.Dir(filePath)
-	p := e.permissions.Request(ctx,
+	p := permission.RequestProjectEdit(ctx, e.permissions,
 		permission.CreatePermissionRequest{
 			SessionID:   sessionID,
 			Path:        permissionPath,
@@ -195,7 +195,7 @@ func (e *editTool) createNewFile(ctx context.Context, filePath, content string) 
 				FilePath: filePath,
 				Diff:     diff,
 			},
-		},
+		}, filePath,
 	)
 	if !p {
 		return ToolResponse{}, permission.ErrorPermissionDenied
@@ -290,7 +290,7 @@ func (e *editTool) deleteContent(ctx context.Context, filePath, oldString string
 	)
 
 	permissionPath := filepath.Dir(filePath)
-	p := e.permissions.Request(ctx,
+	p := permission.RequestProjectEdit(ctx, e.permissions,
 		permission.CreatePermissionRequest{
 			SessionID:   sessionID,
 			Path:        permissionPath,
@@ -301,7 +301,7 @@ func (e *editTool) deleteContent(ctx context.Context, filePath, oldString string
 				FilePath: filePath,
 				Diff:     diff,
 			},
-		},
+		}, filePath,
 	)
 	if !p {
 		return ToolResponse{}, permission.ErrorPermissionDenied
@@ -388,7 +388,7 @@ func (e *editTool) replaceContent(ctx context.Context, filePath, oldString, newS
 		filePath,
 	)
 	permissionPath := filepath.Dir(filePath)
-	p := e.permissions.Request(ctx,
+	p := permission.RequestProjectEdit(ctx, e.permissions,
 		permission.CreatePermissionRequest{
 			SessionID:   sessionID,
 			Path:        permissionPath,
@@ -399,7 +399,7 @@ func (e *editTool) replaceContent(ctx context.Context, filePath, oldString, newS
 				FilePath: filePath,
 				Diff:     diff,
 			},
-		},
+		}, filePath,
 	)
 	if !p {
 		return ToolResponse{}, permission.ErrorPermissionDenied

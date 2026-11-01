@@ -63,7 +63,7 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	default:
 		left = config.Text("Executar", "Execute")
 	}
-	left += " ▾"
+	left += m.approvalLabel(state) + " ▾"
 	right = config.Text("Escolher modelo", "Choose model")
 	labelsGet(&right)
 	right += " ▾"
@@ -114,12 +114,23 @@ func (m statusCmp) widths() (left, center, right int) {
 
 func (m statusCmp) metricWidths(state util.FooterState) (lw, cw, mw, rw int) {
 	lw, cw, rw = m.widths()
+	if label := m.approvalLabel(state); label != "" {
+		lw = ansi.StringWidth(config.Text("Executar", "Execute")+label+" ▾") + 1
+		cw = max(0, m.width-1-lw-rw)
+	}
 	mw = min(max(0, cw-20), ansi.StringWidth(m.metrics(state))+2)
 	if m.metrics(state) == "" {
 		mw = 0
 	}
 	cw -= mw
 	return
+}
+
+func (m statusCmp) approvalLabel(state util.FooterState) string {
+	if state.Mode == "execute" && state.ApprovalPolicy == "project_edits" && m.width >= 140 {
+		return config.Text(" · Edições no projeto", " · Edits allowed")
+	}
+	return ""
 }
 func (m statusCmp) ViewFor(state util.FooterState) string {
 	left, center, right := m.labels(state)

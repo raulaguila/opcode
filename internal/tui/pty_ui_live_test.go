@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -287,6 +288,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.paste("/mode execute")
 	h.send("\r")
 	h.wait("execute mode and acknowledged command submission", 5*time.Second, testLiveOllamaPTYUIExecuteModeAndAcknowledgedCommandSubmission)
+	assertLiveProjectEditPolicy(t, h, conn, workspace)
 	h.paste(`Call bash with these arguments: {"command":"bash interactive.sh","pty":true,"timeout":120000}. Wait for the actual tool result. The human will provide terminal input. Do not execute any other command.`)
 	h.send("\r")
 	h.wait("explicit permission dialog", 120*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })
@@ -573,12 +575,22 @@ func ptyUIIdleFooter(frame string) bool {
 	if footer == "" {
 		return false
 	}
+	if slices.Contains(strings.Fields(footer), "esc") {
+		return false
+	}
 	for _, problem := range []string{"esc cancels", "source citation", "failed", "blocked", "partial", "error", "limit reached"} {
 		if strings.Contains(footer, problem) {
 			return false
 		}
 	}
 	return true
+}
+
+func TestPTYIdleFooterRejectsCompactActiveStates(t *testing.T) {
+	for _, activity := range []string{"Generating 10s Esc", "Generating response · 1s · Esc cancels", "Checking 2s Esc"} {
+		require.False(t, ptyUIIdleFooter("Ask ▾ "+activity+" local ▾"))
+	}
+	require.True(t, ptyUIIdleFooter("Ask ▾ Completed local ▾"))
 }
 
 func ptyUIFooter(frame string) string {

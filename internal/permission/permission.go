@@ -54,6 +54,7 @@ type permissionService struct {
 	sessionPermissions  []PermissionRequest
 	pendingRequests     map[string]pendingRequest
 	autoApproveSessions []string
+	projectEdits        map[string]*projectEditApproval
 }
 
 type pendingRequest struct {
@@ -165,6 +166,11 @@ func (s *permissionService) AutoApproveSession(sessionID string) {
 func (s *permissionService) RevokeSession(sessionID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.revokeSession(sessionID)
+}
+
+func (s *permissionService) revokeSession(sessionID string) {
+	delete(s.projectEdits, sessionID)
 	s.sessionPermissions = slices.DeleteFunc(s.sessionPermissions, func(p PermissionRequest) bool { return p.SessionID == sessionID })
 	s.autoApproveSessions = slices.DeleteFunc(s.autoApproveSessions, func(id string) bool { return id == sessionID })
 	for id, pending := range s.pendingRequests {

@@ -1,6 +1,8 @@
 package chat
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -15,7 +17,7 @@ func (r *turnRenderer) renderReasoningDetails(item message.Message) {
 		return
 	}
 	key := r.groupKey + "\x00process:reasoning:" + item.ID
-	expanded := r.reasoningExpanded(key)
+	expanded := r.reasoningExpanded(key, item)
 	mark := "›"
 	if expanded {
 		mark = "⌄"
@@ -37,12 +39,12 @@ func modelReasoning(item message.Message) string {
 	return item.ReasoningContent().Thinking
 }
 
-func (r *turnRenderer) reasoningExpanded(key string) bool {
+func (r *turnRenderer) reasoningExpanded(key string, item message.Message) bool {
 	m := r.messages
 	if m.toggled[key] {
 		return m.expanded[key]
 	}
-	if r.active {
+	if r.active && item.ID == r.reasoningID && strings.TrimSpace(item.Content().Text) == "" {
 		return true
 	}
 	// Scrolling away from the live tail is a reading choice, not consent to fold.
@@ -55,4 +57,13 @@ func (r *turnRenderer) reasoningExpanded(key string) bool {
 		return true
 	}
 	return false
+}
+
+func lastAssistantID(items []message.Message) string {
+	for i := len(items) - 1; i >= 0; i-- {
+		if items[i].Role == message.Assistant && !items[i].IsApplication() {
+			return items[i].ID
+		}
+	}
+	return ""
 }

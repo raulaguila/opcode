@@ -220,6 +220,7 @@ func (p *chatPage) applyWorkflowCommand(command, value string) (tea.Cmd, error) 
 		if err := p.app.CoderAgent.SetMode(ctx, p.session.ID, workflow.Mode(value)); err != nil {
 			return nil, err
 		}
+		p.pendingApproval = ""
 		p.resetTerminal()
 		p.refreshWorkflow()
 		return tea.Batch(p.resizeContent(), util.ReportInfo(config.Text("Modo: ", "Mode: ")+modeLabel(p.mode()))), nil

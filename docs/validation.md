@@ -5,6 +5,44 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Raciocínio e políticas de aprovação — 01/11/2026
+
+O raciocínio recolhe no primeiro trecho público, antes de terminar a geração
+ou validar citações. Espaços isolados não contam como resposta. Expansão manual
+e leitura anterior mantêm a escolha e a posição; uma nova chamada do modelo
+não reabre raciocínios antigos. O conteúdo persistido e a cópia permanecem iguais.
+
+O menu de modo oferece Pedir aprovação (padrão) e Permitir edições no projeto.
+A segunda opção só autoriza criação/edição pelas ferramentas nativas no projeto
+autorizado, em Executar. Movimentos, exclusões, comandos, rede e caminhos
+externos/sensíveis/com symlinks mantêm as aprovações existentes. Os testes cobrem
+identidade da raiz, cancelamento, parâmetros inválidos, isolamento por sessão,
+leitura antes de sobrescrever e revogação de pedidos pendentes. A escolha não é
+persistida, funciona antes da primeira mensagem e volta ao padrão ao trocar
+o modo, criar ou reabrir conversas ou revogar em `/permissions`.
+
+O PTY mantém a conexão aberta depois de enviar texto público e antes de concluir
+a geração: verifica recolhimento automático, abertura manual, preservação da
+leitura, uma única geração e cópia OSC52 exata. O menu é exercitado em 60×20 e
+180×36, com rascunho preservado e reinício sem consentimento restaurado.
+
+O fluxo completo com Nemotron local inclui carregamento explícito da ferramenta
+`write`, criação única com consentimento de edição e um comando posterior ainda
+aguardando aprovação. Também mantém overview com fontes, pergunta/resposta real,
+resize, cópia, probe LSP autorizado, terminal interativo e instrução em fila. Uma
+tentativa inicial do modelo de criar por `bash` foi recusada pelo teste; o prompt
+da fixture passou a explicitar o carregamento nativo. Sem alteração no prompt
+do agente ou nos critérios das avaliações. O detector PTY também passou a
+rejeitar `Esc` compacto como estado ocioso, além de `Esc cancels`.
+
+Passaram **1184 testes principais** (2557 nós) com race detector/integração e
+**26 testes principais no grupo PTY** (230 nós), além do Nemotron local real.
+Build, vet, staticcheck e complexidade ≤15 também passaram. Os resultados,
+incluindo o OpenAI-compatible local, estão registrados na
+[evidência desta rodada](evidence/2026-11-01-approval-policies-validation.json).
+Validadores de citações, recibos, proteção de acesso e Bubblewrap preservados.
+Sem dependências, preferências persistentes ou configurações pessoais novas.
+
 ## Raciocínio em streaming — 01/11/2026
 
 O bloco existente de raciocínio do modelo passa a abrir durante o turno ativo,

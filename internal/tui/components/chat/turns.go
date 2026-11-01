@@ -62,6 +62,7 @@ type turnRenderer struct {
 	dependencies []string
 	active       bool
 	groupKey     string
+	reasoningID  string
 }
 
 func (m *messagesCmp) renderTurns() {
@@ -141,6 +142,7 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	r.groupKey = group.key
 	r.renderUser(group)
 	r.active = latest && r.messages.IsAgentWorking()
+	r.reasoningID = lastAssistantID(group.messages)
 	revisions := planResponseRevisions(group.messages)
 	start, first := -1, true
 	lastPublic := revisions.latest(group.messages)

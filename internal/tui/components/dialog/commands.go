@@ -70,13 +70,14 @@ type CommandDialog interface {
 }
 
 type commandDialogCmp struct {
-	listView utilComponents.SimpleList[Command]
-	commands []Command
-	search   textinput.Model
-	width    int
-	height   int
-	title    string
-	activeID string
+	listView   utilComponents.SimpleList[Command]
+	commands   []Command
+	search     textinput.Model
+	width      int
+	height     int
+	title      string
+	activeID   string
+	approvalID string
 }
 
 type commandKeyMap struct {
@@ -157,6 +158,9 @@ func (c *commandDialogCmp) geometry() commandGeometry {
 	if c.height > 0 {
 		available = max(1, c.height-(2+2*g.padding)-headers-2)
 	}
+	if c.approvalID != "" {
+		available = max(1, available-1)
+	}
 	g.details = g.details[:min(len(g.details), max(0, available-1))]
 	g.count = max(1, min(8, available-len(g.details)))
 	_, selected := c.listView.GetSelectedItem()
@@ -189,6 +193,10 @@ func modeConsequence(id string) string {
 		return config.Text("Prepara um plano, sem comandos ou edições.", "Prepares a plan without commands or edits.")
 	case "mode-execute":
 		return config.Text("Permite alterações e solicita as permissões necessárias.", "Allows changes and requests the required permissions.")
+	case "approval-prompt":
+		return config.Text("Solicita aprovação para alterações e comandos. Padrão da sessão.", "Requests approval for changes and commands. Session default.")
+	case "approval-project_edits":
+		return config.Text("Em Executar, permite criar e editar arquivos comuns do projeto. Exclusões, movimentações, comandos, rede e caminhos sensíveis ou externos ainda pedem aprovação. Vale só nesta sessão.", "In Execute, allows creating and editing ordinary project files. Deletion, moves, commands, network and sensitive or external paths still require approval. Applies only to this session.")
 	}
 	return ""
 }
@@ -207,6 +215,9 @@ func (c *commandDialogCmp) View() string {
 	items := c.listView.GetItems()
 	_, selected := c.listView.GetSelectedItem()
 	for i := g.start; i < min(len(items), g.start+g.count); i++ {
+		if c.approvalHeading(i, g.start, items) {
+			rows = append(rows, styles.PanelTitle().Render(config.Text("Aprovação", "Approval")))
+		}
 		rows = append(rows, c.commandRow(items[i], i == selected, g.width))
 	}
 	if len(items) == 0 {
@@ -217,7 +228,7 @@ func (c *commandDialogCmp) View() string {
 	}
 	hint := config.Text("↑↓ escolher · Enter abrir · Esc voltar", "↑↓ select · Enter open · Esc back")
 	if c.activeID != "" {
-		hint = config.Text("↑↓ escolher · Enter aplicar modo · Esc voltar", "↑↓ select · Enter apply mode · Esc back")
+		hint = config.Text("↑↓ escolher · Enter aplicar · Esc voltar", "↑↓ select · Enter apply · Esc back")
 	}
 	rows = append(rows, styles.PanelDivider(g.width), dialogHint(hint, g.width))
 	return styles.Panel().Padding(g.padding, 2).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
@@ -228,7 +239,7 @@ func (c *commandDialogCmp) commandRow(item Command, selected bool, width int) st
 	if localized := modeActionTitle(item.ID); localized != "" {
 		name = localized
 	}
-	if item.ID == c.activeID {
+	if item.ID == c.activeID || item.ID == c.approvalID {
 		name = "✓ " + name
 	}
 	mark := "  "
@@ -253,7 +264,7 @@ func (c *commandDialogCmp) BindingKeys() []key.Binding {
 }
 
 func (c *commandDialogCmp) SetCommands(commands []Command) {
-	c.title, c.activeID = "", ""
+	c.title, c.activeID, c.approvalID = "", "", ""
 	c.commands = commands
 	c.search.SetValue("")
 	c.search.Focus()
@@ -271,6 +282,12 @@ func (c *commandDialogCmp) SetContext(title, activeID string) {
 			break
 		}
 	}
+}
+
+func (c *commandDialogCmp) SetApprovalContext(activeID string) { c.approvalID = activeID }
+
+func (c *commandDialogCmp) approvalHeading(i, start int, items []Command) bool {
+	return c.approvalID != "" && strings.HasPrefix(items[i].ID, "approval-") && (i == start || !strings.HasPrefix(items[i-1].ID, "approval-"))
 }
 
 func (c *commandDialogCmp) dialogTitle() string {
@@ -316,10 +333,16 @@ func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg tea.MouseMsg) (util
 		return c, nil
 	}
 	g := c.geometry()
-	row := msg.Mouse().Y - g.firstRow
 	items := c.listView.GetItems()
-	if msg.Mouse().X >= 3 && msg.Mouse().X < 3+g.width && row >= 0 && row < g.count && g.start+row < len(items) {
-		return c, util.CmdHandler(CommandSelectedMsg{Command: items[g.start+row]})
+	row := g.firstRow
+	for i := g.start; i < min(len(items), g.start+g.count); i++ {
+		if c.approvalHeading(i, g.start, items) {
+			row++
+		}
+		if msg.Mouse().X >= 3 && msg.Mouse().X < 3+g.width && msg.Mouse().Y == row {
+			return c, util.CmdHandler(CommandSelectedMsg{Command: items[i]})
+		}
+		row++
 	}
 	return c, nil
 }
@@ -356,6 +379,10 @@ func modeActionTitle(id string) string {
 		return config.Text("Planejar", "Plan")
 	case "mode-execute":
 		return config.Text("Executar", "Execute")
+	case "approval-prompt":
+		return config.Text("Pedir aprovação", "Ask for approval")
+	case "approval-project_edits":
+		return config.Text("Permitir edições no projeto", "Allow project edits")
 	}
 	return ""
 }

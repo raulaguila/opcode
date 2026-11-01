@@ -16,6 +16,7 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
@@ -50,6 +51,7 @@ type chatPage struct {
 	sidebarVisible       bool
 	progress             string
 	outcome              string
+	pendingApproval      permission.ApprovalPolicy
 }
 
 type ChatKeyMap struct {
@@ -130,6 +132,8 @@ func (p *chatPage) Update(msg tea.Msg) (updated util.Model, result tea.Cmd) {
 		p.showCompletionDialog = false
 	case WorkflowCommandMsg:
 		return updateChatPageDefaultCaseCaseCase(p, &msg)
+	case ApprovalPolicyMsg:
+		return p, p.chooseApprovalPolicy(msg.Policy)
 	case chat.SendMsg:
 		cmd := p.sendMessage(msg.Text, msg.Attachments)
 		if cmd != nil {
@@ -144,6 +148,7 @@ func (p *chatPage) Update(msg tea.Msg) (updated util.Model, result tea.Cmd) {
 		if err := p.PrepareSessionDraft(""); err != nil {
 			return p, util.ReportError(err)
 		}
+		p.resetApprovalPolicy(p.session.ID)
 		p.workflow = workflowPanel{}
 		p.closeWorkspace()
 		p.recovery = recoveryState{}
@@ -185,6 +190,7 @@ func (p *chatPage) newConversation() tea.Cmd {
 		return util.ReportError(err)
 	}
 	p.resetTerminal()
+	p.resetApprovalPolicy(p.session.ID)
 	p.session = session.Session{}
 	p.workflow = workflowPanel{}
 	p.progress, p.outcome = "", ""
@@ -241,6 +247,9 @@ func (p *chatPage) sendMessage(text string, attachments []message.Attachment) te
 func (p *chatPage) submitAgentMessage(text string, attachments []message.Attachment, draft string, keepDraft ...bool) tea.Cmd {
 	if p.app.CoderAgent == nil {
 		return tea.Batch(util.ReportWarn(config.Text("Configure um provedor em /settings", "Configure a provider in /settings")), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: fmt.Errorf("%s", config.Text("provedor não configurado", "provider not configured"))}))
+	}
+	if err := p.applyPendingApproval(); err != nil {
+		return tea.Batch(util.ReportError(err), util.CmdHandler(chat.SubmissionResultMsg{Text: draft, Error: err}))
 	}
 	_, queued, err := p.app.CoderAgent.Submit(context.Background(), p.session.ID, text, attachments...)
 	if err != nil {
@@ -489,6 +498,8 @@ func updateChatPageSessionSelectedMsg(p *chatPage, cmds *[]tea.Cmd, msg *chat.Se
 		if err := p.PrepareSessionDraft(msg.ID); err != nil {
 			return p, util.ReportError(err), true
 		}
+		p.resetApprovalPolicy(p.session.ID)
+		p.resetApprovalPolicy(msg.ID)
 		p.workflow = workflowPanel{}
 		p.closeWorkspace()
 		p.recovery = recoveryState{}

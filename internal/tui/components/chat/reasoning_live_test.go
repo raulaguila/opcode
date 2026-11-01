@@ -37,26 +37,29 @@ func updateReasoning(m *messagesCmp, item message.Message) {
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: item})
 }
 
-func TestLiveReasoningStaysOpenThroughTextAndCitationValidation(t *testing.T) {
+func TestLiveReasoningFoldsAtFirstPublicTextBeforeCitationValidation(t *testing.T) {
 	m := liveReasoningFixture()
 	require.Contains(t, timelineText(m), "PROVIDER_REASONING")
 	key := reasoningHit(t, m).id
 	item := m.messages[1]
+	item.AppendContent(" \n")
+	updateReasoning(m, item)
+	require.True(t, reasoningHit(t, m).expanded, "whitespace is not a public answer")
 	item.AppendContent("Public answer README.md:1")
 	updateReasoning(m, item)
 	require.Equal(t, key, reasoningHit(t, m).id, "text deltas must not replace the reasoning block")
-	require.Contains(t, timelineText(m), "PROVIDER_REASONING")
+	require.NotContains(t, timelineText(m), "PROVIDER_REASONING", "the first public text folds automatic reasoning while generation is active")
 	item.Parts = append(item.Parts, message.Finish{Reason: message.FinishReasonEndTurn})
 	item.SetCitationValidation(message.CitationPending)
 	updateReasoning(m, item)
-	require.Contains(t, timelineText(m), "PROVIDER_REASONING", "provider completion is earlier than citation validation")
+	require.NotContains(t, timelineText(m), "PROVIDER_REASONING", "citation validation must not reopen reasoning")
 	item.SetCitationValidation(message.CitationValid)
 	updateReasoning(m, item)
 	m.app.CoderAgent = revisionTestAgent{}
 	m.Update(tea.FocusMsg{})
 	require.NotContains(t, timelineText(m), "PROVIDER_REASONING")
 	require.False(t, reasoningHit(t, m).expanded)
-	require.Equal(t, "Public answer README.md:1", m.LatestResponse())
+	require.Equal(t, " \nPublic answer README.md:1", m.LatestResponse())
 	require.Equal(t, "PROVIDER_REASONING", m.messages[1].ReasoningContent().Thinking, "folding must not erase provider data")
 	m.toggleProcess(key)
 	require.Contains(t, timelineText(m), "PROVIDER_REASONING", "completed reasoning remains available on demand")
@@ -94,6 +97,9 @@ func TestReadingReasoningIsNotCollapsedWhenTurnCompletes(t *testing.T) {
 	require.False(t, m.viewport.AtBottom())
 	offset := m.viewport.YOffset
 	item.AppendContent("Public answer")
+	updateReasoning(m, item)
+	require.True(t, reasoningHit(t, m).expanded, "the first public text cannot interrupt an active reader")
+	require.Equal(t, offset, m.viewport.YOffset)
 	item.Parts = append(item.Parts, message.Finish{Reason: message.FinishReasonEndTurn})
 	updateReasoning(m, item)
 	m.app.CoderAgent = revisionTestAgent{}
@@ -125,4 +131,18 @@ func TestMissingProviderReasoningDoesNotCreateThinkingText(t *testing.T) {
 		require.NotContains(t, hit.id, "process:reasoning:")
 	}
 	require.Contains(t, timelineText(m), "Public answer")
+}
+
+func TestNewModelCallDoesNotReopenEarlierReasoning(t *testing.T) {
+	m := liveReasoningFixture()
+	first := reasoningHit(t, m).id
+	item := message.Message{ID: "next", SessionID: m.session.ID, Role: message.Assistant, Parts: []message.ContentPart{message.ReasoningContent{Thinking: "NEXT_REASONING"}}}
+	m.Update(pubsub.Event[message.Message]{Type: pubsub.CreatedEvent, Payload: item})
+	require.NotContains(t, timelineText(m), "PROVIDER_REASONING")
+	require.Contains(t, timelineText(m), "NEXT_REASONING")
+	item.AppendContent("Public answer")
+	updateReasoning(m, item)
+	require.NotContains(t, timelineText(m), "NEXT_REASONING")
+	m.toggleProcess(first)
+	require.Contains(t, timelineText(m), "PROVIDER_REASONING", "older provider reasoning remains available")
 }

@@ -506,17 +506,20 @@ func (p *chatPage) applyReversal() tea.Cmd {
 func (p *chatPage) openPermissions() tea.Cmd {
 	p.showWorkspace("permissions", config.Text("Permissões desta sessão", "Session permissions"), "")
 	var b strings.Builder
+	fmt.Fprintf(&b, "%s%s\n\n", config.Text("Política: ", "Policy: "), approvalLabel(p.approvalPolicy()))
+	grants := 0
 	if inspector, ok := p.app.Permissions.(interface {
 		SessionGrants(string) []permission.PermissionRequest
 	}); ok {
 		for _, grant := range inspector.SessionGrants(p.session.ID) {
+			grants++
 			fmt.Fprintf(&b, "%s · %s\n%s\n\n", grant.ToolName, grant.Action, grant.Path)
 		}
 	}
-	if b.Len() == 0 {
+	if grants == 0 {
 		b.WriteString(config.Text("Nenhuma autorização lembrada nesta sessão.\n", "No remembered approvals in this session.\n"))
 	}
-	b.WriteString(config.Text("\nR revoga as autorizações lembradas e solicitações pendentes. Isso não desfaz arquivos nem restaura aprovações de sessões anteriores.", "\nR revokes remembered approvals and pending requests. It does not undo files or restore approvals from past sessions."))
+	b.WriteString(config.Text("\nR restaura Pedir aprovação e revoga as autorizações lembradas e solicitações pendentes. Isso não desfaz arquivos nem restaura aprovações de sessões anteriores.", "\nR restores Ask for approval and revokes remembered approvals and pending requests. It does not undo files or restore approvals from past sessions."))
 	p.workspace.body = b.String()
 	return nil
 }
@@ -881,6 +884,7 @@ func workspaceKeyChatPageR(p *chatPage) (extractedResult0 tea.Cmd, handled bool)
 		return p.previewReversal(true), true
 	}
 	if p.workspace.kind == "permissions" {
+		p.pendingApproval = ""
 		p.app.Permissions.RevokeSession(p.session.ID)
 		return p.openPermissions(), true
 	}

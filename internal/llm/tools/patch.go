@@ -287,7 +287,7 @@ func authorizePatchChange(p *patchTool, ctx context.Context, commit *diff.Commit
 	case diff.ActionAdd:
 		dir := filepath.Dir(absPath)
 		patchDiff, _, _ := diff.GenerateDiff("", *change.NewContent, path)
-		allowed := p.permissions.Request(ctx,
+		allowed := permission.RequestProjectEdit(ctx, p.permissions,
 			permission.CreatePermissionRequest{
 				SessionID:   sessionID,
 				Path:        dir,
@@ -298,7 +298,7 @@ func authorizePatchChange(p *patchTool, ctx context.Context, commit *diff.Commit
 					FilePath: path,
 					Diff:     patchDiff,
 				},
-			},
+			}, absPath,
 		)
 		if !allowed {
 			return ToolResponse{}, permission.ErrorPermissionDenied
@@ -390,7 +390,13 @@ func authorizeUpdatedPatchFile(p *patchTool, ctx context.Context, sessionID stri
 	}
 	patchDiff, _, _ := diff.GenerateDiff(currentContent, newContent, path)
 	dir := filepath.Dir(absPath)
-	allowed := p.permissions.Request(ctx,
+	request := p.permissions.Request
+	if change.MovePath == nil {
+		request = func(ctx context.Context, opts permission.CreatePermissionRequest) bool {
+			return permission.RequestProjectEdit(ctx, p.permissions, opts, absPath)
+		}
+	}
+	allowed := request(ctx,
 		permission.CreatePermissionRequest{
 			SessionID:   sessionID,
 			Path:        dir,

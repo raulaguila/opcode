@@ -8,6 +8,7 @@ type FooterState struct {
 	SpeedEstimated                 bool
 	SpeedLive, AwaitingModel       bool
 	Mode, Activity                 string
+	ApprovalPolicy                 string
 	Busy, Terminal                 bool
 	WaitingForAnswer               bool
 	ElapsedSeconds                 int

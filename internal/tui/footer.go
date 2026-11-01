@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
 	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -45,9 +46,21 @@ func (a *appModel) openModeChooser() tea.Cmd {
 			items = append(items, command)
 		}
 	}
+	for _, policy := range []permission.ApprovalPolicy{permission.ApprovalPrompt, permission.ApprovalProjectEdits} {
+		items = append(items, dialog.Command{ID: "approval-" + string(policy), Handler: func(dialog.Command) tea.Cmd {
+			return util.CmdHandler(page.ApprovalPolicyMsg{Policy: policy})
+		}})
+	}
 	a.commandDialog.SetCommands(items)
 	if contextual, ok := a.commandDialog.(interface{ SetContext(string, string) }); ok {
 		contextual.SetContext(config.Text("Modo de trabalho", "Work mode"), "mode-"+a.footerState().Mode)
+	}
+	if contextual, ok := a.commandDialog.(interface{ SetApprovalContext(string) }); ok {
+		policy := a.footerState().ApprovalPolicy
+		if policy == "" {
+			policy = string(permission.ApprovalPrompt)
+		}
+		contextual.SetApprovalContext("approval-" + policy)
 	}
 	a.showCommandDialog = true
 	return nil

@@ -61,7 +61,7 @@ func TestCompletedReasoningDoesNotClaimItIsStillWorking(t *testing.T) {
 	require.Contains(t, timelineText(m), config.Text("Raciocínio do modelo", "Model reasoning"))
 	require.NotContains(t, timelineText(m), config.Text("em andamento", "working"))
 	require.Contains(t, timelineText(m), "Public response")
-	require.Contains(t, timelineText(m), "Private reasoning", "provider completion does not finish the application turn")
+	require.NotContains(t, timelineText(m), "Private reasoning", "public text folds reasoning before the application turn finishes")
 	m.app.CoderAgent = revisionTestAgent{}
 	m.Update(tea.FocusMsg{})
 	require.NotContains(t, timelineText(m), "Private reasoning")

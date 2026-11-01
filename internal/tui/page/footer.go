@@ -11,7 +11,7 @@ import (
 )
 
 func (p *chatPage) FooterState() util.FooterState {
-	state := util.FooterState{Mode: string(p.mode()), Terminal: p.terminal.focused, WaitingForAnswer: p.workflow.question.ID != ""}
+	state := util.FooterState{Mode: string(p.mode()), ApprovalPolicy: string(p.approvalPolicy()), Terminal: p.terminal.focused, WaitingForAnswer: p.workflow.question.ID != ""}
 	applyAgentFooterState(p, &state)
 	state.Activity = p.footerActivity(state)
 	if state.Activity == "" && p.terminal.snapshot.Running && !state.Terminal {

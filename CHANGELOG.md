@@ -2,8 +2,13 @@
 
 ## Em desenvolvimento — 2026-11-01
 
+- Seletor de modo inclui políticas de aprovação: solicitar (padrão) ou permitir
+  criação/edição nativa dentro do projeto, somente nesta sessão. Comandos, rede,
+  exclusões, movimentações e caminhos externos/sensíveis continuam protegidos.
+  Ask/Plan, validação das citações e isolamento permanecem preservados.
+
 - Raciocínio fornecido pelo modelo aparece durante a geração em bloco próprio,
-  recolhendo ao concluir a atividade e suas validações. Expansão manual e leitura
+  recolhendo ao começar o texto público da resposta. Expansão manual e leitura
   preservam o bloco; conteúdo e cópia da resposta final continuam separados.
 
 - Conexões mostram atalhos de salvar, catálogo e opções avançadas com cliques

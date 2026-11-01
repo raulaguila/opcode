@@ -776,11 +776,12 @@ modelo” aparece aberto durante a atividade. A mesma identificação acompanha 
 primeiras deltas, o texto público e as chamadas de ferramentas; o conteúdo não
 é duplicado dentro dos detalhes operacionais.
 
-O recolhimento automático acontece quando a atividade termina, após as
-validações do turno. O controle permanece antes da resposta para consultar o
+O recolhimento automático acontece no primeiro trecho de texto público da
+resposta, sem aguardar o fim da geração ou a validação das citações. Um novo
+chamado do modelo pode abrir seu próprio raciocínio, sem reabrir o anterior. O controle permanece antes da resposta para consultar o
 conteúdo novamente. Expandir/recolher manualmente prevalece sobre o automático;
 rolar para ler também mantém o bloco aberto e a posição de leitura quando a
-resposta termina. Essas escolhas valem para a interface atual, sem nova
+resposta começa ou termina. Essas escolhas valem para a interface atual, sem nova
 configuração ou alteração da conversa persistida.
 
 Não há extração de pensamento a partir de prosa comum: somente o campo de
@@ -788,3 +789,27 @@ raciocínio da mensagem do provedor é apresentado. Instruções internas da
 aplicação não viram pensamento. Esse texto não constitui uma resposta validada
 nem uma autorização; permissões, citações e avisos continuam independentes.
 A cópia da resposta final preserva seu Markdown original e não inclui raciocínio.
+
+### Políticas de aprovação
+
+O seletor de modo apresenta uma seção **Aprovação**, independente de Perguntar,
+Planejar e Executar:
+
+- **Pedir aprovação** é o padrão e mantém as solicitações existentes.
+- **Permitir edições no projeto** autoriza as ferramentas nativas de criação e
+  edição de arquivos comuns dentro do projeto selecionado. Só tem efeito em
+  Executar. Excluir ou mover arquivos, executar comandos, acessar a rede e
+  escrever em caminhos externos, sensíveis ou com links simbólicos continuam
+  exigindo as permissões existentes. Perguntar e Planejar continuam sem edições.
+
+A escolha vale em memória para a sessão atual. Pode ser feita antes da primeira
+mensagem e não altera o rascunho. Reiniciar, abrir outra conversa, retomar uma
+conversa, trocar o modo ou revogar em `/permissions` restaura Pedir aprovação.
+Não se pode ampliar permissões durante uma execução; aguarde ou cancele primeiro.
+Selecionar uma política não responde a solicitações pendentes.
+
+Em terminais largos, o rodapé de Executar indica quando edições estão permitidas.
+`/permissions` mostra a política e permite revogar. A aprovação não dispensa
+leitura antes de sobrescrever, isolamento, escrita atômica, recibos ou validação
+das citações. Ferramentas genéricas e integrações não herdam essa autorização
+apenas por apresentarem o mesmo nome de uma ferramenta nativa.

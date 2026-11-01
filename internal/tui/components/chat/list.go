@@ -188,7 +188,7 @@ func (m *messagesCmp) working() string {
 func (m *messagesCmp) initialScreen() string {
 	t := theme.CurrentTheme()
 	question := styles.BaseStyle().Foreground(t.Text()).Width(m.width).Render(config.Text("O que vamos fazer neste projeto?", "What would you like to do in this project?"))
-	hint := styles.BaseStyle().Foreground(t.TextMuted()).Width(m.width).Render(config.Text("Modo no rodapé: Perguntar, Planejar ou Executar · / comandos", "Footer mode: Ask, Plan or Execute · / commands"))
+	hint := styles.BaseStyle().Foreground(t.TextMuted()).Width(m.width).Render(config.Text("Shift+Tab alterna Perguntar, Planejar e Executar · / comandos", "Shift+Tab cycles Ask, Plan and Execute · / commands"))
 	return lipgloss.JoinVertical(lipgloss.Left, question, hint)
 }
 

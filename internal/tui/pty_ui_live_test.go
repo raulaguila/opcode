@@ -847,7 +847,7 @@ func testLiveOllamaPTYUIOPCODELIVEOLLAMA(t *testing.T) {
 
 func testLiveOllamaPTYUIState(t *testing.T, workspace string, h *ptyUIHarness) {
 	for _, refuse := range []string{"\x1b", "\r"} {
-		require.Contains(t, h.frame(), "› Deny (Esc/d)")
+		require.Contains(t, h.frame(), "› 3 Deny (Esc/d)")
 		h.send(refuse)
 		h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool {
 			return !strings.Contains(frame, "Allow (a)") && strings.Contains(frame, "Test failed:")
@@ -855,7 +855,7 @@ func testLiveOllamaPTYUIState(t *testing.T, workspace string, h *ptyUIHarness) {
 		_, statErr := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
 		require.True(t, os.IsNotExist(statErr), "denied probe must never run")
 		h.send("\x14")
-		h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "› Deny (Esc/d)") })
+		h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "› 3 Deny (Esc/d)") })
 	}
 }
 
@@ -1067,7 +1067,7 @@ func testLiveOllamaPTYUIModelListPosition(frame string) bool {
 }
 
 func testLiveOllamaPTYUILocalModelSearch(frame string) bool {
-	return strings.Contains(frame, "Search: llama3.1") && !strings.Contains(frame, "No models found")
+	return strings.Contains(frame, "⌕ llama3.1") && !strings.Contains(frame, "No models found")
 }
 
 func testLiveOllamaPTYUIModelSelectorDismissed(frame string) bool {

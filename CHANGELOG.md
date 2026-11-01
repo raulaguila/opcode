@@ -2,6 +2,15 @@
 
 ## Em desenvolvimento — 2026-11-01
 
+- Novo visual da TUI: molduras arredondadas com título, posição e teclas na
+  borda; barra superior com caminho, branch e conversa; entrada com a cor do
+  modo e as teclas na borda; cartão de erro com as ações de recuperação.
+- Paleta agrupada com descrições e atalhos; seletor de modelos com ícone de
+  busca, etiqueta Nuvem e detalhes ao lado; conversas com prévia ao lado;
+  configurações com seções, cartões de conexão e campos em uma linha.
+- Perguntas e aprovações numeradas (1–9 e 1/2/3); a aprovação aparece logo
+  acima da entrada; o plano mostra o progresso na borda.
+
 - Linha do tempo mais limpa: cada processo usa `✓`/`✗`/`■`/`●`, junta chamadas
   repetidas (`edit store.go ×3`) e guarda o raciocínio das chamadas dentro dele.
   O agente para quando a mesma chamada falha três vezes do mesmo jeito.

@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
@@ -49,7 +50,7 @@ func (m statusCmp) contextMetric(state util.FooterState) string {
 		return prefix + label + " ctx"
 	}
 	// ASCII cells work with NO_COLOR and terminals without block glyphs.
-	filled := min(5, int(math.Ceil(percent/20)))
+	filled := min(5, int(math.Floor(percent/20)))
 	bar := "[" + strings.Repeat("#", filled) + strings.Repeat("-", 5-filled) + "] " + prefix + label
 	if m.width < 110 {
 		return bar
@@ -132,11 +133,16 @@ func compactFooterActivity(text string, width int, state util.FooterState) strin
 	if ansi.StringWidth(text) <= width {
 		return text
 	}
-	suffix := " · Esc"
+	suffix := " Esc"
 	if state.ElapsedKnown {
-		suffix = " · " + footerElapsed(state.ElapsedSeconds) + suffix
+		suffix = " " + footerElapsed(state.ElapsedSeconds) + suffix
 	}
 	phase := footerActivityLabel(state)
+	phase, _, _ = strings.Cut(phase, " ")
+	phase = strings.TrimSuffix(phase, "…")
+	if phase == "Investigating" {
+		phase = config.Text("Investigando", "Exploring")
+	}
 	if state.Pending > 0 {
 		phase = fmt.Sprintf("%d + ", state.Pending) + phase
 	}

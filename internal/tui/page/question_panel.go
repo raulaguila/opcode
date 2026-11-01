@@ -87,6 +87,9 @@ func (p *chatPage) questionAnswerField(item interaction.QuestionItem, width int)
 }
 
 func (p *chatPage) questionAnswerHint(item interaction.QuestionItem, batch bool) string {
+	if p.workflow.answerRequired {
+		return config.Text("Escreva uma resposta ou escolha uma opção", "Write an answer or choose an option")
+	}
 	if len(item.Choices) > 0 && p.workflow.choice < 0 {
 		return config.Text("↑↓ escolha ou escreva · F2 detalhes · Esc cancela", "↑↓ choose or type · F2 details · Esc cancel")
 	}

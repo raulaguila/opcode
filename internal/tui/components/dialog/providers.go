@@ -404,7 +404,7 @@ func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {
 		return m.fieldCount()
 	}
-	available := m.height - 11
+	available := m.height - 11 - (len(wrapDialogActions(m.providerFormHint(), m.contentWidth())) - 1)
 	if m.screen == "provider" && len(m.fields) > 9 && m.fields[9].Value() == "true" {
 		available--
 	}

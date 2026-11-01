@@ -16,6 +16,7 @@ func (p *chatPage) saveBatchAnswer() {
 }
 
 func (p *chatPage) restoreBatchAnswer() {
+	p.workflow.answerRequired = false
 	p.workflow.answer.SetValue("")
 	p.workflow.choice = -1
 	p.workflow.selectedChoices = map[int]bool{}
@@ -75,6 +76,9 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	case "enter", "tab":
 		p.saveBatchAnswer()
+		if p.questionAnswerMissing(p.workflow.batchAnswers[index]) {
+			return nil
+		}
 		single := interaction.Question{Questions: []interaction.QuestionItem{item}}
 		if err := interaction.ValidateAnswers(single, []interaction.AnswerItem{p.workflow.batchAnswers[index]}); err != nil {
 			return util.ReportError(err)
@@ -93,6 +97,7 @@ func batchQuestionKeyChatPageDefault(p *chatPage, item *interaction.QuestionItem
 		} else {
 			p.workflow.selectedChoices[p.workflow.choice] = !p.workflow.selectedChoices[p.workflow.choice]
 		}
+		p.workflow.answerRequired = false
 		return nil, true
 	}
 	return extractedResult0, false

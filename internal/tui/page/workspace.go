@@ -240,7 +240,13 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 	case "permissions":
 		return p.openPermissions()
 	case "error":
-		p.showWorkspace("error", config.Text("Detalhes da execução", "Execution details"), fmt.Sprint(p.recovery.err))
+		details := fmt.Sprint(p.recovery.err)
+		title := config.Text("Detalhes da execução", "Execution details")
+		if p.catalogErrorDetails != "" {
+			details = p.catalogErrorDetails
+			title = config.Text("Detalhes da conexão", "Connection details")
+		}
+		p.showWorkspace("error", title, details)
 		return nil
 	case "retry":
 		return p.retryRequest("/retry")

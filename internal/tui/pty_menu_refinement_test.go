@@ -104,7 +104,7 @@ func assertPickerPTYCapabilities(t *testing.T, h *ptyUIHarness) {
 	t.Helper()
 	h.send("\x0f")
 	h.wait("explicit capabilities and hosting", 10*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Choose model") && strings.Contains(frame, "REMOTE_UI_CHAT") && strings.Contains(frame, "Cloud") && strings.Contains(frame, "Local") && strings.Contains(frame, "UNKNOWN_UI_CHAT")
+		return strings.Contains(frame, "Choose model") && strings.Contains(frame, "4 catalog · 3 chat") && strings.Contains(frame, "REMOTE_UI_CHAT") && strings.Contains(frame, "Cloud") && strings.Contains(frame, "Local") && strings.Contains(frame, "UNKNOWN_UI_CHAT")
 	})
 	require.NotContains(t, h.frame(), "EMBED_UI_ONLY", "embedding-only entries must not be offered for chat")
 	h.send("\x1b[B")

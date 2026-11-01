@@ -50,9 +50,10 @@ func ReportWarn(warn string) tea.Cmd {
 
 type (
 	InfoMsg struct {
-		Type InfoType
-		Msg  string
-		TTL  time.Duration
+		Type    InfoType
+		Msg     string
+		Details string
+		TTL     time.Duration
 	}
 	ClearStatusMsg struct{}
 )

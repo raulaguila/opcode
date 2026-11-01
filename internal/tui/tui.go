@@ -285,6 +285,10 @@ func (a *appModel) routeStatus(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case util.InfoMsg:
+		if target := a.pages[page.ChatPage]; msg.Details != "" && target != nil {
+			updated, _ := target.Update(msg)
+			a.pages[page.ChatPage] = updated
+		}
 		s, cmd := a.status.Update(msg)
 		a.status = s.(core.StatusCmp)
 		cmds = append(cmds, cmd)

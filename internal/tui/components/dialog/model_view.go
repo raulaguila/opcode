@@ -228,6 +228,9 @@ func (m *modelDialogCmp) catalogView() string {
 	if len(m.filtered) > 0 {
 		position = fmt.Sprintf(config.Text("%d de %d", "%d of %d"), m.selectedIdx+1, len(m.filtered))
 	}
+	if m.query != "" {
+		position += config.Text(" resultados", " results")
+	}
 	if m.scrollOffset > 0 {
 		position += " · ↑"
 	}
@@ -255,6 +258,16 @@ func (m *modelDialogCmp) catalogView() string {
 	}
 	frame := styles.Panel().Padding(g.padY, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 	return lipgloss.NewStyle().MaxWidth(g.width + 6).MaxHeight(g.height).Render(frame)
+}
+
+func (m *modelDialogCmp) catalogCounts() string {
+	chat := 0
+	for _, model := range m.models {
+		if !model.EmbeddingOnly() {
+			chat++
+		}
+	}
+	return fmt.Sprintf(config.Text("%d catálogo · %d conversa", "%d catalog · %d chat"), len(m.models), chat)
 }
 
 func containsModel(list []models.ModelID, id models.ModelID) bool {

@@ -65,14 +65,14 @@ func testPTYQuestionChoice(t *testing.T, binary string, suggested bool) {
 	})
 	h.send("\r")
 	h.wait("empty custom answer rejected without submitting", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Question for you") && strings.Contains(frame, "answer must contain")
+		return strings.Contains(frame, "Question for you") && strings.Contains(frame, "Write an answer or choose an option") && !strings.Contains(frame, "answer must contain")
 	})
 	require.EqualValues(t, 2, generations.Load(), "empty answers must not resume model generation")
 	require.Empty(t, persistedQuestionResponses(t, data))
 	want := "Agora não; preciso revisar primeiro."
 	h.paste(want)
 	h.wait("typed custom answer remains active", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, want) && strings.Contains(frame, "› ● Other answer:")
+		return strings.Contains(frame, want) && strings.Contains(frame, "› ● Other answer:") && !strings.Contains(frame, "Write an answer or choose an option")
 	})
 	if suggested {
 		h.send("\x1b[A")

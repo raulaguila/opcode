@@ -44,6 +44,7 @@ func (p *chatPage) questionPaste(msg tea.PasteMsg) tea.Cmd {
 	focus := p.focusQuestionInput(count)
 	var cmd tea.Cmd
 	p.workflow.answer, cmd = p.workflow.answer.Update(msg)
+	p.workflow.answerRequired = false
 	return tea.Batch(focus, cmd)
 }
 

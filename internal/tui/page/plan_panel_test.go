@@ -26,7 +26,7 @@ func TestPlanPanelUsesSharedSurfaceProgressAndSecondaryControls(t *testing.T) {
 	p.SetSize(60, 20)
 	view := ansi.Strip(p.workflowView())
 	require.Contains(t, view, "┌")
-	require.Contains(t, view, config.Text("Plano 1/3", "Plan 1/3"))
+	require.Contains(t, view, config.Text("Plano 1/3 concluídas", "Plan 1/3 completed"))
 	require.Contains(t, view, "✓ 1. Inspect")
 	require.Contains(t, view, "→ 2. Verify")
 	require.Contains(t, view, "○ 3. Report")
@@ -95,4 +95,26 @@ func TestPlanPanelHighlightAndLegendKeepThemeContrastAndNoColorMarkers(t *testin
 			require.Contains(t, ansi.Strip(view), "→ 1. ACTIVE_STEP", "active state is readable without color")
 		}
 	}
+}
+
+func TestPlanPanelLabelsCompletionAndHiddenRows(t *testing.T) {
+	p := workflowPage(t)
+	p.workflow.expanded, p.workflow.offset = true, 0
+	p.workflow.task.Objective = "Plan"
+	for i := 0; i < 20; i++ {
+		p.workflow.task.Steps = append(p.workflow.task.Steps, workflow.Step{Title: fmt.Sprintf("Step %d", i+1), Status: "pending"})
+	}
+	p.SetSize(60, 20)
+	title := strings.Split(ansi.Strip(p.workflowView()), "\n")[1]
+	require.Contains(t, title, config.Text("0/20 concluídas", "0/20 completed"))
+	require.Contains(t, title, "↓")
+	require.NotContains(t, title, "↑")
+	p.workflow.offset = 10
+	title = strings.Split(ansi.Strip(p.workflowView()), "\n")[1]
+	require.Contains(t, title, "↑")
+	require.Contains(t, title, "↓")
+	p.workflow.offset = 1000
+	title = strings.Split(ansi.Strip(p.workflowView()), "\n")[1]
+	require.Contains(t, title, "↑")
+	require.NotContains(t, title, "↓")
 }

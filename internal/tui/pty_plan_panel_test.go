@@ -56,7 +56,7 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 			h.paste("Use update_plan to save the fixture plan and finish_task as planned without modifying files.")
 			h.send("\r")
 			h.wait("saved styled plan", 20*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "PLAN_PANEL_READY") && strings.Contains(frame, "Plan 1/14") && strings.Contains(frame, "→ 11. Step 11") && ptyUIIdleFooter(frame)
+				return strings.Contains(frame, "PLAN_PANEL_READY") && strings.Contains(frame, "Plan 1/14 completed") && strings.Contains(frame, "→ 11. Step 11") && ptyUIIdleFooter(frame)
 			})
 			require.EqualValues(t, 2, generations.Load(), "presentation never triggers repair or inference")
 			const draft = "KEEP_PLAN_DRAFT"
@@ -64,11 +64,12 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 			for _, size := range [][2]int{{60, 20}, {120, 40}} {
 				h.resize(size[0], size[1])
 				h.wait("plan and draft after resize", 5*time.Second, func(frame string) bool {
-					return strings.Contains(frame, draft) && strings.Contains(frame, "→ 11. Step 11") && strings.Contains(frame, "Plan 1/14")
+					return strings.Contains(frame, draft) && strings.Contains(frame, "→ 11. Step 11") && strings.Contains(frame, "Plan 1/14 completed")
 				})
 				frame := h.frame()
 				require.Contains(t, frame, "┌")
 				require.Contains(t, frame, "Alt+↑/↓ scroll")
+				require.Contains(t, frame, "completed ↑", "hidden earlier rows are signaled next to completed count")
 				require.NotContains(t, frame, "Session:")
 				h.assertComposer()
 			}

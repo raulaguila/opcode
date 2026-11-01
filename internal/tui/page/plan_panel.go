@@ -57,7 +57,7 @@ func (p *chatPage) planPanelTitle() string {
 				done++
 			}
 		}
-		title += fmt.Sprintf(" %d/%d", done, len(p.workflow.task.Steps))
+		title += fmt.Sprintf(config.Text(" %d/%d concluídas", " %d/%d completed"), done, len(p.workflow.task.Steps))
 	}
 	return title
 }
@@ -67,8 +67,15 @@ func (p *chatPage) planPanelView(height int) string {
 	if height < 5 {
 		width = max(1, p.width)
 	}
-	rows := []string{styles.PanelTitle().Render(ansi.Truncate(p.planPanelTitle(), width, "…"))}
 	body, offset, limit := p.planPanelRows(), p.planOffset(), p.planVisibleRows()
+	title := p.planPanelTitle()
+	if offset > 0 {
+		title += " ↑"
+	}
+	if offset+limit < len(body) {
+		title += " ↓"
+	}
+	rows := []string{styles.PanelTitle().Render(ansi.Truncate(title, width, "…"))}
 	t := theme.CurrentTheme()
 	for _, row := range body[offset : offset+min(limit, len(body)-offset)] {
 		style := styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Text())

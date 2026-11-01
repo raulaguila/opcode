@@ -43,6 +43,7 @@ type chatPage struct {
 	transcript           chat.TranscriptControl
 	workspace            workspacePanel
 	workspaceHistory     []workspacePanel
+	catalogErrorDetails  string
 	recovery             recoveryState
 	lastRequest          chat.SendMsg
 	sidebar              layout.Container
@@ -88,6 +89,9 @@ func (p *chatPage) Update(msg tea.Msg) (updated util.Model, result tea.Cmd) {
 	var cmds []tea.Cmd
 	updateSidebarVisibleSidebar(p, msg, &cmds)
 	switch msg := msg.(type) {
+	case util.InfoMsg:
+		p.catalogErrorDetails = msg.Details
+		return p, nil
 	case WorkspaceCommandMsg:
 		return p, p.workspaceCommand(msg.Command, msg.Value)
 	case GitWorkspaceMsg:
@@ -143,6 +147,7 @@ func (p *chatPage) Update(msg tea.Msg) (updated util.Model, result tea.Cmd) {
 		p.workflow = workflowPanel{}
 		p.closeWorkspace()
 		p.recovery = recoveryState{}
+		p.catalogErrorDetails = ""
 		p.lastRequest = chat.SendMsg{}
 		p.progress = ""
 		p.activityStarted = time.Time{}
@@ -184,6 +189,7 @@ func (p *chatPage) newConversation() tea.Cmd {
 	p.workflow = workflowPanel{}
 	p.progress, p.outcome = "", ""
 	p.recovery = recoveryState{}
+	p.catalogErrorDetails = ""
 	return tea.Batch(p.clearSidebar(), util.CmdHandler(chat.SessionClearedMsg{}))
 }
 func (p *chatPage) syncSidebar() tea.Cmd {
@@ -446,6 +452,7 @@ func updateChatPageDefault(p *chatPage, msg *AgentOutcomeMsg) (extractedResult0 
 		p.activityStarted = time.Time{}
 		if msg.Error != nil {
 			p.recovery = recoveryState{err: msg.Error}
+			p.catalogErrorDetails = ""
 		} else if msg.Done && p.recovery.err != nil {
 			p.recovery.resolved = true
 		}
@@ -485,6 +492,7 @@ func updateChatPageSessionSelectedMsg(p *chatPage, cmds *[]tea.Cmd, msg *chat.Se
 		p.workflow = workflowPanel{}
 		p.closeWorkspace()
 		p.recovery = recoveryState{}
+		p.catalogErrorDetails = ""
 		p.lastRequest = chat.SendMsg{}
 		p.progress = ""
 		p.activityStarted = time.Time{}

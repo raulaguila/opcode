@@ -3,13 +3,17 @@ package page
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/interaction"
+	"github.com/raulaguila/opcode/internal/tui/components/chat"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,19 +44,99 @@ func TestCustomAnswerIsLastSelectableRowAndRequiresText(t *testing.T) {
 		require.True(t, p.workflow.answer.Focused())
 		require.Empty(t, p.workflow.answer.Value())
 		require.Contains(t, ansi.Strip(p.workflowView()), "› ● ")
-		flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
+		require.Empty(t, flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter})), "empty answers stay local without changing global notices")
+		require.Contains(t, ansi.Strip(p.workflowView()), config.Text("Escreva uma resposta ou escolha uma opção", "Write an answer or choose an option"))
+		require.True(t, p.workflow.answer.Focused())
 		select {
 		case value := <-done:
 			t.Fatalf("empty custom row submitted %q", value)
 		default:
 		}
+		p.questionKey(tea.KeyPressMsg{Code: tea.KeyUp})
+		require.False(t, p.workflow.answerRequired, "changing the active answer clears only the local error")
+		p.questionKey(tea.KeyPressMsg{Code: tea.KeyDown})
+		tooLong := strings.Repeat("é", 2001)
+		p.workflow.answer.SetValue(tooLong)
+		messages := flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
+		require.Len(t, messages, 1)
+		notice, ok := messages[0].(util.InfoMsg)
+		require.True(t, ok)
+		require.Equal(t, util.InfoTypeError, notice.Type)
+		require.Contains(t, notice.Msg, "4000", "nonempty text still goes through strict byte validation")
+		require.Equal(t, tooLong, p.workflow.answer.Value())
+		require.True(t, p.workflow.answer.Focused())
+		require.False(t, p.workflow.answerRequired)
+		p.workflow.answer.SetValue("")
+		require.Empty(t, flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter})))
+		require.True(t, p.workflow.answerRequired)
 		p.questionKey(tea.KeyPressMsg{Code: []rune("Minha opção 漢字")[0], Text: "Minha opção 漢字"})
+		require.NotContains(t, ansi.Strip(p.workflowView()), config.Text("Escreva uma resposta ou escolha uma opção", "Write an answer or choose an option"))
 		flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 		if batch {
 			flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter}))
 		}
 		assertCustomAnswerDelivered(t, done, batch)
 	}
+}
+
+func TestEmptyFreeTextAnswerPreservesWhitespaceAndClearsOnEditOrPaste(t *testing.T) {
+	for _, batch := range []bool{false, true} {
+		p := workflowPage(t)
+		p.editor.Update(chat.RestoreDraftMsg{Text: "composer draft"})
+		p.workflow.question = interaction.Question{ID: "q", Question: "Why?"}
+		if batch {
+			p.workflow.question.Questions = []interaction.QuestionItem{{ID: "why", Question: "Why?", Type: "free_text"}}
+			p.workflow.batchAnswers = make([]interaction.AnswerItem, 1)
+		}
+		p.workflow.answer = textinput.New()
+		p.workflow.answer.SetValue("   ")
+		p.workflow.answer.Focus()
+		p.workflow.answer.CursorEnd()
+		for range 2 {
+			require.Empty(t, flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter})))
+			require.Equal(t, "q", p.workflow.question.ID)
+			require.Zero(t, p.workflow.questionIndex)
+			require.True(t, p.workflow.answerRequired)
+			require.True(t, p.workflow.answer.Focused())
+			require.Contains(t, ansi.Strip(p.workflowView()), config.Text("Escreva uma resposta ou escolha uma opção", "Write an answer or choose an option"))
+		}
+		require.Equal(t, "   ", p.workflow.answer.Value())
+		p.questionKey(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		require.False(t, p.workflow.answerRequired)
+		require.Equal(t, "  ", p.workflow.answer.Value())
+		require.Empty(t, flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter})))
+		p.questionPaste(tea.PasteMsg{Content: "reason"})
+		require.False(t, p.workflow.answerRequired)
+		require.Equal(t, "  reason", p.workflow.answer.Value())
+		require.Contains(t, p.editor.View(), "composer draft")
+		p.workflow.answerRequired = true
+		p.refreshQuestion()
+		require.False(t, p.workflow.answerRequired, "a resolved or canceled question cannot leave its local error behind")
+	}
+}
+
+func TestMissingBatchAnswerClearsOnChoiceOrPreviousQuestion(t *testing.T) {
+	p := workflowPage(t)
+	p.workflow.answer = textinput.New()
+	p.workflow.question = interaction.Question{ID: "q", Questions: []interaction.QuestionItem{
+		{ID: "first", Question: "Why?", Type: "free_text"},
+		{ID: "second", Question: "Which?", Type: "multi_choice", Choices: []string{"A", "B"}},
+	}}
+	p.workflow.batchAnswers = []interaction.AnswerItem{{QuestionID: "first", Text: "retained answer"}, {QuestionID: "second"}}
+	p.workflow.questionIndex = 1
+	p.workflow.choice = 0
+	p.workflow.selectedChoices = map[int]bool{}
+	require.Empty(t, flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter})))
+	require.True(t, p.workflow.answerRequired)
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeySpace})
+	require.False(t, p.workflow.answerRequired)
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeySpace})
+	require.Empty(t, flattenCommands(p.questionKey(tea.KeyPressMsg{Code: tea.KeyEnter})))
+	require.True(t, p.workflow.answerRequired)
+	p.questionKey(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	require.False(t, p.workflow.answerRequired)
+	require.Zero(t, p.workflow.questionIndex)
+	require.Equal(t, "retained answer", p.workflow.answer.Value())
 }
 
 func assertCustomAnswerDelivered(t *testing.T, done <-chan string, batch bool) {

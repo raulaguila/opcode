@@ -24,6 +24,7 @@ func (p *chatPage) focusQuestionInput(count int) tea.Cmd {
 
 func (p *chatPage) navigateQuestionAnswer(key string, count int) tea.Cmd {
 	if count > 0 {
+		p.workflow.answerRequired = false
 		delta := 1
 		if key == "up" {
 			delta = -1
@@ -37,6 +38,7 @@ func (p *chatPage) navigateQuestionAnswer(key string, count int) tea.Cmd {
 }
 
 func (p *chatPage) editQuestionAnswer(msg tea.KeyPressMsg, count int) tea.Cmd {
+	choice, value := p.workflow.choice, p.workflow.answer.Value()
 	if msg.Text != "" || msg.Code == tea.KeySpace || msg.Keystroke() == "ctrl+v" {
 		p.workflow.choice = count
 	}
@@ -46,7 +48,15 @@ func (p *chatPage) editQuestionAnswer(msg tea.KeyPressMsg, count int) tea.Cmd {
 	focus := p.focusQuestionInput(count)
 	var cmd tea.Cmd
 	p.workflow.answer, cmd = p.workflow.answer.Update(msg)
+	if choice != p.workflow.choice || value != p.workflow.answer.Value() {
+		p.workflow.answerRequired = false
+	}
 	return tea.Batch(focus, cmd)
+}
+
+func (p *chatPage) questionAnswerMissing(answer interaction.AnswerItem) bool {
+	p.workflow.answerRequired = strings.TrimSpace(answer.Text) == "" && len(answer.Choices) == 0
+	return p.workflow.answerRequired
 }
 
 // The active row determines the answer; an inactive text draft never overrides it.

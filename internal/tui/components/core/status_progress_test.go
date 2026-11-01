@@ -21,8 +21,8 @@ func TestFooterContextBarBoundaries(t *testing.T) {
 		used int64
 		bar  string
 	}{
-		{-1, "[-----] 0%"}, {0, "[-----] 0%"}, {1, "[#----] 1%"},
-		{40, "[##---] 40%"}, {85, "[#####] 85%"},
+		{-1, "[-----] 0%"}, {0, "[-----] 0%"}, {1, "[-----] 1%"},
+		{40, "[##---] 40%"}, {81, "[####-] 81%"}, {99, "[####-] 99%"}, {85, "[####-] 85%"},
 		{100, "[#####] 100%"}, {150, "[#####] 100%"},
 	} {
 		state.ContextTokens = tc.used
@@ -50,15 +50,15 @@ func TestFooterProgressKeepsTimeAndSpeedWhileResizing(t *testing.T) {
 		if width >= 36 {
 			require.Contains(t, plain, "1m05s")
 			require.Contains(t, plain, "Esc")
-			require.Contains(t, plain, "Gen")
+			require.Contains(t, plain, "Generating")
 		}
 		if width >= 60 {
 			require.Contains(t, plain, "~70.0")
 			require.Contains(t, plain, "25%")
 		}
 		if width >= 80 {
-			require.Contains(t, plain, "[##---]")
-			before, _, _ := strings.Cut(plain, "[##---]")
+			require.Contains(t, plain, "[#----]")
+			before, _, _ := strings.Cut(plain, "[#----]")
 			require.Equal(t, "context", m.ActionAt(ansi.StringWidth(before), state))
 		}
 	}
@@ -111,5 +111,5 @@ func TestFooterContextUsesSemanticColorsAndText(t *testing.T) {
 	}
 	theme.SetColorProfile(colorprofile.NoTTY)
 	view := (statusCmp{width: 180}).ViewFor(util.FooterState{ContextWindow: 100, ContextKnown: true, ContextTokens: 95})
-	require.Contains(t, ansi.Strip(view), "[#####] 95%", "color is never the only usage signal")
+	require.Contains(t, ansi.Strip(view), "[####-] 95%", "color is never the only usage signal")
 }

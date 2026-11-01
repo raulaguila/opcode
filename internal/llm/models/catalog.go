@@ -18,6 +18,16 @@ import (
 
 var ErrCatalogUnsupported = errors.New("this provider uses the configured model catalog")
 
+// CatalogError preserves classification without exposing transport URLs or credentials.
+type CatalogError struct {
+	StatusCode int
+	message    string
+	cause      error
+}
+
+func (e *CatalogError) Error() string { return e.message }
+func (e *CatalogError) Unwrap() error { return e.cause }
+
 // CatalogEndpoint is shared by discovery and inference, so a custom endpoint
 // never lists models from a different account/server than generation uses.
 func CatalogEndpoint(provider ModelProvider) string {
@@ -178,12 +188,12 @@ func (d *providerCatalogDiscovery) readPage() (catalogPage, error) {
 		if d.ctx.Err() != nil {
 			return catalogPage{}, d.ctx.Err()
 		}
-		return catalogPage{}, fmt.Errorf("cannot reach model catalog")
+		return catalogPage{}, &CatalogError{message: "cannot reach model catalog", cause: err}
 	}
 	body, readErr := io.ReadAll(io.LimitReader(resp.Body, (4<<20)+1))
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return catalogPage{}, fmt.Errorf("model catalog returned HTTP %d", resp.StatusCode)
+		return catalogPage{}, &CatalogError{StatusCode: resp.StatusCode, message: fmt.Sprintf("model catalog returned HTTP %d", resp.StatusCode)}
 	}
 	if readErr != nil || len(body) > 4<<20 {
 		return catalogPage{}, fmt.Errorf("model catalog response exceeds limit or could not be read")

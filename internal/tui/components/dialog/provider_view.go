@@ -92,18 +92,22 @@ func (m *providerDialogCmp) providerFormLines(width int, line func(string) strin
 		m.fields[i].SetWidth(max(8, width-2))
 		lines = append(lines, line(choiceView(m.fields[i], fieldOptions(m.labels[i]))))
 	}
-	hint := line(m.providerFormHint())
-	if m.screen != "provider" {
-		hint = dialogHint(m.providerFormHint(), width)
+	lines = append(lines, styles.PanelDivider(width))
+	for _, hint := range wrapDialogActions(m.providerFormHint(), width) {
+		if m.screen != "provider" {
+			lines = append(lines, dialogHint(hint, width))
+		} else {
+			lines = append(lines, line(hint))
+		}
 	}
-	return append(lines, styles.PanelDivider(width), hint)
+	return lines
 }
 
 func (m *providerDialogCmp) providerFormHint() string {
 	if m.screen != "provider" {
 		return "Tab/↑↓ fields · Ctrl+S save · Esc back"
 	}
-	hint := config.Text("[Salvar] [Catálogo] [Mais] · Esc", "[Save] [Catalog] [More] · Esc")
+	hint := config.Text("[Salvar] Ctrl+S · [Catálogo] Ctrl+T · [Mais] Ctrl+A · Tab/↑↓ campos · Esc", "[Save] Ctrl+S · [Catalog] Ctrl+T · [More] Ctrl+A · Tab/↑↓ fields · Esc")
 	if m.fields[providerActiveField].Value() == "false" {
 		return config.Text("Ctrl+G salvar e ativar · ", "Ctrl+G save and enable · ") + hint
 	}

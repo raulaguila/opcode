@@ -103,7 +103,7 @@ func (m statusCmp) widths() (left, center, right int) {
 		right = min(right, 16)
 	}
 	if m.width < 80 {
-		left, right = min(left, 8), min(right, 10)
+		left, right = min(left, 8), min(right, 8)
 	}
 	if m.width < 60 {
 		left, right = min(left, 6), min(right, 8)

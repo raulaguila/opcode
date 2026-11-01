@@ -1,5 +1,17 @@
 # Histórico de versões
 
+## Em desenvolvimento — 2026-11-01
+
+- Conexões mostram atalhos de salvar, catálogo e opções avançadas com cliques
+  alinhados. Falhas de catálogo distinguem autenticação, TLS, rede, tempo e
+  formato, com diagnóstico sanitizado em `/error`, separado da recuperação.
+- Pergunta vazia oferece orientação no painel e limpa o aviso ao corrigir a
+  resposta; rascunhos, seleção e validação de tamanho continuam preservados.
+- Rodapé compacto usa estados curtos completos, preservando tempo e tok/s;
+  preenchimento integral da barra de contexto ocorre apenas em 100%.
+- Plano informa etapas concluídas e conteúdo oculto acima/abaixo. O catálogo
+  distingue total, modelos de conversa e resultados de busca.
+
 ## Em desenvolvimento — 2026-10-31
 
 - Rodapé apresenta barra e percentual de uso da janela efetiva, mantendo estimativas

@@ -151,7 +151,8 @@ func assertPTYLiveFooterResize(t *testing.T, h *ptyUIHarness, finalSent *atomic.
 		h.resize(width, 36)
 		h.wait(fmt.Sprintf("live context and time at %d columns", width), 5*time.Second, func(frame string) bool {
 			footer := ptyUIFooter(frame)
-			return strings.Contains(footer, "%") && strings.Contains(footer, "~") &&
+			return strings.Contains(footer, "Generating") && !strings.Contains(footer, "Generat…") &&
+				strings.Contains(footer, "%") && strings.Contains(footer, "~") &&
 				regexp.MustCompile(`[0-9]+s`).MatchString(footer) && strings.Contains(footer, "Esc") &&
 				regexp.MustCompile(`~[0-9]+(?:\.[0-9]+)? (?:tok/s|t/s)`).MatchString(footer)
 		})

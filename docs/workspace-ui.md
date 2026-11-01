@@ -555,7 +555,7 @@ ou tecnologias assistivas. As evidências estão em
 ## Contexto e velocidade no rodapé
 
 À esquerda do modelo, a barra mostra, por exemplo,
-`~8k/32k ctx [##---] ~25% · ~24.5 tok/s`. Clique na informação de contexto
+`~8k/32k ctx [#----] ~25% · ~24.5 tok/s`. Clique na informação de contexto
 para abrir `/context`. O preenchimento e o percentual mostram o uso da janela,
 não a porcentagem de conclusão da resposta. O estado é informativo: não aumenta
 nem reduz limites, permissões ou exigências de citações.
@@ -598,9 +598,10 @@ Durante o trabalho, a etapa, o tempo decorrido e Esc ficam juntos: por exemplo,
 `Gerando resposta · 12s · Esc cancela`. O tempo cobre o trabalho desde o envio,
 incluindo espera e ferramentas; não é uma previsão. Acima de um minuto usa
 `1m05s`; acima de uma hora, `1h02m`. Em 80–109 colunas, o rodapé compacta os
-números para `[##---] ~25% · ~24.5 t/s`; em 60–79, mantém `~25% ctx` e a taxa.
+números para `[#----] ~25% · ~24.5 t/s`; em 60–79, mantém `~25% ctx` e a taxa.
 Abaixo disso, oculta métricas para priorizar etapa, tempo e cancelamento. Quando
-necessário, encurta a etapa e o nome do modelo. Perguntas aguardando o usuário
+necessário, usa o primeiro termo da etapa, como “Gerando”/“Generating”, e encurta
+o nome do modelo. A linha compacta mantém o tempo e Esc sem separadores extras. Perguntas aguardando o usuário
 em menos de 80 colunas e avisos/erros em menos de 110 têm prioridade sobre as
 métricas. Nada acrescenta linhas ao rodapé nem muda a altura do input.
 
@@ -738,3 +739,31 @@ ativa; modo e atividade continuam no rodapé principal. O UUID e os dados comple
 permanecem em `/task`, em vez de ocupar a área compacta. Alt+↑/↓ continua rolando
 as etapas. Rascunhos são preservados ao redimensionar; em terminais pequenos, o
 painel mantém título e etapa ativa. Uma pergunta pendente continua tendo prioridade.
+
+
+### Legendas, falhas e contagens
+
+O formulário de conexão mostra as teclas junto às ações: Ctrl+S salva, Ctrl+T
+consulta o catálogo e Ctrl+A abre opções avançadas. Tab/↑↓ percorre os campos;
+as legendas quebram em linhas e os cliques usam a mesma geometria. Consultar
+metadados continua separado de testar inferência.
+
+Uma consulta de modelos que falha mantém o provedor escolhido e a lista vazia.
+A nota distingue autenticação, certificado/TLS, rede, tempo esgotado e formato;
+Ctrl+R tenta novamente e Ctrl+P revisa a conexão. `/error` mostra a orientação
+sanitizada mais recente, sem URL, corpo HTTP ou credenciais do transporte.
+Esse diagnóstico não modifica o erro de uma execução nem autoriza sua repetição;
+uma falha posterior da execução volta a ocupar seu próprio diagnóstico.
+
+O cabeçalho separa o total do catálogo dos modelos aptos à conversa. Embeddings
+explicitamente identificados continuam excluídos. Com busca ativa, a posição
+na lista se refere aos resultados, não ao total anunciado pelo provedor.
+
+Ao enviar uma resposta vazia, a pergunta mostra “Escreva uma resposta ou escolha
+uma opção” no próprio painel. Editar, colar ou mudar a resposta ativa remove esse
+aviso, preservando outros erros e o rascunho da conversa. O serviço mantém a
+validação de respostas e o limite de 4000 bytes, inclusive com texto multibyte.
+
+O título do plano explicita “1/14 concluídas”; ↑ e ↓ indicam conteúdo oculto
+acima ou abaixo. A posição de leitura, a etapa ativa, Alt+↑/↓ e `/task` continuam
+nos controles existentes, sem criar outro painel.

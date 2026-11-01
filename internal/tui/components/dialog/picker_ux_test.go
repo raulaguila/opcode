@@ -41,6 +41,71 @@ func TestModelPickerHidesOnlyExplicitEmbeddingEvidence(t *testing.T) {
 	require.Nil(t, m.choose(), "known embedding metadata cannot escape through a stale highlight")
 }
 
+func TestCatalogCountsSeparateChatEligibilityAndSearchResults(t *testing.T) {
+	for _, language := range []string{"en", "pt"} {
+		t.Run(language, func(t *testing.T) {
+			m := catalogDialog(t)
+			config.Get().TUI.Language = language
+			m.Open()
+			embedding := false
+			m.Update(ModelCatalogLoadedMsg{request: m.request, models: []models.Model{
+				{ID: "chat", APIModel: "chat"},
+				{ID: "embed", APIModel: "embed", SupportsChat: &embedding},
+				{ID: "unknown", APIModel: "unknown-embedding-name"},
+				{ID: "other", APIModel: "other"},
+			}})
+			require.Len(t, m.models, 4)
+			require.Len(t, m.filtered, 3)
+			summary := config.Text("4 catálogo · 3 conversa", "4 catalog · 3 chat")
+			require.Contains(t, ansi.Strip(m.View()), summary)
+			m.Update(tea.KeyPressMsg{Text: "unknown"})
+			require.Len(t, m.filtered, 1)
+			view := ansi.Strip(m.View())
+			require.Contains(t, view, summary)
+			require.Contains(t, view, config.Text("1 de 1 resultados", "1 of 1 results"))
+			m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
+			m.Update(tea.KeyPressMsg{Text: "no-match"})
+			require.Contains(t, ansi.Strip(m.View()), config.Text("0 de 0 resultados", "0 of 0 results"))
+			require.Contains(t, ansi.Strip(m.View()), summary)
+		})
+	}
+}
+
+func TestProviderFormShortcutLegendWrapsAndRemainsClickable(t *testing.T) {
+	for _, language := range []string{"en", "pt"} {
+		t.Run(language, func(t *testing.T) {
+			m := settingsDialog(t)
+			config.Get().TUI.Language = language
+			m.edit(nil)
+			m.fields[providerURLField].SetValue("http://local.invalid/v1")
+			m.fields[providerActiveField].SetValue("false")
+			m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
+			for _, advanced := range []bool{false, true} {
+				m.advanced = advanced
+				for _, field := range m.fieldIndices() {
+					m.focus = field
+					view := m.View()
+					for _, hint := range []string{"Ctrl+S", "Ctrl+T", "Ctrl+A", "Ctrl+G", "Tab/↑↓", "Esc"} {
+						require.Contains(t, ansi.Strip(view), hint)
+					}
+					require.LessOrEqual(t, lipgloss.Width(view), 60)
+					require.LessOrEqual(t, lipgloss.Height(view), 20)
+				}
+			}
+			m.advanced = false
+			m.Update(pickerClickLabel(t, m.View(), config.Text("[Mais]", "[More]")))
+			require.True(t, m.advanced)
+			_, cmd := m.Update(pickerClickLabel(t, m.View(), config.Text("[Catálogo]", "[Catalog]")))
+			require.NotNil(t, cmd)
+			require.True(t, m.testing)
+			m.Update(cmd())
+			_, cmd = m.Update(pickerClickLabel(t, m.View(), config.Text("[Salvar]", "[Save]")))
+			require.NotNil(t, cmd)
+			require.True(t, cmd().(ProviderSettingsSavedMsg).Disabled)
+		})
+	}
+}
+
 func TestFastModelSelectionRechecksEmbeddingEvidence(t *testing.T) {
 	m := catalogDialog(t)
 	http.DefaultTransport = catalogTestTransport(func(req *http.Request) (*http.Response, error) {

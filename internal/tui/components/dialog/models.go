@@ -3,7 +3,6 @@ package dialog
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"unicode"
@@ -464,7 +463,7 @@ func updateModelDialogCmpDefault(m *modelDialogCmp, msg *ModelCatalogLoadedMsg) 
 	m.cancel = nil
 	if msg.err == nil {
 		m.models = msg.models
-		m.note = fmt.Sprintf(config.Text("Catálogo do provedor · %d modelos", "Provider catalog · %d models"), len(m.models))
+		m.note = m.catalogCounts()
 		m.filter()
 		for i, model := range m.filtered {
 			if model.ID == m.refreshSelection {
@@ -476,12 +475,13 @@ func updateModelDialogCmpDefault(m *modelDialogCmp, msg *ModelCatalogLoadedMsg) 
 	} else if errors.Is(msg.err, models.ErrCatalogUnsupported) {
 		m.models = getModelsForProvider(m.provider)
 		m.filter()
-		m.note = config.Text("Catálogo configurado · consulta indisponível", "Configured catalog · live listing unavailable")
+		m.note = m.catalogCounts() + config.Text(" · configurado", " · configured")
 	} else {
 		m.catalogFailed = true
 		m.models = nil
 		m.filter()
-		m.note = config.Text("Falha ao consultar provedor · Ctrl+R tenta novamente · Ctrl+P conexões", "Provider query failed · Ctrl+R retries · Ctrl+P connections")
+		m.note = catalogFailureHint(msg.err) + " · /error"
+		return m, util.CmdHandler(catalogFailureNotice(m.note)), true
 	}
 	return extractedResult0, extractedResult1, false
 }

@@ -17,6 +17,9 @@ func (m *providerDialogCmp) handleProviderMessage(msg tea.Msg) connectionAction 
 			return connectionHandled(nil)
 		}
 		m.finishCatalogTest(msg)
+		if msg.err != nil {
+			return connectionHandled(util.CmdHandler(catalogFailureNotice(m.note)))
+		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.MouseMsg:
@@ -31,7 +34,7 @@ func (m *providerDialogCmp) finishCatalogTest(result providerTestMsg) {
 	m.testing, m.cancel = false, nil
 	m.catalogTested = true
 	if result.err != nil {
-		m.note = config.Text("Falha na consulta: ", "Connection test failed: ") + result.err.Error()
+		m.note = catalogFailureHint(result.err) + " · /error"
 	} else {
 		m.note = fmt.Sprintf(config.Text("Catálogo consultado · %d modelos. Ferramentas não testadas. Ctrl+S salva.", "Catalog queried · %d models. Tools not tested. Ctrl+S saves."), result.count)
 	}

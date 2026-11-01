@@ -123,11 +123,11 @@ func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey 
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		return nil, fmt.Errorf("cannot connect to local model server; start Ollama or LM Studio and check providers.local.baseURL / LOCAL_ENDPOINT")
+		return nil, &CatalogError{message: "cannot connect to local model server; start Ollama or LM Studio and check providers.local.baseURL / LOCAL_ENDPOINT", cause: err}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("local model discovery returned HTTP %d", resp.StatusCode)
+		return nil, &CatalogError{StatusCode: resp.StatusCode, message: fmt.Sprintf("local model discovery returned HTTP %d", resp.StatusCode)}
 	}
 	const maxBody = 1 << 20
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))

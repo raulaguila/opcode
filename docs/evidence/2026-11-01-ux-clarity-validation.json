@@ -1,0 +1,264 @@
+{
+  "date": "2026-11-01",
+  "baseline": "123cfd51118f3c695c4278d9c13fdb3d94bbd142",
+  "binary_sha256": "1b23295f3acb27e9027f76b1423f0c709cc9347fcf3086d3dcdedfa4d4fba353",
+  "source_sha256": {
+    "CHANGELOG.md": "5c0e2a9cc25f40199fc07c2563a01ac67db6715a9dbce12bac912e99fe414397",
+    "docs/validation.md": "86ffb3e142c62a8561c906138ec8cf829bc3d14b3874e205c43ba73ce704d928",
+    "docs/workspace-ui.md": "c73e5442049a4b60a46aacb6082242e0c207ffc13c111a176966e33ca2fe175f",
+    "internal/llm/models/catalog.go": "e1f91f1781f939589433e94466c9b233750dad4b4ea683b11fff3e0bcb8065c3",
+    "internal/llm/models/local.go": "aedf3746189a93d056e3ce7cc478a5cd11f522daea2411ede548c6b363a80d7d",
+    "internal/tui/catalog_diagnostic_test.go": "a564c36fe8d399b40d9d6962e20be83fd37ab6743fb19b66cee6a4cced0315c4",
+    "internal/tui/components/core/status.go": "c6133d11fcf1515f4a120ff43be29d3df5f47a6ede3625724ebc34de7d1fde99",
+    "internal/tui/components/core/status_metrics.go": "81af3a78d20c44bd1d22481dadc44b974e0ec99b9afa62760b90aa66147b60ae",
+    "internal/tui/components/core/status_metrics_test.go": "410c4f89776006d937bd6e8893603c11e7330171c2d22f9b6b2fe592181a94ec",
+    "internal/tui/components/core/status_progress_test.go": "c1a2a31a11a08f967832b7997b0cfb7eeffa499de67b2e371ab26005071b672a",
+    "internal/tui/components/dialog/model_catalog_error.go": "9ea7a130528323be677c7facdce0194cba8f0ad271cd841a3c81afaddd84b3dd",
+    "internal/tui/components/dialog/model_catalog_failure_test.go": "c43d0bd979c005a735f6177784a09d5179e4672c08015a3c442211b8f04628ea",
+    "internal/tui/components/dialog/model_view.go": "2fb5e6d216575dcad95c31c903c740de438af83e9cf602a7ea986da5dc6ef15e",
+    "internal/tui/components/dialog/models.go": "166a84f8c60a03c5ba02f097530e37e71d22b3886059c86a51c7c6d27694a9cb",
+    "internal/tui/components/dialog/picker_ux_test.go": "b240321233e531131bd96cc1512b76e13746c43d137b4b3c6611efa3b80c54f6",
+    "internal/tui/components/dialog/provider_navigation.go": "fa83cd508aa2fbc444e7209173bff0308c8438e2202640f006ddf90431fb2428",
+    "internal/tui/components/dialog/provider_view.go": "008482cbce8f7390be1092a619d76c09d7e8f9e833a1a8c561f374c8246a0353",
+    "internal/tui/components/dialog/providers.go": "131625be102f7d0fd4c21b9afd41e6eb137c136e82d083d5ba058771747542d2",
+    "internal/tui/models_integration_test.go": "e34c9103eed8f3e7db3c284e6b77ab5160f3272ab7e4957339caab265cf48028",
+    "internal/tui/page/catalog_diagnostic_test.go": "c43eaa0e6f0d02791a6e10d72c135d004bc906c316462c40a8efa21ca91e24f1",
+    "internal/tui/page/chat.go": "4e9be5a22c2091508e1f68e508c6a007c5b9b2127fa7fb0fda6931f98a305fcc",
+    "internal/tui/page/paste.go": "a7d3b4e84cbe0128729055833e4158fa94bb72cdd4c01a7bd4d24ea06b45b8a4",
+    "internal/tui/page/plan_panel.go": "c7f467975a0a6a4188c28070584eb2ac4b988fa80f1ccd5ee2c32b2548263626",
+    "internal/tui/page/plan_panel_test.go": "28f652837d449f87744909cac0520950da566ee94190a2b441950d51b5745c7c",
+    "internal/tui/page/question_panel.go": "a22f1d1fbedd177084a0a99c4db0fc70834c9206195d4d0c853f3404de845cbe",
+    "internal/tui/page/question_selection.go": "1572c4a01807eff7c9625e94c329e03c8d303ea3509f2f6f0f9da060e4dc78e9",
+    "internal/tui/page/question_selection_test.go": "1a22a25adf7019be2796d5e09bef8e97a6666de33dbebaa97cb573a1864f50ef",
+    "internal/tui/page/questions.go": "96dd4e91eaae79a03398d8fc3b26cd369e7d0788e205721964f926b6c86d1637",
+    "internal/tui/page/workflow.go": "eae20a588b01aba352e567b83700917095f6247581e66f7da156844d999b81b1",
+    "internal/tui/page/workspace.go": "b7229ef68a4c520587ddb7305bcdd44f1ef49c7b8d10be78bd87317f8d2f714d",
+    "internal/tui/pty_menu_refinement_test.go": "cd30d9932eb00f1d8536140c23f0bba8664b7449b1fcc42d08ec44acce1f5708",
+    "internal/tui/pty_plan_panel_test.go": "b27112dd3725db48b3da2b1e3b72a764a2b5277257c14ea59e8cacba0473789c",
+    "internal/tui/pty_question_choice_test.go": "442fb3ee6cf02e2182a394f8718e62f9838cef7db6218b3cee0b4ade27f6aeea",
+    "internal/tui/pty_stream_speed_test.go": "1abb3c1f1cb17a722a46e36d517698157783c33711c359bf8960aafd02a6fd1e",
+    "internal/tui/pty_ui_live_test.go": "e356adb714bef2ff526d71946d8f89df0164a43b7a2240e0ce36895339453b9a",
+    "internal/tui/settings_integration_test.go": "17932d8fed8fae831c14ff1e3488c60590590ecc394d0d594066010f732b0d5b",
+    "internal/tui/setup_binary_test.go": "400823fa54ac775c3afdf74109940982af1b449588e5a037866c89d888824c88",
+    "internal/tui/tui.go": "247dc05881b55cf72ca14e67299d2a0f872968070917dd1bda1ee37fc518ee73",
+    "internal/tui/util/util.go": "8ae47520f86db729febcf7d16162f0c455d260282d2133259eda7b74d6100f67"
+  },
+  "manifest_scope": "All changed/new files except this evidence file. Production Go source unchanged since binary build. Caption expectations in tests were updated separately and executed in the final corresponding gates.",
+  "protected_unchanged_sha256": {
+    "go.mod": "b69606c07b1eb3ed19aae4c407554a7857bcf58e27ce859d77522b07225b1425",
+    "go.sum": "659d9fea2397880cc3968a56605298ebc5d7f8f5751308aa426cfbfa0ecaa74c",
+    "internal/evaluation/testdata/cases.json": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+    "internal/evaluation/testdata/explanation_quality.json": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7",
+    "internal/evaluation/testdata/project_questions.json": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600",
+    "internal/evaluation/testdata/retrieval.json": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "internal/evaluation/testdata/review_evidence.json": "e1f3e5ba75c2f893f41c8b7265ca0271cb418e5c808df494802f6bf89b07bbde",
+    "internal/evaluation/testdata/synonym_navigation.json": "c39b929d82928ec4fc9767da83c1b6c14588aa48f776c93864986c28860082c9",
+    "internal/llm/agent/calibration.go": "195656bcc8d66ace6a3e86854cdf2b6a24bcb61fab87b96c38a27254969bf661",
+    "internal/llm/agent/citation_revision.go": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c",
+    "internal/llm/agent/citations.go": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c",
+    "internal/llm/agent/citations_messages.go": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7",
+    "internal/llm/agent/generation.go": "ed75c0c3c658a26322b9de074c3832e95f5b369a96ea93d40d68f877e48c574f",
+    "internal/llm/agent/provider_failure.go": "6aa96dca2a0d4569aeccf11b936f1ec4a10d743391e3deebc03b44cf8f64c209",
+    "internal/llm/prompt/coder.go": "560709d80d9cdc03579070d67ac310e3ddb009f64dab3d6ecdbdea6357841867",
+    "internal/llm/provider/provider.go": "a20b2bba2b689219cdbdfce04be94f6db9a4968a89e5ccb100521508059f01f6",
+    "internal/llm/tools/access.go": "473cd65951c14b446ce6212e040e06495406536b83e09a6fdd6529972ea0f731",
+    "internal/llm/tools/source_receipt.go": "9d577433546bcacb83064f026d2e935361ddba021a14088f0759de699ec7da9e",
+    "internal/permission/exact_params_test.go": "50c801eb517d8cc1c2a2043d38a4cc367d94dca6be1b02d88b8cb49a6006256e",
+    "internal/permission/permission.go": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14",
+    "internal/permission/permission_test.go": "fa4d5da4ae2c63908c15520fc06039277e17c0dd738624c1f056b74164b6ae7d",
+    "internal/permission/status.go": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944"
+  },
+  "checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-ux-clarity/final/opcode",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 1.51
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 193.38
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.07
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 2.66
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.15
+    }
+  ],
+  "live": [
+    {
+      "name": "pty",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-ux-clarity/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestPTY|TestLiveBinary)",
+        "-count=1",
+        "-json",
+        "-timeout=6m"
+      ],
+      "exit_code": 0,
+      "seconds": 50.52
+    },
+    {
+      "name": "compatible-local",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-ux-clarity/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/llm/provider/integration",
+        "-run",
+        "^TestLiveProviders$",
+        "-count=1",
+        "-json",
+        "-timeout=5m"
+      ],
+      "exit_code": 0,
+      "seconds": 7.07
+    },
+    {
+      "name": "native-nemotron",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-ux-clarity/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^TestLiveOllamaPTYUI$",
+        "-count=1",
+        "-json",
+        "-timeout=12m"
+      ],
+      "exit_code": 0,
+      "seconds": 28.38
+    }
+  ],
+  "passed_counts": {
+    "integration.log": {
+      "parent_tests": 1160,
+      "test_nodes": 2513
+    },
+    "pty.jsonl": {
+      "parent_tests": 23,
+      "test_nodes": 224
+    },
+    "native-nemotron.jsonl": {
+      "parent_tests": 1,
+      "test_nodes": 1
+    },
+    "compatible-local.jsonl": {
+      "parent_tests": 1,
+      "test_nodes": 5
+    }
+  },
+  "native_model": "nemotron-3.5-bolt:e4b",
+  "native_context_window": 16384,
+  "improvements": [
+    "Visible provider Ctrl+S/T/A actions, wrapping and click alignment",
+    "Localized catalog causes with sanitized diagnostic details separate from execution recovery",
+    "Inline empty-answer guidance clearing on edit, paste, selection and batch navigation",
+    "Complete compact phase label, elapsed time and speed; context bar full only at 100 percent",
+    "Explicit completed plan count and hidden-content arrows",
+    "Catalog total, eligible chat count and search result positions"
+  ],
+  "log_sha256": {
+    "integration.log": "c486fd7cf838b67c9a2ef73d850790f65a0bd997c4e5962e52dbdbc3ab1a792f",
+    "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "staticcheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "complexity.log": "d95ca46ac1c5ee5a2a58509a36eef3d730a264584d56b864023d831a38ffa7b6",
+    "pty.jsonl": "e40eb8a21d2306a77fc8cac6ce942604d31219f9677514a744c90cb3e87e6829",
+    "native-nemotron.jsonl": "c730ed5ec1adcfe8c283839d663f976892b82e0e337a5dafe510e730a3bd4a08",
+    "compatible-local.jsonl": "5c02dfc71a2f429e1379af5c98d4fdf7ed90437c31816ce1ae43b7359eb1f4b9"
+  },
+  "reviewed_vt_captures": [
+    "provider-form",
+    "question-empty",
+    "plan",
+    "footer-compact",
+    "models"
+  ],
+  "capture_overlay_sha256": "c42f717e1270cd8b9ee380efc76021482481edd5446691230a79d579c69e31f1",
+  "capture_notes": "Read-only overlay records VT cells after existing successful predicates; production binary unchanged. PNG default terminal colors approximated; no browser/DOM accessibility certification.",
+  "earlier_failures": {
+    "cause": "Acceptance tests still expected old Provider catalog and Provider query failed labels. Updated to catalog/chat counts and explicit HTTP 503 cause, retaining navigation, empty-list, retry, receipt, permission and call-count assertions.",
+    "production_fixes_after_build": false,
+    "agent_evaluation_criteria_changed": false
+  },
+  "preserved": [
+    "Exact permissions and Bubblewrap sandbox",
+    "Citation validators, historical read evidence and source receipts",
+    "Agent evaluation criteria and expected semantic outcomes",
+    "Generation budgets and streaming rate samples",
+    "Drafts, answer selection and no replay of authorized commands"
+  ],
+  "no_dependency_changes": true,
+  "no_personal_config_changes": true,
+  "no_additional_inference_for_presentation": true,
+  "limits": [
+    "No real company gateway or paid OpenAI requests.",
+    "Native full-flow test uses local Ollama; transport failures use controlled typed fixtures.",
+    "Context percentage remains request input/window, not generation completion.",
+    "Terminal colors, external clipboard receipt and assistive technologies are not certified by these captures."
+  ]
+}

@@ -130,7 +130,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	}
 	h.send("\x0f") // Ctrl+O opens model selection even with a draft.
 	h.wait("model selector", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Choose model") })
-	h.wait("provider catalog", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Provider catalog") })
+	h.wait("provider catalog", 10*time.Second, func(frame string) bool { return strings.Contains(frame, " catalog · ") })
 	testLiveOllamaPTYUIStruct(h)
 	h.send("\t")
 	h.wait("catalog before outage", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") })
@@ -773,7 +773,7 @@ func testLiveOllamaPTYUIStruct(h *ptyUIHarness) {
 		})
 		h.send(keys.previous)
 		h.wait("Ollama provider restored", 10*time.Second, func(frame string) bool {
-			return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+			return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, " catalog · ") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
 		})
 	}
 }
@@ -890,7 +890,7 @@ func TestPTYUILSPFormWaitsForAllFields(t *testing.T) {
 }
 
 func testLiveOllamaPTYUIFailedProviderStaysSelectedWithEmptyList(frame string) bool {
-	return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "Provider query failed") && strings.Contains(frame, "Empty list: query failed") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+	return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "Catalog HTTP 503: check server") && strings.Contains(frame, "Empty list: query failed") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
 }
 
 func testLiveOllamaPTYUICallback(catalogAvailable *atomic.Bool, w http.ResponseWriter, r *http.Request) {
@@ -1024,7 +1024,7 @@ func testLiveOllamaPTYUIProviderRetryRecoversCatalog(frame string) bool {
 }
 
 func testLiveOllamaPTYUIReturnToOllamaAfterOutage(frame string) bool {
-	return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, "Provider catalog")
+	return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, " catalog · ")
 }
 
 func testLiveOllamaPTYUIModelListPosition(frame string) bool {

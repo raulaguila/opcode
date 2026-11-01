@@ -5,6 +5,40 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Clareza dos controles e estados — 01/11/2026
+
+A revisão implementa seis ajustes de apresentação: legendas com atalhos nas
+conexões, falhas de catálogo acionáveis, validação local de pergunta vazia,
+estados curtos no rodapé compacto, progresso/rolagem do plano e contagens de
+catálogo/conversa/busca. Reutiliza os componentes e o painel de diagnóstico.
+
+O catálogo preserva o erro tipado de transporte por um wrapper cujo texto é
+sanitizado. Só redação fixa da aplicação chega à interface e a `/error`:
+autenticação, TLS/certificado, rede, prazo, HTTP ou formato. Testes PT/EN cobrem
+OpenAI e local, com URLs e credenciais sentinela; nenhuma delas aparece na nota
+ou nos detalhes. Falhar não seleciona um modelo antigo nem repete inferência.
+O diagnóstico de conexão fica separado da recuperação de execução.
+
+Perguntas vazias mostram orientação no painel, preservam a escolha/rascunho e
+limpam o aviso ao editar, colar ou navegar. Respostas não vazias continuam no
+serviço estrito, incluindo o limite de 4000 bytes e texto multibyte. Lotes mantêm
+revisão antes de enviar; responder continua sem conceder permissão.
+
+Passaram **1160 testes principais** com race detector e integração, vet,
+staticcheck e `gocognit -over 15 .`. As **23 suítes PTY** cobrem cliques/foco,
+inicialização, legendas, temas, NO_COLOR, perguntas, plano e rodapé em 60/80/180
+colunas. As verificações preservam seleção, rascunhos, contagem de requisições,
+recibos e recusa de chamadas incompletas. Expectativas de legendas antigas foram
+atualizadas para os textos novos, incluindo a causa HTTP 503 na falha de catálogo;
+os critérios de avaliação do agente não mudaram.
+
+O fluxo completo em PTY com `nemotron-3.5-bolt:e4b` local no Ollama e o round trip
+OpenAI-compatible local são registrados na [evidência desta rodada](evidence/2026-11-01-ux-clarity-validation.json).
+Permissões, isolamento, recibos e validadores de citações permanecem inalterados.
+Sem novas dependências, configurações, inferência auxiliar ou mudanças em arquivos
+pessoais. Capturas VT foram inspecionadas; as cores padrão dos PNGs são aproximações,
+portanto não constituem certificação de contraste/acessibilidade do terminal.
+
 ## Uso de contexto e geração no rodapé — 31/10/2026
 
 O rodapé mostra barra em caracteres, percentual e consumo da janela efetiva.

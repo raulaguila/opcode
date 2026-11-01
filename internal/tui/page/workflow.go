@@ -28,6 +28,7 @@ type workflowPanel struct {
 	expanded        bool
 	question        interaction.Question
 	answer          textinput.Model
+	answerRequired  bool
 	choice          int
 	offset          int
 	details         bool
@@ -65,9 +66,11 @@ func (p *chatPage) refreshQuestion() {
 	q, ok := p.app.Questions.Pending(p.session.ID)
 	if !ok {
 		p.workflow.question = interaction.Question{}
+		p.workflow.answerRequired = false
 		return
 	}
 	if q.ID != p.workflow.question.ID {
+		p.workflow.answerRequired = false
 		input := textinput.New()
 		input.CharLimit = 4000
 		input.Prompt = config.Text("Resposta: ", "Answer: ")
@@ -176,6 +179,9 @@ func (p *chatPage) questionKey(msg tea.KeyPressMsg) tea.Cmd {
 		return p.navigateQuestionAnswer(msg.String(), len(q.Choices))
 	case "enter":
 		selected := p.selectedQuestionAnswer(interaction.QuestionItem{Choices: q.Choices})
+		if p.questionAnswerMissing(selected) {
+			return nil
+		}
 		answer := selected.Text
 		if len(selected.Choices) > 0 {
 			answer = selected.Choices[0]

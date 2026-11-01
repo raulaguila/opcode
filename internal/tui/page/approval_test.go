@@ -111,3 +111,32 @@ func TestReopenedPageDoesNotRestoreSessionApprovalPolicy(t *testing.T) {
 	require.Equal(t, permission.ApprovalPrompt, reopened.approvalPolicy())
 	require.Equal(t, permission.ApprovalPrompt, p.approvalPolicy())
 }
+
+func TestApprovalSelectionExplainsReadOnlyModesWithoutRepeatingExecuteState(t *testing.T) {
+	for _, mode := range []workflow.Mode{workflow.Ask, workflow.Plan, workflow.Execute} {
+		p := approvalPage(t)
+		p.workflow.task.Mode = mode
+		cmd := p.chooseApprovalPolicy(permission.ApprovalProjectEdits)
+		require.Equal(t, permission.ApprovalProjectEdits, p.approvalPolicy())
+		require.Equal(t, mode, p.mode())
+		if mode == workflow.Execute {
+			require.Nil(t, cmd, "the selected footer value already confirms ordinary execute changes")
+		} else {
+			msgs := flattenCommands(cmd)
+			require.Len(t, msgs, 1)
+			require.Equal(t, config.Text("Somente leitura neste modo; edições só em Executar.", "Read only in this mode; edits only apply in Execute."), msgs[0].(util.InfoMsg).Msg)
+		}
+	}
+}
+
+func TestApprovalCommandOpensChooserWithoutChangingConsent(t *testing.T) {
+	p := approvalPage(t)
+	cmd, handled := p.handleWorkspaceMessage("/approval", nil)
+	require.True(t, handled, "a UI command must not be forwarded to the model")
+	msgs := flattenCommands(cmd)
+	require.Len(t, msgs, 2)
+	require.IsType(t, OpenApprovalChooserMsg{}, msgs[0])
+	require.Equal(t, chat.SubmissionResultMsg{Text: "/approval"}, msgs[1])
+	require.Equal(t, permission.ApprovalPrompt, p.approvalPolicy())
+	require.Equal(t, workflow.Execute, p.mode())
+}

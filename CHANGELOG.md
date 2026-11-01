@@ -2,6 +2,13 @@
 
 ## Em desenvolvimento — 2026-11-01
 
+- Recuperação usa os mesmos comandos no desenho e nos cliques; Revisar tarefa
+  abre a tarefa, espaços não executam ações e rótulos compactos evitam cortes.
+- Aprovação explica o efeito somente leitura em Ask/Plan, é pesquisável por
+  `/approval` e deixa de repetir confirmações rotineiras em Executar.
+- Paleta informa posição e continuidade; modelo fica legível no rodapé compacto
+  ocioso e cada linha do catálogo informa o contexto disponível, sem nova consulta.
+
 - Rodapé separa modo e aprovação em dois controles. A política selecionada,
   inclusive o padrão, permanece visível; cada clique destaca a seleção
   correspondente no mesmo menu. Rótulos compactos preservam o espaço da geração.

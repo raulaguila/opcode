@@ -316,7 +316,7 @@ func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme,
 		group := ""
 		catalogViewScrollOffsetModelIDActive(active, &model, &prefs, &group)
 		rendered := fmt.Sprintf("%s %s %s", caret, mark, label)
-		rendered = modelRowGroup(rendered, group, g.width, model.ID == active)
+		rendered = modelRowGroup(rendered, group, modelRowContext(model), g.width, model.ID == active)
 		row := (*base)
 		if i == m.selectedIdx {
 			row = row.Background(t.BorderDim()).Foreground(t.Text()).Bold(true)
@@ -325,13 +325,31 @@ func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme,
 	}
 }
 
-func modelRowGroup(row, group string, width int, active bool) string {
-	if group == "" || width < 48 && (!active || width < 18) {
-		return row
+func modelRowGroup(row, group, context string, width int, active bool) string {
+	if width < 12 || ansi.StringWidth(context)+5 > width {
+		return ansi.Truncate(row, width, "…")
 	}
-	groupWidth := ansi.StringWidth(group)
-	row = ansi.Truncate(row, max(1, width-groupWidth-1), "…")
-	return row + strings.Repeat(" ", max(1, width-groupWidth-ansi.StringWidth(row))) + group
+	metadata := context
+	if group != "" && (width >= 48 || active) && width >= ansi.StringWidth(context)+ansi.StringWidth(group)+16 {
+		metadata += " · " + group
+	}
+	metadataWidth := ansi.StringWidth(metadata)
+	row = ansi.Truncate(row, max(1, width-metadataWidth-1), "…")
+	return row + strings.Repeat(" ", max(1, width-metadataWidth-ansi.StringWidth(row))) + metadata
+}
+
+func modelRowContext(model models.Model) string {
+	if model.ContextWindow <= 0 {
+		return "—"
+	}
+	label := compactModelTokens(model.ContextWindow)
+	if model.ContextWindow >= 1024*1024 {
+		label = fmt.Sprintf("%.1fM", float64(model.ContextWindow)/(1024*1024))
+	}
+	if model.ContextEstimated {
+		label = "~" + label
+	}
+	return label
 }
 
 func modelDetailLinesActiveContextModelTargetAgentCoder(m *modelDialogCmp, selected *models.Model, effective *string) {

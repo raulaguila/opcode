@@ -1,0 +1,252 @@
+{
+  "date": "2026-11-01",
+  "baseline": "faeef2b3cc34410607b528bd8ee8e8333810b118",
+  "binary_sha256": "41be8df9f79b0c48084cf59411190db077fd2f412163f3bb587c8b301b9aa86c",
+  "source_sha256": {
+    "CHANGELOG.md": "fcc6d34d8690c000124cd620666a1ab166cf6709133761b3f27c1cf0176a0b98",
+    "docs/validation.md": "94d46be92e6d5afc13f28701166d207ed76ecaf7fa73613d4848bde6eb6baa25",
+    "docs/workspace-ui.md": "fcf83856717aadd9204b71b167a5c4f27518988a9d1cc81df75227b08329941d",
+    "internal/tui/approval_palette_test.go": "84b153b401dae6d763ec45e32d2cec74d51c61d0eea84aa6d1825088c46e45b9",
+    "internal/tui/commands/approval_search_test.go": "7b4142fd3b00c03fd82fd84a67b99d09772bc6fcd8f9b55c99c91b4a6ba2f35b",
+    "internal/tui/commands/commands.go": "cf67cecfd49badc39989b0c61a64f6c00652d3106dafdfd704084cd7d06c267c",
+    "internal/tui/commands/copy.go": "c2a3855aeeb69916482daa1a0eabbfd9213972806e963b491982802adf289404",
+    "internal/tui/components/core/status.go": "bb6f8f3efae9e653274e6335c0c1445d25fdab74ccde8089c79f218bbbdfe03e",
+    "internal/tui/components/core/status_idle_test.go": "e4af5cd0f430a65677b2b19f22ccdd55cdc415561ab6a6520f8aee2b9b7a309a",
+    "internal/tui/components/dialog/commands.go": "3e6ea3ce862dfc4863833e5c949917df4e1d3d9173033303093571c0c92be08b",
+    "internal/tui/components/dialog/model_row_context_test.go": "9fe54e2db4617d1c3b504f1e7837d4295a26919337fcb63940613991dd8fe38a",
+    "internal/tui/components/dialog/model_view.go": "a06d7628eba08a3c8504dab30be0ca9522586aec04ea98c7f3e5164bd4b82b91",
+    "internal/tui/components/dialog/palette_discovery_test.go": "a411e51580f2d6401fbde858ff938299f95b513c5e24b0bded091ab7b9424262",
+    "internal/tui/page/approval.go": "87c682742588dc65d541685882820b45645b0e20696dda099cfbff846e662e42",
+    "internal/tui/page/approval_test.go": "b41191d1d4c0af4547d8a94182e4c6dd77894b83df7305db5aff77d0ff21d6a3",
+    "internal/tui/page/recovery.go": "4b2326936e65a3638c70340c4f779f4291bda907816a59f97b36764eb808667f",
+    "internal/tui/page/recovery_actions.go": "d16708211686ad1d8a534d6d77bf9370eb8e997815d76dcc8d2b62c00e9735f7",
+    "internal/tui/page/recovery_actions_test.go": "065597d053a17cb65933d5800932f1a238624a8d57003b7abd77e4261f75b8e3",
+    "internal/tui/page/workspace.go": "5c195fd8a3d66a2b468e39457127c140b24381755ae9f7519f2b7b6337896b75",
+    "internal/tui/productivity.go": "f802bc20b0181ab529024da69801d14ca13beddf2ac896c7ce3e84937a34a14c",
+    "internal/tui/pty_lean_ux_test.go": "b4517ec35a24b5e34fc36a86053a8c4e4d98cd46ebc66a436df164b42b3b0a62"
+  },
+  "manifest_scope": "Changed/new files except this evidence file. All Go source unchanged since final build and validation.",
+  "protected_unchanged_sha256": {
+    "go.mod": "b69606c07b1eb3ed19aae4c407554a7857bcf58e27ce859d77522b07225b1425",
+    "go.sum": "659d9fea2397880cc3968a56605298ebc5d7f8f5751308aa426cfbfa0ecaa74c",
+    "internal/evaluation/testdata/cases.json": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+    "internal/evaluation/testdata/explanation_quality.json": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7",
+    "internal/evaluation/testdata/project_questions.json": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600",
+    "internal/evaluation/testdata/retrieval.json": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "internal/evaluation/testdata/review_evidence.json": "e1f3e5ba75c2f893f41c8b7265ca0271cb418e5c808df494802f6bf89b07bbde",
+    "internal/evaluation/testdata/synonym_navigation.json": "c39b929d82928ec4fc9767da83c1b6c14588aa48f776c93864986c28860082c9",
+    "internal/llm/agent/calibration.go": "195656bcc8d66ace6a3e86854cdf2b6a24bcb61fab87b96c38a27254969bf661",
+    "internal/llm/agent/citation_revision.go": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c",
+    "internal/llm/agent/citations.go": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c",
+    "internal/llm/agent/citations_messages.go": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7",
+    "internal/llm/agent/generation.go": "ed75c0c3c658a26322b9de074c3832e95f5b369a96ea93d40d68f877e48c574f",
+    "internal/llm/agent/provider_failure.go": "6aa96dca2a0d4569aeccf11b936f1ec4a10d743391e3deebc03b44cf8f64c209",
+    "internal/llm/prompt/coder.go": "560709d80d9cdc03579070d67ac310e3ddb009f64dab3d6ecdbdea6357841867",
+    "internal/llm/provider/provider.go": "a20b2bba2b689219cdbdfce04be94f6db9a4968a89e5ccb100521508059f01f6",
+    "internal/llm/tools/access.go": "473cd65951c14b446ce6212e040e06495406536b83e09a6fdd6529972ea0f731",
+    "internal/llm/tools/source_receipt.go": "9d577433546bcacb83064f026d2e935361ddba021a14088f0759de699ec7da9e",
+    "internal/permission/exact_params_test.go": "50c801eb517d8cc1c2a2043d38a4cc367d94dca6be1b02d88b8cb49a6006256e",
+    "internal/permission/permission_test.go": "fa4d5da4ae2c63908c15520fc06039277e17c0dd738624c1f056b74164b6ae7d",
+    "internal/permission/status.go": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944",
+    "internal/permission/permission.go": "0373c54ba0c921c1d9a71f01cedc76560b444c3fcb5e0b43445b749f535ed8a7",
+    "internal/permission/approval_policy.go": "13fcda04733d0ca0807cbfdc6ac887cbb17b07ffec992b6afa54fe4a1d9d1c11",
+    "internal/llm/tools/edit.go": "14b606be22ae58d22f7e99c9e332995e9cc0a6bacd3e5c8ae390e8f4defe5254",
+    "internal/llm/tools/write.go": "d348681069ff3694679d61391ed2f02b0f344d64594640bd91d254cdac3c8e13",
+    "internal/llm/tools/patch.go": "a3006d53d2e317cd49797cd2a8d153d11e48351e157f229116c188f5261c061a"
+  },
+  "checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-lean-ux/final/opcode",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.18
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 113.97
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.74
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.61
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.27
+    }
+  ],
+  "live": [
+    {
+      "name": "pty",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-lean-ux/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestPTY|TestLiveBinary)",
+        "-count=1",
+        "-json",
+        "-timeout=6m"
+      ],
+      "exit_code": 0,
+      "seconds": 56.07
+    },
+    {
+      "name": "native-nemotron",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-lean-ux/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^TestLiveOllamaPTYUI$",
+        "-count=1",
+        "-json",
+        "-timeout=12m"
+      ],
+      "exit_code": 0,
+      "seconds": 32.98
+    },
+    {
+      "name": "compatible-local",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-lean-ux/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/llm/provider/integration",
+        "-run",
+        "^TestLiveProviders$",
+        "-count=1",
+        "-json",
+        "-timeout=5m"
+      ],
+      "exit_code": 0,
+      "seconds": 7.36
+    }
+  ],
+  "passed_counts": {
+    "integration.log": {
+      "parent_tests": 1201,
+      "test_nodes": 2669
+    },
+    "pty.jsonl": {
+      "parent_tests": 28,
+      "test_nodes": 232
+    },
+    "native-nemotron.jsonl": {
+      "parent_tests": 1,
+      "test_nodes": 1
+    },
+    "compatible-local.jsonl": {
+      "parent_tests": 1,
+      "test_nodes": 5
+    }
+  },
+  "native_model": "nemotron-3.5-bolt:e4b",
+  "native_context_window": 16384,
+  "improvements": [
+    "Recovery rendering and exact clicks share one action list; /task routes to task; whitespace and invisible areas do not execute actions",
+    "Read-only effective mode explained independently of selected approval preference; no routine Execute policy toast",
+    "Searchable approval palette/slash entry reuses existing chooser; filtered count and continuation arrows",
+    "Recognizable idle compact model identity while preserving active metrics and important messages",
+    "Cached context per model row, estimate/unknown markings and effective-window separation"
+  ],
+  "regression_proof": "New recovery task-click test fails against baseline with expected task / actual error, passes after fix.",
+  "pty_acceptance": [
+    "Palette approval search opens existing chooser with read-only explanation",
+    "Selecting policy in Ask does not change mode or invoke inference",
+    "Draft preserved through approval selection and model inspection",
+    "Compact idle model identity visible at60columns",
+    "Model row uses explicit16k fixture override instead of provider64k advertisement",
+    "Step limit1 fixture: one generation, blank click no retry, /task opens correct task panel",
+    "Native Nemotron: factual cited overview, question/answer, one native write under project-edit consent and subsequent explicitly approved PTY command"
+  ],
+  "fixture_note": "Initial new catalog acceptance expected64k; corrected to16k because the fixture explicitly configures that override. Production context detection and precedence unchanged.",
+  "log_sha256": {
+    "integration.log": "bc3f607c263812ebb91bee4565fa2f9c1d8f6efecf474a076fac86a161ce4a2e",
+    "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "staticcheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "complexity.log": "d95ca46ac1c5ee5a2a58509a36eef3d730a264584d56b864023d831a38ffa7b6",
+    "pty.jsonl": "21dbe6c1aee5eacaf901dd65b0835a68bd5b0af56fab7b3c3fc543a3426f7d52",
+    "native-nemotron.jsonl": "6a76028af498fee2d8b4d90c07fb6bcd628968cb8006d7319717ff29f10e4800",
+    "compatible-local.jsonl": "613c3af0db66f72c473d8d7b31a79591b22ea7208ec4e3584c01fa92b441be63",
+    "focused-pty.log": "558449fe2adc7320bf38c4b151bcffeec54f3331bbdf3ccfe0c064cff44b68d6",
+    "before-fix.log": "66c5181648d1e10bcc783344ab4e5f6d44f2da717a097ef9f770436c32d2bd05"
+  },
+  "capture_overlay_sha256": "7cbd659ca505ea4b71000b4d7290e1ffba5b08576b1890f50a96acf159b27b65",
+  "reviewed_vt_captures": [
+    "read-only-policy",
+    "idle-model-60",
+    "model-context-row",
+    "recovery-actions",
+    "correct-task"
+  ],
+  "capture_notes": "Read-only test overlay captures VT cells after existing successful assertions; production binary unchanged. Default PNG colors approximated; no accessibility certification.",
+  "no_permission_engine_changes": true,
+  "no_citation_validator_changes": true,
+  "no_dependency_changes": true,
+  "no_prompt_or_provider_changes": true,
+  "no_personal_config_changes": true,
+  "limits": [
+    "Selected approval policy remains inactive in Ask/Plan and follows existing revocation lifecycle.",
+    "More model room is reserved only for idle60–79column footers; active work and important messages retain priority.",
+    "Context rows describe available/configured metadata, not automatically the active request window.",
+    "Local disposable fixtures only; no company gateway or paid provider calls."
+  ]
+}

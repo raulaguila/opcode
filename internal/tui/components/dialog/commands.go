@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -146,7 +147,7 @@ func (c *commandDialogCmp) geometry() commandGeometry {
 	if c.activeID != "" {
 		headers = 1
 	}
-	if c.height > 0 && c.height < 10 {
+	if c.height > 0 && c.height < 12 {
 		g.padding = 0
 		if headers == 3 {
 			headers = 2
@@ -155,8 +156,12 @@ func (c *commandDialogCmp) geometry() commandGeometry {
 	g.firstRow = 1 + g.padding + headers
 	g.details = c.detailLines(g.width)
 	available := 8 + len(g.details)
+	footerRows := 2
+	if c.activeID == "" {
+		footerRows++
+	}
 	if c.height > 0 {
-		available = max(1, c.height-(2+2*g.padding)-headers-2)
+		available = max(1, c.height-(2+2*g.padding)-headers-footerRows)
 	}
 	if c.approvalID != "" {
 		available = max(1, available-1)
@@ -176,6 +181,9 @@ func (c *commandDialogCmp) detailLines(width int) []string {
 	_, description := commands.Presentation(item.ID, item.Title, item.Description)
 	if c.activeID != "" {
 		description = modeConsequence(item.ID)
+		if strings.HasPrefix(item.ID, "approval-") && c.activeID != "mode-execute" {
+			description = config.Text("Somente leitura neste modo; edições só em Executar. ", "Read only in this mode; edits only apply in Execute. ") + description
+		}
 	} else {
 		description = "/" + item.ID + " · " + description
 	}
@@ -226,12 +234,26 @@ func (c *commandDialogCmp) View() string {
 	for _, detail := range g.details {
 		rows = append(rows, styles.PanelHint().Render(detail))
 	}
+	if c.activeID == "" {
+		rows = append(rows, dialogHint(c.positionLabel(g, selected, len(items)), g.width))
+	}
 	hint := config.Text("↑↓ escolher · Enter abrir · Esc voltar", "↑↓ select · Enter open · Esc back")
 	if c.activeID != "" {
 		hint = config.Text("↑↓ escolher · Enter aplicar · Esc voltar", "↑↓ select · Enter apply · Esc back")
 	}
 	rows = append(rows, styles.PanelDivider(g.width), dialogHint(hint, g.width))
 	return styles.Panel().Padding(g.padding, 2).Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+}
+
+func (c *commandDialogCmp) positionLabel(g commandGeometry, selected, total int) string {
+	position := fmt.Sprintf(config.Text("%d de %d", "%d of %d"), max(0, selected+1), total)
+	if g.start > 0 {
+		position += " · ↑"
+	}
+	if g.start+g.count < total {
+		position += " · ↓"
+	}
+	return position
 }
 
 func (c *commandDialogCmp) commandRow(item Command, selected bool, width int) string {

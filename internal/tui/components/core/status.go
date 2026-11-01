@@ -53,6 +53,9 @@ func (m statusCmp) View() string { return m.ViewFor(util.FooterState{}) }
 func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	left = m.modeLabel(state) + " ▾"
 	right = config.Text("Escolher modelo", "Choose model")
+	if m.compactIdle(state) {
+		right = config.Text("Modelo", "Model")
+	}
 	labelsGet(&right)
 	right += " ▾"
 	center = config.Text("/ comandos · Alt+Enter nova linha", "/ commands · Alt+Enter new line")
@@ -96,6 +99,9 @@ func (m statusCmp) widths(state util.FooterState) (left, center, right int) {
 		right = 12
 	case m.width >= 60:
 		right = 4
+		if m.compactIdle(state) {
+			right = 12
+		}
 	}
 	right = min(right, max(0, width-left))
 	center = width - left - right
@@ -104,12 +110,21 @@ func (m statusCmp) widths(state util.FooterState) (left, center, right int) {
 
 func (m statusCmp) metricWidths(state util.FooterState) (lw, cw, mw, rw int) {
 	lw, cw, rw = m.widths(state)
-	mw = min(max(0, cw-20), ansi.StringWidth(m.metrics(state))+1)
+	reserve := 20
+	if m.compactIdle(state) {
+		reserve = 10
+	}
+	mw = min(max(0, cw-reserve), ansi.StringWidth(m.metrics(state))+1)
 	if m.metrics(state) == "" {
 		mw = 0
 	}
 	cw -= mw
 	return
+}
+
+func (m statusCmp) compactIdle(state util.FooterState) bool {
+	return m.width >= 60 && m.width < 80 && !state.Busy && !state.Terminal && state.Pending == 0 && m.info.Msg == "" &&
+		(state.Activity == "" || state.Activity == config.Text("Concluído", "Completed"))
 }
 
 func (m statusCmp) ViewFor(state util.FooterState) string {

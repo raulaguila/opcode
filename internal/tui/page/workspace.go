@@ -170,6 +170,8 @@ func (p *chatPage) workspaceCommand(command, value string) tea.Cmd {
 		return util.CmdHandler(OpenFilesMsg{})
 	case "commands":
 		return util.CmdHandler(OpenCommandsMsg{})
+	case "approval":
+		return util.CmdHandler(OpenApprovalChooserMsg{})
 	case "terminal":
 		p.closeWorkspace()
 		return p.toggleTerminal()
@@ -717,7 +719,7 @@ func (p *chatPage) handleWorkspaceMessage(text string, attachments []message.Att
 		return nil, false
 	}
 	switch command {
-	case "quit", "cancel", "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "search", "select", "queue", "runtime", "index", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "retry", "error":
+	case "quit", "cancel", "new", "files", "terminal", "commands", "worktrees", "setup", "local-status", "contract", "settings", "providers", "models", "integrations", "sessions", "process", "latest", "search", "select", "queue", "runtime", "index", "context", "compact", "recalibrate", "skills", "skill", "changes", "checks", "undo", "redo", "actions", "export", "permissions", "approval", "retry", "error":
 	default:
 		return nil, false
 	}

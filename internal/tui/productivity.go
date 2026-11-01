@@ -90,6 +90,8 @@ func (a *appModel) productivityMessage(msg tea.Msg) (tea.Cmd, bool) {
 		return nil, true
 	case page.OpenModeChooserMsg:
 		return a.openModeChooser(), true
+	case page.OpenApprovalChooserMsg:
+		return a.openModeChooserAt(true), true
 	case dialog.SessionPreviewRequestMsg:
 		return productivityMessageCaseDialogSessionPreviewRequestMsg(a, &msg)
 	case dialog.SessionActionMsg:

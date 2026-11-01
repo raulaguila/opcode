@@ -14,6 +14,7 @@ var Builtins = []Command{
 	{ID: "terminal", Title: "Terminal", Description: "Abrir ou voltar ao terminal"},
 	{ID: "commands", Title: "Todos os comandos", Description: "Buscar ações e ferramentas"},
 	{ID: "mode ", Title: "Modo de trabalho", Description: "Escolher modo de trabalho…", Group: true},
+	{ID: "approval", Title: "Alterar aprovação…", Description: "Escolher a política de aprovação da sessão"},
 	{ID: "plan", Title: "Plano e próximas ações", Description: "Rever, ajustar ou executar o plano"},
 	{ID: "task", Title: "Tarefa atual", Description: "Ver tarefa e critérios de aceite"},
 	{ID: "resume", Title: "Retomar tarefa", Description: "Continuar a tarefa salva"},
@@ -52,7 +53,7 @@ var Builtins = []Command{
 
 func Category(id string) string {
 	switch id {
-	case "settings", "models", "setup", "integrations", "runtime", "local-status":
+	case "settings", "models", "setup", "integrations", "runtime", "local-status", "approval":
 		return config.Text("Configurações", "Settings")
 	case "files", "worktrees", "index", "changes", "checks", "undo", "redo":
 		return config.Text("Projeto", "Project")

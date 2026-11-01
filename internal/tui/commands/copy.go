@@ -6,13 +6,14 @@ import (
 )
 
 var english = map[string][2]string{
-	"search":  {"Find in conversation", "Find text and navigate messages · Alt+F"},
-	"select":  {"Select text", "Select transcript text with the keyboard · Alt+S"},
-	"cancel":  {"Stop activity", "Request cancellation while preserving progress"},
-	"quit":    {"Quit Opcode", "Save the draft and close the application"},
-	"index":   {"Project index", "Status, update, rebuild, pause or clear derived index"},
-	"runtime": {"Runtime diagnostic", "Model, protocol, context, tools and index; credentials omitted"},
-	"new":     {"New conversation", "Start another conversation"}, "files": {"Files", "Choose files to attach"}, "terminal": {"Terminal", "Open or return to the terminal"}, "commands": {"All commands", "Search actions and tools"},
+	"approval": {"Change approval…", "Choose the session approval policy"},
+	"search":   {"Find in conversation", "Find text and navigate messages · Alt+F"},
+	"select":   {"Select text", "Select transcript text with the keyboard · Alt+S"},
+	"cancel":   {"Stop activity", "Request cancellation while preserving progress"},
+	"quit":     {"Quit Opcode", "Save the draft and close the application"},
+	"index":    {"Project index", "Status, update, rebuild, pause or clear derived index"},
+	"runtime":  {"Runtime diagnostic", "Model, protocol, context, tools and index; credentials omitted"},
+	"new":      {"New conversation", "Start another conversation"}, "files": {"Files", "Choose files to attach"}, "terminal": {"Terminal", "Open or return to the terminal"}, "commands": {"All commands", "Search actions and tools"},
 	"mode": {"Work mode", "Choose work mode…"}, "plan": {"Plan and next actions", "Review, adjust or execute the plan"}, "task": {"Current task", "Inspect task and acceptance criteria"}, "resume": {"Resume task", "Continue the saved task"},
 	"setup": {"Guided setup", "Provider, model and optional tests"}, "local-status": {"Ollama allocation", "Loaded context, CPU/GPU and model memory"}, "contract": {"Expected outcome", "Explain, plan, change or verify; targets and criteria"},
 	"settings": {"Settings", "Providers and preferences"}, "models": {"Choose model", "Catalog, favorites and details"}, "integrations": {"Integrations", "Configure/test MCP or LSP"}, "sessions": {"Conversations", "Search, rename, archive and export"},

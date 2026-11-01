@@ -5,6 +5,41 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Cinco ajustes de clareza e recuperação — 01/11/2026
+
+A recuperação tem uma única lista de comandos para desenhar ações e testar
+cliques. A regressão `/task` → `/error` falha contra a versão anterior e passa
+abrindo a tarefa. Testes PT/EN cobrem todos os tipos de recuperação em
+20/36/60/90/180 colunas, margens, separadores, linhas adicionais e rascunho.
+Limite de saída continua sem sugerir retry antes de ajustar a configuração.
+
+A aprovação distingue a política selecionada do modo efetivo: Ask/Plan
+continuam somente leitura, com explicação no seletor e ao confirmar. Em Executar,
+o valor selecionado substitui o toast duplicado. A busca e `/approval` abrem o
+seletor existente sem alterar consentimento; a paleta informa contagem filtrada
+e continuidade. O rodapé compacto ocioso preserva um nome reconhecível do modelo
+sem sacrificar contexto/tok/s, e avisos/geração mantêm prioridade.
+
+O contexto de cada linha do catálogo vem dos metadados existentes, com `~` para
+estimativas e `—` quando não informado. Testes preservam identidade Unicode,
+seleção, favoritos e marcadores; limite configurado e janela efetiva continuam
+separados. Não há novas consultas por linha, alteração de metadados ou inferência.
+
+O PTY controlado cobre busca de aprovação, explicação em Ask, rascunho, modelo
+legível em 60 colunas, contexto na linha e nenhuma inferência pela navegação.
+Outro caso, com limite explícito de um passo, confirma que espaço vazio não
+repete geração e que clicar `/task` abre a tarefa correta, preservando o rascunho.
+O fluxo Nemotron real mantém fontes, pergunta/resposta, criação nativa única sob
+consentimento e comando PTY ainda aprovado explicitamente pelo usuário.
+
+Passaram **1201 testes principais** (2669 nós) com race detector/integração,
+**28 testes principais do grupo PTY** (232 nós), o fluxo completo com Nemotron
+e o round trip OpenAI-compatible local. Build, vet, staticcheck e complexidade
+≤15 também passaram. Resultados e hashes estão na [evidência desta rodada](evidence/2026-11-01-lean-ux-validation.json).
+Permissões, isolamento, recibos, validadores de citações, prompts, provedores e
+critérios de avaliação permanecem inalterados; sem novas dependências ou
+configurações pessoais. Cores padrão de capturas PNG são aproximadas.
+
 ## Controles de modo e aprovação no rodapé — 01/11/2026
 
 O rodapé tem alvos separados para modo e aprovação, sempre identificando a

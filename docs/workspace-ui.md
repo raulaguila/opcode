@@ -824,3 +824,29 @@ A aprovação não dispensa
 leitura antes de sobrescrever, isolamento, escrita atômica, recibos ou validação
 das citações. Ferramentas genéricas e integrações não herdam essa autorização
 apenas por apresentarem o mesmo nome de uma ferramenta nativa.
+
+### Clareza de recuperação, aprovação e modelos
+
+As ações de recuperação compartilham comandos e áreas de clique com a linha
+renderizada. `/task` abre a tarefa; separadores, margens e ações ocultas não
+executam nada. Quando os rótulos completos não cabem, aparecem os comandos
+curtos. Entre 20 e 35 colunas, as ações podem ocupar linhas adicionais; a altura
+do painel acompanha essas linhas sem apagar o rascunho.
+
+`/approval` ou **Alterar aprovação…** na paleta abre o mesmo seletor na política
+atual. Em Perguntar/Planejar, o menu e a confirmação explicam que o modo continua
+somente leitura e que edições só se aplicam em Executar. Selecionar uma política
+não altera o modo nem responde a aprovações. Em Executar, o próprio controle
+confirma a escolha, sem uma mensagem rotineira duplicada no rodapé.
+
+A paleta mostra posição, total filtrado e setas quando há opções acima/abaixo.
+Em 60–79 colunas, o rodapé ocioso reserva mais espaço ao modelo e reduz a dica
+de comandos. Geração, perguntas, avisos, terminal e fila mantêm prioridade;
+percentual e tok/s continuam disponíveis. Abaixo de 60, o atalho de modelos
+continua sendo a alternativa ao botão.
+
+Cada linha de modelo mostra seu contexto conhecido/configurado (`64k`),
+estimado (`~128k`) ou desconhecido (`—`). Marcadores de uso, favoritos e recentes
+continuam quando há espaço. Esses valores usam os metadados já disponíveis:
+não iniciam consultas, inferência ou carregamento. O contexto efetivo da sessão
+continua separado nos detalhes, e overrides de configuração permanecem válidos.

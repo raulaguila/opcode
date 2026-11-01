@@ -7,9 +7,11 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/tui/util"
+	"github.com/raulaguila/opcode/internal/workflow"
 )
 
 type ApprovalPolicyMsg struct{ Policy permission.ApprovalPolicy }
+type OpenApprovalChooserMsg struct{}
 
 func (p *chatPage) approvalPolicy() permission.ApprovalPolicy {
 	if p.pendingApproval != "" {
@@ -38,7 +40,10 @@ func (p *chatPage) chooseApprovalPolicy(policy permission.ApprovalPolicy) tea.Cm
 		p.pendingApproval = ""
 		return util.ReportError(err)
 	}
-	return util.ReportInfo(config.Text("Aprovação: ", "Approval: ") + approvalLabel(policy))
+	if p.mode() != workflow.Execute {
+		return util.ReportInfo(config.Text("Somente leitura neste modo; edições só em Executar.", "Read only in this mode; edits only apply in Execute."))
+	}
+	return nil
 }
 
 func (p *chatPage) applyPendingApproval() error {

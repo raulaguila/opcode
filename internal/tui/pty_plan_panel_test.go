@@ -51,20 +51,25 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 			h.paste("/plan")
 			h.send("\r")
 			h.wait("empty styled plan", 5*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "Describe the task to organize") && ptyUIComposerEmpty(frame)
+				return strings.Contains(frame, "No plan yet") && !strings.Contains(frame, "┌") && ptyUIComposerEmpty(frame)
 			})
 			h.paste("Use update_plan to save the fixture plan and finish_task as planned without modifying files.")
 			h.send("\r")
 			h.wait("saved styled plan", 20*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "PLAN_PANEL_READY") && strings.Contains(frame, "Plan 1/14 completed") && strings.Contains(frame, "→ 11. Step 11") && ptyUIIdleFooter(frame)
+				// Plan mode never records progress, so every step stays pending.
+				return strings.Contains(frame, "PLAN_PANEL_READY") && strings.Contains(frame, "Plan 0/14 completed") && ptyUIIdleFooter(frame)
 			})
+			for range 10 {
+				h.send("\x1b[1;3B")
+			}
+			h.wait("plan scrolls to a later step", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "○ 11. Step 11") })
 			require.EqualValues(t, 2, generations.Load(), "presentation never triggers repair or inference")
 			const draft = "KEEP_PLAN_DRAFT"
 			h.paste(draft)
 			for _, size := range [][2]int{{60, 20}, {120, 40}} {
 				h.resize(size[0], size[1])
 				h.wait("plan and draft after resize", 5*time.Second, func(frame string) bool {
-					return strings.Contains(frame, draft) && strings.Contains(frame, "→ 11. Step 11") && strings.Contains(frame, "Plan 1/14 completed")
+					return strings.Contains(frame, draft) && strings.Contains(frame, "○ 11. Step 11") && strings.Contains(frame, "Plan 0/14 completed")
 				})
 				frame := h.frame()
 				require.Contains(t, frame, "┌")

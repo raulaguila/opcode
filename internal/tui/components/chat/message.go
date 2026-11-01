@@ -54,18 +54,23 @@ func renderMessageWithCache(msg string, isUser bool, width int, cache *styles.Ma
 	if isUser {
 		pipe = t.Secondary()
 	}
-	return renderMessageWithPipe(msg, width, cache, pipe, info...)
+	return renderMessageWithPipe(msg, width, cache, pipe, isUser, info...)
 }
 
-func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, pipe color.Color, info ...string) string {
+// A user message takes the heavy bar so turns separate without color (NO_COLOR).
+func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, pipe color.Color, user bool, info ...string) string {
 	t := theme.CurrentTheme()
+	border, glyph := lipgloss.NormalBorder(), "│"
+	if user {
+		border, glyph = lipgloss.ThickBorder(), "┃"
+	}
 
 	style := styles.BaseStyle().
 		Width(max(1, width)).
 		BorderLeft(true).
 		Foreground(t.TextMuted()).
 		BorderForeground(pipe).
-		BorderStyle(lipgloss.NormalBorder())
+		BorderStyle(border)
 
 	contentWidth := max(1, width-style.GetHorizontalFrameSize())
 	measure := contentWidth
@@ -84,7 +89,7 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 		parts = append(parts, info...)
 	}
 	if len(parts) == 1 {
-		if framed, ok := renderLaidOutMessage(parts[0], width, pipe); ok {
+		if framed, ok := renderLaidOutMessage(parts[0], width, pipe, glyph); ok {
 			return framed
 		}
 	}
@@ -101,14 +106,14 @@ func renderMessageWithPipe(msg string, width int, cache *styles.MarkdownCache, p
 
 // The single Markdown fragment already owns its layout. Keep native ANSI/link
 // wrapping, but reuse fixed frame tags instead of rebuilding them for every row.
-func renderLaidOutMessage(content string, width int, pipe color.Color) (string, bool) {
+func renderLaidOutMessage(content string, width int, pipe color.Color, glyph string) (string, bool) {
 	if width < 2 || strings.IndexFunc(content, func(r rune) bool { return unicode.IsControl(r) && r != '\n' && r != '\x1b' }) >= 0 {
 		return "", false
 	}
 	palette := theme.CurrentTheme()
 	inner := width - 1
 	content = lipgloss.Wrap(content, inner, "")
-	border := ansi.Style{}.ForegroundColor(pipe).Styled("│")
+	border := ansi.Style{}.ForegroundColor(pipe).Styled(glyph)
 	text := ansi.Style{}.ForegroundColor(palette.TextMuted()).BackgroundColor(palette.Background()).String()
 	pad := ansi.Style{}.BackgroundColor(palette.Background()).String()
 	spaces := strings.Repeat(" ", inner)
@@ -203,31 +208,17 @@ func renderAssistantMessage(
 
 	// Add finish info if available
 	if finished {
-		switch finishData.Reason {
-		case message.FinishReasonEndTurn:
-			took := formatTimestampDiff(msg.CreatedAt, finishData.Time)
+		status := map[message.FinishReason]string{
+			message.FinishReasonEndTurn:          formatTimestampDiff(msg.CreatedAt, finishData.Time),
+			message.FinishReasonCanceled:         config.Text("cancelado", "canceled"),
+			message.FinishReasonError:            config.Text("erro", "error"),
+			message.FinishReasonPermissionDenied: config.Text("permissão negada", "permission denied"),
+		}[finishData.Reason]
+		if status != "" {
 			info = append(info, baseStyle.
 				Width(width-1).
 				Foreground(t.TextMuted()).
-				Render(fmt.Sprintf(" %s (%s)", models.SupportedModels[msg.Model].Name, took)),
-			)
-		case message.FinishReasonCanceled:
-			info = append(info, baseStyle.
-				Width(width-1).
-				Foreground(t.TextMuted()).
-				Render(fmt.Sprintf(" %s (%s)", models.SupportedModels[msg.Model].Name, "canceled")),
-			)
-		case message.FinishReasonError:
-			info = append(info, baseStyle.
-				Width(width-1).
-				Foreground(t.TextMuted()).
-				Render(fmt.Sprintf(" %s (%s)", models.SupportedModels[msg.Model].Name, "error")),
-			)
-		case message.FinishReasonPermissionDenied:
-			info = append(info, baseStyle.
-				Width(width-1).
-				Foreground(t.TextMuted()).
-				Render(fmt.Sprintf(" %s (%s)", models.SupportedModels[msg.Model].Name, "permission denied")),
+				Render(fmt.Sprintf(" %s (%s)", messageModelName(models.SupportedModels[msg.Model]), status)),
 			)
 		}
 	}
@@ -732,4 +723,13 @@ func projectedTaskHistory(reader taskHistoryReader, id string) []message.Message
 	}
 	history, _ := reader.List(context.Background(), id)
 	return history
+}
+
+// messageModelName drops the internal "local." ID a nameless configured model
+// falls back to, matching the model picker.
+func messageModelName(model models.Model) string {
+	if (model.Name == "" || model.Name == string(model.ID)) && model.APIModel != "" {
+		return model.APIModel
+	}
+	return model.Name
 }

@@ -62,11 +62,11 @@ func assertMessageFrameCells(t *testing.T, width int) {
 		for _, info := range [][]string{nil, {"model name"}, {"model\nsecond line", styles.PanelHint().Render("metadata")}, {""}} {
 			parts := append([]string{markdown}, info...)
 			for _, user := range []bool{false, true} {
-				pipe := palette.Primary()
+				pipe, border := palette.Primary(), lipgloss.NormalBorder()
 				if user {
-					pipe = palette.Secondary()
+					pipe, border = palette.Secondary(), lipgloss.ThickBorder()
 				}
-				frame := styles.BaseStyle().Width(width).BorderLeft(true).Foreground(palette.TextMuted()).BorderForeground(pipe).BorderStyle(lipgloss.NormalBorder())
+				frame := styles.BaseStyle().Width(width).BorderLeft(true).Foreground(palette.TextMuted()).BorderForeground(pipe).BorderStyle(border)
 				before := frame.Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
 				after := renderMessage(source, user, false, width, info...)
 				require.Equal(t, lipgloss.Width(before), lipgloss.Width(after))
@@ -82,7 +82,7 @@ func TestMessageFrameFastPathDefersSpecialNativeLayout(t *testing.T) {
 		text  string
 		width int
 	}{{"plain", 1}, {"tab\tcolumn", 40}, {"line\rreturn", 40}, {"bell\a", 40}, {"漢", 2}} {
-		_, ok := renderLaidOutMessage(tc.text, tc.width, theme.CurrentTheme().Primary())
+		_, ok := renderLaidOutMessage(tc.text, tc.width, theme.CurrentTheme().Primary(), "│")
 		require.False(t, ok, "special layout must use the native frame")
 	}
 }

@@ -35,7 +35,7 @@ func TestTimelineInterleavesMessagesAndIndependentToolGroups(t *testing.T) {
 	}
 	require.Len(t, hits, 2)
 	require.NotEqual(t, hits[0].id, hits[1].id)
-	require.Less(t, strings.Index(view, "Public diagnosis"), strings.LastIndex(view, "Process"))
+	require.Less(t, strings.Index(view, "Public diagnosis"), strings.LastIndex(view, "repair"))
 	m.toggleProcess(hits[1].id)
 	view = timelineText(m)
 	require.Contains(t, view, "Private correction")

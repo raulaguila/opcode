@@ -273,7 +273,11 @@ func (c *commandDialogCmp) commandRow(item Command, selected bool, width int) st
 	if c.activeID != "" || width < 48 {
 		return style.Width(width).Render(ansi.Truncate(mark+name, width, "…"))
 	}
+	// A shortcut teaches more than a category; commands without one keep it.
 	category := commands.Category(item.ID)
+	if shortcut := commandShortcut(item.ID); shortcut != "" {
+		category = keyLabel(shortcut)
+	}
 	titleWidth := max(1, width-ansi.StringWidth(category)-3)
 	title := ansi.Truncate(mark+name, titleWidth, "…")
 	title += strings.Repeat(" ", max(0, width-ansi.StringWidth(title)-ansi.StringWidth(category)))
@@ -416,4 +420,11 @@ func modeActionTitle(id string) string {
 		return config.Text("Permitir edições no projeto", "Allow project edits")
 	}
 	return ""
+}
+
+func commandShortcut(id string) string {
+	if id == "new" {
+		return "ctrl+n"
+	}
+	return config.Shortcut(id)
 }

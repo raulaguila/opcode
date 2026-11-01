@@ -96,6 +96,11 @@ func (g *generationState) checkRepetition(agentMessage message.Message, toolResu
 		if repeats >= 4 {
 			return fmt.Errorf("repeated tool calls without progress; task saved for resumption")
 		}
+		// A call that fails the same way three times will not pass on a fourth;
+		// small models otherwise spend the whole run retrying it.
+		if repeats >= 3 && allToolsFailed(toolResults) {
+			return fmt.Errorf("%s failed 3 times with the same error; task saved for resumption", agentMessage.ToolCalls()[0].Name)
+		}
 	}
 
 	return nil
@@ -426,4 +431,15 @@ func (g *generationState) streamFailure(reply message.Message, err error) (bool,
 		return false, AgentEvent{}
 	}
 	return true, g.agent.err(failure)
+}
+
+func allToolsFailed(results *message.Message) bool {
+	found := false
+	for _, result := range results.ToolResults() {
+		if !result.IsError {
+			return false
+		}
+		found = true
+	}
+	return found
 }

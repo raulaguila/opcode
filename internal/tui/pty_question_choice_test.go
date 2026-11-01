@@ -113,7 +113,7 @@ func assertQuestionExchangeOrder(t *testing.T, frame string) {
 		require.Greater(t, index, previous, "question exchange order must remain intact: %s\n%s", text, frame)
 		previous = index
 	}
-	require.GreaterOrEqual(t, strings.Count(frame, "› Process"), 2)
+	require.GreaterOrEqual(t, strings.Count(frame, "› ✓ "), 2)
 	require.NotContains(t, frame, "Citations not validated")
 }
 

@@ -34,6 +34,23 @@ func contextPercent(state util.FooterState) float64 {
 }
 
 func (m statusCmp) contextMetric(state util.FooterState) string {
+	return m.contextMetricFor(state, m.shortContext(state))
+}
+
+// shortContext drops the token fraction when the full metrics would be clipped.
+func (m statusCmp) shortContext(state util.FooterState) bool {
+	if m.width < 110 {
+		return true
+	}
+	_, cw, _ := m.widths(state)
+	reserve := 20
+	if m.compactIdle(state) {
+		reserve = 10
+	}
+	return ansi.StringWidth(m.metricsFor(state, false))+1 > cw-reserve
+}
+
+func (m statusCmp) contextMetricFor(state util.FooterState, short bool) string {
 	if state.ContextWindow <= 0 {
 		return ""
 	}
@@ -49,10 +66,10 @@ func (m statusCmp) contextMetric(state util.FooterState) string {
 	if m.width < 80 {
 		return prefix + label
 	}
-	// ASCII cells work with NO_COLOR and terminals without block glyphs.
+	// Full and light blocks stay distinct without color (NO_COLOR).
 	filled := min(5, int(math.Floor(percent/20)))
-	bar := "[" + strings.Repeat("#", filled) + strings.Repeat("-", 5-filled) + "] " + prefix + label
-	if m.width < 110 {
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", 5-filled) + " " + prefix + label
+	if short {
 		return bar
 	}
 	return prefix + compactTokens(max(0, state.ContextTokens)) + "/" + compactTokens(state.ContextWindow) + " ctx " + bar
@@ -74,10 +91,14 @@ func footerRate(state util.FooterState) string {
 }
 
 func (m statusCmp) metrics(state util.FooterState) string {
+	return m.metricsFor(state, m.shortContext(state))
+}
+
+func (m statusCmp) metricsFor(state util.FooterState, short bool) string {
 	if m.width < 60 || m.width < 80 && state.WaitingForAnswer || m.width < 110 && m.hasPriorityInfo() {
 		return ""
 	}
-	context := m.contextMetric(state)
+	context := m.contextMetricFor(state, short)
 	// Speed does not depend on whether the provider advertises a window.
 	if context == "" && !state.Busy && state.TokensPerSecond <= 0 {
 		return ""

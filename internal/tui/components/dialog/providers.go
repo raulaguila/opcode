@@ -380,7 +380,8 @@ func (m *providerDialogCmp) View() string {
 	if m.testing {
 		note = "Testing connection… Esc cancels."
 	}
-	if m.screen == "provider" && m.dirty() {
+	// A new provider is unsaved by definition; the note only helps on edits.
+	if m.screen == "provider" && m.originalID != "" && m.dirty() {
 		lines = append(lines, line(config.Text("Alterações não salvas", "Unsaved changes")))
 	}
 	if m.screen == "provider" && len(m.fields) > 9 && m.fields[9].Value() == "true" {

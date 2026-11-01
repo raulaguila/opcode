@@ -23,6 +23,7 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
 	"github.com/raulaguila/opcode/internal/tui/layout"
 	"github.com/raulaguila/opcode/internal/tui/util"
+	"github.com/raulaguila/opcode/internal/workflow"
 )
 
 var ChatPage PageID = "chat"
@@ -226,7 +227,7 @@ func (p *chatPage) sendMessage(text string, attachments []message.Attachment) te
 		return tea.Batch(util.ReportError(err), util.CmdHandler(chat.SubmissionResultMsg{Text: text, Error: err}))
 	}
 	if p.session.ID == "" {
-		session, err := p.app.Sessions.Create(context.Background(), "New Session")
+		session, err := p.app.Sessions.Create(context.Background(), config.Text("Nova conversa", "New Session"))
 		if err != nil {
 			return failure(err)
 		}
@@ -328,6 +329,7 @@ func (p *chatPage) BindingKeys() []key.Binding {
 	localKeys := keyMap
 	localKeys.Terminal = key.NewBinding(key.WithKeys(config.Shortcut("terminal")), key.WithHelp(config.Shortcut("terminal"), config.Text("terminal / conversa", "terminal / chat")))
 	bindings := layout.KeyMapToSlice(localKeys)
+	bindings = append(bindings, key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", config.Text("alternar modo", "cycle mode"))))
 	bindings = append(bindings, p.messages.BindingKeys()...)
 	bindings = append(bindings, p.editor.BindingKeys()...)
 	return bindings
@@ -423,6 +425,14 @@ func updateChatPageKeyMsg(p *chatPage, msg *tea.KeyPressMsg) (extractedResult0 u
 			p.editor = updated.(layout.Container)
 			return p, cmd, true
 		}
+	}
+	if msg.String() == "shift+tab" && !p.showCompletionDialog {
+		// Same cycle as the footer mode menu: Ask → Plan → Execute → Ask.
+		next := map[workflow.Mode]workflow.Mode{workflow.Ask: workflow.Plan, workflow.Plan: workflow.Execute}[p.mode()]
+		if next == "" {
+			next = workflow.Ask
+		}
+		return p, util.CmdHandler(WorkflowCommandMsg{Command: "mode", Value: string(next)}), true
 	}
 	if result0, result1, result2, handled := updateChatPageKeyMsgAltUp(p, msg); handled {
 		return result0, result1, result2
@@ -559,7 +569,7 @@ func updateChatPageDefaultCaseCase(p *chatPage, msg *TerminalStartedMsg) (extrac
 
 func updateChatPageDefaultCaseCaseCase(p *chatPage, msg *WorkflowCommandMsg) (extractedResult0 util.Model, extractedResult1 tea.Cmd) {
 	if p.session.ID == "" {
-		session, err := p.app.Sessions.Create(context.Background(), "New Session")
+		session, err := p.app.Sessions.Create(context.Background(), config.Text("Nova conversa", "New Session"))
 		if err != nil {
 			return p, util.ReportError(err)
 		}

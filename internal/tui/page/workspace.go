@@ -486,7 +486,7 @@ func (p *chatPage) previewReversal(redo bool) tea.Cmd {
 		if redo {
 			return util.ReportInfo(config.Text("Nada para refazer", "Nothing to redo"))
 		}
-		return util.ReportInfo(config.Text("Nada para desfazer: nenhuma edição de ferramenta nesta conversa", "Nothing to undo: no tool edits in this conversation"))
+		return util.ReportInfo(config.Text("Nada para desfazer nesta conversa", "Nothing to undo in this conversation"))
 	}
 	if err != nil {
 		return util.ReportError(err)

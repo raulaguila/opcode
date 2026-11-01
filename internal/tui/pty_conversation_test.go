@@ -170,7 +170,7 @@ func assertConversationOrder(t *testing.T, frame string) {
 		require.Greater(t, index, previous, "%s must retain its chronological position:\n%s", text, frame)
 		previous = index
 	}
-	require.GreaterOrEqual(t, strings.Count(frame, "› Process"), 2, "consecutive tools must form separate collapsed groups")
+	require.GreaterOrEqual(t, strings.Count(frame, "› ✓ "), 2, "consecutive tools must form separate collapsed groups")
 	require.NotContains(t, frame, "Citations not validated")
 	require.NotContains(t, frame, "Model limit reached")
 }

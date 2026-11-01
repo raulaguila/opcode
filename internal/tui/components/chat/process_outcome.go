@@ -46,6 +46,19 @@ func processOutcome(items []message.Message) string {
 	return strings.Join(labels, " · ")
 }
 
+// processFailed reports a failed tool result. The folded row never quotes the
+// result itself: tool output stays behind the explicit expand.
+func processFailed(items []message.Message) bool {
+	for _, item := range items {
+		for _, result := range item.ToolResults() {
+			if result.IsError {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 type processFlags struct {
 	Cancelled bool `json:"cancelled"`
 	TimedOut  bool `json:"timed_out"`

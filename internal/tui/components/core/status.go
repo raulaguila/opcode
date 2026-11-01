@@ -105,6 +105,10 @@ func (m statusCmp) widths(state util.FooterState) (left, center, right int) {
 			right = 12
 		}
 	}
+	if m.showsPlainInfo(state) && m.width < 160 {
+		// A notice needs the room more than the full model name does.
+		right = min(right, 12)
+	}
 	right = min(right, max(0, width-left))
 	center = width - left - right
 	return
@@ -117,7 +121,7 @@ func (m statusCmp) metricWidths(state util.FooterState) (lw, cw, mw, rw int) {
 		reserve = 10
 	}
 	mw = min(max(0, cw-reserve), ansi.StringWidth(m.metrics(state))+1)
-	if m.metrics(state) == "" {
+	if m.metrics(state) == "" || m.showsPlainInfo(state) {
 		mw = 0
 	}
 	cw -= mw
@@ -205,7 +209,7 @@ func (m statusCmp) ActionAt(x int, state util.FooterState) string {
 	if x >= lw+cw {
 		return "context"
 	}
-	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
+	if m.showsInfo(state) {
 		// Only open known panels. A hint can never execute a tool or retry work.
 		for _, action := range []string{"integrations", "context", "settings", "models", "error"} {
 			if strings.Contains(m.info.Msg, "/"+action) {
@@ -245,8 +249,19 @@ func NewStatusCmp(lspClients map[string]*lsp.Client) StatusCmp {
 	return &statusCmp{messageTTL: 5 * time.Second, lspClients: lspClients}
 }
 
+// showsInfo reports whether the center segment shows the current notice.
+func (m statusCmp) showsInfo(state util.FooterState) bool {
+	return m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError)
+}
+
+// showsPlainInfo: an informational notice borrows the metrics' room. Warnings
+// and errors keep context visible, since they often concern that context.
+func (m statusCmp) showsPlainInfo(state util.FooterState) bool {
+	return m.showsInfo(state) && !m.hasPriorityInfo()
+}
+
 func labelsTypeUtilInfoTypeError(m *statusCmp, state *util.FooterState, center *string) {
-	if m.info.Msg != "" && (state.Activity == "" && !state.Busy || m.info.Type == util.InfoTypeWarn || m.info.Type == util.InfoTypeError) {
+	if m.showsInfo(*state) {
 		(*center) = strings.Join(strings.Fields(m.info.Msg), " ")
 		if m.info.Type == util.InfoTypeWarn {
 			(*center) = config.Text("Aviso: ", "Warning: ") + (*center)

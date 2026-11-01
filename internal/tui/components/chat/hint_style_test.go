@@ -54,7 +54,7 @@ func assertChatHintSurfaces(t *testing.T) {
 	r.renderRevisionToggle("previous", "Older version")
 	r.renderProcess(turnGroup{key: "group", messages: []message.Message{{Parts: []message.ContentPart{message.ToolCall{Name: "view"}}}}}, true)
 	view := strings.Join(r.rendered, "\n")
-	for _, text := range []string{"Drag to select", "Model reasoning", "Older version", "Process"} {
+	for _, text := range []string{"Drag to select", "Model reasoning", "Older version", "● view"} {
 		actual := chatHintGlyph(t, view, text)
 		require.Equal(t, root.FG, actual.FG)
 		require.Equal(t, root.BG, actual.BG)
@@ -67,12 +67,13 @@ func assertChatHintSurfaces(t *testing.T) {
 		completed := turnRenderer{messages: m, base: styles.BaseStyle(), theme: palette}
 		completed.renderProcess(turnGroup{key: "done", messages: []message.Message{result}}, false)
 		completedView := strings.Join(completed.rendered, "\n")
-		want := root.FG
 		if failed {
-			want = body.FG
-			require.Equal(t, body.FG, chatHintGlyph(t, completedView, "1 failure").FG, "recorded failures remain primary")
+			require.Contains(t, ansi.Strip(completedView), "1 failure")
+			require.Contains(t, completedView, "✗")
+			continue
 		}
-		require.Equal(t, want, chatHintGlyph(t, completedView, "finished").FG, "successful completion stays secondary without demoting failures")
+		require.Equal(t, root.FG, chatHintGlyph(t, completedView, "✓").FG, "successful completion stays secondary")
+		require.NotContains(t, completedView, "finished")
 	}
 	require.Equal(t, root.FG, chatHintGlyph(t, m.navigationHint(), "Arrows move").FG)
 	m.find = transcriptFind{open: true, query: "query"}

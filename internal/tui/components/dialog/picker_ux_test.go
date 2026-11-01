@@ -85,7 +85,7 @@ func TestProviderFormShortcutLegendWrapsAndRemainsClickable(t *testing.T) {
 				for _, field := range m.fieldIndices() {
 					m.focus = field
 					view := m.View()
-					for _, hint := range []string{"Ctrl+S", "Ctrl+T", "Ctrl+A", "Ctrl+G", "Tab/↑↓", "Esc"} {
+					for _, hint := range []string{"Ctrl+S", "Ctrl+T", "Ctrl+A", "Ctrl+G", "Tab", "Esc"} {
 						require.Contains(t, ansi.Strip(view), hint)
 					}
 					require.LessOrEqual(t, lipgloss.Width(view), 60)

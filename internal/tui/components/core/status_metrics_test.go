@@ -29,7 +29,7 @@ func TestFooterMetricsResizeAndClicksMatchVisibleCells(t *testing.T) {
 		require.Contains(t, plain, "~25%")
 		marker := "~25%"
 		if width >= 80 {
-			marker = "[#----]"
+			marker = "█░░░░"
 		}
 		before, _, _ := strings.Cut(plain, marker)
 		x := ansi.StringWidth(before)

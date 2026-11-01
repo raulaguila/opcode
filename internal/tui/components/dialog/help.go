@@ -84,7 +84,7 @@ func (h *helpCmp) render() string {
 		if strings.Contains(d, "model") || strings.Contains(d, "theme") || strings.Contains(d, "settings") || strings.Contains(d, "help") {
 			group = 2
 		}
-		groups[group] = append(groups[group], ansi.Wrap(binding.Help().Key+"  "+interfaceCopy(binding.Help().Desc), width, ""))
+		groups[group] = append(groups[group], ansi.Wrap(keyLabel(binding.Help().Key)+"  "+interfaceCopy(binding.Help().Desc), width, ""))
 	}
 	for i, group := range groups {
 		if len(group) == 0 {
@@ -102,6 +102,29 @@ func (h *helpCmp) render() string {
 	h.viewport.SetContent(strings.Join(lines, "\n"))
 	return h.viewport.View()
 }
+
+// keyLabel writes "ctrl+shift+pgdn" as "Ctrl+Shift+PgDn", the style the
+// footer and dialogs already use.
+func keyLabel(keys string) string {
+	names := map[string]string{"pgup": "PgUp", "pgdn": "PgDn", "esc": "Esc", "enter": "Enter", "tab": "Tab", "space": "Space", "home": "Home", "end": "End", "up": "↑", "down": "↓", "left": "←", "right": "→"}
+	words := strings.Split(keys, " ")
+	for i, word := range words {
+		parts := strings.Split(word, "+")
+		for j, part := range parts {
+			switch {
+			case names[part] != "":
+				parts[j] = names[part]
+			case len(part) == 1 && j > 0:
+				parts[j] = strings.ToUpper(part)
+			case len(part) > 1 && part[0] >= 'a' && part[0] <= 'z':
+				parts[j] = strings.ToUpper(part[:1]) + part[1:]
+			}
+		}
+		words[i] = strings.Join(parts, "+")
+	}
+	return strings.Join(words, " ")
+}
+
 func (h *helpCmp) View() string {
 	title := config.Text("Atalhos do teclado", "Keyboard shortcuts")
 	hint := config.Text("↑↓/PgUp/PgDn rola · Esc fecha", "↑↓/PgUp/PgDn scroll · Esc closes")

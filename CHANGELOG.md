@@ -2,6 +2,18 @@
 
 ## Em desenvolvimento — 2026-11-01
 
+- Linha do tempo mais limpa: cada processo usa `✓`/`✗`/`■`/`●`, junta chamadas
+  repetidas (`edit store.go ×3`) e guarda o raciocínio das chamadas dentro dele.
+  O agente para quando a mesma chamada falha três vezes do mesmo jeito.
+- `Shift+Tab` alterna o modo; mensagens suas usam barra grossa; a legenda de
+  seleção aparece só na primeira resposta.
+- Rodapé usa blocos (`██░░░`) no contexto e cede o espaço das métricas a avisos;
+  durante a geração, a taxa tem prioridade sobre a fração de tokens.
+- Paleta mostra o atalho de cada comando; ajuda usa `Ctrl+L` como o resto da
+  interface; plano vazio não ocupa a tela; nova conversa e estados finais
+  respeitam o idioma; formulário de provedor destaca rótulos e não acusa
+  "alterações não salvas" em uma conexão nova.
+
 - Correções da auditoria: edições pedidas por servidores LSP
   (`workspace/applyEdit`) são recusadas; o servidor local libera vagas de
   sessões ociosas e não trava outras sessões durante um envio; o sandbox

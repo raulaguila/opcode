@@ -17,7 +17,7 @@ func TestReasoningDetailsPrecedeMatchingPublicResponseWithoutTrailingProcess(t *
 	label := config.Text("Raciocínio do modelo", "Model reasoning")
 	require.Contains(t, view, label)
 	require.Less(t, strings.Index(view, label), strings.Index(view, "Public answer"))
-	require.NotContains(t, view[strings.Index(view, "Public answer"):], config.Text("Processo", "Process"))
+	require.NotContains(t, view[strings.Index(view, "Public answer"):], "✓")
 	require.NotContains(t, view, "Internal analysis")
 	require.Len(t, m.hits, 3, "one details toggle, response and explicit response actions")
 	m.toggleProcess(m.hits[0].id)
@@ -36,8 +36,8 @@ func TestReasoningDetailsDoNotReorderPublicCommentaryAndToolCalls(t *testing.T) 
 	}
 	m.renderView()
 	view := timelineText(m)
-	require.Less(t, strings.Index(view, "I will inspect"), strings.Index(view, config.Text("Processo", "Process")))
-	require.Less(t, strings.Index(view, config.Text("Processo", "Process")), strings.Index(view, "Final answer"))
+	require.Less(t, strings.Index(view, "I will inspect"), strings.Index(view, "✓ example_tool"))
+	require.Less(t, strings.Index(view, "✓ example_tool"), strings.Index(view, "Final answer"))
 	for _, hit := range m.hits {
 		if hit.kind == "process" {
 			m.toggleProcess(hit.id)

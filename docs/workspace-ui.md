@@ -39,11 +39,12 @@ Telas muito baixas reduzem essa reserva para manter a conversa visível.
 Ao abrir um diálogo, o campo perde o foco e preserva o rascunho; ao fechar,
 o foco retorna. Perguntas e terminal recebem as teclas apenas quando ativos.
 O seletor de modos tem título próprio e marca o modo atual; `/mode` também o abre.
+`Shift+Tab` alterna Perguntar → Planejar → Executar sem abrir o seletor.
 
 Contexto, custos, integração LSP e Git ficam nos painéis correspondentes. O
 rodapé não repete “Pronto”, custo zero ou ausência de diagnósticos. Avisos,
 erros, resultados parciais e pedidos de aprovação/resposta permanecem visíveis
-quando exigem atenção. O campo mantém três linhas iniciais.
+quando exigem atenção e, nesse momento, ocupam o espaço das métricas.
 
 ## Provedores, modelos e integrações
 
@@ -142,8 +143,12 @@ O resumo distingue leituras e buscas de contexto, fontes reutilizadas, chamadas
 de terminal, outras ferramentas e reparos. Por exemplo, “3 leituras de contexto”
 descreve a preparação inicial; não significa três comandos ou três chamadas ao
 modelo. Detalhes em [perguntas e evidências](question-and-evidence-recovery.md).
-Raciocínio anexado a uma mensagem aparece antes dela, em **Raciocínio do modelo**, e não
-gera um grupo de processo duplicado depois da resposta. Expandir continua
+Raciocínio anexado a uma resposta aparece antes dela, em **Raciocínio do modelo**, e não
+gera um grupo de processo duplicado depois da resposta. Raciocínio de uma chamada
+de ferramenta fica dentro do processo correspondente. A linha recolhida usa
+`✓` (concluído), `✗` (falha registrada), `■` (interrompido) ou `●` (em andamento)
+e junta chamadas repetidas, como `✗ edit store.go ×3 · 3 falhas` (sem repetir “finalizado”); o conteúdo
+dos resultados só aparece ao expandir. Expandir continua
 permitindo consultar o conteúdo interno; o texto público permanece visível.
 Reparos internos de protocolo, conclusão e citações ficam identificados como
 validação da aplicação dentro do processo. Não aparecem como perguntas suas,
@@ -555,7 +560,8 @@ ou tecnologias assistivas. As evidências estão em
 ## Contexto e velocidade no rodapé
 
 À esquerda do modelo, a barra mostra, por exemplo,
-`~8k/32k ctx [#----] ~25% · ~24.5 tok/s`. Clique na informação de contexto
+`~8k/32k ctx █░░░░ ~25% · ~24.5 tok/s`; quando o nome do modelo ou a etapa
+não deixam espaço, a fração de tokens sai antes de qualquer corte. Clique na informação de contexto
 para abrir `/context`. O preenchimento e o percentual mostram o uso da janela,
 não a porcentagem de conclusão da resposta. O estado é informativo: não aumenta
 nem reduz limites, permissões ou exigências de citações.
@@ -598,7 +604,7 @@ Durante o trabalho, a etapa, o tempo decorrido e Esc ficam juntos: por exemplo,
 `Gerando resposta · 12s · Esc cancela`. O tempo cobre o trabalho desde o envio,
 incluindo espera e ferramentas; não é uma previsão. Acima de um minuto usa
 `1m05s`; acima de uma hora, `1h02m`. Em 80–109 colunas, o rodapé compacta os
-números para `[#----] ~25% · ~24.5 t/s`; em 60–79, mantém `~25% ctx` e a taxa.
+números para `█░░░░ ~25% · ~24.5 t/s`; em 60–79, mantém `~25% ctx` e a taxa.
 Abaixo disso, oculta métricas para priorizar etapa, tempo e cancelamento. Quando
 necessário, usa o primeiro termo da etapa, como “Gerando”/“Generating”, e encurta
 o nome do modelo. A linha compacta mantém o tempo e Esc sem separadores extras. Perguntas aguardando o usuário

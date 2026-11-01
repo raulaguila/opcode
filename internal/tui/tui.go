@@ -69,7 +69,7 @@ var keys = keyMap{
 	),
 	Filepicker: key.NewBinding(
 		key.WithKeys("ctrl+f"),
-		key.WithHelp("ctrl+f", "select files to upload"),
+		key.WithHelp("ctrl+f", "attach images"),
 	),
 	Models: key.NewBinding(
 		key.WithKeys("ctrl+o"),
@@ -825,7 +825,7 @@ func configuredKeys() keyMap {
 	k.SwitchSession.SetKeys(config.Shortcut("sessions"))
 	k.SwitchSession.SetHelp(config.Shortcut("sessions"), "switch session")
 	k.Filepicker.SetKeys(config.Shortcut("files"))
-	k.Filepicker.SetHelp(config.Shortcut("files"), "select files to upload")
+	k.Filepicker.SetHelp(config.Shortcut("files"), "attach images")
 	k.SwitchTheme.SetKeys(config.Shortcut("theme"))
 	k.SwitchTheme.SetHelp(config.Shortcut("theme"), "switch theme")
 	return k

@@ -17,6 +17,7 @@ func assertTranscriptReference(t *testing.T, m *messagesCmp) {
 	r := turnRenderer{messages: m, base: styles.BaseStyle(), theme: theme.CurrentTheme()}
 	groups := m.groups()
 	for index, group := range groups {
+		r.firstTurn = index == 0
 		r.renderGroup(group, index == len(groups)-1)
 	}
 	require.Equal(t, r.base.Width(m.width).Render(strings.Join(r.rendered, "\n")), strings.Join(m.transcriptLines, "\n"))

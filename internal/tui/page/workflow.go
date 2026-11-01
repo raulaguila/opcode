@@ -147,6 +147,10 @@ func (p *chatPage) workflowHeight() int {
 	if p.workflow.question.ID != "" {
 		return p.questionPanelHeight()
 	}
+	// An empty plan would only hold a hint; the footer carries it instead.
+	if len(p.planRows()) <= 2 {
+		return 0
+	}
 	return p.planPanelHeight()
 }
 func (p *chatPage) workflowView() string {
@@ -308,6 +312,9 @@ func applyWorkflowCommandCasePlanTask(p *chatPage, command string, value string,
 		p.workflow.offset = -1
 	}
 	p.refreshWorkflow()
+	if p.workflow.expanded && len(p.planRows()) <= 2 {
+		return tea.Batch(p.resizeContent(), util.ReportInfo(config.Text("Sem plano ainda · descreva a tarefa para organizar as etapas", "No plan yet · describe the task to organize its steps"))), nil
+	}
 	return p.resizeContent(), nil
 
 }

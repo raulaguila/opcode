@@ -350,3 +350,18 @@ func TestUserCancellationDoesNotBlockTheTask(t *testing.T) {
 	require.NotEqual(t, "blocked", task.Status)
 	require.NotContains(t, task.Summary, "cancelled")
 }
+
+func TestRepeatedIdenticalFailureStopsAfterThreeAttempts(t *testing.T) {
+	g := &generationState{agent: &agent{}}
+	call := message.Message{Parts: []message.ContentPart{message.ToolCall{ID: "e", Name: "edit", Input: `{"old_string":""}`}}}
+	failed := &message.Message{Parts: []message.ContentPart{message.ToolResult{ToolCallID: "e", Content: "old_string is empty", IsError: true}}}
+	require.NoError(t, g.checkRepetition(call, failed))
+	require.NoError(t, g.checkRepetition(call, failed))
+	require.ErrorContains(t, g.checkRepetition(call, failed), "edit failed 3 times")
+
+	g = &generationState{agent: &agent{}}
+	ok := &message.Message{Parts: []message.ContentPart{message.ToolResult{ToolCallID: "e", Content: "same"}}}
+	for range 3 {
+		require.NoError(t, g.checkRepetition(call, ok), "successful repeats keep the older limit of four")
+	}
+}

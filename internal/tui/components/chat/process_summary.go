@@ -11,17 +11,28 @@ import (
 )
 
 func processSummary(messages []message.Message) string {
-	// A few direct tool calls read better by name and target than as a count.
+	// A few distinct direct calls read better by name and target than as a
+	// count; repeats of the same call collapse to "edit store.go ×3".
 	var briefs []string
+	repeats := map[string]int{}
 	direct := true
 	for _, msg := range messages {
 		direct = direct && !msg.IsApplication()
 		for _, call := range msg.ToolCalls() {
 			direct = direct && !strings.HasPrefix(call.Origin, "context")
-			briefs = append(briefs, toolBrief(call))
+			brief := toolBrief(call)
+			if repeats[brief] == 0 {
+				briefs = append(briefs, brief)
+			}
+			repeats[brief]++
 		}
 	}
 	if direct && len(briefs) > 0 && len(briefs) <= 3 {
+		for i, brief := range briefs {
+			if repeats[brief] > 1 {
+				briefs[i] = fmt.Sprintf("%s ×%d", brief, repeats[brief])
+			}
+		}
 		return strings.Join(briefs, " · ")
 	}
 	var reads, searches, reused, commands, calls, repairs int

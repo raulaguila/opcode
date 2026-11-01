@@ -154,11 +154,10 @@ func assertPTYLiveFooterResize(t *testing.T, h *ptyUIHarness, finalSent *atomic.
 			return strings.Contains(footer, "Generating") && !strings.Contains(footer, "Generat…") &&
 				strings.Contains(footer, "%") && strings.Contains(footer, "~") &&
 				regexp.MustCompile(`[0-9]+s`).MatchString(footer) && strings.Contains(footer, "Esc") &&
-				regexp.MustCompile(`~[0-9]+(?:\.[0-9]+)? (?:tok/s|t/s)`).MatchString(footer)
+				regexp.MustCompile(`~[0-9]+(?:\.[0-9]+)? (?:tok/s|t/s)`).MatchString(footer) &&
+				// Waiting on the bar too avoids reading a frame drawn before the resize.
+				(width < 80 || regexp.MustCompile(`[█░]{5} ~[0-9]+%`).MatchString(footer))
 		})
-		if width >= 80 {
-			require.Regexp(t, `\[[#-]{5}\] ~[0-9]+%`, ptyUIFooter(h.frame()))
-		}
 		t.Logf("live footer %d: %s", width, ptyUIFooter(h.frame()))
 		h.assertComposer()
 		require.False(t, finalSent.Load(), "all responsive indicators precede completion")

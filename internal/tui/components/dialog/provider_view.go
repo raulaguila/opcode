@@ -84,9 +84,9 @@ func (m *providerDialogCmp) providerFormLines(width int, line func(string) strin
 	start := max(0, slices.Index(indices, m.focus)-count+1)
 	var lines []string
 	for _, i := range indices[start:min(len(indices), start+count)] {
-		label := fieldLabel(m.labels[i])
+		label := styles.PanelHint().Render(fieldLabel(m.labels[i]))
 		if i == m.focus {
-			label = "› " + label
+			label = styles.PanelTitle().Render("› " + fieldLabel(m.labels[i]))
 		}
 		lines = append(lines, line(label))
 		m.fields[i].SetWidth(max(8, width-2))
@@ -107,7 +107,7 @@ func (m *providerDialogCmp) providerFormHint() string {
 	if m.screen != "provider" {
 		return "Tab/↑↓ fields · Ctrl+S save · Esc back"
 	}
-	hint := config.Text("[Salvar] Ctrl+S · [Catálogo] Ctrl+T · [Mais] Ctrl+A · Tab/↑↓ campos · Esc", "[Save] Ctrl+S · [Catalog] Ctrl+T · [More] Ctrl+A · Tab/↑↓ fields · Esc")
+	hint := config.Text("[Salvar] Ctrl+S · [Catálogo] Ctrl+T · [Mais] Ctrl+A · Tab campos · Esc", "[Save] Ctrl+S · [Catalog] Ctrl+T · [More] Ctrl+A · Tab fields · Esc")
 	if m.fields[providerActiveField].Value() == "false" {
 		return config.Text("Ctrl+G salvar e ativar · ", "Ctrl+G save and enable · ") + hint
 	}

@@ -21,9 +21,9 @@ func TestFooterContextBarBoundaries(t *testing.T) {
 		used int64
 		bar  string
 	}{
-		{-1, "[-----] 0%"}, {0, "[-----] 0%"}, {1, "[-----] 1%"},
-		{40, "[##---] 40%"}, {81, "[####-] 81%"}, {99, "[####-] 99%"}, {85, "[####-] 85%"},
-		{100, "[#####] 100%"}, {150, "[#####] 100%"},
+		{-1, "░░░░░ 0%"}, {0, "░░░░░ 0%"}, {1, "░░░░░ 1%"},
+		{40, "██░░░ 40%"}, {81, "████░ 81%"}, {99, "████░ 99%"}, {85, "████░ 85%"},
+		{100, "█████ 100%"}, {150, "█████ 100%"},
 	} {
 		state.ContextTokens = tc.used
 		require.Contains(t, ansi.Strip(m.ViewFor(state)), tc.bar)
@@ -57,8 +57,8 @@ func TestFooterProgressKeepsTimeAndSpeedWhileResizing(t *testing.T) {
 			require.Contains(t, plain, "25%")
 		}
 		if width >= 80 {
-			require.Contains(t, plain, "[#----]")
-			before, _, _ := strings.Cut(plain, "[#----]")
+			require.Contains(t, plain, "█░░░░")
+			before, _, _ := strings.Cut(plain, "█░░░░")
 			require.Equal(t, "context", m.ActionAt(ansi.StringWidth(before), state))
 		}
 	}
@@ -105,7 +105,7 @@ func TestFooterContextUsesSemanticColorsAndText(t *testing.T) {
 			}
 			state := util.FooterState{ContextWindow: 100, ContextKnown: true, ContextTokens: used}
 			view := (statusCmp{width: 180}).ViewFor(state)
-			actual := footerGlyph(t, view, "[")
+			actual := footerGlyph(t, view, "░")
 			want := footerGlyph(t, styles.BaseStyle().Background(colors.BackgroundSecondary()).Foreground(color).Render("["), "[")
 			require.Equal(t, want.FG, actual.FG)
 			require.Equal(t, want.BG, actual.BG)
@@ -113,5 +113,5 @@ func TestFooterContextUsesSemanticColorsAndText(t *testing.T) {
 	}
 	theme.SetColorProfile(colorprofile.NoTTY)
 	view := (statusCmp{width: 180}).ViewFor(util.FooterState{ContextWindow: 100, ContextKnown: true, ContextTokens: 95})
-	require.Contains(t, ansi.Strip(view), "[####-] 95%", "color is never the only usage signal")
+	require.Contains(t, ansi.Strip(view), "████░ 95%", "color is never the only usage signal")
 }

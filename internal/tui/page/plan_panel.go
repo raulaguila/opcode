@@ -14,7 +14,7 @@ func (p *chatPage) planPanelRows() []string {
 	rows := p.planRows()
 	// Session identity and the full task controls remain in /task.
 	if len(rows) <= 2 {
-		return []string{config.Text("Descreva a tarefa para organizar as etapas.", "Describe the task to organize its steps.")}
+		return nil
 	}
 	return rows[1 : len(rows)-1]
 }

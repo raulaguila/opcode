@@ -59,9 +59,8 @@ func TestPTYApprovalPolicyIsExplicitRevocableAndNotPersisted(t *testing.T) {
 	})
 	h.send("\x1b[A\r")
 	h.wait("explicitly restored prompt policy", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Work mode") && strings.Contains(frame, "KEEP_POLICY_DRAFT")
+		return !strings.Contains(frame, "Work mode") && strings.Contains(frame, "KEEP_POLICY_DRAFT") && strings.Contains(ptyUIFooter(frame), "A:ask")
 	})
-	require.Contains(t, ptyUIFooter(h.frame()), "A:ask")
 	h.resize(80, 24)
 	require.Contains(t, ptyUIFooter(h.frame()), "A:ask")
 	h.resize(120, 36)

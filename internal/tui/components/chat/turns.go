@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"fmt"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"strings"
 
@@ -66,6 +65,8 @@ type turnRenderer struct {
 	// answered: the turn already shows a response before the live reasoning,
 	// as in citation repairs, so that reasoning stays folded.
 	answered bool
+	// firstTurn: the selection/actions legend teaches once per conversation.
+	firstTurn bool
 }
 
 func (m *messagesCmp) renderTurns() {
@@ -105,7 +106,7 @@ func (m *messagesCmp) renderTurns() {
 }
 func (m *messagesCmp) renderTurnFrame(g turnGroup, blocks []installedTurn, index int, latest, working bool) (turnCacheItem, bool) {
 	active := latest && working
-	renderer := turnRenderer{messages: m}
+	renderer := turnRenderer{messages: m, firstTurn: index == 0}
 	expanded := renderer.processExpanded(g, active)
 	if index < len(blocks) && blocks[index].key == g.key && m.frameValid(blocks[index].frame, g, active, expanded, latest) {
 		return blocks[index].frame, true
@@ -159,7 +160,9 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	for index, item := range group.messages {
 		answer := answeredQuestions(item, r.messages.renderCache.toolOwners, r.messages.messages)
 		_, hidden := revisions.hidden[index]
-		if !hidden && (publicResponse(item) || modelReasoning(item) != "" || len(answer) > 0) {
+		// Reasoning behind a tool call folds into that call's process row.
+		ownReasoning := modelReasoning(item) != "" && (!processEvent(item) || publicResponse(item))
+		if !hidden && (publicResponse(item) || ownReasoning || len(answer) > 0) {
 			if start >= 0 {
 				r.renderProcessRange(group, start, index, first, false)
 				first, start = false, -1
@@ -260,18 +263,23 @@ func (r *turnRenderer) renderProcess(group turnGroup, active bool) {
 	if expanded {
 		mark = "⌄"
 	}
-	label := fmt.Sprintf(config.Text("%s Processo · %s", "%s Process · %s"), mark, processSummary(group.messages))
+	summary := processSummary(group.messages)
+	label := mark + " ✓ " + summary
 	status := ""
 	if reasoningOnly(group.messages) && (!active || completedReasoning(group.messages)) {
 		label = mark + " " + config.Text("Raciocínio do modelo", "Model reasoning")
 	} else if active && !completedReasoning(group.messages) {
+		label = mark + " ● " + summary
 		status = " · " + config.Text("em andamento", "working")
-	} else {
-		outcome := processOutcome(group.messages)
-		status = " · " + outcome
-		if outcome == config.Text("finalizado", "finished") {
-			status = styles.HintOn(r.theme.Background()).Render(status)
+	} else if outcome := processOutcome(group.messages); outcome != config.Text("finalizado", "finished") {
+		// Success needs no words; failures and interruptions say what happened.
+		icon, color := "■", r.theme.Warning()
+		if processFailed(group.messages) {
+			icon, color = "✗", r.theme.Error()
+			outcome = strings.TrimPrefix(outcome, config.Text("finalizado", "finished")+" · ")
 		}
+		label = mark + " " + icon + " " + summary
+		status = r.base.Foreground(color).Render(" · " + outcome)
 	}
 	label = styles.HintOn(r.theme.Background()).Render(label) + r.base.Render(status)
 	start := r.position
@@ -331,6 +339,9 @@ func (r *turnRenderer) renderProcessMessageContent(item message.Message, index i
 	if len(copy.ToolCalls()) == 0 && copy.Content().String() == "" {
 		return
 	}
+	if thinking := modelReasoning(item); thinking != "" && !publicResponse(item) {
+		r.appendText(item.ID+":thinking", r.base.Foreground(r.theme.TextMuted()).Render(config.Text("Raciocínio interno", "Internal reasoning")+"\n"+toMarkdown(tools.RedactCredentials(thinking), false, m.width)))
+	}
 	for _, rendered := range renderAssistantMessage(copy, index, m.messages, m.nestedProjection(), m.currentMsgID, false, m.width, r.position) {
 		r.appendItem(rendered)
 	}
@@ -381,7 +392,7 @@ func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool)
 	}
 	r.renderRevisingState(item)
 	r.hits = append(r.hits, transcriptHit{start: start, end: r.position - 1, kind: "actions", id: item.ID})
-	if latest && !m.IsAgentWorking() {
+	if latest && r.firstTurn && !m.IsAgentWorking() {
 		r.renderActions(item)
 	}
 }

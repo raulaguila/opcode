@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 )
 
@@ -67,7 +68,30 @@ func choiceView(field textinput.Model, options []string) string {
 	if len(options) == 0 {
 		return field.View()
 	}
-	v := field.Value()
+	return "‹ " + choiceLabel(field.Value()) + " ›  " + config.Text("←/→ escolher", "←/→ choose")
+}
+
+// choiceRadios shows every option as a radio, "● On  ○ Off", when they fit
+// the width; otherwise the compact ‹ value › stepper.
+func choiceRadios(field textinput.Model, options []string, width int) string {
+	if len(options) == 0 {
+		return field.View()
+	}
+	var parts []string
+	for _, option := range options {
+		mark := "○ "
+		if option == field.Value() {
+			mark = "● "
+		}
+		parts = append(parts, mark+choiceLabel(option))
+	}
+	if line := strings.Join(parts, "   "); ansi.StringWidth(line) <= width {
+		return line
+	}
+	return choiceView(field, options)
+}
+
+func choiceLabel(v string) string {
 	switch v {
 	case "none":
 		v = config.Text("Sem autenticação", "No authentication")
@@ -84,7 +108,7 @@ func choiceView(field textinput.Model, options []string) string {
 	case "":
 		v = config.Text("Automático", "Automatic")
 	}
-	return "‹ " + v + " ›  " + config.Text("←/→ escolher", "←/→ choose")
+	return v
 }
 func fieldLabel(label string) string {
 	if p := strings.Index(label, " ("); p >= 0 && len(fieldOptions(label)) > 0 {

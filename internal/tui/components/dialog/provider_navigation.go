@@ -192,7 +192,7 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 			m.selected = min(len(m.rows)-1, m.selected+1)
 		}
 	}
-	if !leftClick(msg) || msg.Mouse().X < 3 || msg.Mouse().X >= m.contentWidth()+3 {
+	if x := msg.Mouse().X - m.navOffset(); !leftClick(msg) || x < 3 || x >= m.contentWidth()+3 {
 		return connectionAction{}
 	}
 	if m.screen == "list" {
@@ -201,8 +201,8 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 	indices := m.fieldIndices()
 	count := m.formRows()
 	start := max(0, slices.Index(indices, m.focus)-count+1)
-	i := start + (msg.Mouse().Y-2)/2
-	if msg.Mouse().Y < 2 || msg.Mouse().Y >= 2+count*2 || i >= len(indices) {
+	i := start + msg.Mouse().Y - 2
+	if msg.Mouse().Y < 2 || msg.Mouse().Y >= 2+count || i >= len(indices) {
 		return connectionAction{}
 	}
 	m.fields[m.focus].Blur()
@@ -213,8 +213,8 @@ func (m *providerDialogCmp) handleProviderMouse(msg tea.MouseMsg) connectionActi
 func (m *providerDialogCmp) providerRowClick(msg tea.MouseMsg) connectionAction {
 	rows := m.listRows()
 	start := max(0, m.selected-rows+1)
-	i := msg.Mouse().Y - 2 + start
-	if msg.Mouse().Y < 2 || msg.Mouse().Y >= 2+rows || i >= len(m.rows) {
+	i := (msg.Mouse().Y-2)/2 + start // two rows per card
+	if msg.Mouse().Y < 2 || msg.Mouse().Y >= 2+rows*2 || i >= len(m.rows) {
 		return connectionAction{}
 	}
 	m.selected = i

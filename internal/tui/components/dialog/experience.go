@@ -101,7 +101,7 @@ func (m *providerDialogCmp) experienceView() string {
 		note = dialogHint(m.note, width)
 	}
 	lines = dialogFooter(lines, width, m.height, note)
-	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, m.withNav(lines)...))
 }
 
 func localizedSettingLabel(s string) string {
@@ -367,7 +367,7 @@ func experienceViewProviderDialogCmpSettingsSettings(m *providerDialogCmp, line 
 }
 
 func experienceUpdateTeaMouseMsgMouseXContentWidth(m *providerDialogCmp, mouse tea.MouseMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
-	if leftClick(mouse) && mouse.Mouse().Y >= 4 && mouse.Mouse().X >= 3 && mouse.Mouse().X < m.contentWidth()+3 {
+	if x := mouse.Mouse().X - m.navOffset(); leftClick(mouse) && mouse.Mouse().Y >= 4 && x >= 3 && x < m.contentWidth()+3 {
 		if m.screen == "setting" {
 			return nil, true, true, true
 		}

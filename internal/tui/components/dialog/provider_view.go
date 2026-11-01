@@ -22,12 +22,21 @@ func (m *providerDialogCmp) providerBodyLines(t theme.Theme, width int, base lip
 	}
 	rows := m.listRows()
 	start := max(0, m.selected-rows+1)
+	// Each connection is a two-line card: status and name, then its address
+	// and authentication.
 	for i := start; i < min(len(m.rows), start+rows); i++ {
-		style := base
+		style, detail := base, styles.PanelHint().Width(width)
 		if i == m.selected {
 			style = style.Foreground(t.Text()).Background(t.BorderDim()).Bold(true)
+			detail = detail.Background(t.BorderDim())
 		}
-		lines = append(lines, style.Render(ansi.Truncate(selectionMark(i == m.selected)+m.providerRowLabel(m.rows[i]), width, "…")))
+		dot, enabled := "● ", !m.providerDisabled(m.rows[i])
+		if !enabled {
+			dot = "○ "
+		}
+		lines = append(lines,
+			style.Render(ansi.Truncate(selectionMark(i == m.selected)+dot+m.providerRowLabel(m.rows[i]), width, "…")),
+			detail.Render(ansi.Truncate("    "+m.providerRowDetail(m.rows[i]), width, "…")))
 	}
 	lines = append(lines, styles.PanelDivider(width))
 	primary, secondary := m.providerListActions()
@@ -78,19 +87,56 @@ func (m *providerDialogCmp) providerRowLabel(row providerRow) string {
 	return label
 }
 
+func (m *providerDialogCmp) providerDisabled(row providerRow) bool {
+	if row.legacy {
+		return config.Get().Providers[models.ModelProvider(row.id)].Disabled
+	}
+	return config.Get().ProviderProfiles[row.id].Disabled
+}
+
+// providerRowDetail is a card's second line: address and authentication.
+func (m *providerDialogCmp) providerRowDetail(row providerRow) string {
+	provider := config.Get().Providers[models.ModelProvider(row.id)]
+	if !row.legacy {
+		provider = config.Get().ProviderProfiles[row.id].Provider
+	}
+	address := provider.BaseURL
+	if address == "" {
+		address = config.Text("endereço padrão do provedor", "provider default address")
+	}
+	auth := config.Text("sem autenticação", "no authentication")
+	switch {
+	case provider.APIKeyRef != "":
+		auth = config.Text("chave no cofre do sistema", "key in system vault")
+	case provider.APIKeyEnv != "":
+		auth = config.Text("chave em ", "key in ") + provider.APIKeyEnv
+	case provider.APIKey != "":
+		auth = config.Text("chave no arquivo de configuração", "key in config file")
+	}
+	return address + " · " + auth
+}
+
 func (m *providerDialogCmp) providerFormLines(width int, line func(string) string) []string {
 	m.configureProfilePlaceholders()
 	count, indices := m.formRows(), m.fieldIndices()
 	start := max(0, slices.Index(indices, m.focus)-count+1)
 	var lines []string
+	// One row per field: the label right-aligned in a column, the value beside it.
+	labelWidth := 10
 	for _, i := range indices[start:min(len(indices), start+count)] {
-		label := styles.PanelHint().Render(fieldLabel(m.labels[i]))
+		labelWidth = max(labelWidth, ansi.StringWidth(fieldLabel(m.labels[i]))+2)
+	}
+	labelWidth = min(labelWidth, width/2)
+	valueWidth := max(8, width-labelWidth-2)
+	for _, i := range indices[start:min(len(indices), start+count)] {
+		name := ansi.Truncate(fieldLabel(m.labels[i]), labelWidth-2, "…")
+		pad := strings.Repeat(" ", max(0, labelWidth-ansi.StringWidth(name)-2))
+		label := styles.PanelHint().Render(pad + "  " + name)
 		if i == m.focus {
-			label = styles.PanelTitle().Render("› " + fieldLabel(m.labels[i]))
+			label = styles.PanelHint().Render(pad) + styles.PanelTitle().Render("› "+name)
 		}
-		lines = append(lines, line(label))
-		m.fields[i].SetWidth(max(8, width-2))
-		lines = append(lines, line(choiceView(m.fields[i], fieldOptions(m.labels[i]))))
+		m.fields[i].SetWidth(max(8, valueWidth-1))
+		lines = append(lines, line(label+dialogBody().Render("  ")+choiceRadios(m.fields[i], fieldOptions(m.labels[i]), valueWidth)))
 	}
 	lines = append(lines, styles.PanelDivider(width))
 	for _, hint := range wrapDialogActions(m.providerFormHint(), width) {

@@ -321,6 +321,9 @@ func (m *providerDialogCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 		}
 		return m, nil // Native operations must finish commit/rollback before navigation.
 	}
+	if cmd, handled := m.navClick(msg); handled {
+		return m, cmd
+	}
 	if cmd, handled := m.deleteUpdate(msg); handled {
 		return m, cmd
 	}
@@ -388,7 +391,7 @@ func (m *providerDialogCmp) View() string {
 		lines = append(lines, line(config.Text("TLS sem validação: certificado e identidade não verificados.", "Insecure TLS: certificate and server identity are not verified.")))
 	}
 	lines = append(lines, m.noteLines(note)...)
-	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, lines...), width, 2, 1, interfaceCopy(title), "", "")
+	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, m.withNav(lines)...), width+m.navOffset(), 2, 1, interfaceCopy(title), "", "")
 }
 func (m *providerDialogCmp) BindingKeys() []key.Binding {
 	return []key.Binding{key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", config.Text("salvar", "save"))), key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", config.Text("consultar catálogo", "query catalog"))), key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", config.Text("voltar", "back")))}
@@ -399,7 +402,7 @@ func (m *providerDialogCmp) listRows() int {
 		return 10
 	}
 	primary, secondary := m.providerListActions()
-	return max(1, min(10, m.height-7-len(primary)-len(secondary)))
+	return max(1, min(5, (m.height-7-len(primary)-len(secondary))/2))
 }
 func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {
@@ -409,7 +412,7 @@ func (m *providerDialogCmp) formRows() int {
 	if m.screen == "provider" && len(m.fields) > 9 && m.fields[9].Value() == "true" {
 		available--
 	}
-	return max(1, min(m.fieldCount(), available/2))
+	return max(1, min(m.fieldCount(), available))
 }
 
 func (m *providerDialogCmp) fieldCount() int {

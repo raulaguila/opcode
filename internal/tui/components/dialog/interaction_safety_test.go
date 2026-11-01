@@ -137,7 +137,7 @@ func TestProviderBasicMouseFocusMatchesVisibleInput(t *testing.T) {
 		found := false
 		for y, line := range strings.Split(ansi.Strip(m.View()), "\n") {
 			if strings.Contains(line, tc.label) {
-				m.Update(tea.MouseClickMsg{X: 5, Y: y + 1, Button: tea.MouseLeft})
+				m.Update(tea.MouseClickMsg{X: 5, Y: y, Button: tea.MouseLeft}) // label and value share a row
 				require.Equal(t, tc.field, m.focus)
 				require.True(t, m.fields[tc.field].Focused(), tc.label)
 				if tc.field != 8 {

@@ -52,7 +52,7 @@ func TestIntegrationArgumentEditorPreservesDraftAndResumesCurrentGeometry(t *tes
 func TestProviderMouseAndKeyboardFocusUseTheSameVisibleFields(t *testing.T) {
 	m := settingsDialog(t)
 	m.edit(nil)
-	_, _ = m.Update(tea.MouseClickMsg{X: 4, Y: 5, Button: tea.MouseLeft})
+	_, _ = m.Update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft}) // one row per field
 	require.Equal(t, providerURLField, m.focus)
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	require.Equal(t, providerAuthField, m.focus)

@@ -44,7 +44,7 @@ func TestChoiceFieldsAndArgumentsPreserveUnsavedConfiguration(t *testing.T) {
 	require.Equal(t, "false", m.fields[8].Value())
 	m.Update(tea.KeyPressMsg{Text: "invalid"})
 	require.Equal(t, "false", m.fields[8].Value())
-	require.Contains(t, ansi.Strip(m.View()), "‹ Off ›")
+	require.Contains(t, ansi.Strip(m.View()), "● Off")
 	after, err := os.ReadFile(viper.ConfigFileUsed())
 	require.NoError(t, err)
 	require.Equal(t, before, after)

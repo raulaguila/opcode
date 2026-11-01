@@ -86,7 +86,7 @@ func runPTYLiveReasoning(t *testing.T, mode string) {
 	assertPTYReasoningAtPublicText(t, h, mode, visible, anchor)
 	release()
 	h.wait("turn and source validation finished", 20*time.Second, func(frame string) bool {
-		return ptyUIIdleFooter(frame) && strings.Contains(ptyUIFooter(frame), "Completed")
+		return ptyUIIdleFooter(frame)
 	})
 	if mode == "reading" {
 		require.Equal(t, anchor, firstReasoningLine(h.frame()), "finalization cannot move the reader or fold their content")

@@ -230,7 +230,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.wait("integration list restored", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "MCP and language servers") })
 	h.send("\x1b")
 	h.wait("integration dialog dismissed", 5*time.Second, testLiveOllamaPTYUIIntegrationDialogDismissed)
-	require.Contains(t, h.frame(), "Ask ▾", "probing an integration must not change the work mode")
+	require.Equal(t, "Ask", ptyUIMode(h.frame()), "probing an integration must not change the work mode")
 	t.Log("separate LSP probe explicitly approved in UI; stderr burst suppressed and Ask mode preserved")
 
 	databaseURI := (&url.URL{Scheme: "file", Path: filepath.Join(data, "opcode.db")}).String() + "?mode=ro"
@@ -510,7 +510,7 @@ func (h *ptyUIHarness) resize(cols, rows int) {
 	})
 	h.wait(fmt.Sprintf("terminal resize %dx%d", cols, rows), 5*time.Second, func(frame string) bool {
 		lines := strings.Split(frame, "\n")
-		return len(lines) >= rows && strings.Count(lines[rows-1], "▾") == 3
+		return len(lines) >= rows && strings.Count(lines[rows-1], "▾") == 2
 	})
 }
 
@@ -635,9 +635,9 @@ func ptyUIIdleFooter(frame string) bool {
 
 func TestPTYIdleFooterRejectsCompactActiveStates(t *testing.T) {
 	for _, activity := range []string{"Generating 10s Esc", "Generating response · 1s · Esc cancels", "Checking 2s Esc"} {
-		require.False(t, ptyUIIdleFooter("Ask ▾ P:ask ▾ "+activity+" local ▾"))
+		require.False(t, ptyUIIdleFooter("A:ask ▾ "+activity+" local ▾"))
 	}
-	require.True(t, ptyUIIdleFooter("Ask ▾ P:ask ▾ Completed local ▾"))
+	require.True(t, ptyUIIdleFooter("A:ask ▾ local ▾"))
 }
 
 func ptyUIFooter(frame string) string {

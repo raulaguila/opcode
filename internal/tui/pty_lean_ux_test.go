@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -34,7 +35,8 @@ func TestPTYLeanApprovalDiscoveryAndModelContext(t *testing.T) {
 	h.paste("KEEP_LEAN_DRAFT")
 	h.send("\x0b")
 	h.wait("palette exposes count and continuation", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Search commands") && strings.Contains(frame, " of ") && strings.Contains(frame, " · ↓")
+		// The corner counts every command.
+		return strings.Contains(frame, "Search commands") && regexp.MustCompile(`Commands ─+ \d+ ─`).MatchString(frame)
 	})
 	h.paste("approval")
 	h.wait("approval is searchable", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Change approval") })
@@ -45,7 +47,7 @@ func TestPTYLeanApprovalDiscoveryAndModelContext(t *testing.T) {
 	h.send("\x1b[B\r")
 	h.wait("selected policy does not grant edits in Ask", 5*time.Second, func(frame string) bool {
 		footer := ptyUIFooter(frame)
-		return !strings.Contains(frame, "Work mode") && strings.Contains(footer, "Ask ▾") && strings.Contains(footer, "Approval: project edits") && strings.Contains(footer, "Read only in this mode")
+		return !strings.Contains(frame, "Work mode") && ptyUIMode(frame) == "Ask" && strings.Contains(footer, "Approval: project edits") && strings.Contains(footer, "Read only in this mode")
 	})
 	h.resize(60, 20)
 	h.wait("idle compact footer retains model identity", 6*time.Second, func(frame string) bool {

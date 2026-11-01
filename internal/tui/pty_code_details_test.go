@@ -44,7 +44,7 @@ func TestPTYCodeBlocksAndReasoningDetails(t *testing.T) {
 	h.paste("Explique o projeto em README.md com um exemplo de shell.")
 	h.send("\r")
 	h.wait("code answer completed", 20*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Fim da explicação.") && strings.Contains(ptyUIFooter(frame), "Completed") && ptyUIIdleFooter(frame) && !strings.Contains(frame, "Validating citations")
+		return strings.Contains(frame, "Fim da explicação.") && ptyUIIdleFooter(frame) && !strings.Contains(frame, "Validating citations")
 	})
 	assertPTYCodeDetails(t, h)
 	require.EqualValues(t, 1, generations.Load(), "presentation must not trigger citation repair")

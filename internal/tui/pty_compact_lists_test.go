@@ -43,7 +43,7 @@ func TestPTYCompactListsPreserveDensityOnResize(t *testing.T) {
 	h.paste("Explique o projeto em README.md com uma lista.")
 	h.send("\r")
 	h.wait("list completed", 20*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Fim da lista.") && strings.Contains(ptyUIFooter(frame), "Completed") && ptyUIIdleFooter(frame)
+		return strings.Contains(frame, "Fim da lista.") && ptyUIIdleFooter(frame)
 	})
 	for _, width := range []int{120, 60, 160} {
 		h.resize(width, 36)

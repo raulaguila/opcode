@@ -80,7 +80,7 @@ func testPTYOutputLimit(t *testing.T, api string) {
 	})
 	require.NotContains(t, h.frame(), "Model limit reached")
 	require.NotContains(t, h.frame(), "UNVERIFIED_OUTPUT")
-	require.Contains(t, ptyUIFooter(h.frame()), "16k ctx")
+	require.Regexp(t, `[█░]{5} ~?[0-9]+%`, ptyUIFooter(h.frame()), "context stays visible beside the warning")
 	require.EqualValues(t, 1, calls.Load(), "no automatic retry or repair")
 	require.NoFileExists(t, filepath.Join(workspace, "SHOULD_NOT_EXIST"))
 	h.paste("KEEP_OUTPUT_DRAFT")

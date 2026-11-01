@@ -20,7 +20,14 @@ type hosted struct {
 	back int // the settings section to return to
 }
 
-func (h *hosted) view(*Model) string { return h.cmp.View() }
+func (h *hosted) view(m *Model) string {
+	if form, ok := h.cmp.(formStater); ok {
+		if state, ok := form.FormState(); ok {
+			return connectionView(state, m.width)
+		}
+	}
+	return h.cmp.View()
+}
 
 func (h *hosted) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	cmd := h.forward(msg)
@@ -135,6 +142,11 @@ func (m *Model) hostedMouse(msg tea.MouseMsg) tea.Cmd {
 	h, ok := m.dialog.(*hosted)
 	if !ok {
 		return nil
+	}
+	if form, ok := h.cmp.(formStater); ok {
+		if _, drawn := form.FormState(); drawn {
+			return nil // drawn here, so the editor's own click targets do not apply
+		}
 	}
 	cmd := h.forward(util.TranslateMouse(msg, -h.x, -h.y))
 	h.returnWhenListed(m)

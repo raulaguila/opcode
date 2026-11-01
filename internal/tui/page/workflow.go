@@ -198,6 +198,11 @@ func (p *chatPage) questionKey(msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "up", "down":
 		return p.navigateQuestionAnswer(msg.String(), len(q.Choices))
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		if cmd, ok := p.jumpQuestionChoice(msg.String(), len(q.Choices)); ok {
+			return cmd
+		}
+		return p.editQuestionAnswer(msg, len(q.Choices))
 	case "enter":
 		selected := p.selectedQuestionAnswer(interaction.QuestionItem{Choices: q.Choices})
 		if p.questionAnswerMissing(selected) {

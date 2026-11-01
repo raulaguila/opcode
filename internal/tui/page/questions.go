@@ -67,6 +67,9 @@ func (p *chatPage) batchQuestionKey(msg tea.KeyPressMsg) tea.Cmd {
 		return result0
 	}
 	item := q.Questions[index]
+	if cmd, ok := p.jumpQuestionChoice(key, len(item.Choices)); ok {
+		return cmd
+	}
 	switch key {
 	case "up", "down":
 		return p.navigateQuestionAnswer(key, len(item.Choices))

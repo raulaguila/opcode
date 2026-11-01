@@ -27,6 +27,7 @@ func TestPlanPanelUsesSharedSurfaceProgressAndSecondaryControls(t *testing.T) {
 	view := ansi.Strip(p.workflowView())
 	require.Contains(t, view, "╭")
 	require.Contains(t, view, config.Text("Plano 1/3 concluídas", "Plan 1/3 completed"))
+	require.Contains(t, strings.Split(view, "\n")[0], "███░░░░░░░", "progress sits in the top border")
 	require.Contains(t, view, "✓ 1. Inspect")
 	require.Contains(t, view, "→ 2. Verify")
 	require.Contains(t, view, "○ 3. Report")

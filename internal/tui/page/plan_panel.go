@@ -94,6 +94,22 @@ func (p *chatPage) planPanelView(height int) string {
 		rows = append(rows, "")
 	}
 	hint := config.Text("Alt+↑/↓ rola · /task detalhes", "Alt+↑/↓ scroll · /task details")
-	// Title and legend sit in the frame's borders.
-	return styles.Frame(strings.Join(rows, "\n"), width, 1, 0, title, "", hint)
+	// Title, progress and legend sit in the frame's borders.
+	return styles.Frame(strings.Join(rows, "\n"), width, 1, 0, title, p.planProgressBar(), hint)
+}
+
+// planProgressBar draws completed steps as blocks, e.g. "██░░░".
+func (p *chatPage) planProgressBar() string {
+	steps := p.workflow.task.Steps
+	if len(steps) == 0 {
+		return ""
+	}
+	done := 0
+	for _, step := range steps {
+		if step.Status == "completed" {
+			done++
+		}
+	}
+	filled := done * 10 / len(steps)
+	return strings.Repeat("█", filled) + strings.Repeat("░", 10-filled)
 }

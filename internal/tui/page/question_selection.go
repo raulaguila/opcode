@@ -37,6 +37,17 @@ func (p *chatPage) navigateQuestionAnswer(key string, count int) tea.Cmd {
 	return p.focusQuestionInput(count)
 }
 
+// jumpQuestionChoice focuses choice n for the digit n, unless the custom
+// answer is being typed, where digits are text.
+func (p *chatPage) jumpQuestionChoice(key string, count int) (tea.Cmd, bool) {
+	if len(key) != 1 || key[0] < '1' || key[0] > '9' || int(key[0]-'0') > count || p.workflow.choice == count {
+		return nil, false
+	}
+	p.workflow.answerRequired = false
+	p.workflow.choice = int(key[0] - '1')
+	return p.focusQuestionInput(count), true
+}
+
 func (p *chatPage) editQuestionAnswer(msg tea.KeyPressMsg, count int) tea.Cmd {
 	choice, value := p.workflow.choice, p.workflow.answer.Value()
 	if msg.Text != "" || msg.Code == tea.KeySpace || msg.Keystroke() == "ctrl+v" {

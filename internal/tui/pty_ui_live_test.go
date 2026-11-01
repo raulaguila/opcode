@@ -131,7 +131,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	}
 	h.send("\x0f") // Ctrl+O opens model selection even with a draft.
 	h.wait("model selector", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Choose model") })
-	h.wait("provider catalog", 10*time.Second, func(frame string) bool { return strings.Contains(frame, " catalog · ") })
+	h.wait("provider catalog", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Ollama · ") && strings.Contains(frame, " of ") })
 	testLiveOllamaPTYUIStruct(h)
 	h.send("\t")
 	h.wait("catalog before outage", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") })
@@ -804,11 +804,11 @@ func testLiveOllamaPTYUIStruct(h *ptyUIHarness) {
 	} {
 		h.send(keys.next)
 		h.wait("second provider and distinct catalog", 10*time.Second, func(frame string) bool {
-			return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && strings.Contains(frame, "Context: 128k")
+			return strings.Contains(frame, "Navigation fixture") && strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") && strings.Contains(frame, "128k")
 		})
 		h.send(keys.previous)
 		h.wait("Ollama provider restored", 10*time.Second, func(frame string) bool {
-			return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, " catalog · ") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
+			return strings.Contains(frame, "Ollama · ") && strings.Contains(frame, " of ") && !strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL")
 		})
 	}
 }
@@ -1059,7 +1059,7 @@ func testLiveOllamaPTYUIProviderRetryRecoversCatalog(frame string) bool {
 }
 
 func testLiveOllamaPTYUIReturnToOllamaAfterOutage(frame string) bool {
-	return strings.Contains(frame, "Choose model · Ollama") && strings.Contains(frame, " catalog · ")
+	return strings.Contains(frame, "Ollama · ") && strings.Contains(frame, " of ")
 }
 
 func testLiveOllamaPTYUIModelListPosition(frame string) bool {

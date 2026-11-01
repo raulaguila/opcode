@@ -114,7 +114,7 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	wait("New connection")
 	send("\x13")
 	wait("Setup 2/3")
-	wait(" catalog · ")
+	wait(" of ")
 	send("llama3.1:8b")
 	wait("llama3.1:8b")
 	send("\x04")

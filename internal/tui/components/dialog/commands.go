@@ -274,10 +274,19 @@ func (c *commandDialogCmp) SetCommands(commands []Command) {
 // SetContext distinguishes a focused action from the mode already in use.
 func (c *commandDialogCmp) SetContext(title, activeID string) {
 	c.title, c.activeID = title, activeID
+	c.FocusCommand(activeID)
+}
+
+func (c *commandDialogCmp) FocusCommand(id string) {
+	_, selected := c.listView.GetSelectedItem()
 	for i, item := range c.listView.GetItems() {
-		if item.ID == activeID {
-			for range i {
-				c.listView.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		if item.ID == id {
+			key := tea.KeyDown
+			if i < selected {
+				key = tea.KeyUp
+			}
+			for range max(i-selected, selected-i) {
+				c.listView.Update(tea.KeyPressMsg{Code: key})
 			}
 			break
 		}

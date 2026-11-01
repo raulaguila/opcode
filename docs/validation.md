@@ -5,6 +5,37 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Controles de modo e aprovação no rodapé — 01/11/2026
+
+O rodapé tem alvos separados para modo e aprovação, sempre identificando a
+política atual, inclusive o padrão. Ambos reutilizam o menu existente, focando
+a seleção correspondente e preservando os dois marcadores. Abrir ou navegar
+não altera consentimento, modo ou rascunho; confirmar continua passando pelo
+mesmo serviço de políticas e bloqueio durante execução.
+
+A geometria é compartilhada entre renderização e cliques. Testes cobrem Ask,
+Plan e Execute com ambas as políticas em 36/60/80/110/120/180 colunas, margem
+final, uma única linha, seleção por teclado e rótulos PT/EN. Em português,
+verificam também política, etapa, tempo, percentual e tok/s durante geração.
+Perguntas e avisos mantêm prioridade e seus alvos clicáveis. Rótulos compactos
+reduzem o espaço dos controles/modelo; abaixo de 80 colunas, contexto usa
+percentual, e abaixo de 60 o seletor de modelo continua acessível por atalho.
+
+O PTY verifica foco da política padrão, seleção de edição, retorno ao padrão,
+resize de 60×20 até 180×36, preservação do rascunho e reinício. O Nemotron local
+exercita o novo controle antes da criação nativa única; o comando posterior
+continua exigindo aprovação explícita. Perguntas, fontes, cópia, terminal e
+instrução em fila permanecem no fluxo completo. Fixtures sintéticas passaram
+a representar três seletores visíveis: modo, aprovação e modelo. Os critérios
+de conclusão, geração ociosa, cópia e recusa foram preservados.
+
+Passaram **1186 testes principais** (2559 nós) com race detector/integração,
+**26 testes principais do grupo PTY** (230 nós), Nemotron real e OpenAI-compatible
+local. Build, vet, staticcheck e complexidade ≤15 também passaram. Os resultados
+constam na [evidência desta rodada](evidence/2026-11-01-footer-controls-validation.json).
+A alteração é de apresentação/foco: serviços de permissões, validação de citações,
+recibos, prompts, provedores, limites e dependências permanecem inalterados.
+
 ## Raciocínio e políticas de aprovação — 01/11/2026
 
 O raciocínio recolhe no primeiro trecho público, antes de terminar a geração

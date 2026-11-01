@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/tui/components/core"
 	"github.com/raulaguila/opcode/internal/tui/components/dialog"
 	"github.com/raulaguila/opcode/internal/tui/page"
@@ -20,6 +22,34 @@ func TestFooterClickUsesClippedPageHeight(t *testing.T) {
 		commandDialog: dialog.NewCommandDialogCmp()}
 	updated, _ := a.Update(tea.MouseClickMsg{X: 1, Y: 23, Button: tea.MouseLeft})
 	require.True(t, updated.(appModel).showCommandDialog, "rendered footer remains clickable when page content overflows")
+}
+
+type approvalFooterPage struct {
+	inputPage
+	state util.FooterState
+}
+
+func (p *approvalFooterPage) FooterState() util.FooterState { return p.state }
+
+func TestFooterApprovalClickFocusesSelectedPolicyWithoutChangingMode(t *testing.T) {
+	for _, width := range []int{60, 180} {
+		for _, policy := range []permission.ApprovalPolicy{permission.ApprovalPrompt, permission.ApprovalProjectEdits} {
+			state := util.FooterState{Mode: "execute", ApprovalPolicy: string(policy)}
+			status, _ := core.NewStatusCmp(nil).Update(tea.WindowSizeMsg{Width: width})
+			a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: &approvalFooterPage{state: state}}, status: status.(core.StatusCmp), commandDialog: dialog.NewCommandDialogCmp()}
+			a.commands = []dialog.Command{{ID: "mode-ask"}, {ID: "mode-plan"}, {ID: "mode-execute"}}
+			before, _, found := strings.Cut(ansi.Strip(a.statusView()), "▾")
+			require.True(t, found)
+			require.Nil(t, a.footerClick(ansi.StringWidth(before)+2), "opening a chooser does not change consent")
+			require.True(t, a.showCommandDialog)
+			require.Contains(t, a.commandDialog.View(), "✓ Execute")
+			_, selected := a.commandDialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+			command := selected().(dialog.CommandSelectedMsg).Command
+			require.Equal(t, "approval-"+string(policy), command.ID)
+			require.Equal(t, policy, command.Handler(command)().(page.ApprovalPolicyMsg).Policy)
+			require.Equal(t, "execute", a.footerState().Mode)
+		}
+	}
 }
 
 func TestFooterModeClickOpensOnlyModesAndKeepsExistingCommandHandler(t *testing.T) {

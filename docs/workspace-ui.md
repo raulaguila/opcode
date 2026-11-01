@@ -808,8 +808,19 @@ conversa, trocar o modo ou revogar em `/permissions` restaura Pedir aprovação.
 Não se pode ampliar permissões durante uma execução; aguarde ou cancele primeiro.
 Selecionar uma política não responde a solicitações pendentes.
 
-Em terminais largos, o rodapé de Executar indica quando edições estão permitidas.
-`/permissions` mostra a política e permite revogar. A aprovação não dispensa
+O rodapé mostra controles separados de modo e aprovação. A política selecionada
+fica sempre visível, inclusive Pedir aprovação; clicar nela abre o seletor
+existente com a política atual destacada. Clicar no modo destaca o modo atual.
+Abrir ou navegar não muda consentimento; Enter ou clique na opção confirma.
+Em Perguntar/Planejar, a política continua identificada, mas as ferramentas de
+escrita permanecem indisponíveis; permitir edições só tem efeito em Executar.
+
+Rótulos longos são compactados para `Perm.: pedir` ou `P:pedir` (e `editar`),
+preservando etapa, tempo, contexto e tok/s. Abaixo de 80 colunas, o contexto usa
+percentual; abaixo de 60, o nome do modelo cede espaço aos controles e continua
+acessível pelo atalho de modelos. O rodapé permanece em uma linha e a margem
+final não é clicável. `/permissions` mostra a política e permite revogar.
+A aprovação não dispensa
 leitura antes de sobrescrever, isolamento, escrita atômica, recibos ou validação
 das citações. Ferramentas genéricas e integrações não herdam essa autorização
 apenas por apresentarem o mesmo nome de uma ferramenta nativa.

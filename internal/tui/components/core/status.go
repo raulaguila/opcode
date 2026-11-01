@@ -51,19 +51,7 @@ func (m statusCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 }
 func (m statusCmp) View() string { return m.ViewFor(util.FooterState{}) }
 func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
-	mode := state.Mode
-	if mode == "" && config.Get() != nil {
-		mode = config.Get().Runtime.Defaults().Mode
-	}
-	switch mode {
-	case "ask":
-		left = config.Text("Perguntar", "Ask")
-	case "plan":
-		left = config.Text("Planejar", "Plan")
-	default:
-		left = config.Text("Executar", "Execute")
-	}
-	left += m.approvalLabel(state) + " ▾"
+	left = m.modeLabel(state) + " ▾"
 	right = config.Text("Escolher modelo", "Choose model")
 	labelsGet(&right)
 	right += " ▾"
@@ -93,32 +81,30 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 }
 
 // Rendering and mouse hits use the same width allocation.
-func (m statusCmp) widths() (left, center, right int) {
+func (m statusCmp) widths(state util.FooterState) (left, center, right int) {
 	// Leave the final terminal cell blank. After a full-width write, an erase
 	// command can otherwise clear the last glyph while autowrap is pending.
 	width := max(0, m.width-1)
-	left = min(12, width/3)
-	right = min(28, width/3)
-	if m.width < 110 {
-		right = min(right, 16)
+	mode, approval := m.controlWidths(state)
+	left = mode + approval
+	switch {
+	case m.width >= 160:
+		right = 28
+	case m.width >= 110:
+		right = 20
+	case m.width >= 80:
+		right = 12
+	case m.width >= 60:
+		right = 4
 	}
-	if m.width < 80 {
-		left, right = min(left, 8), min(right, 8)
-	}
-	if m.width < 60 {
-		left, right = min(left, 6), min(right, 8)
-	}
+	right = min(right, max(0, width-left))
 	center = width - left - right
 	return
 }
 
 func (m statusCmp) metricWidths(state util.FooterState) (lw, cw, mw, rw int) {
-	lw, cw, rw = m.widths()
-	if label := m.approvalLabel(state); label != "" {
-		lw = ansi.StringWidth(config.Text("Executar", "Execute")+label+" ▾") + 1
-		cw = max(0, m.width-1-lw-rw)
-	}
-	mw = min(max(0, cw-20), ansi.StringWidth(m.metrics(state))+2)
+	lw, cw, rw = m.widths(state)
+	mw = min(max(0, cw-20), ansi.StringWidth(m.metrics(state))+1)
 	if m.metrics(state) == "" {
 		mw = 0
 	}
@@ -126,15 +112,10 @@ func (m statusCmp) metricWidths(state util.FooterState) (lw, cw, mw, rw int) {
 	return
 }
 
-func (m statusCmp) approvalLabel(state util.FooterState) string {
-	if state.Mode == "execute" && state.ApprovalPolicy == "project_edits" && m.width >= 140 {
-		return config.Text(" · Edições no projeto", " · Edits allowed")
-	}
-	return ""
-}
 func (m statusCmp) ViewFor(state util.FooterState) string {
 	left, center, right := m.labels(state)
-	lw, cw, mw, rw := m.metricWidths(state)
+	_, cw, mw, rw := m.metricWidths(state)
+	lw, aw := m.controlWidths(state)
 	t := theme.CurrentTheme()
 	segment := func(text string, width int, accent, alignRight bool) string {
 		if width == 0 {
@@ -147,13 +128,17 @@ func (m statusCmp) ViewFor(state util.FooterState) string {
 		if accent {
 			style = style.Foreground(t.Text())
 			if width >= 4 {
-				return style.Render(ansi.Truncate(" "+strings.TrimSuffix(text, " ▾"), width-2, "…") + " ▾")
+				arrow := " ▾"
+				if m.width < 60 {
+					arrow = "▾"
+				}
+				return style.Render(ansi.Truncate(" "+strings.TrimSuffix(text, " ▾"), width-ansi.StringWidth(arrow), "…") + arrow)
 			}
 		}
 		return style.Render(ansi.Truncate(" "+text, width, "…"))
 	}
 	middle := m.middleSegment(center, cw, state)
-	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, m.metricsSegment(state, mw), segment(right, rw, true, true))
+	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), segment(m.approvalLabel(state)+" ▾", aw, true, false), middle, m.metricsSegment(state, mw), segment(right, rw, true, true))
 	if m.width > 0 {
 		view += styles.BaseStyle().Background(t.BackgroundSecondary()).Render(" ")
 	}
@@ -190,8 +175,12 @@ func (m statusCmp) ActionAt(x int, state util.FooterState) string {
 	if x < 0 || x >= lw+cw+mw+rw {
 		return ""
 	}
-	if x < lw {
+	mode, _ := m.controlWidths(state)
+	if x < mode {
 		return "mode"
+	}
+	if x < lw {
+		return "approval"
 	}
 	if x >= lw+cw+mw {
 		return "models"

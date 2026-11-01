@@ -81,8 +81,10 @@ func TestFooterPrioritizesHumanQuestionAndWarningsInCompactTerminal(t *testing.T
 	require.NotContains(t, view, "%", "waiting for a human takes precedence over usage at compact widths")
 	m.width = 80
 	m.info = util.InfoMsg{Type: util.InfoTypeWarn, Msg: "See /error for details"}
-	require.Contains(t, ansi.Strip(m.ViewFor(state)), "See /error for details")
-	require.Equal(t, "error", m.ActionAt(15, state), "warning navigation stays safe and visible")
+	view = ansi.Strip(m.ViewFor(state))
+	require.Contains(t, view, "See /error for details")
+	before, _, _ := strings.Cut(view, "See /error")
+	require.Equal(t, "error", m.ActionAt(ansi.StringWidth(before), state), "warning navigation stays safe and visible")
 }
 
 func TestFooterContextUsesSemanticColorsAndText(t *testing.T) {

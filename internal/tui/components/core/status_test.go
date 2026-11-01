@@ -25,7 +25,9 @@ func TestFooterStaysOnOneRowAndMouseMatchesVisibleSegments(t *testing.T) {
 			require.Positive(t, modeEnd)
 			require.Equal(t, "mode", m.ActionAt(1, state))
 			require.Equal(t, "commands", m.ActionAt(width/2, state))
-			require.Equal(t, "models", m.ActionAt(width-2, state))
+			if width >= 60 {
+				require.Equal(t, "models", m.ActionAt(width-2, state))
+			}
 			require.NotContains(t, plain, "Context:")
 			require.NotContains(t, plain, "Cost:")
 			require.NotContains(t, plain, "No diagnostics")

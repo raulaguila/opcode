@@ -17,13 +17,13 @@ import (
 func assertLiveProjectEditPolicy(t *testing.T, h *ptyUIHarness, conn *sql.DB, workspace string) {
 	t.Helper()
 	h.resize(180, 40)
-	h.clickMode()
+	h.clickApproval()
 	h.wait("separate approval section", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "Approval") && strings.Contains(frame, "Allow project edits")
 	})
 	h.clickLabel("Allow project edits")
 	h.wait("project edit policy explicitly selected", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Work mode") && strings.Contains(frame, "Edits allowed")
+		return !strings.Contains(frame, "Work mode") && strings.Contains(frame, "Approval: project edits")
 	})
 	before := len(ptyUIMessages(conn))
 	h.paste(`First call request_tools with {"names":["write"],"replace":true} to load the native file tool. Then call write exactly once with {"file_path":"policy-created.txt","content":"PROJECT_EDIT_OK"}. Do not use bash, commands, patches or change any other file. After write succeeds, reply exactly POLICY_FILE_CREATED.`)

@@ -26,6 +26,8 @@ func (a *appModel) footerClick(x int) tea.Cmd {
 	case "models":
 		a.showModelDialog = true
 		return a.openModelCatalog("", false)
+	case "approval":
+		return a.openModeChooserAt(true)
 	case "mode", "commands":
 		if action == "mode" {
 			return a.openModeChooser()
@@ -40,6 +42,10 @@ func (a *appModel) footerClick(x int) tea.Cmd {
 }
 
 func (a *appModel) openModeChooser() tea.Cmd {
+	return a.openModeChooserAt(false)
+}
+
+func (a *appModel) openModeChooserAt(approvalFocus bool) tea.Cmd {
 	var items []dialog.Command
 	for _, command := range a.commands {
 		if strings.HasPrefix(command.ID, "mode-") {
@@ -55,12 +61,17 @@ func (a *appModel) openModeChooser() tea.Cmd {
 	if contextual, ok := a.commandDialog.(interface{ SetContext(string, string) }); ok {
 		contextual.SetContext(config.Text("Modo de trabalho", "Work mode"), "mode-"+a.footerState().Mode)
 	}
+	policy := a.footerState().ApprovalPolicy
+	if policy == "" {
+		policy = string(permission.ApprovalPrompt)
+	}
 	if contextual, ok := a.commandDialog.(interface{ SetApprovalContext(string) }); ok {
-		policy := a.footerState().ApprovalPolicy
-		if policy == "" {
-			policy = string(permission.ApprovalPrompt)
-		}
 		contextual.SetApprovalContext("approval-" + policy)
+	}
+	if approvalFocus {
+		if contextual, ok := a.commandDialog.(interface{ FocusCommand(string) }); ok {
+			contextual.FocusCommand("approval-" + policy)
+		}
 	}
 	a.showCommandDialog = true
 	return nil

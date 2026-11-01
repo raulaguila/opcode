@@ -457,7 +457,7 @@ func ptyUIComposerEmpty(frame string) bool {
 	}
 	lines := strings.Split(frame, "\n")
 	for index := len(lines) - 1; index >= 0; index-- {
-		if strings.Count(lines[index], "▾") == 2 {
+		if strings.Count(lines[index], "▾") == 3 {
 			lines = lines[:index]
 			break
 		}
@@ -500,7 +500,7 @@ func (h *ptyUIHarness) resize(cols, rows int) {
 	})
 	h.wait(fmt.Sprintf("terminal resize %dx%d", cols, rows), 5*time.Second, func(frame string) bool {
 		lines := strings.Split(frame, "\n")
-		return len(lines) >= rows && strings.Count(lines[rows-1], "▾") == 2
+		return len(lines) >= rows && strings.Count(lines[rows-1], "▾") == 3
 	})
 }
 
@@ -522,13 +522,26 @@ func resizePTYUIScreen(screen vt10x.Terminal, cols, rows int) {
 func (h *ptyUIHarness) clickMode() {
 	h.t.Helper()
 	for row, line := range strings.Split(h.frame(), "\n") {
-		if strings.Count(line, "▾") == 2 {
+		if strings.Count(line, "▾") == 3 {
 			// SGR mouse coordinates are one-based; x=3 is inside the mode button.
 			h.send(fmt.Sprintf("\x1b[<0;3;%dM\x1b[<0;3;%dm", row+1, row+1))
 			return
 		}
 	}
 	h.t.Fatal("mode button is absent from the current footer")
+}
+
+func (h *ptyUIHarness) clickApproval() {
+	h.t.Helper()
+	for row, line := range strings.Split(h.frame(), "\n") {
+		if strings.Count(line, "▾") == 3 {
+			before, _, _ := strings.Cut(line, "▾")
+			x := ansi.StringWidth(before) + 3
+			h.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, row+1, x, row+1))
+			return
+		}
+	}
+	h.t.Fatal("approval button is absent from the current footer")
 }
 func (h *ptyUIHarness) wait(label string, timeout time.Duration, predicate func(string) bool) {
 	h.t.Helper()
@@ -558,7 +571,7 @@ func (h *ptyUIHarness) assertComposer() {
 		if strings.HasPrefix(strings.TrimSpace(line), ">") {
 			prompts++
 		}
-		if strings.Count(line, "▾") == 2 {
+		if strings.Count(line, "▾") == 3 {
 			footers++
 		}
 	}
@@ -588,14 +601,14 @@ func ptyUIIdleFooter(frame string) bool {
 
 func TestPTYIdleFooterRejectsCompactActiveStates(t *testing.T) {
 	for _, activity := range []string{"Generating 10s Esc", "Generating response · 1s · Esc cancels", "Checking 2s Esc"} {
-		require.False(t, ptyUIIdleFooter("Ask ▾ "+activity+" local ▾"))
+		require.False(t, ptyUIIdleFooter("Ask ▾ P:ask ▾ "+activity+" local ▾"))
 	}
-	require.True(t, ptyUIIdleFooter("Ask ▾ Completed local ▾"))
+	require.True(t, ptyUIIdleFooter("Ask ▾ P:ask ▾ Completed local ▾"))
 }
 
 func ptyUIFooter(frame string) string {
 	for line := range strings.SplitSeq(frame, "\n") {
-		if strings.Count(line, "▾") == 2 {
+		if strings.Count(line, "▾") == 3 {
 			return line
 		}
 	}

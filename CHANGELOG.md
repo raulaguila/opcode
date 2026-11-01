@@ -2,6 +2,10 @@
 
 ## Em desenvolvimento — 2026-11-01
 
+- Rodapé separa modo e aprovação em dois controles. A política selecionada,
+  inclusive o padrão, permanece visível; cada clique destaca a seleção
+  correspondente no mesmo menu. Rótulos compactos preservam o espaço da geração.
+
 - Seletor de modo inclui políticas de aprovação: solicitar (padrão) ou permitir
   criação/edição nativa dentro do projeto, somente nesta sessão. Comandos, rede,
   exclusões, movimentações e caminhos externos/sensíveis continuam protegidos.

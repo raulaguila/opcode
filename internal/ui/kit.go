@@ -1,0 +1,118 @@
+package ui
+
+import (
+	"image/color"
+	"strings"
+
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+)
+
+// Box is the proposal's panel: a rounded border whose top edge carries the
+// title on the left and a short note on the right, and whose bottom edge
+// carries the key legend. Every dialog and card is a Box.
+type Box struct {
+	Title, Meta, Legend string
+	Width               int // outer width, borders included
+	PadX, PadY          int
+	Accent, Background  color.Color
+	TitleColor          color.Color // defaults to Strong
+}
+
+// Render draws the box around body; body lines are clipped and padded.
+func (b Box) Render(body string) string {
+	bg := b.Background
+	if bg == nil {
+		bg = P.Surface
+	}
+	accent := b.Accent
+	if accent == nil {
+		accent = P.Border
+	}
+	titleColor := b.TitleColor
+	if titleColor == nil {
+		titleColor = P.Strong
+	}
+	edge := on(bg, accent)
+	inner := max(1, b.Width-2)
+	content := max(1, inner-2*b.PadX)
+	label := func(text string, c color.Color, bold bool) string {
+		return on(bg, c).Bold(bold).Render(text)
+	}
+	border := func(left, right, title, meta string, titleStyle func(string) string) string {
+		// "╭─ title ──── meta ─╮": labels sit two cells in from the corners.
+		meta = ansi.Truncate(meta, max(0, (inner-7)/2), "…")
+		if ansi.StringWidth(meta) < 2 {
+			meta = ""
+		}
+		reserved := 0
+		if meta != "" {
+			reserved = ansi.StringWidth(meta) + 3
+		}
+		title = ansi.Truncate(title, max(0, inner-4-reserved), "…")
+		used := 0
+		var out strings.Builder
+		out.WriteString(edge.Render(left + "─"))
+		if title != "" {
+			out.WriteString(edge.Render(" ") + titleStyle(title) + edge.Render(" "))
+			used += ansi.StringWidth(title) + 2
+		}
+		tail := ""
+		if meta != "" {
+			tail = edge.Render(" ") + label(meta, P.Muted, false) + edge.Render(" ")
+			used += ansi.StringWidth(meta) + 2
+		}
+		out.WriteString(edge.Render(strings.Repeat("─", max(0, inner-2-used))))
+		out.WriteString(tail + edge.Render("─"+right))
+		return out.String()
+	}
+	fill := lipgloss.NewStyle().Background(bg)
+	pad := fill.Render(strings.Repeat(" ", b.PadX))
+	blank := edge.Render("│") + fill.Render(strings.Repeat(" ", inner)) + edge.Render("│")
+	rows := []string{border("╭", "╮", b.Title, b.Meta, func(s string) string { return label(s, titleColor, true) })}
+	for range b.PadY {
+		rows = append(rows, blank)
+	}
+	for _, line := range strings.Split(body, "\n") {
+		line = ansi.Truncate(line, content, "…")
+		gap := fill.Render(strings.Repeat(" ", max(0, content-ansi.StringWidth(line))))
+		rows = append(rows, edge.Render("│")+pad+line+gap+pad+edge.Render("│"))
+	}
+	for range b.PadY {
+		rows = append(rows, blank)
+	}
+	rows = append(rows, border("╰", "╯", b.Legend, "", func(s string) string { return label(s, P.Muted, false) }))
+	return strings.Join(rows, "\n")
+}
+
+// Inner is the writable width inside a box with the given outer width.
+func (b Box) Inner() int { return max(1, b.Width-2-2*b.PadX) }
+
+// Button is a filled label. The primary one takes the accent; the others sit
+// on a raised surface.
+func Button(label string, primary bool, accent color.Color) string {
+	if primary {
+		return on(accent, P.Field).Bold(true).Render(" " + label + " ")
+	}
+	return on(P.Raised, P.Strong).Render(" " + label + " ")
+}
+
+// Line pads text to width on a background, so rows paint edge to edge.
+func Line(text string, width int, bg color.Color) string {
+	text = ansi.Truncate(text, width, "…")
+	return text + lipgloss.NewStyle().Background(bg).Render(strings.Repeat(" ", max(0, width-ansi.StringWidth(text))))
+}
+
+// Spread places left and right text on one row of the given width.
+func Spread(left, right string, width int, bg color.Color) string {
+	room := max(0, width-ansi.StringWidth(right))
+	left = ansi.Truncate(left, room, "…")
+	gap := lipgloss.NewStyle().Background(bg).Render(strings.Repeat(" ", max(0, width-ansi.StringWidth(left)-ansi.StringWidth(right))))
+	return left + gap + right
+}
+
+// Meter draws a five-cell usage bar: "██░░░".
+func Meter(fraction float64, color color.Color, bg color.Color) string {
+	filled := min(5, max(0, int(fraction*5)))
+	return on(bg, color).Render(strings.Repeat("█", filled)) + on(bg, P.Faint).Render(strings.Repeat("░", 5-filled))
+}

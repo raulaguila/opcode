@@ -17,6 +17,7 @@ import (
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui"
+	"github.com/raulaguila/opcode/internal/ui"
 	"github.com/raulaguila/opcode/internal/version"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/spf13/cobra"
@@ -209,8 +210,13 @@ to assist developers in writing, debugging, and understanding code directly from
 		// Interactive mode
 		// Set up the TUI
 		output := tui.NewTerminalWriter(os.Stdout)
+		var model tea.Model = tui.New(app, initialSessions...)
+		if choice, _ := cmd.Flags().GetString("ui"); choice == "novo" || choice == "new" {
+			// The interface rebuilt from the visual proposal, screen by screen.
+			model = ui.New(app, initialSessions...)
+		}
 		program := tea.NewProgram(
-			tui.WithTerminalOutput(tui.New(app, initialSessions...), output),
+			tui.WithTerminalOutput(model, output),
 			tea.WithOutput(output),
 		)
 
@@ -405,6 +411,7 @@ func init() {
 	// Add quiet flag to hide spinner in non-interactive mode
 	rootCmd.Flags().BoolP("quiet", "q", false, "Hide spinner in non-interactive mode")
 	rootCmd.Flags().String("mode", "", "Initial mode: ask, plan or execute")
+	rootCmd.Flags().String("ui", "", "Interface: empty for the current one, \"novo\" for the rebuilt one (in progress)")
 	addResumeFlag(rootCmd)
 	rootCmd.Flags().Int("max-steps", 0, "Maximum model requests per turn (1–200)")
 	rootCmd.Flags().Int("max-seconds", 0, "Maximum turn duration including user waits (seconds, 1–7200)")

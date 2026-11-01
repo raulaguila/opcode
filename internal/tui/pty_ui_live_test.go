@@ -458,7 +458,7 @@ func ptyUIComposerText(line string) string {
 	if strings.HasPrefix(line, "╰") {
 		return ""
 	}
-	return strings.TrimSpace(strings.Trim(line, "│"))
+	return strings.Replace(strings.TrimSpace(strings.Trim(line, "│")), "❯", ">", 1)
 }
 
 func ptyUIComposerEmpty(frame string) bool {

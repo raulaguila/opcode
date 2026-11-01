@@ -159,6 +159,10 @@ func (p *chatPage) workflowHeight() int {
 		return 0
 	}
 	if !p.workflow.expanded && p.workflow.question.ID == "" {
+		// A collapsed plan with steps keeps a one-line strip above the composer.
+		if p.planStrip() != "" {
+			return 1
+		}
 		return 0
 	}
 	if p.workflow.question.ID != "" {
@@ -177,6 +181,9 @@ func (p *chatPage) workflowView() string {
 	}
 	if p.workflow.question.ID != "" {
 		return p.questionPanelView(height)
+	}
+	if !p.workflow.expanded {
+		return p.planStrip()
 	}
 	return p.planPanelView(height)
 }

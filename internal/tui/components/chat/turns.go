@@ -392,9 +392,8 @@ func (r *turnRenderer) renderFinal(item message.Message, index int, latest bool)
 	}
 	r.renderRevisingState(item)
 	r.hits = append(r.hits, transcriptHit{start: start, end: r.position - 1, kind: "actions", id: item.ID})
-	if latest && r.firstTurn && !m.IsAgentWorking() {
-		r.renderActions(item)
-	}
+	// Selection and actions are in the help (Ctrl+H); the reply stays clean.
+	_ = r.firstTurn
 }
 
 func (r *turnRenderer) renderActions(item message.Message) {

@@ -351,18 +351,14 @@ func (p *permissionDialogCmp) render() string {
 	t := theme.CurrentTheme()
 	baseStyle := dialogBody()
 
-	title := baseStyle.
-		Bold(true).
-		Width(p.width - 4).
-		Foreground(t.Primary()).
-		Render(config.Text("Aprovação necessária", "Permission required"))
+	title := p.approvalTitle()
 	// Render header
 	headerContent := p.renderHeader()
 	// Render buttons
 	buttons := p.renderButtons()
 
 	// Calculate content height dynamically based on window size
-	p.contentViewPort.SetHeight(max(1, p.height-lipgloss.Height(headerContent)-lipgloss.Height(buttons)-6-lipgloss.Height(title)))
+	p.contentViewPort.SetHeight(max(1, p.height-lipgloss.Height(headerContent)-lipgloss.Height(buttons)-6))
 	p.contentViewPort.SetWidth(max(1, p.width-4))
 
 	// Render content based on tool type
@@ -387,29 +383,41 @@ func (p *permissionDialogCmp) render() string {
 		p.contentViewPort.SetHeight(max(1, lines))
 		contentFinal = p.styleViewport()
 	}
-	p.buttonY = 2 + lipgloss.Height(title) + 1 + lipgloss.Height(headerContent) + lipgloss.Height(contentFinal)
+	// The frame's border carries the request and its size; the body holds
+	// scope, content and the numbered choices.
+	p.buttonY = 2 + lipgloss.Height(headerContent) + lipgloss.Height(contentFinal)
 	content := lipgloss.JoinVertical(
 		lipgloss.Top,
-		title,
-		baseStyle.Render(strings.Repeat(" ", lipgloss.Width(title))),
 		headerContent,
 		contentFinal,
 		buttons,
-		styles.PanelDivider(max(1, p.width-4)),
-		p.permissionHintView(max(1, p.width-4)),
-		baseStyle.Render(strings.Repeat(" ", max(0, p.width-4))),
 	)
+	_ = baseStyle
+	return styles.FrameOn(content, max(1, p.width-4), 1, 1, title, p.approvalMeta(), interfaceCopy(p.permissionHint()), t.Warning(), t.BackgroundSecondary())
+}
 
-	return baseStyle.
-		Padding(1, 0, 0, 1).
-		Border(lipgloss.RoundedBorder()).
-		BorderBackground(t.BackgroundSecondary()).
-		BorderForeground(t.TextMuted()).
-		Width(p.width).
-		Height(min(p.height, lipgloss.Height(content)+1)).
-		Render(
-			content,
-		)
+// approvalTitle names what is being approved, as the frame's title.
+func (p *permissionDialogCmp) approvalTitle() string {
+	switch p.permission.ToolName {
+	case tools.EditToolName, tools.WriteToolName, tools.PatchToolName:
+		return config.Text("Aprovar edição", "Approve edit")
+	case tools.BashToolName:
+		return config.Text("Aprovar comando", "Approve command")
+	case tools.FetchToolName:
+		return config.Text("Aprovar acesso à rede", "Approve network access")
+	}
+	return config.Text("Aprovação necessária", "Permission required")
+}
+
+// approvalMeta is the corner note: the change size, or the tool's name.
+func (p *permissionDialogCmp) approvalMeta() string {
+	if summary := p.changeSummary(); summary != "" {
+		if _, size, ok := strings.Cut(summary, " · "); ok {
+			size, _, _ = strings.Cut(size, " · ")
+			return config.Text("1 arquivo · ", "1 file · ") + size
+		}
+	}
+	return p.permission.ToolName
 }
 
 func (p *permissionDialogCmp) View() string {

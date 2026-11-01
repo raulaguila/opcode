@@ -19,7 +19,7 @@ func TestReasoningDetailsPrecedeMatchingPublicResponseWithoutTrailingProcess(t *
 	require.Less(t, strings.Index(view, label), strings.Index(view, "Public answer"))
 	require.NotContains(t, view[strings.Index(view, "Public answer"):], "✓")
 	require.NotContains(t, view, "Internal analysis")
-	require.Len(t, m.hits, 3, "one details toggle, response and explicit response actions")
+	require.Len(t, m.hits, 2, "one details toggle and the response")
 	m.toggleProcess(m.hits[0].id)
 	view = timelineText(m)
 	require.Contains(t, view, "Internal analysis")

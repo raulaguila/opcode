@@ -13,8 +13,9 @@ func TestQuietChatKeepsPlanOnDemandAndQuestionsVisible(t *testing.T) {
 	_, err := p.app.Workflows.UpdatePlan(context.Background(), "s", "Task", []workflow.Step{{Title: "Check", Status: "in_progress"}}, []string{"Pass checks"}, nil)
 	require.NoError(t, err)
 	p.refreshWorkflow()
-	require.Zero(t, p.workflowHeight(), "a new plan must not take over the composer")
-	require.Empty(t, p.workflowView())
+	require.Equal(t, 1, p.workflowHeight(), "a collapsed plan keeps only a one-line strip")
+	require.Contains(t, p.workflowView(), "● 1. Check")
+	require.Contains(t, p.workflowView(), "/plan")
 	p.workflow.expanded = true
 	require.Positive(t, p.workflowHeight())
 	require.Contains(t, p.workflowView(), "Check")

@@ -278,15 +278,20 @@ func (m *editorCmp) View() string {
 		Padding(0, 0, 0, 1).
 		Bold(true).
 		Foreground(t.Primary())
+	prompt := ">"
+	if m.modeLabel != "" {
+		// Inside the mode frame the prompt takes the mode's color.
+		style, prompt = style.Foreground(m.modeColor), "❯"
+	}
 
 	var body string
 	if len(m.attachments) == 0 {
-		body = lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"), m.textarea.View())
+		body = lipgloss.JoinHorizontal(lipgloss.Top, style.Render(prompt), m.textarea.View())
 	} else {
 		m.textarea.SetHeight(max(1, m.height-m.frameRows()-m.attachmentRows(m.width)))
 		body = lipgloss.JoinVertical(lipgloss.Top,
 			m.attachmentsContent(),
-			lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"),
+			lipgloss.JoinHorizontal(lipgloss.Top, style.Render(prompt),
 				m.textarea.View()),
 		)
 	}

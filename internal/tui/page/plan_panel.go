@@ -127,3 +127,37 @@ func (p *chatPage) planProgressBar(width int) string {
 	return styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Warning()).Render(strings.Repeat("█", filled)) +
 		styles.PanelHint().Render(strings.Repeat("░", span-filled)+label)
 }
+
+// planStrip is the collapsed plan: progress, the current step and the key
+// that expands it, on one line.
+func (p *chatPage) planStrip() string {
+	steps := p.workflow.task.Steps
+	if len(steps) == 0 || p.width < 40 {
+		return ""
+	}
+	done, current := 0, ""
+	for i, step := range steps {
+		if step.Status == "completed" {
+			done++
+		}
+		if step.Status == "in_progress" && current == "" {
+			current = fmt.Sprintf("● %d. %s", i+1, panelText(step.Title))
+		}
+	}
+	if current == "" && done < len(steps) {
+		for i, step := range steps {
+			if step.Status != "completed" {
+				current = fmt.Sprintf("○ %d. %s", i+1, panelText(step.Title))
+				break
+			}
+		}
+	}
+	t := theme.CurrentTheme()
+	bar := styles.BaseStyle().Background(t.BackgroundSecondary())
+	head := bar.Foreground(t.Warning()).Bold(true).Render(fmt.Sprintf(config.Text(" Plano %d/%d ", " Plan %d/%d "), done, len(steps)))
+	tail := styles.PanelHint().Render(" /plan ")
+	room := max(0, p.width-ansi.StringWidth(ansi.Strip(head))-ansi.StringWidth(ansi.Strip(tail)))
+	middle := bar.Foreground(t.Text()).Render(ansi.Truncate(" "+current, room, "…"))
+	gap := bar.Render(strings.Repeat(" ", max(0, room-ansi.StringWidth(ansi.Strip(middle)))))
+	return head + middle + gap + tail
+}

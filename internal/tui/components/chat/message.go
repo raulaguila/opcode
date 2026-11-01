@@ -218,7 +218,7 @@ func renderAssistantMessage(
 			info = append(info, baseStyle.
 				Width(width-1).
 				Foreground(t.TextMuted()).
-				Render(fmt.Sprintf(" %s (%s)", messageModelName(models.SupportedModels[msg.Model]), status)),
+				Render(fmt.Sprintf(" %s · %s", messageModelName(models.SupportedModels[msg.Model]), status)),
 			)
 		}
 	}

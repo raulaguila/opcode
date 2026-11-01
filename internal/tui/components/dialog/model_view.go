@@ -245,7 +245,9 @@ func (m *modelDialogCmp) catalogView() string {
 	label := "⌕ "
 	m.search.SetWidth(max(1, g.width-ansi.StringWidth(label)))
 	m.search.Placeholder = config.Text("Buscar por nome ou ID", "Search by name or ID")
-	rows = append(rows, base.Render(label+m.search.View()))
+	// The search reads as a field: a darker band across the dialog.
+	field := styles.BaseStyle().Background(t.BackgroundDarker()).Width(g.width)
+	rows = append(rows, field.Render(dialogBody().Background(t.BackgroundDarker()).Foreground(t.Info()).Render(label)+m.search.View()))
 	if m.showNote() {
 		note := m.note
 		if m.loading {
@@ -266,8 +268,10 @@ func (m *modelDialogCmp) catalogView() string {
 	g.width = full.width
 	// The corner reads like the catalog: provider and chat models of the
 	// catalog, or the result count while searching.
+	// The provider repeats in the corner on wide dialogs; narrow ones keep
+	// the room for the counts (the tabs already name the provider).
 	position := m.providerLabel()
-	if !m.providerTabs() {
+	if !m.providerTabs() || g.width < 60 {
 		position = ""
 	}
 	counts := ""
@@ -326,7 +330,7 @@ func (m *modelDialogCmp) chatModelCount() int {
 	return chat
 }
 
-func (m *modelDialogCmp) providerTabs() bool { return len(m.availableProviders) > 1 }
+func (m *modelDialogCmp) providerTabs() bool { return len(m.availableProviders) > 0 }
 
 // showNote: the catalog summary now lives in the corner, so the note row only
 // appears for loading and for messages such as errors.
@@ -428,7 +432,7 @@ func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme,
 		model := m.filtered[i]
 		caret, mark := " ", " "
 		if i == m.selectedIdx {
-			caret = "›"
+			caret = "▌"
 		}
 		if model.ID == active {
 			mark = "✓"

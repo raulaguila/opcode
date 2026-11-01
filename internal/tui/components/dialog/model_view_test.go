@@ -49,7 +49,7 @@ func TestModelCurrentMarkerDoesNotFollowHighlightAndListScrolls(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	view := ansi.Strip(m.View())
 	require.Contains(t, view, "✓ "+m.modelLabel(m.filtered[0]))
-	require.Contains(t, view, "›   Model 1")
+	require.Contains(t, view, "▌   Model 1")
 	require.Contains(t, view, "2 of 16")
 	require.Contains(t, view, "↓")
 	m.Update(tea.KeyPressMsg{Code: tea.KeyPgDown})
@@ -133,7 +133,7 @@ func TestModelPreferencesAndRoleSelectionRemainIndependent(t *testing.T) {
 	require.Equal(t, models.ModelID("model-00"), config.Get().Agents[config.AgentCoder].Model)
 	view := ansi.Strip(m.View())
 	require.Contains(t, view, "Task model")
-	require.Contains(t, view, "› ✓ ↺ Model 9")
+	require.Contains(t, view, "▌ ✓ ↺ Model 9")
 }
 
 func TestWideModelDetailsSitBesideTheList(t *testing.T) {

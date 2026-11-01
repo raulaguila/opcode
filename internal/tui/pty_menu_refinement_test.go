@@ -136,7 +136,7 @@ func assertPickerPTYSettingsClick(t *testing.T, h *ptyUIHarness, size [2]int, dr
 	h.paste("settings")
 	h.wait("filtered settings action", 5*time.Second, func(frame string) bool {
 		// The search field itself, not the "/settings" key chip of the unfiltered list.
-		return strings.Contains(frame, "Commands") && strings.Contains(frame, "/ settings") && strings.Contains(frame, "1 of 1")
+		return strings.Contains(frame, "Commands") && strings.Contains(frame, "/ settings") && strings.Contains(frame, "1 result")
 	})
 	h.clickLabel("Settings")
 	h.wait("settings opened by actual mouse", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "╭─ Settings") })

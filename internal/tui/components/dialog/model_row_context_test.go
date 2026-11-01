@@ -31,7 +31,7 @@ func TestModelRowsShowKnownUnknownAndEstimatedContext(t *testing.T) {
 		require.Contains(t, rows[0], "✓ model-00 · Local")
 		require.Contains(t, rows[0], "64k")
 		require.Contains(t, rows[0], config.Text("Em uso", "In use"))
-		require.Contains(t, rows[1], "›   ★ Model 1 · ")
+		require.Contains(t, rows[1], "▌   ★ Model 1 · ")
 		require.Contains(t, rows[1], "~128k")
 		require.Contains(t, rows[2], "↺ Model 2")
 		require.Contains(t, rows[2], "—")

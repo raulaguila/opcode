@@ -22,19 +22,18 @@ func TestPalettePositionShowsFilteredCountAndContinuation(t *testing.T) {
 		m.SetCommands(items)
 		m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 		view := ansi.Strip(m.View())
-		require.Contains(t, view, config.Text("1 de 24 · ↓", "1 of 24 · ↓"))
+		// The corner counts every command, as the proposal shows.
+		require.Contains(t, strings.Split(view, "\n")[0], " 24 ─")
 		for range 23 {
 			m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		}
 		view = ansi.Strip(m.View())
-		require.Contains(t, view, config.Text("24 de 24 · ↑", "24 of 24 · ↑"))
+		require.Contains(t, view, "▌ Action 23", "the selection scrolls into view")
 		require.LessOrEqual(t, lipgloss.Height(view), size[1])
 		assertVisibleCommandClicks(t, m, items, view)
 		m.Update(tea.PasteMsg{Content: "action-23"})
 		view = ansi.Strip(m.View())
-		require.Contains(t, view, config.Text("1 de 1", "1 of 1"))
-		require.NotContains(t, view, " · ↓")
-		require.NotContains(t, view, " · ↑")
+		require.Contains(t, view, config.Text("1 resultado", "1 result"))
 	}
 }
 

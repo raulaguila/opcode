@@ -275,15 +275,15 @@ func (c *commandDialogCmp) View() string {
 	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, rows...), g.width, 2, g.padding, c.dialogTitle(), meta, hint)
 }
 
+// positionLabel is the corner count: every command, or the matches.
 func (c *commandDialogCmp) positionLabel(g commandGeometry, selected, total int) string {
-	position := fmt.Sprintf(config.Text("%d de %d", "%d of %d"), max(0, selected+1), total)
-	if g.start > 0 {
-		position += " · ↑"
+	if strings.TrimSpace(c.search.Value()) == "" {
+		return fmt.Sprint(total)
 	}
-	if g.start+g.count < total {
-		position += " · ↓"
+	if total == 1 {
+		return config.Text("1 resultado", "1 result")
 	}
-	return position
+	return fmt.Sprintf(config.Text("%d resultados", "%d results"), total)
 }
 
 func (c *commandDialogCmp) commandRow(item Command, selected bool, width int) string {
@@ -294,10 +294,16 @@ func (c *commandDialogCmp) commandRow(item Command, selected bool, width int) st
 	if item.ID == c.activeID || item.ID == c.approvalID {
 		name = "✓ " + name
 	}
+	// The matched part of the name is underlined while searching.
+	if query := strings.TrimSpace(c.search.Value()); query != "" && !strings.HasPrefix(name, "✓ ") {
+		if at := strings.Index(strings.ToLower(name), strings.ToLower(query)); at >= 0 {
+			name = name[:at] + ansi.Style{}.Underline(true).Styled(name[at:at+len(query)]) + name[at+len(query):]
+		}
+	}
 	mark := "  "
 	style := dialogBody()
 	if selected {
-		mark = "› "
+		mark = "▌ "
 		style = styles.SelectedRow().Bold(true)
 	}
 	if c.activeID != "" || width < 48 {

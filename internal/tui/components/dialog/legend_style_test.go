@@ -48,7 +48,7 @@ func TestModelPickerUsageMarkerBelongsOnlyToActiveRow(t *testing.T) {
 			require.LessOrEqual(t, lipgloss.Height(m.View()), size.Height)
 			rows := strings.Split(view, "\n")
 			require.Contains(t, rows[m.geometry().listY], "✓")
-			require.Contains(t, rows[m.geometry().listY+1], "›")
+			require.Contains(t, rows[m.geometry().listY+1], "▌")
 		}
 	}
 	m.selectedIdx = len(m.filtered) - 1
@@ -74,7 +74,7 @@ func TestMenuLegendsAreSecondaryWhileSelectionAndConsentStayDistinct(t *testing.
 	require.Equal(t, hint.FG, actual.FG)
 	require.NotEqual(t, body.FG, actual.FG)
 	require.Zero(t, actual.Mode&23)
-	require.NotZero(t, legendGlyph(t, view, "›   Model 1").Mode&4, "navigation highlight remains bold")
+	require.NotZero(t, legendGlyph(t, view, "▌   Model 1").Mode&4, "navigation highlight remains bold")
 	p := NewPermissionDialogCmp().(*permissionDialogCmp)
 	p.permission.ToolName = tools.BashToolName
 	consent := legendGlyph(t, p.permissionHintView(100), "exact scope")

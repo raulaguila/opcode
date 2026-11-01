@@ -17,6 +17,7 @@ type Box struct {
 	PadX, PadY          int
 	Accent, Background  color.Color
 	TitleColor          color.Color // defaults to Strong
+	Dashed              bool        // a dashed edge, for what is off or only offered
 }
 
 // Render draws the box around body; body lines are clipped and padded.
@@ -34,6 +35,10 @@ func (b Box) Render(body string) string {
 		titleColor = P.Strong
 	}
 	edge := on(bg, accent)
+	h, v := "─", "│"
+	if b.Dashed {
+		h, v = "┄", "┆"
+	}
 	inner := max(1, b.Width-2)
 	content := max(1, inner-2*b.PadX)
 	label := func(text string, c color.Color, bold bool) string {
@@ -52,7 +57,7 @@ func (b Box) Render(body string) string {
 		title = ansi.Truncate(title, max(0, inner-4-reserved), "…")
 		used := 0
 		var out strings.Builder
-		out.WriteString(edge.Render(left + "─"))
+		out.WriteString(edge.Render(left + h))
 		if title != "" {
 			out.WriteString(edge.Render(" ") + titleStyle(title) + edge.Render(" "))
 			used += ansi.StringWidth(title) + 2
@@ -62,13 +67,13 @@ func (b Box) Render(body string) string {
 			tail = edge.Render(" ") + label(meta, P.Muted, false) + edge.Render(" ")
 			used += ansi.StringWidth(meta) + 2
 		}
-		out.WriteString(edge.Render(strings.Repeat("─", max(0, inner-2-used))))
-		out.WriteString(tail + edge.Render("─"+right))
+		out.WriteString(edge.Render(strings.Repeat(h, max(0, inner-2-used))))
+		out.WriteString(tail + edge.Render(h+right))
 		return out.String()
 	}
 	fill := lipgloss.NewStyle().Background(bg)
 	pad := fill.Render(strings.Repeat(" ", b.PadX))
-	blank := edge.Render("│") + fill.Render(strings.Repeat(" ", inner)) + edge.Render("│")
+	blank := edge.Render(v) + fill.Render(strings.Repeat(" ", inner)) + edge.Render(v)
 	rows := []string{border("╭", "╮", b.Title, b.Meta, func(s string) string { return label(s, titleColor, true) })}
 	for range b.PadY {
 		rows = append(rows, blank)
@@ -76,7 +81,7 @@ func (b Box) Render(body string) string {
 	for _, line := range strings.Split(body, "\n") {
 		line = ansi.Truncate(line, content, "…")
 		gap := fill.Render(strings.Repeat(" ", max(0, content-ansi.StringWidth(line))))
-		rows = append(rows, edge.Render("│")+pad+line+gap+pad+edge.Render("│"))
+		rows = append(rows, edge.Render(v)+pad+line+gap+pad+edge.Render(v))
 	}
 	for range b.PadY {
 		rows = append(rows, blank)

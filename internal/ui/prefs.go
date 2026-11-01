@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/raulaguila/opcode/internal/permission"
 )
 
 // Settings sections, in the proposal's nav order.
@@ -20,19 +21,29 @@ const (
 	sectionConnections = iota
 	sectionInterface
 	sectionWork
+	sectionApproval
 	sectionShortcuts
 	sectionIntegrations
+	sectionAdvanced
 )
 
 func sectionNames() []string {
-	return []string{textFor("Conexões", "Connections"), textFor("Interface", "Interface"), textFor("Trabalho", "Work"), textFor("Atalhos", "Shortcuts"), textFor("Integrações", "Integrations")}
+	return []string{textFor("Conexões", "Connections"), textFor("Interface", "Interface"), textFor("Trabalho", "Work"), textFor("Aprovação", "Approval"), textFor("Atalhos", "Shortcuts"), textFor("Integrações", "Integrations"), textFor("Avançado", "Advanced")}
 }
 
-// sectionCategories maps a preference section to config.UserSettings categories.
-var sectionCategories = map[int][]string{
-	sectionInterface: {"interface", "sessions"},
-	sectionWork:      {"execution"},
-	sectionShortcuts: {"shortcuts"},
+// inSection says which section lists a preference: run limits are advanced.
+func inSection(section int, s config.Setting) bool {
+	switch section {
+	case sectionInterface:
+		return s.Category == "interface" || s.Category == "sessions"
+	case sectionWork:
+		return s.Category == "execution" && !s.Advanced
+	case sectionShortcuts:
+		return s.Category == "shortcuts"
+	case sectionAdvanced:
+		return s.Category == "execution" && s.Advanced
+	}
+	return false
 }
 
 // connection is one configured provider, legacy backend or named profile.
@@ -63,13 +74,29 @@ type settingsPanel struct {
 	values            map[string]string
 	origins           map[string]string
 	probes            map[models.ModelProvider]probeMsg
+	active            models.ModelProvider // the connection in use leads the list
 }
 
 func (m *Model) openSettingsAt(section int) tea.Cmd {
 	p := &settingsPanel{section: section, probes: map[models.ModelProvider]probeMsg{}}
+	if m.app != nil && m.app.CoderAgent != nil {
+		p.active = m.app.CoderAgent.Model().Provider
+	}
 	p.reload()
 	m.dialog = p
-	return nil
+	// Each card shows its catalog size and latency, as the proposal does.
+	var probes []tea.Cmd
+	for _, c := range connections(p.active) {
+		if !c.raw.Disabled && !keyMissing(c) {
+			probes = append(probes, p.probe(c))
+		}
+	}
+	return tea.Batch(probes...)
+}
+
+// keyMissing is a connection that names a key variable that is not set.
+func keyMissing(c connection) bool {
+	return c.raw.APIKeyEnv != "" && os.Getenv(c.raw.APIKeyEnv) == "" && c.raw.APIKey == "" && c.raw.APIKeyRef == ""
 }
 
 func (m *Model) openSettings() tea.Cmd { return m.openSettingsAt(sectionConnections) }
@@ -81,7 +108,7 @@ func (p *settingsPanel) reload() {
 	}
 }
 
-func connections() []connection {
+func connections(active models.ModelProvider) []connection {
 	cfg := config.Get()
 	if cfg == nil {
 		return nil
@@ -98,6 +125,9 @@ func connections() []connection {
 		out = append(out, connection{id: id, provider: models.ModelProvider("profile:" + id), name: name, raw: profile.Provider})
 	}
 	slices.SortFunc(out, func(a, b connection) int {
+		if (a.provider == active) != (b.provider == active) {
+			return boolRank(b.provider == active) - boolRank(a.provider == active)
+		}
 		if a.raw.Disabled != b.raw.Disabled {
 			return boolRank(a.raw.Disabled) - boolRank(b.raw.Disabled)
 		}
@@ -111,7 +141,7 @@ func (p *settingsPanel) settingRows() []config.Setting {
 	var out []config.Setting
 	query := strings.ToLower(strings.TrimSpace(p.query))
 	for _, s := range config.UserSettings {
-		if !slices.Contains(sectionCategories[p.section], s.Category) {
+		if !inSection(p.section, s) {
 			continue
 		}
 		if query == "" || strings.Contains(strings.ToLower(s.Label+" "+s.Path), query) {
@@ -124,9 +154,11 @@ func (p *settingsPanel) settingRows() []config.Setting {
 func (p *settingsPanel) count() int {
 	switch p.section {
 	case sectionConnections:
-		return len(connections())
+		return len(connections(p.active))
 	case sectionIntegrations:
 		return 0
+	case sectionApproval:
+		return 1
 	}
 	return len(p.settingRows())
 }
@@ -225,7 +257,7 @@ func (p *settingsPanel) view(m *Model) string {
 	box := Box{Title: textFor("Configurações", "Settings"), Meta: homeRelative(global), Width: width, PadX: 0, PadY: 1}
 	inner := box.Inner()
 	navWidth := 22
-	content := inner - navWidth - 3
+	content := inner - navWidth - 5 // two columns of air before the frame
 	nav := p.navRows(navWidth)
 	var body []string
 	switch p.section {
@@ -233,6 +265,8 @@ func (p *settingsPanel) view(m *Model) string {
 		body = p.connectionRows(m, content)
 	case sectionIntegrations:
 		body = p.integrationRows(content)
+	case sectionApproval:
+		body = p.approvalRows(m, content)
 	default:
 		body = p.preferenceRows(content)
 	}
@@ -247,7 +281,7 @@ func (p *settingsPanel) view(m *Model) string {
 		if i < len(body) {
 			right = body[i]
 		}
-		rows = append(rows, Line(left, navWidth, P.Surface)+rule+on(P.Surface, P.Surface).Render("  ")+Line(right, content, P.Surface))
+		rows = append(rows, Line(left, navWidth, P.Surface)+rule+on(P.Surface, P.Surface).Render("  ")+Line(right, content, P.Surface)+on(P.Surface, P.Surface).Render("  "))
 	}
 	rows = append(rows, "")
 	for _, row := range KeyRow(p.legend(), inner-4, P.Surface) {
@@ -258,11 +292,8 @@ func (p *settingsPanel) view(m *Model) string {
 
 func (p *settingsPanel) navRows(width int) []string {
 	counts := map[int]string{}
-	if n := len(connections()); n > 0 {
+	if n := len(connections(p.active)); n > 0 {
 		counts[sectionConnections] = fmt.Sprint(n)
-	}
-	if cfg := config.Get(); cfg != nil && len(cfg.LSP)+len(cfg.MCPServers) > 0 {
-		counts[sectionIntegrations] = fmt.Sprint(len(cfg.LSP) + len(cfg.MCPServers))
 	}
 	var rows []string
 	for i, name := range sectionNames() {
@@ -270,7 +301,15 @@ func (p *settingsPanel) navRows(width int) []string {
 		if i == p.section {
 			bg, fg, bar = P.Selected, P.Strong, on(P.Selected, P.Ask).Render("▌ ")
 		}
-		rows = append(rows, Spread(bar+on(bg, fg).Bold(i == p.section).Render(name), on(bg, P.Muted).Render(counts[i]+" "), width, bg))
+		count := on(bg, P.Muted).Render(counts[i] + " ")
+		if n := integrationWarnings(); i == sectionIntegrations && n > 0 {
+			count = on(bg, P.Plan).Render(fmt.Sprintf(textFor("%d aviso", "%d warning"), n))
+			if n > 1 {
+				count = on(bg, P.Plan).Render(fmt.Sprintf(textFor("%d avisos", "%d warnings"), n))
+			}
+			count += on(bg, bg).Render(" ")
+		}
+		rows = append(rows, Spread(bar+on(bg, fg).Bold(i == p.section).Render(name), count, width, bg))
 	}
 	return rows
 }
@@ -282,7 +321,9 @@ func (p *settingsPanel) legend() string {
 	case p.editing:
 		return textFor("Enter salvar · Esc cancelar", "Enter save · Esc cancel")
 	case p.section == sectionConnections:
-		return textFor("N nova · Enter editar · T testar · M modelos · D excluir · Tab seção · Esc fechar", "N new · Enter edit · T test · M models · D delete · Tab section · Esc close")
+		return textFor("N nova · Enter editar · T testar · D excluir · Tab seção · Esc fechar", "N new · Enter edit · T test · D delete · Tab section · Esc close")
+	case p.section == sectionApproval:
+		return textFor("←→ política · Tab seção · Esc fechar", "←→ policy · Tab section · Esc close")
 	case p.section == sectionIntegrations:
 		return textFor("Enter abrir integrações · Tab seção · Esc fechar", "Enter open integrations · Tab section · Esc close")
 	}
@@ -293,61 +334,113 @@ func (p *settingsPanel) legend() string {
 	return textFor("↑↓ preferência · ←→ valor · Tab seção"+saved+" · Esc fechar", "↑↓ preference · ←→ value · Tab section"+saved+" · Esc close")
 }
 
-// connectionRows draws each connection as a card: state and name, address
-// and authentication, then its actions.
+// connectionRows draws each connection as a framed card: state, name and
+// status on top, address and authentication, then the actions that fit its
+// state. A disabled connection is a one-line dashed card.
 func (p *settingsPanel) connectionRows(m *Model, width int) []string {
-	active := models.ModelProvider("")
-	if m.app != nil && m.app.CoderAgent != nil {
-		active = m.app.CoderAgent.Model().Provider
-	}
+	active := p.active
 	var rows []string
-	list := connections()
+	list := connections(p.active)
 	if len(list) == 0 {
 		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ainda.", "No connections yet.")), "")
 	}
 	for i, c := range list {
-		bg := P.Surface
-		bar := on(P.Surface, P.Surface).Render(" ")
+		box := Box{Width: width, PadX: 1, Accent: P.CardEdge, Background: P.Card}
 		if i == p.selected {
-			bg, bar = P.Selected, on(P.Surface, P.Ask).Render("▌")
+			box.Accent, box.Background = P.CardSelectedEdge, P.CardSelected
 		}
-		icon, iconColor, state, stateColor := "●", P.Success, textFor("ativa", "active"), P.Muted
+		bg, inner := box.Background, box.Inner()
+		icon, iconColor, state, stateColor := "●", P.Success, "", P.Muted
 		switch {
 		case c.raw.Disabled:
 			icon, iconColor, state = "○", P.Faint, textFor("desativada", "disabled")
-		case c.raw.APIKeyEnv != "" && os.Getenv(c.raw.APIKeyEnv) == "" && c.raw.APIKey == "" && c.raw.APIKeyRef == "":
+		case keyMissing(c):
 			icon, iconColor, state, stateColor = "▲", P.Plan, textFor("chave ausente", "key missing"), P.Plan
 		case c.provider == active:
 			state = textFor("em uso", "in use")
 		}
 		name := on(bg, P.Strong).Bold(true).Render(c.name)
 		if c.raw.Disabled {
+			box.Dashed = true
 			name = on(bg, P.Muted).Render(c.name)
 		}
-		rows = append(rows, bar+Line(on(bg, iconColor).Render(" "+icon+" ")+name+on(bg, stateColor).Render("  "+state), width-1, bg))
-		detail := connectionDetail(c)
-		if probe, ok := p.probes[c.provider]; ok {
-			color := P.Success
-			if !probe.ok {
-				color = P.Danger
+		body := []string{Spread(on(bg, iconColor).Render(icon+"  ")+name, on(bg, stateColor).Render(state), inner, bg)}
+		if !c.raw.Disabled {
+			detail := on(bg, P.Muted).Render(connectionDetail(c))
+			if probe, ok := p.probes[c.provider]; ok {
+				color := P.Muted
+				if !probe.ok {
+					color = P.Danger
+				}
+				detail += on(bg, P.Muted).Render(" · ") + on(bg, color).Render(probe.text)
 			}
-			detail = on(bg, P.Muted).Render(detail+" · ") + on(bg, color).Render(probe.text)
-		} else {
-			detail = on(bg, P.Muted).Render(detail)
-		}
-		rows = append(rows, bar+Line(on(bg, bg).Render("   ")+detail, width-1, bg))
-		if i == p.selected && p.deleting {
-			rows = append(rows, bar+Line(on(bg, P.Danger).Render("   "+textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")), width-1, bg))
-		} else if !c.raw.Disabled {
 			gap := on(bg, bg).Render(" ")
-			rows = append(rows, bar+Line(on(bg, bg).Render("   ")+Button(textFor("Editar", "Edit"), false, P.Ask)+gap+Button(textFor("Testar", "Test"), false, P.Ask)+gap+Button(textFor("Modelos", "Models"), false, P.Ask), width-1, bg))
+			buttons := Button(textFor("Editar", "Edit"), false, P.Ask) + gap + Button(textFor("Testar", "Test"), false, P.Ask) + gap + Button(textFor("Modelos", "Models"), false, P.Ask)
+			if keyMissing(c) {
+				buttons = Button(textFor("Editar", "Edit"), false, P.Ask) + gap + Button(textFor("Desativar", "Disable"), false, P.Ask)
+			}
+			if i == p.selected && p.deleting {
+				buttons = on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels"))
+			}
+			body = append(body, on(bg, bg).Render("   ")+detail, on(bg, bg).Render("   ")+buttons)
+		} else if i == p.selected && p.deleting {
+			body = append(body, on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
 		}
+		for j := range body {
+			body[j] = Line(body[j], inner, bg)
+		}
+		rows = append(rows, strings.Split(box.Render(strings.Join(body, "\n")), "\n")...)
 		rows = append(rows, "")
 	}
 	if p.status != "" && p.failed {
-		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(p.status, width, "…")), "")
+		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(p.status, width, "…")))
 	}
-	return append(rows, on(P.Surface, P.Ask).Render(textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…")))
+	add := Box{Width: width, PadX: 1, Accent: P.CardSelectedEdge, Background: P.Surface, Dashed: true}
+	return append(rows, strings.Split(add.Render(on(P.Surface, P.Ask).Render(textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…"))), "\n")...)
+}
+
+// integrationWarnings counts integrations that fail validation or were
+// turned off for lacking a command.
+func integrationWarnings() int {
+	cfg := config.Get()
+	if cfg == nil {
+		return 0
+	}
+	n := 0
+	for name, lsp := range cfg.LSP {
+		if config.ValidateIntegration(config.Integration{Kind: "lsp", Name: name, LSP: lsp}) != nil || lsp.Command == "" {
+			n++
+		}
+	}
+	for name, mcp := range cfg.MCPServers {
+		if config.ValidateIntegration(config.Integration{Kind: "mcp", Name: name, MCP: mcp}) != nil {
+			n++
+		}
+	}
+	return n
+}
+
+// approvalRows offer the policy of this conversation; it is not saved.
+func (p *settingsPanel) approvalRows(m *Model, width int) []string {
+	options := []struct {
+		label  string
+		policy permission.ApprovalPolicy
+	}{{textFor("Pedir", "Ask"), permission.ApprovalPrompt}, {textFor("Editar no projeto", "Project edits"), permission.ApprovalProjectEdits}}
+	var control string
+	for _, option := range options {
+		if option.policy == m.policy {
+			control += on(P.Segment, P.Strong).Bold(true).Render(" " + option.label + " ")
+		} else {
+			control += on(P.Raised, P.Muted).Render(" " + option.label + " ")
+		}
+	}
+	bg := P.Selected
+	return []string{
+		on(P.Surface, P.Ask).Render("▌") + Spread(on(bg, P.Strong).Render(" "+textFor("Política desta conversa", "This conversation's policy")), control+on(bg, bg).Render(" "), width-1, bg),
+		on(P.Surface, P.Ask).Render("▌") + Line(on(bg, P.Muted).Render(" "+textFor("Editar no projeto aprova edições de arquivos do projeto sem perguntar", "Project edits approves edits to project files without asking")), width-1, bg),
+		"",
+		on(P.Surface, P.Muted).Render(ansi.Truncate(textFor("Comandos, rede, exclusões e caminhos fora do projeto continuam pedindo aprovação.", "Commands, network, deletions and outside paths still ask for approval."), width, "…")),
+	}
 }
 
 // connectionDetail is a card's second line: address and authentication.
@@ -491,6 +584,15 @@ func (p *settingsPanel) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 			return m.openIntegrations(), true
 		}
 		return nil, true
+	case sectionApproval:
+		if key == "left" || key == "right" || key == "space" || key == "enter" {
+			if m.policy == permission.ApprovalProjectEdits {
+				m.setApproval(permission.ApprovalPrompt)
+			} else {
+				m.setApproval(permission.ApprovalProjectEdits)
+			}
+		}
+		return nil, true
 	}
 	return p.preferenceKey(m, key, msg.Text), true
 }
@@ -505,7 +607,7 @@ func (p *settingsPanel) paste(text string) {
 }
 
 func (p *settingsPanel) current() (connection, bool) {
-	list := connections()
+	list := connections(p.active)
 	if p.selected < 0 || p.selected >= len(list) {
 		return connection{}, false
 	}
@@ -525,6 +627,10 @@ func (p *settingsPanel) connectionKey(m *Model, key string) tea.Cmd {
 	case "t":
 		if ok {
 			return p.probe(c)
+		}
+	case "a":
+		if ok {
+			p.setDisabled(m, c, !c.raw.Disabled)
 		}
 	case "m":
 		if ok && !c.raw.Disabled {
@@ -562,10 +668,42 @@ func (p *settingsPanel) deleteKey(m *Model, key string) tea.Cmd {
 			return nil
 		}
 		p.status, p.failed = "", false
-		p.selected = max(0, min(p.selected, len(connections())-1))
+		p.selected = max(0, min(p.selected, len(connections(p.active))-1))
 		m.info = textFor("Conexão excluída", "Connection deleted")
 	}
 	return nil
+}
+
+// setDisabled turns a connection off or back on. The stored key is written
+// back as it was in the file, never a key resolved from the environment.
+func (p *settingsPanel) setDisabled(m *Model, c connection, disabled bool) {
+	if m.app != nil && m.app.CoderAgent != nil && disabled && m.app.CoderAgent.Model().Provider == c.provider {
+		p.status, p.failed = textFor("Troque o modelo antes de desativar a conexão em uso", "Switch models before disabling the connection in use"), true
+		return
+	}
+	if err := m.saveGuard(); err != nil {
+		p.status, p.failed = err.Error(), true
+		return
+	}
+	var err error
+	if c.legacy {
+		raw := config.Get().Providers[c.provider]
+		raw.Disabled, raw.APIKey = disabled, config.StoredProviderKey(c.id, true)
+		err = config.SaveProvider(c.provider, raw)
+	} else {
+		profile := config.Get().ProviderProfiles[c.id]
+		profile.Disabled, profile.APIKey = disabled, config.StoredProviderKey(c.id, false)
+		err = config.SaveProviderProfile(c.id, profile)
+	}
+	if err != nil {
+		p.status, p.failed = err.Error(), true
+		return
+	}
+	p.status, p.failed = "", false
+	m.info = textFor("Conexão desativada", "Connection disabled")
+	if !disabled {
+		m.info = textFor("Conexão ativada", "Connection enabled")
+	}
 }
 
 // probe asks the connection's catalog, as the proposal's "Testar" does.
@@ -581,7 +719,8 @@ func (p *settingsPanel) probe(c connection) tea.Cmd {
 		start := time.Now()
 		found, err := fetch(models.WithoutCatalogMetadata(ctx))
 		if err != nil {
-			return probeMsg{provider: c.provider, text: ansi.Truncate(strings.Join(strings.Fields(err.Error()), " "), 60, "…")}
+			// The card has room for a word; the full reason shows when it is tested by hand in its form.
+			return probeMsg{provider: c.provider, text: textFor("sem resposta", "no response")}
 		}
 		return probeMsg{provider: c.provider, text: fmt.Sprintf(textFor("%d modelos · %d ms", "%d models · %d ms"), len(found), time.Since(start).Milliseconds()), ok: true}
 	}

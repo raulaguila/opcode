@@ -50,3 +50,12 @@ func TestKeyRowPushesTheLastPairRight(t *testing.T) {
 	require.True(t, strings.HasPrefix(row, "Enter usar   Tab provedor"))
 	require.True(t, strings.HasSuffix(row, "Esc fechar"))
 }
+
+func TestDashedBoxKeepsWidthAndCorners(t *testing.T) {
+	lines := strings.Split(ansi.Strip(Box{Width: 12, PadX: 1, Dashed: true}.Render("x")), "\n")
+	require.Equal(t, "╭┄┄┄┄┄┄┄┄┄┄╮", lines[0])
+	require.Equal(t, "┆ x        ┆", lines[1])
+	for _, line := range lines {
+		require.Equal(t, 12, ansi.StringWidth(line))
+	}
+}

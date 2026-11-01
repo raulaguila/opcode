@@ -24,7 +24,7 @@ func TestRecoveryTaskClickOpensTaskAndKeepsDraft(t *testing.T) {
 	p.recovery.err = errors.New("agent step limit reached")
 	p.editor.Update(chat.RestoreDraftMsg{Text: "KEEP_RECOVERY_DRAFT"})
 	p.SetSize(90, 30)
-	rows, actions := layoutRecoveryActions(p.recovery.err, p.width)
+	rows, actions := layoutRecoveryActions(p.recovery.err, p.width, false)
 	require.Contains(t, rows[0], "/task")
 	p.recoveryMouse(tea.MouseClickMsg{X: actions[0].start + 1, Y: recoveryActionY(p, 0), Button: tea.MouseLeft})
 	require.Equal(t, "task", p.workspace.kind)
@@ -36,7 +36,7 @@ func TestRecoveryClickIgnoresBlankOutsideAndHiddenActions(t *testing.T) {
 	p, _ := workspacePage(t)
 	p.recovery.err = errors.New("agent step limit reached")
 	p.SetSize(90, 30)
-	_, actions := layoutRecoveryActions(p.recovery.err, p.width)
+	_, actions := layoutRecoveryActions(p.recovery.err, p.width, false)
 	y := recoveryActionY(p, 0)
 	for _, point := range [][2]int{{-1, y}, {0, y}, {actions[0].end, y}, {actions[len(actions)-1].end, y}, {p.width, y}, {actions[0].start, y - 1}, {actions[0].start, y + 1}} {
 		require.Nil(t, p.recoveryMouse(tea.MouseClickMsg{X: point[0], Y: point[1], Button: tea.MouseLeft}))
@@ -66,8 +66,8 @@ func TestRecoveryCompactActionsPreserveCommandsAndExactVisibleCells(t *testing.T
 
 func assertRecoveryActionLayout(t *testing.T, width int, err error) {
 	t.Helper()
-	rows, actions := layoutRecoveryActions(err, width)
-	require.Len(t, actions, len(recoveryActionOptions(err)))
+	rows, actions := layoutRecoveryActions(err, width, false)
+	require.Len(t, actions, len(recoveryActionOptions(err, false)))
 	if width >= 36 {
 		require.Len(t, rows, 1, "compact recovery groups must fit the normal two-row panel")
 	}
@@ -86,11 +86,24 @@ func TestRecoveryWrappedActionUsesItsRenderedRow(t *testing.T) {
 	p, _ := workspacePage(t)
 	p.recovery.err = errors.New("out of memory")
 	p.SetSize(20, 20)
-	rows, actions := layoutRecoveryActions(p.recovery.err, p.width)
+	rows, actions := layoutRecoveryActions(p.recovery.err, p.width, false)
 	require.Greater(t, len(rows), 1)
 	require.Equal(t, 1+len(rows), p.recoveryHeight())
 	last := actions[len(actions)-1]
 	require.Equal(t, "error", last.command)
 	p.recoveryMouse(tea.MouseClickMsg{X: last.start, Y: recoveryActionY(p, last.row), Button: tea.MouseLeft})
 	require.Equal(t, "error", p.workspace.kind)
+}
+
+func TestRecoveryOffersUndoOnlyWhenTheTaskChangedFiles(t *testing.T) {
+	err := errors.New("context budget exceeded")
+	require.NotContains(t, recoveryActionText(recoveryActionOptions(err, false)[0], false), "/undo")
+	require.Equal(t, "undo", recoveryActionOptions(err, true)[0].command)
+	for _, width := range []int{36, 60, 110} {
+		rows, actions := layoutRecoveryActions(err, width, true)
+		for _, row := range rows {
+			require.LessOrEqual(t, ansi.StringWidth(row), width)
+		}
+		require.Len(t, actions, len(recoveryActionOptions(err, true)))
+	}
 }

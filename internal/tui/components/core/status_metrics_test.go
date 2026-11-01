@@ -61,3 +61,11 @@ func TestFooterMetricsResizeAndClicksMatchVisibleCells(t *testing.T) {
 		require.Equal(t, width, lipgloss.Width(view))
 	}
 }
+
+func TestIdleFooterOmitsPlaceholderMetrics(t *testing.T) {
+	m := statusCmp{width: 110}
+	idle := m.metrics(util.FooterState{ContextWindow: 16384})
+	require.Equal(t, "16k ctx", idle)
+	busy := m.metrics(util.FooterState{ContextWindow: 16384, Busy: true})
+	require.Contains(t, busy, "— tok/s", "a running request still shows that speed is pending")
+}

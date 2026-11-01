@@ -38,10 +38,10 @@ func processOutcome(items []message.Message) string {
 		labels[0] = config.Text("interrompido", "interrupted")
 	}
 	if failures > 0 {
-		labels = append(labels, fmt.Sprintf(config.Text("%d falha(s)", "%d failure(s)"), failures))
+		labels = append(labels, plural(failures, "falha", "falhas", "failure", "failures"))
 	}
 	if partial > 0 {
-		labels = append(labels, fmt.Sprintf(config.Text("%d saída(s) parcial(is)", "%d partial output(s)"), partial))
+		labels = append(labels, plural(partial, "saída parcial", "saídas parciais", "partial output", "partial outputs"))
 	}
 	return strings.Join(labels, " · ")
 }
@@ -58,4 +58,11 @@ func processResultFlags(metadata string) processFlags {
 		_ = json.Unmarshal([]byte(metadata), &flags)
 	}
 	return flags
+}
+
+func plural(n int, onePT, manyPT, oneEN, manyEN string) string {
+	if n == 1 {
+		return fmt.Sprintf("1 %s", config.Text(onePT, oneEN))
+	}
+	return fmt.Sprintf("%d %s", n, config.Text(manyPT, manyEN))
 }

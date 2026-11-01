@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/permission"
@@ -74,7 +74,7 @@ func sanitizeProbeText(s string) string {
 }
 
 func (a *App) probeMCPIntegration(ctx context.Context, candidate config.Integration) ([]string, error) {
-	result, err := agent.ProbeMCPServer(ctx, candidate.Name, candidate.MCP, a.Permissions)
+	result, err := mcp.ProbeMCPServer(ctx, candidate.Name, candidate.MCP, a.Permissions)
 	if err != nil {
 		return nil, err
 	}

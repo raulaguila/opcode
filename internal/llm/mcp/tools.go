@@ -1,13 +1,14 @@
-package agent
+package mcp
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"

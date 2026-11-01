@@ -210,7 +210,10 @@ func parseWriteParams(raw string) (WriteParams, *ToolResponse) {
 		return params, &response
 	}
 
-	if params.Content == "" {
+	// Empty content creates an empty file; only an omitted field is an error.
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal([]byte(raw), &fields) // raw already parsed as an object above
+	if _, present := fields["content"]; !present {
 		response := NewTextErrorResponse("content is required")
 		return params, &response
 	}

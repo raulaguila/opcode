@@ -2,18 +2,20 @@ package agent
 
 import (
 	"context"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/workflow"
-	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/raulaguila/opcode/internal/config"
+	mcptools "github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMCPNameCannotImpersonateNativeReadTool(t *testing.T) {
-	tool := tools.SecureTool(NewMcpTool("get", mcp.Tool{Name: "project_map"}, nil, config.MCPServer{}), nil)
+	tool := tools.SecureTool(mcptools.NewMcpTool("get", mcp.Tool{Name: "project_map"}, nil, config.MCPServer{}), nil)
 	require.Equal(t, "get_project_map", tool.Info().Name)
 	require.True(t, tools.IsOpaqueTool(tool))
 	a, p, _, _ := runtimeAgent(t, workflow.Ask)

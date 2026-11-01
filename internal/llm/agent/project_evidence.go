@@ -86,7 +86,7 @@ func (a *agent) bootstrapCall(ctx context.Context, session string, tool tools.Ba
 			response = tools.NewTextErrorResponse(err.Error())
 		}
 	}
-	response.Content = clip(response.Content, remaining)
+	response.Content = tools.Clip(response.Content, remaining)
 	run.toolBytes += len(response.Content)
 	if len(response.Metadata) > min(4096, max(0, run.limits.ToolBudget-run.toolBytes)) {
 		response.Metadata = ""

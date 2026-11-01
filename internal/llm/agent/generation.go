@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/workflow"
-	"slices"
-	"strings"
 )
 
 // generationState owns one run's history and bounded recovery attempts.
@@ -189,7 +190,7 @@ func (g *generationState) validateCitations(agentMessage message.Message) (bool,
 	}
 	if assessment.problem != "" {
 		if g.citationRepairs >= 1 {
-			return false, fmt.Errorf("%w: %s", ErrSourceCitation, clip(tools.RedactCredentials(assessment.problem), 1800))
+			return false, fmt.Errorf("%w: %s", ErrSourceCitation, tools.Clip(tools.RedactCredentials(assessment.problem), 1800))
 		}
 		g.citationRepairs++
 		if state == message.CitationRevising {
@@ -338,7 +339,7 @@ func (g *generationState) completionTask() (workflow.Task, error) {
 		return task, err
 	}
 	if errors.Is(fingerprintErr, errWorkspaceVerification) && task.HasFileChanges() && !task.WorkspaceRequired {
-		return g.agent.workflow.FinishWithReason(g.ctx, g.sessionID, "partial", clip("Files saved and affected contents verified; workspace/check validation unavailable: "+fingerprintErr.Error(), 2000), "", nil)
+		return g.agent.workflow.FinishWithReason(g.ctx, g.sessionID, "partial", tools.Clip("Files saved and affected contents verified; workspace/check validation unavailable: "+fingerprintErr.Error(), 2000), "", nil)
 	}
 	if fingerprintErr != nil && g.run.mode == workflow.Execute && (task.Changed || len(task.Checks) > 0 || task.Status == "completed") {
 		return task, fmt.Errorf("cannot verify current files: %w", fingerprintErr)

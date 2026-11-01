@@ -44,7 +44,7 @@ func (r *turnRenderer) reasoningExpanded(key string, item message.Message) bool 
 	if m.toggled[key] {
 		return m.expanded[key]
 	}
-	if r.active && item.ID == r.reasoningID && strings.TrimSpace(item.Content().Text) == "" {
+	if r.active && !r.answered && item.ID == r.reasoningID && strings.TrimSpace(item.Content().Text) == "" {
 		return true
 	}
 	// Scrolling away from the live tail is a reading choice, not consent to fold.

@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/raulaguila/opcode/internal/llm/prompt"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
-	"time"
 )
 
 func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgHistory []message.Message, run *generationRun) ([]message.Message, provider.PreparedRequest, error) {
@@ -312,7 +313,7 @@ func (b *toolBatchExecution) recordChecks(call message.ToolCall, before string, 
 func (b *toolBatchExecution) save() (*message.Message, error) {
 	for i := range b.results {
 		remaining := max(0, b.run.limits.ToolBudget-b.run.toolBytes)
-		b.results[i].Content = clip(b.results[i].Content, min(16000, remaining))
+		b.results[i].Content = tools.Clip(b.results[i].Content, min(16000, remaining))
 		b.run.toolBytes += len(b.results[i].Content)
 		if len(b.results[i].Metadata) > min(4096, max(0, b.run.limits.ToolBudget-b.run.toolBytes)) {
 			b.results[i].Metadata = ""

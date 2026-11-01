@@ -23,7 +23,7 @@ func TestCompactIdleFooterKeepsRecognizableModelAndUsage(t *testing.T) {
 			_, _, _, modelWidth := m.metricWidths(state)
 			model := ansi.Cut(plain, width-1-modelWidth, width-1)
 			require.Contains(t, model, ansi.Truncate(strings.TrimSuffix(label, " ▾"), 3, ""), "model identity must survive compact idle layout")
-			require.Contains(t, plain, "P:"+config.Text("editar", "edit"))
+			require.Contains(t, plain, "A:"+config.Text("editar", "edit"))
 			require.Contains(t, plain, "25%")
 			require.Contains(t, plain, "70.0 t/s")
 			require.Equal(t, "models", m.ActionAt(width-2, state))

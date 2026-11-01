@@ -261,7 +261,7 @@ func testRoutedModalRegressionMatrixStructStateState(size *[2]int, t *testing.T)
 				u, _ = a.Update(result)
 				a = u.(appModel)
 			case "files":
-				require.Contains(t, ansi.Strip(a.View().Content), "Empty directory")
+				require.Contains(t, ansi.Strip(a.View().Content), "No images or folders here")
 				u, _ = a.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 				a = u.(appModel)
 				u, _ = a.Update(testTextKey(string([]rune("l")), 0))

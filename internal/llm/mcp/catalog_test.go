@@ -1,23 +1,37 @@
-package agent
+package mcp
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/permission"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
 func catalogConfiguration(t *testing.T) {
 	t.Helper()
-	_, _, _ = steeringAgent(t)
+	loadTestConfig(t)
 	cfg := config.Get()
 	previous := cfg.MCPServers
 	cfg.MCPServers = map[string]config.MCPServer{"docs": {Type: config.MCPHTTP, URL: "http://example.invalid/mcp", HeadersEnv: map[string]string{"Authorization": "MISSING_MCP_STARTUP_VARIABLE"}}}
 	t.Cleanup(func() { cfg.MCPServers = previous })
+}
+func loadTestConfig(t *testing.T) {
+	t.Helper()
+	if config.Get() == nil {
+		dir := t.TempDir()
+		path := filepath.Join(dir, ".opcode.json")
+		require.NoError(t, os.WriteFile(path, []byte(`{"providers":{"openai":{"apiKey":"unit-test-key"}}}`), 0600))
+		viper.SetConfigFile(path)
+		_, err := config.Load(dir, false)
+		require.NoError(t, err)
+	}
 }
 func catalogContext() context.Context {
 	ctx := context.WithValue(context.Background(), tools.SessionIDContextKey, "catalog-session")

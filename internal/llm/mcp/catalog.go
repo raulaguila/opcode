@@ -1,4 +1,4 @@
-package agent
+package mcp
 
 import (
 	"context"
@@ -197,7 +197,7 @@ func mcpCatalogEntries(entries []mcp.Tool, toolName, query string) []any {
 			continue
 		}
 		if query == "" || strings.Contains(strings.ToLower(entry.Name+" "+entry.Description), strings.ToLower(query)) {
-			items = append(items, map[string]any{"name": entry.Name, "description": clip(entry.Description, 140), "source": "mcp", "read_only": "unknown; opaque execution approval required"})
+			items = append(items, map[string]any{"name": entry.Name, "description": tools.Clip(entry.Description, 140), "source": "mcp", "read_only": "unknown; opaque execution approval required"})
 		}
 	}
 

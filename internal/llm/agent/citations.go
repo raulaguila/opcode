@@ -124,7 +124,7 @@ func citationRepairRequest(run *generationRun, history []message.Message, proble
 	request := ""
 	for _, msg := range history {
 		if msg.ID == run.turnMessageID && msg.Role == message.User {
-			request = clip(msg.Content().Text, 2400)
+			request = tools.Clip(msg.Content().Text, 2400)
 			break
 		}
 	}

@@ -173,39 +173,6 @@ func SensitivePath(path string) bool {
 	return false
 }
 
-type PersistentShell struct{ cwd string }
-
-// Kept as a compatibility entry point; each command gets an independent process.
-func GetPersistentShell(cwd string) *PersistentShell { return &PersistentShell{cwd: cwd} }
-func (s *PersistentShell) Exec(ctx context.Context, command string, timeoutMs int) (string, string, int, bool, error) {
-	if timeoutMs <= 0 {
-		timeoutMs = 60000
-	}
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutMs)*time.Millisecond)
-	defer cancel()
-	cmd, err := Command(ctx, s.cwd, command)
-	if err != nil {
-		return "", "", -1, false, err
-	}
-	out, stderr := &Buffer{}, &Buffer{}
-	cmd.Stdout = out
-	cmd.Stderr = stderr
-	err = cmd.Run()
-	code := 0
-	if cmd.ProcessState != nil {
-		code = cmd.ProcessState.ExitCode()
-	} else if err != nil {
-		code = -1
-	}
-	stdout, _ := out.Snapshot()
-	errText, _ := stderr.Snapshot()
-	if _, ok := err.(*exec.ExitError); ok {
-		err = nil
-	}
-	return stdout, errText, code, ctx.Err() != nil, err
-}
-func (s *PersistentShell) Close() {}
-
 func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *config.Config, readGit, interactive, writeGit bool) (*exec.Cmd, error) {
 	if runtime.GOOS != "linux" {
 		return nil, fmt.Errorf("OS sandbox is unavailable; explicitly configure security.sandbox=none in user-global configuration to run without it")
@@ -242,15 +209,81 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 	}
 	wrapped = append(wrapped, workspaceBind, cwd, cwd, "--chdir", cwd)
 	// Hide credential files inside the otherwise writable workspace, too.
-	masks := sandboxCredentialMasks{cwd: cwd, readGit: readGit, writeGit: writeGit}
-	if err := filepath.WalkDir(cwd, masks.visit); err != nil {
+	masks, err := credentialMasks(cwd, readGit, writeGit, cfg)
+	if err != nil {
 		return nil, fmt.Errorf("cannot inspect sandbox credential masks: %w", err)
 	}
-	wrapped = append(wrapped, masks.args...)
+	wrapped = append(wrapped, masks...)
 	wrapped = append(wrapped, "--", path)
 	wrapped = append(wrapped, args...)
 	return exec.CommandContext(ctx, binary, wrapped...), nil
 
+}
+
+// maskInspectionLimit bounds the first walk of a workspace; later commands
+// reuse its result while no inspected directory changes.
+const maskInspectionLimit = 1_000_000
+
+// Credential masks per workspace. A cached walk is reused only while every
+// directory it entered keeps its mtime: creating, deleting or renaming an entry
+// changes its parent's mtime, so a new credential file forces a fresh walk.
+var (
+	maskCacheMu sync.Mutex
+	maskCache   = map[string]cachedMasks{}
+)
+
+type cachedMasks struct {
+	key  string
+	args []string
+	dirs map[string]time.Time
+}
+
+func credentialMasks(cwd string, readGit, writeGit bool, cfg *config.Config) ([]string, error) {
+	key := fmt.Sprint(readGit, writeGit)
+	if directory, err := config.AuthDirectory(); err == nil {
+		key += "\x00" + directory
+	}
+	if cfg != nil {
+		key += fmt.Sprintf("\x00%s\x00%s\x00%q", cfg.WorkingDir, cfg.Data.Directory, cfg.Security.DenyPaths)
+	}
+	maskCacheMu.Lock()
+	cached, ok := maskCache[cwd]
+	maskCacheMu.Unlock()
+	if ok && cached.key == key && cached.unchanged() {
+		return cached.args, nil
+	}
+	started := time.Now()
+	masks := sandboxCredentialMasks{cwd: cwd, readGit: readGit, writeGit: writeGit, dirs: map[string]time.Time{}}
+	if err := filepath.WalkDir(cwd, masks.visit); err != nil {
+		return nil, err
+	}
+	// Like racy-git: an mtime this close to the walk may hide a later change
+	// within the filesystem's timestamp resolution, so such a walk is not reused.
+	stable := true
+	for _, modified := range masks.dirs {
+		if !modified.Before(started.Add(-2 * time.Second)) {
+			stable = false
+			break
+		}
+	}
+	maskCacheMu.Lock()
+	if stable {
+		maskCache[cwd] = cachedMasks{key: key, args: masks.args, dirs: masks.dirs}
+	} else {
+		delete(maskCache, cwd)
+	}
+	maskCacheMu.Unlock()
+	return masks.args, nil
+}
+
+func (c cachedMasks) unchanged() bool {
+	for dir, modified := range c.dirs {
+		info, err := os.Lstat(dir)
+		if err != nil || !info.IsDir() || !info.ModTime().Equal(modified) {
+			return false
+		}
+	}
+	return true
 }
 
 type sandboxCredentialMasks struct {
@@ -258,6 +291,20 @@ type sandboxCredentialMasks struct {
 	readGit, writeGit bool
 	inspected         int
 	args              []string
+	dirs              map[string]time.Time
+}
+
+// recordDir notes a directory the walk enters, for cache validation.
+func (m *sandboxCredentialMasks) recordDir(name string, d os.DirEntry) error {
+	if m.dirs == nil || !d.IsDir() {
+		return nil
+	}
+	info, err := d.Info()
+	if err != nil {
+		return err
+	}
+	m.dirs[name] = info.ModTime()
+	return nil
 }
 
 func (m *sandboxCredentialMasks) visit(name string, d os.DirEntry, err error) error {
@@ -265,17 +312,17 @@ func (m *sandboxCredentialMasks) visit(name string, d os.DirEntry, err error) er
 		return err
 	}
 	m.inspected++
-	if m.inspected > 100000 {
+	if m.inspected > maskInspectionLimit {
 		return fmt.Errorf("workspace exceeds sandbox inspection limit; choose a narrower working directory")
 	}
 	if name == m.cwd {
-		return nil
+		return m.recordDir(name, d)
 	}
 	if strings.EqualFold(d.Name(), ".git") && (m.readGit || m.writeGit) && filepath.Dir(name) == m.cwd {
 		return m.bindGit(name, d)
 	}
 	if !SensitivePath(name) {
-		return nil
+		return m.recordDir(name, d)
 	}
 	if d.IsDir() {
 		m.args = append(m.args, "--tmpfs", name)

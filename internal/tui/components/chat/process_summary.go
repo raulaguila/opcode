@@ -1,7 +1,9 @@
 package chat
 
 import (
+	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -9,6 +11,19 @@ import (
 )
 
 func processSummary(messages []message.Message) string {
+	// A few direct tool calls read better by name and target than as a count.
+	var briefs []string
+	direct := true
+	for _, msg := range messages {
+		direct = direct && !msg.IsApplication()
+		for _, call := range msg.ToolCalls() {
+			direct = direct && !strings.HasPrefix(call.Origin, "context")
+			briefs = append(briefs, toolBrief(call))
+		}
+	}
+	if direct && len(briefs) > 0 && len(briefs) <= 3 {
+		return strings.Join(briefs, " · ")
+	}
 	var reads, searches, reused, commands, calls, repairs int
 	processSummaryMessages(messages, &reads, &searches, &reused, &commands, &calls, &repairs)
 	var labels []string
@@ -83,4 +98,25 @@ func reasoningOnly(messages []message.Message) bool {
 		found = found || item.ReasoningContent().Thinking != ""
 	}
 	return found
+}
+
+// toolBrief names a call by its tool and main argument, e.g. "edit store.go".
+func toolBrief(call message.ToolCall) string {
+	var input map[string]any
+	_ = json.Unmarshal([]byte(call.Input), &input)
+	for _, field := range []string{"file_path", "path", "command", "pattern", "query", "url", "name"} {
+		value, ok := input[field].(string)
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		if field == "file_path" || field == "path" {
+			value = filepath.Base(value)
+		}
+		value = strings.Join(strings.Fields(value), " ")
+		if len([]rune(value)) > 40 {
+			value = string([]rune(value)[:39]) + "…"
+		}
+		return call.Name + " " + value
+	}
+	return call.Name
 }

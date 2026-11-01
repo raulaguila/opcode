@@ -200,9 +200,12 @@ func (f *filepickerCmp) View() string {
 	}
 	rows := max(1, height-10)
 	start := max(0, f.cursor-rows+1)
-	lines := []string{config.Text("Anexar arquivo", "Attach file"), ansi.Truncate(f.cwd.View(), listWidth, "…")}
+	lines := []string{config.Text("Anexar imagem · PNG, JPG ou WebP", "Attach image · PNG, JPG or WebP"), ansi.Truncate(f.cwd.View(), listWidth, "…")}
+	if cfg := config.Get(); cfg != nil && !GetSelectedModel(cfg).SupportsAttachments {
+		lines = append(lines, config.Text("O modelo atual não aceita imagens; escolha outro em Ctrl+O", "The current model does not accept images; choose another with Ctrl+O"))
+	}
 	if len(f.dirs) == 0 {
-		lines = append(lines, config.Text("Pasta vazia", "Empty directory"))
+		lines = append(lines, config.Text("Nenhuma imagem ou pasta aqui", "No images or folders here"))
 	}
 	for i := start; i < min(len(f.dirs), start+rows); i++ {
 		name := f.dirs[i].Name()

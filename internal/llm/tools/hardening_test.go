@@ -155,12 +155,12 @@ func TestBashStructuredFailureAndEnvironmentIsolation(t *testing.T) {
 	require.True(t, response.IsError)
 	require.NoError(t, json.Unmarshal([]byte(response.Metadata), &metadata))
 	require.True(t, metadata.TimedOut)
-	first := shell.GetPersistentShell(config.WorkingDirectory())
-	_, _, _, _, err = first.Exec(toolContext(), "export OPCODE_STATE_PROBE=changed; cd /", 1000)
+	bash := NewBashTool(p)
+	_, err = bash.Run(toolContext(), toolInput(BashParams{Command: "export OPCODE_STATE_PROBE=changed; cd /"}))
 	require.NoError(t, err)
-	stdout, _, _, _, err := first.Exec(toolContext(), "printf '%s|%s' \"${OPCODE_STATE_PROBE-unset}\" \"$PWD\"", 1000)
+	response, err = bash.Run(toolContext(), toolInput(BashParams{Command: "printf '%s|%s' \"${OPCODE_STATE_PROBE-unset}\" \"$PWD\""}))
 	require.NoError(t, err)
-	require.Equal(t, "unset|"+config.WorkingDirectory(), stdout)
+	require.Equal(t, "unset|"+config.WorkingDirectory(), response.Content)
 }
 func TestSandboxFailureNeverRunsCommandOutsideSandbox(t *testing.T) {
 	original := config.Get().Security

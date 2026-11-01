@@ -41,6 +41,7 @@ type Server struct {
 	runIDs      map[string]uint64
 	submissions map[string]map[string]submission
 	allowed     map[string]bool
+	submitting  map[string]*sync.Mutex
 	workers     sync.WaitGroup
 	slots       chan struct{}
 	handlers    sync.WaitGroup
@@ -60,7 +61,7 @@ func New(parent context.Context, application *app.App, conn *sql.DB, token strin
 		return nil, fmt.Errorf("server requires an application and database")
 	}
 	ctx, cancel := context.WithCancel(parent)
-	s := &Server{app: application, db: conn, token: token, ctx: ctx, cancel: cancel, outcomes: map[string]string{}, runIDs: map[string]uint64{}, submissions: map[string]map[string]submission{}, allowed: map[string]bool{}, slots: make(chan struct{}, 16)}
+	s := &Server{app: application, db: conn, token: token, ctx: ctx, cancel: cancel, outcomes: map[string]string{}, runIDs: map[string]uint64{}, submissions: map[string]map[string]submission{}, allowed: map[string]bool{}, submitting: map[string]*sync.Mutex{}, slots: make(chan struct{}, 16)}
 	config.RegisterRuntimeCredentials("local-server", token)
 	application.Questions.SetInteractive(true)
 	requests := application.Permissions.Subscribe(ctx)
@@ -295,7 +296,7 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.allowed) >= 64 && !s.allowed[request.Resume] {
+	if len(s.allowed) >= 64 && !s.allowed[request.Resume] && !s.detachIdleSession() {
 		s.fail(w, 409, "server session limit reached")
 		return
 	}
@@ -322,6 +323,23 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	}
 	s.allowed[id] = true
 	s.write(w, 201, map[string]string{"id": id})
+}
+
+// detachIdleSession frees one attachment slot held by a finished session; its
+// client can attach again with resume. It runs while s.mu is held.
+func (s *Server) detachIdleSession() bool {
+	for id := range s.allowed {
+		if s.outcomes[id] == "running" || s.app.CoderAgent.IsSessionBusy(id) || len(s.app.Processes.List(id)) > 0 {
+			continue
+		}
+		delete(s.allowed, id)
+		delete(s.outcomes, id)
+		delete(s.runIDs, id)
+		delete(s.submissions, id)
+		delete(s.submitting, id)
+		return true
+	}
+	return false
 }
 
 type Message struct {
@@ -418,6 +436,18 @@ func (s *Server) prompt(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, 400, "invalid request_id")
 		return
 	}
+	// Prompts for one session stay ordered and idempotent, while Submit's
+	// storage work runs without blocking other sessions and approvals.
+	s.mu.Lock()
+	sessionLock := s.submitting[id]
+	if sessionLock == nil {
+		sessionLock = &sync.Mutex{}
+		s.submitting[id] = sessionLock
+	}
+	s.mu.Unlock()
+	sessionLock.Lock()
+	defer sessionLock.Unlock()
+
 	s.mu.Lock()
 	digest := sha256.Sum256([]byte(request.Content))
 	if s.replaySubmission(w, id, request.RequestID, digest) {
@@ -428,8 +458,19 @@ func (s *Server) prompt(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, 409, "task limit reached")
 		return
 	}
+	previous, hadOutcome := s.outcomes[id]
+	s.outcomes[id] = "running" // keeps the session attached while Submit runs
+	s.mu.Unlock()
 	events, queued, err := s.app.CoderAgent.Submit(s.ctx, id, request.Content)
+	s.mu.Lock()
 	if err != nil {
+		if s.outcomes[id] == "running" {
+			if hadOutcome {
+				s.outcomes[id] = previous
+			} else {
+				delete(s.outcomes, id)
+			}
+		}
 		s.mu.Unlock()
 		s.fail(w, 409, err.Error())
 		return

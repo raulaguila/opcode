@@ -67,9 +67,9 @@ func assertApprovalControls(t *testing.T, width int, state util.FooterState) {
 			label = config.Text("Aprovação: editar no projeto", "Approval: project edits")
 		}
 	} else if width >= 110 {
-		label = "Perm.: " + label
+		label = config.Text("Aprov.: ", "Appr.: ") + label
 	} else {
-		label = "P:" + label
+		label = "A:" + label
 	}
 	before, _, found := strings.Cut(view, label)
 	require.True(t, found, "%s/%s at %d: %s", state.Mode, state.ApprovalPolicy, width, view)

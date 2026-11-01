@@ -38,6 +38,8 @@ func TestLocalDiscoveryReadsOllamaContextMetadata(t *testing.T) {
 			default:
 				status = 404
 			}
+		case "/api/tags":
+			status, body = 404, `{}`
 		default:
 			t.Fatalf("unexpected metadata endpoint: %s", req.URL.Path)
 		}
@@ -74,6 +76,8 @@ func TestOptionalOllamaMetadataFailureKeepsEstimatedCatalog(t *testing.T) {
 				case "/api/ps":
 					body = `{"models":[]}`
 				case "/api/show":
+				case "/api/tags":
+					status, body = 404, `{}`
 				default:
 					t.Fatalf("unexpected endpoint: %s", req.URL.Path)
 				}

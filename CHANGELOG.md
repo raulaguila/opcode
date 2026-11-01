@@ -2,6 +2,15 @@
 
 ## Em desenvolvimento — 2026-11-01
 
+- Correções da auditoria: edições pedidas por servidores LSP
+  (`workspace/applyEdit`) são recusadas; o servidor local libera vagas de
+  sessões ociosas e não trava outras sessões durante um envio; o sandbox
+  reutiliza as máscaras de credenciais enquanto nenhum diretório muda; a saída
+  parcial do bash é indicada como tal; `write` cria arquivos vazios; o consentimento
+  de edição funciona com projetos atrás de symlinks; logs de depuração são privados.
+- MCP passa a ter pacote próprio (`internal/llm/mcp`), código morto foi removido e
+  o limite do `gocognit` subiu para 30 para evitar divisões mecânicas.
+
 - Recuperação usa os mesmos comandos no desenho e nos cliques; Revisar tarefa
   abre a tarefa, espaços não executam ações e rótulos compactos evitam cortes.
 - Aprovação explica o efeito somente leitura em Ask/Plan, é pesquisável por

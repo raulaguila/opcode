@@ -53,7 +53,7 @@ func (a *agent) contextTools(_ *generationRun, session string) []tools.BaseTool 
 	return append(result, a.findingTools(makeTool, session)...)
 }
 func conversationItem(msg message.Message, limit int) map[string]any {
-	item := map[string]any{"id": msg.ID, "role": msg.Role, "text": clip(tools.RedactCredentials(msg.Content().Text), limit)}
+	item := map[string]any{"id": msg.ID, "role": msg.Role, "text": tools.Clip(tools.RedactCredentials(msg.Content().Text), limit)}
 	if len(msg.ToolCalls()) > 0 {
 		var calls []map[string]string
 		for _, call := range msg.ToolCalls() {
@@ -64,7 +64,7 @@ func conversationItem(msg message.Message, limit int) map[string]any {
 	if len(msg.ToolResults()) > 0 {
 		var results []map[string]any
 		for _, r := range msg.ToolResults() {
-			results = append(results, map[string]any{"tool_call_id": r.ToolCallID, "content": clip(tools.RedactCredentials(r.Content), max(80, limit/len(msg.ToolResults()))), "is_error": r.IsError})
+			results = append(results, map[string]any{"tool_call_id": r.ToolCallID, "content": tools.Clip(tools.RedactCredentials(r.Content), max(80, limit/len(msg.ToolResults()))), "is_error": r.IsError})
 		}
 		item["tool_results"] = results
 	}

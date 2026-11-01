@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -70,6 +71,14 @@ func interfaceCopy(english string) string {
 		"test connection":        "consultar catálogo",
 		"back":                   "voltar",
 		"terminal / chat":        "terminal / conversa",
+		"OpenAI compatible":      "Compatível com OpenAI",
+		"complete path":          "completar caminho",
+		"new line":               "nova linha",
+		"send":                   "enviar",
+		"page up":                "página acima",
+		"page down":              "página abaixo",
+		"half page up":           "meia página acima",
+		"half page down":         "meia página abaixo",
 
 		"Connections and preferences": "Conexões e preferências", "Configure provider": "Configurar provedor", "Preferences": "Preferências", "Profile ID": "ID da conexão", "Name": "Nome", "API base URL": "URL da API", "API key environment variable": "Variável de ambiente da chave", "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)": "Backend (local/openai/anthropic/gemini/groq/openrouter/xai)", "API (empty/chat_completions/responses/ollama)": "API (vazio/chat_completions/responses/ollama)", "Context window (0 uses catalog)": "Janela de contexto (0 usa catálogo)", "Default output tokens (0 uses catalog)": "Tokens de saída (0 usa catálogo)", "Disabled (true/false)": "Desativado (true/false)", "No connections yet. Press N to add Ollama or another provider.": "Nenhuma conexão. Pressione N para adicionar um provedor.", "N add · Enter edit · P preferences · I integrations · Esc close": "N adicionar · Enter editar · P preferências · I integrações · Esc fechar", "Tab/↑↓ fields · Ctrl+S save · Esc back": "Tab/↑↓ campos · Ctrl+S salvar · Esc voltar", "Tab fields · Ctrl+T test · Ctrl+S save · Esc back": "Tab campos · Ctrl+T catálogo · Ctrl+S salvar · Esc voltar", "Testing connection… Esc cancels.": "Consultando catálogo… Esc cancela.", "MCP and language servers": "MCP e servidores de linguagem", "Connection test results": "Resultados do teste", "Transport (stdio/http/sse)": "Transporte (stdio/http/sse)", "Command (stdio)": "Comando (stdio)", "Arguments (JSON array)": "Argumentos (array JSON)", "URL (http/sse)": "URL (http/sse)", "Headers from environment (JSON header:ENV)": "Cabeçalhos do ambiente (JSON header:ENV)", "Child environment (JSON target:ENV)": "Ambiente do processo (JSON destino:ENV)", "Language/name": "Linguagem/nome", "Command": "Comando", "OAuth enabled (true/false)": "OAuth ativo (true/false)", "OAuth client ID (empty: dynamic registration)": "OAuth client ID (vazio: registro dinâmico)", "OAuth client secret environment variable": "OAuth variável do segredo do cliente", "OAuth scopes (space separated)": "OAuth escopos (separados por espaços)", "OAuth redirect port (0: automatic)": "OAuth porta de retorno (0: automática)", "No models found": "Nenhum modelo encontrado", "Configured catalog": "Catálogo configurado", "Loading provider models…": "Consultando modelos do provedor…", "No provider · Ctrl+P settings": "Sem provedor · Ctrl+P configurações", "Ctrl+P settings · Ctrl+A role · Ctrl+R refresh · Esc close": "Ctrl+P ajustes · Ctrl+A função · Ctrl+R catálogo · Esc fechar", "↑↓ select · ←→ provider · Enter choose · Ctrl+F favorite": "↑↓ seleciona · ←→ provedor · Enter escolhe · Ctrl+F favorito",
 	}
@@ -94,4 +103,24 @@ func localizedSettingHelp(help string) string {
 		return config.Text(translated, help)
 	}
 	return help
+}
+
+// localizedSettingValue shows stored enum/boolean values in the interface
+// language; editing still uses the stored value.
+func localizedSettingValue(path string, value any) string {
+	raw := fmt.Sprint(value)
+	if strings.HasSuffix(path, "proseWidth") && raw == "0" {
+		return config.Text("automática", "automatic")
+	}
+	labels := map[string][2]string{
+		"true": {"sim", "yes"}, "false": {"não", "no"},
+		"auto": {"automático", "automatic"}, "shown": {"visível", "shown"}, "hidden": {"oculta", "hidden"},
+		"off": {"desativadas", "off"}, "bell": {"sino", "bell"}, "native": {"nativas", "native"}, "osc": {"OSC", "OSC"},
+		"pt": {"português", "Portuguese"}, "en": {"inglês", "English"},
+		"ask": {"Perguntar", "Ask"}, "plan": {"Planejar", "Plan"}, "execute": {"Executar", "Execute"},
+	}
+	if label, ok := labels[raw]; ok {
+		return config.Text(label[0], label[1])
+	}
+	return raw
 }

@@ -985,13 +985,13 @@ func testPTYUICompactThemesStructCallback(binary **string, variant *struct {
 	})
 	h.send("\x06")
 	h.wait("compact file picker", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Attach file") && strings.Contains(frame, "Empty directory")
+		return strings.Contains(frame, "Attach image") && strings.Contains(frame, "No images or folders here")
 	})
 	h.send("\rl")
-	h.wait("empty picker stays usable", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Attach file") })
+	h.wait("empty picker stays usable", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Attach image") })
 	h.send("\x1b")
 	h.wait("file picker draft restored", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Attach file") && strings.Contains(frame, "compact draft ação")
+		return !strings.Contains(frame, "Attach image") && strings.Contains(frame, "compact draft ação")
 	})
 	h.send("\x03")
 	h.wait("quit menu", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Continue") && strings.Contains(frame, "Quit") })

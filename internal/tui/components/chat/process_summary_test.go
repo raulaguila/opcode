@@ -25,3 +25,11 @@ func TestProcessSummarySeparatesPreparationCommandsAndRepairs(t *testing.T) {
 	}
 	require.NotContains(t, summary, "actions")
 }
+
+func TestProcessSummaryNamesFewDirectToolCalls(t *testing.T) {
+	calls := []message.Message{{Role: message.Assistant, Parts: []message.ContentPart{
+		message.ToolCall{ID: "1", Name: "edit", Input: `{"file_path":"/w/store.go","old_string":"a"}`},
+		message.ToolCall{ID: "2", Name: "bash", Input: `{"command":"go test ./..."}`},
+	}}}
+	require.Equal(t, "edit store.go · bash go test ./...", processSummary(calls))
+}

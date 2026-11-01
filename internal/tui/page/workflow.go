@@ -227,9 +227,23 @@ func (p *chatPage) applyWorkflowCommand(command, value string) (tea.Cmd, error) 
 	case "plan", "task":
 		return applyWorkflowCommandCasePlanTask(p, command, value, ctx)
 	case "resume":
+		if !p.hasSavedTask() {
+			return util.ReportInfo(noSavedTask()), nil
+		}
 		return p.submitAgentMessage(resumeInstruction, nil, resumeInstruction), nil
 	}
 	return nil, nil
+}
+
+// hasSavedTask: /resume continues saved work; with none it would start an
+// unrelated model run from a generic instruction.
+func (p *chatPage) hasSavedTask() bool {
+	task := p.workflow.task
+	return strings.TrimSpace(task.Objective) != "" || len(task.Steps) > 0
+}
+
+func noSavedTask() string {
+	return config.Text("Nenhuma tarefa salva para retomar. Descreva o que deseja na conversa.", "No saved task to resume. Describe what you want in the conversation.")
 }
 
 func (p *chatPage) handleWorkflowMessage(text string) (tea.Cmd, bool) {
@@ -243,6 +257,9 @@ func (p *chatPage) handleWorkflowMessage(text string) (tea.Cmd, bool) {
 	}
 	value := strings.Join(fields[1:], " ")
 	if command == "resume" && p.app.Workflows != nil {
+		if !p.hasSavedTask() {
+			return tea.Batch(util.ReportInfo(noSavedTask()), util.CmdHandler(chat.SubmissionResultMsg{Text: text})), true
+		}
 		return p.submitAgentMessage(resumeInstruction, nil, text), true
 	}
 	cmd, err := p.applyWorkflowCommand(command, value)

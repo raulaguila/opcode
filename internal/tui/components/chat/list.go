@@ -68,11 +68,11 @@ var messageKeys = MessageKeys{
 	),
 	HalfPageUp: key.NewBinding(
 		key.WithKeys("alt+pgup"),
-		key.WithHelp("alt+pgup", "½ page up"),
+		key.WithHelp("alt+pgup", "half page up"),
 	),
 	HalfPageDown: key.NewBinding(
 		key.WithKeys("alt+pgdown"),
-		key.WithHelp("alt+pgdn", "½ page down"),
+		key.WithHelp("alt+pgdn", "half page down"),
 	),
 }
 
@@ -186,7 +186,10 @@ func (m *messagesCmp) working() string {
 }
 
 func (m *messagesCmp) initialScreen() string {
-	return styles.BaseStyle().Foreground(theme.CurrentTheme().Text()).Width(m.width).Render(config.Text("O que vamos fazer neste projeto?", "What would you like to do in this project?"))
+	t := theme.CurrentTheme()
+	question := styles.BaseStyle().Foreground(t.Text()).Width(m.width).Render(config.Text("O que vamos fazer neste projeto?", "What would you like to do in this project?"))
+	hint := styles.BaseStyle().Foreground(t.TextMuted()).Width(m.width).Render(config.Text("Modo no rodapé: Perguntar, Planejar ou Executar · / comandos", "Footer mode: Ask, Plan or Execute · / commands"))
+	return lipgloss.JoinVertical(lipgloss.Left, question, hint)
 }
 
 func (m *messagesCmp) rerender() {

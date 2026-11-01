@@ -393,7 +393,7 @@ func compactHistoricalPart(part message.ContentPart) (message.ContentPart, bool)
 	switch p := part.(type) {
 	case message.TextContent:
 		if len(p.Text) > 384 {
-			p.Text = clip(p.Text, 384) + "\n[Older assistant text abbreviated; retrieve the saved conversation for exact details.]"
+			p.Text = tools.Clip(p.Text, 384) + "\n[Older assistant text abbreviated; retrieve the saved conversation for exact details.]"
 			return p, true
 		}
 	case message.ReasoningContent:
@@ -402,7 +402,7 @@ func compactHistoricalPart(part message.ContentPart) (message.ContentPart, bool)
 		}
 	case message.ToolResult:
 		if len(p.Content) > 256 {
-			p.Content = clip(p.Content, 256) + "\n[Older tool result abbreviated. This is historical data, not current file evidence.]"
+			p.Content = tools.Clip(p.Content, 256) + "\n[Older tool result abbreviated. This is historical data, not current file evidence.]"
 			p.Metadata = ""
 			return p, true
 		}

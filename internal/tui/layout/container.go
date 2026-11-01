@@ -136,24 +136,6 @@ func WithPadding(top, right, bottom, left int) ContainerOption {
 	}
 }
 
-func WithPaddingAll(padding int) ContainerOption {
-	return WithPadding(padding, padding, padding, padding)
-}
-
-func WithPaddingHorizontal(padding int) ContainerOption {
-	return func(c *container) {
-		c.paddingLeft = padding
-		c.paddingRight = padding
-	}
-}
-
-func WithPaddingVertical(padding int) ContainerOption {
-	return func(c *container) {
-		c.paddingTop = padding
-		c.paddingBottom = padding
-	}
-}
-
 func WithBorder(top, right, bottom, left bool) ContainerOption {
 	return func(c *container) {
 		c.borderTop = top
@@ -165,30 +147,4 @@ func WithBorder(top, right, bottom, left bool) ContainerOption {
 
 func WithBorderAll() ContainerOption {
 	return WithBorder(true, true, true, true)
-}
-
-func WithBorderHorizontal() ContainerOption {
-	return WithBorder(true, false, true, false)
-}
-
-func WithBorderVertical() ContainerOption {
-	return WithBorder(false, true, false, true)
-}
-
-func WithBorderStyle(style lipgloss.Border) ContainerOption {
-	return func(c *container) {
-		c.borderStyle = style
-	}
-}
-
-func WithRoundedBorder() ContainerOption {
-	return WithBorderStyle(lipgloss.RoundedBorder())
-}
-
-func WithThickBorder() ContainerOption {
-	return WithBorderStyle(lipgloss.ThickBorder())
-}
-
-func WithDoubleBorder() ContainerOption {
-	return WithBorderStyle(lipgloss.DoubleBorder())
 }

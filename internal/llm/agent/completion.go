@@ -2,10 +2,11 @@ package agent
 
 import (
 	"fmt"
-	"github.com/raulaguila/opcode/internal/message"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/raulaguila/opcode/internal/message"
 )
 
 // Intent is advisory completion bookkeeping, never authorization. Questions and
@@ -88,7 +89,7 @@ var conciseDescriptions = map[string]string{
 	"write":             "Write a file with file_path and content. Read existing files first; preserve unrelated content. The user must approve the proposed change. Use edit for a small replacement.",
 	"patch":             "Apply a unified patch using the patch_text argument. Read affected files first. Changes require user permission and are applied transactionally.",
 	"update_plan":       `Save a plan. All four arguments required. Example: {"objective":"Inspect project","steps":[{"title":"Read files","status":"pending"}],"criteria":["Find relevant files"],"checks":[]}. Step status: pending/in_progress/completed. Use configured check names only. This never approves commands.`,
-	"finish_task":       "Record planned/completed/partial/blocked with a summary. Only completed after the requested actions actually succeeded; include valid check receipts when files changed. no_change_reason means inspection proved a change unnecessary, never inability to edit. If unable to perform work, use partial/blocked.",
+	"finish_task":       "Record planned/completed/partial/blocked with a summary. These status identifiers are internal: describe the outcome to the user in their language without quoting them. Only completed after the requested actions actually succeeded; include valid check receipts when files changed. no_change_reason means inspection proved a change unnecessary, never inability to edit. If unable to perform work, use partial/blocked.",
 }
 
 // Explicit native-tool requests are observable requirements. The application

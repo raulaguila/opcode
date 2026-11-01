@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +40,7 @@ func runMCP(c *cobra.Command, args []string, action, cwd string) error {
 	}
 	switch action {
 	case "login":
-		if err := agent.LoginMCPOAuth(c.Context(), server, func(link string) error {
+		if err := mcp.LoginMCPOAuth(c.Context(), server, func(link string) error {
 			fmt.Fprintln(c.OutOrStdout(), "Abra este endereço para autorizar o MCP (não concede permissão às ferramentas):\n"+link)
 			return nil
 		}); err != nil {
@@ -48,12 +48,12 @@ func runMCP(c *cobra.Command, args []string, action, cwd string) error {
 		}
 		fmt.Fprintln(c.OutOrStdout(), "OAuth autorizado. As ferramentas continuam exigindo aprovação.")
 	case "logout":
-		if err := agent.LogoutMCPOAuth(c.Context(), server); err != nil {
+		if err := mcp.LogoutMCPOAuth(c.Context(), server); err != nil {
 			return err
 		}
 		fmt.Fprintln(c.OutOrStdout(), "Credenciais locais removidas. Para revogar o acesso remoto, use a conta do provedor.")
 	case "status":
-		ready, err := agent.MCPOAuthStatus(c.Context(), server)
+		ready, err := mcp.MCPOAuthStatus(c.Context(), server)
 		if err != nil {
 			return err
 		}

@@ -23,7 +23,7 @@ func (p *chatPage) composerPanel() string {
 			state = config.Text("Execução retomada", "Run resumed")
 		}
 		first := state + " · " + config.Text("Rascunho e progresso preservados", "Draft and progress preserved")
-		rows, _ := layoutRecoveryActions(p.recovery.err, p.width)
+		rows, _ := layoutRecoveryActions(p.recovery.err, p.width, p.recovery.changed)
 		panels = append(panels, ansi.Truncate(first, max(1, p.width), "…")+"\n"+strings.Join(rows, "\n"))
 	}
 	return strings.Join(panels, "\n")
@@ -32,11 +32,7 @@ func (p *chatPage) recoveryHeight() int {
 	if p.recovery.err == nil || p.recovery.resolved || p.width < 20 || p.height < 12 {
 		return 0
 	}
-	// Every compact action group fits one row from 36 columns.
-	if p.width >= 36 {
-		return 2
-	}
-	rows, _ := layoutRecoveryActions(p.recovery.err, p.width)
+	rows, _ := layoutRecoveryActions(p.recovery.err, p.width, p.recovery.changed)
 	return 1 + len(rows)
 }
 func (p *chatPage) composerPanelHeight() int { return p.workflowHeight() + p.recoveryHeight() }
@@ -59,7 +55,7 @@ func (p *chatPage) recoveryMouse(msg tea.MouseMsg) tea.Cmd {
 	_, height := p.layout.GetSize()
 	_, editorHeight := p.editor.GetSize()
 	row := msg.Mouse().Y - (height - editorHeight + p.workflowHeight() + 1)
-	_, actions := layoutRecoveryActions(p.recovery.err, p.width)
+	_, actions := layoutRecoveryActions(p.recovery.err, p.width, p.recovery.changed)
 	for _, action := range actions {
 		if row == action.row && msg.Mouse().X >= action.start && msg.Mouse().X < action.end {
 			return p.workspaceCommand(action.command, "")
@@ -124,7 +120,7 @@ func recoveryTitle(err error) string {
 	}
 }
 func recoveryActions(err error) string {
-	rows, _ := layoutRecoveryActions(err, 1<<20)
+	rows, _ := layoutRecoveryActions(err, 1<<20, false)
 	return strings.Join(rows, "\n")
 }
 

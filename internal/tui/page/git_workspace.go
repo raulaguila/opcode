@@ -49,7 +49,8 @@ func (p *chatPage) gitWorkspaceResult(msg GitWorkspaceMsg) tea.Cmd {
 	p.workspace.loading = false
 	p.workspace.cancel = nil
 	if msg.Err != nil {
-		p.workspace.note = panelText(msg.Err.Error())
+		// The tool error is model-facing English; the user gets the likely cause.
+		p.workspace.note = config.Text("Git indisponível aqui: a pasta não é um repositório Git, o Git não está instalado ou a leitura excedeu o tempo.", "Git unavailable here: the folder is not a Git repository, Git is not installed, or the read timed out.")
 		return nil
 	}
 	branch := config.Text("Não identificado", "Unknown")

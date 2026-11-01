@@ -30,6 +30,7 @@ func RenderMarkdownBlocks(content string, width, proseWidth int) string {
 func renderMarkdownBlocks(content string, width, proseWidth int, cache *MarkdownCache, streaming bool) string {
 	source := []byte(content)
 	doc := sharedMarkdownParser.Parse(text.NewReader(source))
+	literalHTML(doc, source)
 	blocks := markdownBlockRenderer{content: content, source: source, width: width, prose: proseWidth, cache: cache, streaming: streaming, renderers: map[markdownRendererKey]renderer.Renderer{}}
 	var output []string
 	for node := doc.FirstChild(); node != nil; {
@@ -46,6 +47,42 @@ func renderMarkdownBlocks(content string, width, proseWidth int, cache *Markdown
 		node = next
 	}
 	return TerminalOutput(strings.Join(output, "\n\n"))
+}
+
+// literalHTML shows HTML-looking text as typed. Terminals never render HTML,
+// and sanitizing it would erase prose such as "remove <id>" or Vec<T>.
+func literalHTML(doc ast.Node, source []byte) {
+	var nodes []ast.Node
+	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if entering && (node.Kind() == ast.KindRawHTML || node.Kind() == ast.KindHTMLBlock) {
+			nodes = append(nodes, node)
+			return ast.WalkSkipChildren, nil
+		}
+		return ast.WalkContinue, nil
+	})
+	for _, node := range nodes {
+		parent := node.Parent()
+		switch n := node.(type) {
+		case *ast.RawHTML:
+			for i := 0; i < n.Segments.Len(); i++ {
+				parent.InsertBefore(parent, node, ast.NewTextSegment(n.Segments.At(i)))
+			}
+		case *ast.HTMLBlock:
+			paragraph := ast.NewParagraph()
+			lines := n.Lines()
+			for i := 0; i < lines.Len(); i++ {
+				segment := lines.At(i)
+				line := ast.NewTextSegment(segment.TrimRightSpace(source))
+				line.SetSoftLineBreak(i < lines.Len()-1)
+				paragraph.AppendChild(paragraph, line)
+			}
+			if n.HasClosure() {
+				paragraph.AppendChild(paragraph, ast.NewTextSegment(n.ClosureLine.TrimRightSpace(source)))
+			}
+			parent.InsertBefore(parent, node, paragraph)
+		}
+		parent.RemoveChild(parent, node)
+	}
 }
 
 type markdownBlockRenderer struct {

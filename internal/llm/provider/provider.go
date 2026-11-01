@@ -186,24 +186,6 @@ func WithOpenAIOptions(openaiOptions ...OpenAIOption) ProviderClientOption {
 	}
 }
 
-func WithGeminiOptions(geminiOptions ...GeminiOption) ProviderClientOption {
-	return func(options *providerClientOptions) {
-		options.geminiOptions = geminiOptions
-	}
-}
-
-func WithBedrockOptions(bedrockOptions ...BedrockOption) ProviderClientOption {
-	return func(options *providerClientOptions) {
-		options.bedrockOptions = bedrockOptions
-	}
-}
-
-func WithCopilotOptions(copilotOptions ...CopilotOption) ProviderClientOption {
-	return func(options *providerClientOptions) {
-		options.copilotOptions = copilotOptions
-	}
-}
-
 func validateInsecureTLS(name models.ModelProvider, options providerClientOptions) error {
 	if !options.tlsInsecure {
 		return nil
@@ -272,4 +254,10 @@ func createLocalClient(options providerClientOptions) (providerClient, providerC
 	}
 	options.openaiOptions = append(options.openaiOptions, WithOpenAIBaseURL(endpoint))
 	return newOpenAIClient(options), options, nil
+}
+
+func WithCopilotOptions(copilotOptions ...CopilotOption) ProviderClientOption {
+	return func(options *providerClientOptions) {
+		options.copilotOptions = copilotOptions
+	}
 }

@@ -1142,16 +1142,19 @@ func configureLoadedLogging(discoverLocal bool) error {
 	}
 	if discoverLocal && Environment("OPCODE_DEV_DEBUG") == "true" {
 		loggingFile := fmt.Sprintf("%s/%s", cfg.Data.Directory, "debug.log")
-		messagesPath := fmt.Sprintf("%s/%s", cfg.Data.Directory, "messages")
-
-		if err := ensureDebugLogFiles(loggingFile, messagesPath); err != nil {
-			return err
+		// Debug logs hold prompts and tool output: keep them private to the user.
+		if err := os.MkdirAll(cfg.Data.Directory, 0o700); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
 		}
-		logging.MessageDir = messagesPath
 
-		sloggingFileWriter, err := os.OpenFile(loggingFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
+		sloggingFileWriter, err := os.OpenFile(loggingFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 		if err != nil {
 			return fmt.Errorf("failed to open log file: %w", err)
+		}
+		// Tighten logs created by older versions with world-readable modes.
+		if err := sloggingFileWriter.Chmod(0o600); err != nil {
+			sloggingFileWriter.Close()
+			return fmt.Errorf("failed to secure log file: %w", err)
 		}
 		// Configure logger
 		logger := slog.New(slog.NewTextHandler(sloggingFileWriter, &slog.HandlerOptions{
@@ -1176,27 +1179,6 @@ func ensureStartupConfigTemplates(discoverLocal bool) error {
 		}
 		if err := ensureGlobalTemplate(); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-func ensureDebugLogFiles(loggingFile, messagesPath string) error {
-	// if file does not exist create it
-	if _, err := os.Stat(loggingFile); os.IsNotExist(err) {
-		if err := os.MkdirAll(cfg.Data.Directory, 0o755); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
-		}
-		file, err := os.Create(loggingFile)
-		if err != nil {
-			return fmt.Errorf("failed to create log file: %w", err)
-		}
-		_ = file.Close()
-	}
-
-	if _, err := os.Stat(messagesPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(messagesPath, 0o756); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
 	return nil

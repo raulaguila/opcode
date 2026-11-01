@@ -233,7 +233,7 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 		makeTool("update_plan", planDescription, planParams, planRequired, func(ctx context.Context, call tools.ToolCall) (any, error) {
 			return a.workflowUpdatePlan(run, session, ctx, call)
 		}),
-		makeTool("finish_task", "Mark a task planned, completed, partial or blocked. Completion requires all steps completed, valid checks for the current file revision, and actual changes for implementation requests. If no changes are needed, supply an explicit no_change_reason; unfinished work is partial or blocked. A successful command alone does not prove semantic correctness.", map[string]any{"status": map[string]any{"type": "string", "enum": []string{"planned", "completed", "blocked", "partial"}}, "summary": stringParam, "no_change_reason": stringParam}, []string{"status", "summary"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
+		makeTool("finish_task", "Mark a task planned, completed, partial or blocked. These status identifiers are internal: describe the outcome to the user in their language without quoting them. Completion requires all steps completed, valid checks for the current file revision, and actual changes for implementation requests. If no changes are needed, supply an explicit no_change_reason; unfinished work is partial or blocked. A successful command alone does not prove semantic correctness.", map[string]any{"status": map[string]any{"type": "string", "enum": []string{"planned", "completed", "blocked", "partial"}}, "summary": stringParam, "no_change_reason": stringParam}, []string{"status", "summary"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
 			return a.workflowFinishTask(run, session, ctx, call)
 		}),
 	}
@@ -248,20 +248,6 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 	}
 	return result
 }
-func clip(text string, limit int) string {
-	if len(text) <= limit {
-		return text
-	}
-	if limit <= 0 {
-		return ""
-	}
-	marker := "\n[truncated]"
-	if limit < len(marker) {
-		return strings.ToValidUTF8(text[:limit], "")
-	}
-	return strings.ToValidUTF8(text[:limit-len(marker)], "") + marker
-}
-
 func (a *agent) observeWorkspace(ctx context.Context, session string) error {
 	if a.workflow == nil {
 		return nil
@@ -399,7 +385,7 @@ func (a *agent) workflowRequestTools(run *generationRun, _ string, _ context.Con
 	}
 	for _, name := range in.Names {
 		if !requestedToolAvailable(run, name) {
-			return nil, fmt.Errorf("tool unavailable in this mode: %s", clip(name, 80))
+			return nil, fmt.Errorf("tool unavailable in this mode: %s", tools.Clip(name, 80))
 		}
 	}
 	if run.toolLeases == nil {
@@ -430,7 +416,13 @@ func (a *agent) workflowUpdatePlan(run *generationRun, session string, ctx conte
 	commands := checkCommands()
 	for _, name := range checks {
 		if commands[name] == "" {
-			return nil, fmt.Errorf("unknown configured check: %s", clip(name, 80))
+			return nil, fmt.Errorf("unknown configured check: %s", tools.Clip(name, 80))
+		}
+	}
+	// Plan mode cannot execute anything, so no step of the plan is done yet.
+	if run.mode == workflow.Plan {
+		for i := range steps {
+			steps[i].Status = "pending"
 		}
 	}
 	return a.workflow.UpdatePlan(ctx, session, objective, steps, criteria, checks)

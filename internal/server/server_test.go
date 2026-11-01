@@ -38,12 +38,16 @@ type serverAgent struct {
 	requests  atomic.Int64
 	result    chan agent.AgentEvent
 	submitted context.Context
+	gate      chan struct{}
 }
 
 func (a *serverAgent) IsSessionBusy(string) bool { return a.busy.Load() }
 func (a *serverAgent) Cancel(string)             { a.cancelled.Add(1); a.busy.Store(false) }
 func (a *serverAgent) Submit(ctx context.Context, id, text string, _ ...message.Attachment) (<-chan agent.AgentEvent, bool, error) {
 	a.requests.Add(1)
+	if a.gate != nil {
+		<-a.gate
+	}
 	a.submitted = ctx
 	a.busy.Store(true)
 	return a.result, false, nil
@@ -269,4 +273,41 @@ func TestClientUsesHeaderBoundsAndCancellationWithoutExposingCredential(t *testi
 	require.NoError(t, c.Do(context.Background(), "GET", "/v1/health", nil, &response))
 	require.Equal(t, "ok", response["status"])
 	require.Error(t, c.Do(context.Background(), "POST", "/v1/sessions", map[string]string{"title": strings.Repeat("x", MaxBody+1)}, nil))
+}
+
+func TestServerSessionLimitDetachesOnlyIdleSessions(t *testing.T) {
+	s, fake := serverFixture(t)
+	for range 64 {
+		createSession(t, s)
+	}
+	fake.busy.Store(true)
+	w := api(s, "POST", "/v1/sessions", map[string]string{"title": "Busy"})
+	require.Equal(t, 409, w.Code, "busy sessions keep their slots")
+	fake.busy.Store(false)
+	createSession(t, s)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	require.Len(t, s.allowed, 64)
+}
+
+func TestServerSlowSubmitDoesNotBlockOtherSessions(t *testing.T) {
+	s, fake := serverFixture(t)
+	slow, other := createSession(t, s), createSession(t, s)
+	fake.gate = make(chan struct{})
+	done := make(chan int)
+	go func() {
+		done <- api(s, "POST", "/v1/sessions/"+slow+"/prompt", map[string]string{"content": "hello"}).Code
+	}()
+	require.Eventually(t, func() bool { return fake.requests.Load() == 1 }, 2*time.Second, 5*time.Millisecond)
+
+	snapshot := make(chan int)
+	go func() { snapshot <- api(s, "GET", "/v1/sessions/"+other, nil).Code }()
+	select {
+	case code := <-snapshot:
+		require.Equal(t, 200, code)
+	case <-time.After(2 * time.Second):
+		t.Fatal("snapshot of another session waited for a slow submission")
+	}
+	close(fake.gate)
+	require.Equal(t, 202, <-done)
 }

@@ -57,7 +57,7 @@ func updateApplicationShortcut(a *appModel, msg *tea.KeyPressMsg) (tea.Model, te
 		return updateAppModelKeyMsgModels(a)
 	case msg.Keystroke() == config.Shortcut("theme"):
 		return updateAppModelKeyMsgTheme(a)
-	case key.Matches((*msg), returnKey) || key.Matches((*msg)):
+	case key.Matches((*msg), returnKey):
 		if result0, result1, result2, handled := updateAppModelKeyMsgMatches(a, msg); handled {
 			return result0, result1, result2
 		}

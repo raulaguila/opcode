@@ -42,6 +42,9 @@ type Preview struct {
 	Redo           bool
 }
 
+// ErrNothingToReview: no turn with tool edits is available to undo or redo.
+var ErrNothingToReview = errors.New("no turn available for this review")
+
 func New(root, dataDir string) *Store {
 	root, _ = filepath.Abs(root)
 	if dataDir == "" {
@@ -173,7 +176,7 @@ func (s *Store) Preview(session, turnID string, redo bool) (Preview, error) {
 		}
 	}
 	if selected == nil {
-		return Preview{}, fmt.Errorf("nenhuma interação disponível para esta revisão")
+		return Preview{}, ErrNothingToReview
 	}
 	p := Preview{Turn: *selected, Redo: redo, Revision: fingerprint(*selected)}
 	var body strings.Builder

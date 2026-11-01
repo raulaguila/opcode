@@ -2,13 +2,14 @@ package agent
 
 import (
 	"context"
+	"sync/atomic"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
-	"sync/atomic"
-	"testing"
 )
 
 type finalProtocolProbe struct {

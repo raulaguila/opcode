@@ -52,7 +52,7 @@ func TestPTYApprovalPolicyIsExplicitRevocableAndNotPersisted(t *testing.T) {
 		return strings.Contains(ptyUIFooter(frame), "Approval: project edits") && strings.Contains(frame, "KEEP_POLICY_DRAFT")
 	})
 	h.resize(60, 20)
-	require.Contains(t, ptyUIFooter(h.frame()), "P:edit")
+	require.Contains(t, ptyUIFooter(h.frame()), "A:edit")
 	h.clickApproval()
 	h.wait("compact policy chooser", 5*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "✓ Allow project edits") && strings.Contains(frame, "✓ Execute")
@@ -61,11 +61,11 @@ func TestPTYApprovalPolicyIsExplicitRevocableAndNotPersisted(t *testing.T) {
 	h.wait("explicitly restored prompt policy", 5*time.Second, func(frame string) bool {
 		return !strings.Contains(frame, "Work mode") && strings.Contains(frame, "KEEP_POLICY_DRAFT")
 	})
-	require.Contains(t, ptyUIFooter(h.frame()), "P:ask")
+	require.Contains(t, ptyUIFooter(h.frame()), "A:ask")
 	h.resize(80, 24)
-	require.Contains(t, ptyUIFooter(h.frame()), "P:ask")
+	require.Contains(t, ptyUIFooter(h.frame()), "A:ask")
 	h.resize(120, 36)
-	require.Contains(t, ptyUIFooter(h.frame()), "Perm.: ask")
+	require.Contains(t, ptyUIFooter(h.frame()), "Appr.: ask")
 	h.resize(180, 36)
 	h.wait("prompt label restored", 5*time.Second, func(frame string) bool { return !strings.Contains(ptyUIFooter(frame), "Approval: project edits") })
 	h.clickApproval()

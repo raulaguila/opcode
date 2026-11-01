@@ -119,7 +119,7 @@ func TestReasoningAndToolDetailsDoNotDuplicateProviderText(t *testing.T) {
 		}
 	}
 	require.Equal(t, 1, strings.Count(timelineText(m), "PROVIDER_REASONING"))
-	require.Contains(t, timelineText(m), "tool call")
+	require.Contains(t, timelineText(m), "example_tool")
 }
 
 func TestMissingProviderReasoningDoesNotCreateThinkingText(t *testing.T) {
@@ -145,4 +145,18 @@ func TestNewModelCallDoesNotReopenEarlierReasoning(t *testing.T) {
 	require.NotContains(t, timelineText(m), "NEXT_REASONING")
 	m.toggleProcess(first)
 	require.Contains(t, timelineText(m), "PROVIDER_REASONING", "older provider reasoning remains available")
+}
+
+func TestLiveReasoningOfRepairStaysFoldedBehindVisibleAnswer(t *testing.T) {
+	m := renderFixture(0)
+	m.app.CoderAgent = revisionTestAgent{busy: true}
+	m.messages = []message.Message{
+		{ID: "u", SessionID: m.session.ID, Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Explain project"}}},
+		{ID: "a", SessionID: m.session.ID, Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "First answer README.md:1"}, message.Finish{Reason: message.FinishReasonEndTurn}}},
+		{ID: "r", SessionID: m.session.ID, Role: message.Assistant, Parts: []message.ContentPart{message.ReasoningContent{Thinking: "INTERNAL_REPAIR_PROTOCOL"}}},
+	}
+	m.renderView()
+	m.viewport.GotoBottom()
+	require.NotContains(t, timelineText(m), "INTERNAL_REPAIR_PROTOCOL", "repair reasoning must not replace the visible answer")
+	require.False(t, reasoningHit(t, m).expanded)
 }

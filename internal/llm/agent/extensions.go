@@ -91,7 +91,7 @@ func (a *agent) executeHook(ctx context.Context, bash tools.BaseTool, hook confi
 		return err
 	}
 	if response.IsError {
-		return fmt.Errorf("command failed: %s", clip(tools.RedactCredentials(strings.TrimSpace(response.Content)), 1000))
+		return fmt.Errorf("command failed: %s", tools.Clip(tools.RedactCredentials(strings.TrimSpace(response.Content)), 1000))
 	}
 	return nil
 }

@@ -162,7 +162,6 @@ func (g *geminiClient) readStream(ctx context.Context, r io.Reader, events chan<
 	}
 	return nil
 }
-func WithGeminiDisableCache() GeminiOption { return func(o *geminiOptions) { o.disableCache = true } }
 
 func (g *geminiClient) messageCallIdentities(messages []message.Message) (map[string]string, map[string]string) {
 	names, ids := map[string]string{}, map[string]string{}

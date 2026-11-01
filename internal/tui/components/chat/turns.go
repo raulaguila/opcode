@@ -63,6 +63,9 @@ type turnRenderer struct {
 	active       bool
 	groupKey     string
 	reasoningID  string
+	// answered: the turn already shows a response before the live reasoning,
+	// as in citation repairs, so that reasoning stays folded.
+	answered bool
 }
 
 func (m *messagesCmp) renderTurns() {
@@ -143,6 +146,13 @@ func (r *turnRenderer) renderGroup(group turnGroup, latest bool) {
 	r.renderUser(group)
 	r.active = latest && r.messages.IsAgentWorking()
 	r.reasoningID = lastAssistantID(group.messages)
+	r.answered = false
+	for _, item := range group.messages {
+		if item.ID == r.reasoningID {
+			break
+		}
+		r.answered = r.answered || (publicResponse(item) && strings.TrimSpace(item.Content().Text) != "")
+	}
 	revisions := planResponseRevisions(group.messages)
 	start, first := -1, true
 	lastPublic := revisions.latest(group.messages)

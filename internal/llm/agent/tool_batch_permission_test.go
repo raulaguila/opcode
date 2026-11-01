@@ -2,10 +2,11 @@ package agent
 
 import (
 	"context"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestDeniedToolStopsRemainingBatch(t *testing.T) {

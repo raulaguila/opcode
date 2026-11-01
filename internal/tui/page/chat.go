@@ -65,7 +65,7 @@ var keyMap = ChatKeyMap{
 	Terminal: key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "terminal / chat")),
 	ShowCompletionDialog: key.NewBinding(
 		key.WithKeys("@"),
-		key.WithHelp("@", "Complete"),
+		key.WithHelp("@", "complete path"),
 	),
 	NewSession: key.NewBinding(
 		key.WithKeys("ctrl+n"),
@@ -460,7 +460,7 @@ func updateChatPageDefault(p *chatPage, msg *AgentOutcomeMsg) (extractedResult0 
 		p.progress = ""
 		p.activityStarted = time.Time{}
 		if msg.Error != nil {
-			p.recovery = recoveryState{err: msg.Error}
+			p.recovery = recoveryState{err: msg.Error, changed: p.workflow.task.Changed}
 			p.catalogErrorDetails = ""
 		} else if msg.Done && p.recovery.err != nil {
 			p.recovery.resolved = true

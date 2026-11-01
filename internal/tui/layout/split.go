@@ -266,27 +266,9 @@ func WithLeftPanel(panel Container) SplitPaneOption {
 	}
 }
 
-func WithRightPanel(panel Container) SplitPaneOption {
-	return func(s *splitPaneLayout) {
-		s.rightPanel = panel
-	}
-}
-
-func WithRatio(ratio float64) SplitPaneOption {
-	return func(s *splitPaneLayout) {
-		s.ratio = ratio
-	}
-}
-
 func WithBottomPanel(panel Container) SplitPaneOption {
 	return func(s *splitPaneLayout) {
 		s.bottomPanel = panel
-	}
-}
-
-func WithVerticalRatio(ratio float64) SplitPaneOption {
-	return func(s *splitPaneLayout) {
-		s.verticalRatio = ratio
 	}
 }
 

@@ -1,13 +1,17 @@
 package tui
 
 import (
-	"charm.land/bubbles/v2/key"
-	tea "charm.land/bubbletea/v2"
 	"context"
 	"fmt"
+	"io"
+	"strings"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -20,8 +24,6 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/page"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
-	"io"
-	"strings"
 )
 
 type keyMap struct {
@@ -740,13 +742,13 @@ func New(app *app.App, initial ...session.Session) tea.Model {
 		d.SetOAuthHandler(func(ctx context.Context, action, name string, notify func(string) error) (string, error) {
 			switch action {
 			case "login":
-				err := agent.LoginMCPOAuth(ctx, config.Get().MCPServers[name], notify)
+				err := mcp.LoginMCPOAuth(ctx, config.Get().MCPServers[name], notify)
 				return config.Text("Autenticação concluída.", "Authentication completed."), err
 			case "logout":
-				err := agent.LogoutMCPOAuth(ctx, config.Get().MCPServers[name])
+				err := mcp.LogoutMCPOAuth(ctx, config.Get().MCPServers[name])
 				return config.Text("Credenciais removidas.", "Credentials removed."), err
 			default:
-				connected, err := agent.MCPOAuthStatus(ctx, config.Get().MCPServers[name])
+				connected, err := mcp.MCPOAuthStatus(ctx, config.Get().MCPServers[name])
 				return fmt.Sprintf("OAuth: %t", connected), err
 			}
 		})

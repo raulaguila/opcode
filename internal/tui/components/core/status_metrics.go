@@ -38,7 +38,7 @@ func (m statusCmp) contextMetric(state util.FooterState) string {
 		return ""
 	}
 	if !state.ContextKnown {
-		return "—/" + compactTokens(state.ContextWindow) + " ctx"
+		return compactTokens(state.ContextWindow) + " ctx"
 	}
 	percent := contextPercent(state)
 	label := fmt.Sprintf("%.0f%%", math.Floor(percent))
@@ -86,10 +86,15 @@ func (m statusCmp) metrics(state util.FooterState) string {
 	if m.width < 110 {
 		unit = " t/s"
 	}
+	rate := footerRate(state)
+	// Idle without a measurement: a dash says nothing.
+	if rate == "—" && !state.Busy {
+		return context
+	}
 	if context != "" {
 		context += " · "
 	}
-	return context + footerRate(state) + unit
+	return context + rate + unit
 }
 
 func (m statusCmp) metricsSegment(state util.FooterState, width int) string {
@@ -138,7 +143,7 @@ func compactFooterActivity(text string, width int, state util.FooterState) strin
 		suffix = " " + footerElapsed(state.ElapsedSeconds) + suffix
 	}
 	phase := footerActivityLabel(state)
-	if !state.WaitingForAnswer {
+	if !state.WaitingForAnswer && ansi.StringWidth(strings.TrimSuffix(phase, "…")+suffix) > width {
 		phase, _, _ = strings.Cut(phase, " ")
 	}
 	phase = strings.TrimSuffix(phase, "…")

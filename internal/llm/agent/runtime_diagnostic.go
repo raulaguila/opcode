@@ -2,11 +2,12 @@ package agent
 
 import (
 	"context"
+	"sort"
+
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/prompt"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/version"
-	"sort"
 )
 
 type RuntimeDiagnosticControl interface {

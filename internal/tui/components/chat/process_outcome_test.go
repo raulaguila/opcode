@@ -16,8 +16,8 @@ func TestCollapsedProcessReportsResultsAndPreservesPublicReply(t *testing.T) {
 	}
 	m.renderView()
 	view := timelineText(m)
-	require.Contains(t, view, config.Text("1 falha(s)", "1 failure(s)"))
-	require.Contains(t, view, config.Text("1 saída(s) parcial(is)", "1 partial output(s)"))
+	require.Contains(t, view, config.Text("1 falha", "1 failure"))
+	require.Contains(t, view, config.Text("1 saída parcial", "1 partial output"))
 	require.Contains(t, view, "Public limited answer")
 	require.NotContains(t, view, "private failure detail")
 }
@@ -26,7 +26,7 @@ func TestProcessOutcomeUsesRecordedFlagsNotProseAndDeduplicatesResults(t *testin
 	result := message.Message{Parts: []message.ContentPart{message.ToolResult{ToolCallID: "a", Content: `{"cancelled":true,"truncated":true}`, Metadata: `{"cancelled":true}`, IsError: true}}}
 	outcome := processOutcome([]message.Message{result, result})
 	require.Contains(t, outcome, config.Text("interrompido", "interrupted"))
-	require.Contains(t, outcome, config.Text("1 falha(s)", "1 failure(s)"))
+	require.Contains(t, outcome, config.Text("1 falha", "1 failure"))
 	require.NotContains(t, outcome, config.Text("parcial", "partial"), "JSON in arbitrary tool prose is not outcome metadata")
 	require.Equal(t, config.Text("finalizado", "finished"), processOutcome([]message.Message{{Parts: []message.ContentPart{message.ToolResult{ToolCallID: "b", Content: "Error: cancelled"}}}}))
 	require.Equal(t, config.Text("interrompido", "interrupted"), processOutcome([]message.Message{{Parts: []message.ContentPart{message.Finish{Reason: message.FinishReasonCanceled}}}}))

@@ -2,12 +2,13 @@ package agent
 
 import (
 	"fmt"
+	"strings"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 func allocationContextProvider(t testing.TB) provider.Provider {

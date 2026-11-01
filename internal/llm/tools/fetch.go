@@ -26,7 +26,6 @@ type FetchPermissionsParams struct {
 }
 
 type fetchTool struct {
-	client      *http.Client
 	permissions permission.Service
 }
 
@@ -64,12 +63,7 @@ TIPS:
 )
 
 func NewFetchTool(permissions permission.Service) BaseTool {
-	return &fetchTool{
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		permissions: permissions,
-	}
+	return &fetchTool{permissions: permissions}
 }
 
 func (t *fetchTool) Info() ToolInfo {

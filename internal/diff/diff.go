@@ -84,15 +84,6 @@ type ParseConfig struct {
 // ParseOption modifies a ParseConfig
 type ParseOption func(*ParseConfig)
 
-// WithContextSize sets the number of context lines to include
-func WithContextSize(size int) ParseOption {
-	return func(p *ParseConfig) {
-		if size >= 0 {
-			p.ContextSize = size
-		}
-	}
-}
-
 // -------------------------------------------------------------------------
 // Side-by-Side Configuration
 // -------------------------------------------------------------------------

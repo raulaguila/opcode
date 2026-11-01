@@ -101,6 +101,7 @@ func TestResumeAcknowledgesOriginalDraftAndReportsQueueRejection(t *testing.T) {
 			probe.err = errors.New("queue full")
 		}
 		p.app.CoderAgent = probe
+		p.workflow.task.Objective = "Saved objective"
 		messages := flattenCommands(p.sendMessage("/resume", nil))
 		require.Equal(t, []string{"s:" + resumeInstruction}, probe.seen)
 		found := false
@@ -113,6 +114,13 @@ func TestResumeAcknowledgesOriginalDraftAndReportsQueueRejection(t *testing.T) {
 		}
 		require.True(t, found)
 	}
+}
+func TestResumeWithoutSavedTaskStartsNoRun(t *testing.T) {
+	p := workflowPage(t)
+	probe := &submittingAgent{}
+	p.app.CoderAgent = probe
+	flattenCommands(p.sendMessage("/resume", nil))
+	require.Empty(t, probe.seen, "nothing saved means nothing to continue")
 }
 func TestQuestionUsesRealSelectionOrFreeTextWithoutSubmittingChat(t *testing.T) {
 	for _, free := range []bool{false, true} {

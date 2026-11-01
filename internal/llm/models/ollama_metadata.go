@@ -264,3 +264,53 @@ func ollamaParameterContext(maximum int64, parameters string) (int64, string) {
 	}
 	return context, source
 }
+
+// applyOllamaTags reads every model's maximum context and family from one
+// /api/tags listing, so the catalog does not show a 4k fallback for models
+// whose per-model /api/show enrichment has not run. The maximum ignores a
+// Modelfile num_ctx, so it stays an estimate until /api/show confirms it.
+func applyOllamaTags(ctx context.Context, client *http.Client, endpoint, key string, found []localModel) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(endpoint, "/v1")+"/api/tags", nil)
+	if err != nil {
+		return
+	}
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	response, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	raw, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+	response.Body.Close()
+	if err != nil || response.StatusCode != http.StatusOK || len(raw) > 1<<20 {
+		return
+	}
+	var listing struct {
+		Models []struct {
+			Name    string `json:"name"`
+			Details struct {
+				Families      []string `json:"families"`
+				ContextLength int64    `json:"context_length"`
+			} `json:"details"`
+		} `json:"models"`
+	}
+	if json.Unmarshal(raw, &listing) != nil {
+		return
+	}
+	for i := range found {
+		for _, tag := range listing.Models {
+			if !ollamaSameModel(found[i].ID, tag.Name) {
+				continue
+			}
+			found[i].TagContext = tag.Details.ContextLength
+			// BERT-family models only produce embeddings.
+			for _, family := range tag.Details.Families {
+				if found[i].SupportsChat == nil && strings.Contains(strings.ToLower(family), "bert") {
+					chat := false
+					found[i].SupportsChat = &chat
+				}
+			}
+		}
+	}
+}

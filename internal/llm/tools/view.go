@@ -257,28 +257,6 @@ func isImageFile(filePath string) (bool, string) {
 	}
 }
 
-type LineScanner struct {
-	scanner *bufio.Scanner
-}
-
-func NewLineScanner(r io.Reader) *LineScanner {
-	return &LineScanner{
-		scanner: bufio.NewScanner(r),
-	}
-}
-
-func (s *LineScanner) Scan() bool {
-	return s.scanner.Scan()
-}
-
-func (s *LineScanner) Text() string {
-	return s.scanner.Text()
-}
-
-func (s *LineScanner) Err() error {
-	return s.scanner.Err()
-}
-
 func viewAccessFailure(filePath string, err error) (ToolResponse, error) {
 
 	if os.IsNotExist(err) {

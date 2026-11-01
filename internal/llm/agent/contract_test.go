@@ -2,12 +2,13 @@ package agent
 
 import (
 	"context"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestExplicitExplainOverridesImplementationHeuristicAndRejectsForgedTools(t *testing.T) {

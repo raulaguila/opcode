@@ -70,7 +70,7 @@ func assertChatHintSurfaces(t *testing.T) {
 		want := root.FG
 		if failed {
 			want = body.FG
-			require.Equal(t, body.FG, chatHintGlyph(t, completedView, "failure(s)").FG, "recorded failures remain primary")
+			require.Equal(t, body.FG, chatHintGlyph(t, completedView, "1 failure").FG, "recorded failures remain primary")
 		}
 		require.Equal(t, want, chatHintGlyph(t, completedView, "finished").FG, "successful completion stays secondary without demoting failures")
 	}

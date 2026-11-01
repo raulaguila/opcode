@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 )
 
 type ToolInfo struct {
@@ -81,4 +82,19 @@ func GetContextValues(ctx context.Context) (string, string) {
 		return sessionID.(string), ""
 	}
 	return sessionID.(string), messageID.(string)
+}
+
+// Clip bounds text to limit bytes on a UTF-8 boundary and marks the cut.
+func Clip(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	if limit <= 0 {
+		return ""
+	}
+	marker := "\n[truncated]"
+	if limit < len(marker) {
+		return strings.ToValidUTF8(text[:limit], "")
+	}
+	return strings.ToValidUTF8(text[:limit-len(marker)], "") + marker
 }

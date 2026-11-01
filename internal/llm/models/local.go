@@ -67,6 +67,11 @@ func DiscoverLocalModels(ctx context.Context, endpoint, apiKey string) ([]Model,
 	if len(found) == 0 {
 		return nil, fmt.Errorf("local server returned no language models; load a model in Ollama or LM Studio")
 	}
+	// Ollama serves its compatible API at the root /v1; one listing request is
+	// cheap enough even for the quick name-only catalog. Gateways are left alone.
+	if root, _ := url.Parse(endpoint); compatibleCatalog && root != nil && root.Path == "/v1" {
+		applyOllamaTags(ctx, client, endpoint, apiKey, found)
+	}
 	if compatibleCatalog && ctx.Value(catalogMetadataKey{}) != false {
 		if running, err := InspectOllama(ctx, endpoint, apiKey); err == nil {
 			enrichOllamaContexts(ctx, client, endpoint, apiKey, found, running)
@@ -108,6 +113,7 @@ type localModel struct {
 	RemoteHost          json.RawMessage `json:"remote_host,omitempty"`
 	SupportsChat        *bool           `json:"-"`
 	Hosting             string          `json:"-"`
+	TagContext          int64           `json:"-"` // Ollama /api/tags maximum, an estimate
 }
 
 func listLocalModels(ctx context.Context, client *http.Client, endpoint, apiKey string, lmStudio bool) ([]localModel, error) {
@@ -155,7 +161,7 @@ func convertLocalModel(model localModel) Model {
 			source = "fallback"
 		}
 	}
-	window := cmp.Or(model.LoadedContextLength, model.MaxContextLength, model.ReportedContext, 4096)
+	window := cmp.Or(model.LoadedContextLength, model.MaxContextLength, model.ReportedContext, model.TagContext, 4096)
 	if strings.HasPrefix(source, "ollama:") && model.MaxContextLength > 0 {
 		window = model.MaxContextLength
 	}

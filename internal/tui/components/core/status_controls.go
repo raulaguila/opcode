@@ -36,9 +36,10 @@ func (m statusCmp) approvalLabel(state util.FooterState) string {
 		}
 		return config.Text("Aprovação: pedir", "Approval: ask")
 	}
-	prefix := "P:"
+	// One concept, one name: menus call it Aprovação, so the footer abbreviates that.
+	prefix := "A:"
 	if m.width >= 110 {
-		prefix = "Perm.: "
+		prefix = config.Text("Aprov.: ", "Appr.: ")
 	}
 	if state.ApprovalPolicy == "project_edits" {
 		return prefix + config.Text("editar", "edit")

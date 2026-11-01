@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/review"
 	"github.com/raulaguila/opcode/internal/workflow"
-	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/logging"
@@ -197,9 +198,11 @@ func (a *agent) finishGenerationRun(sessionID string, run *generationRun, events
 	run.pending = nil
 	a.runMu.Unlock()
 	a.persistPendingInstructions(sessionID, pending, result)
-	if result.Error != nil && a.workflow != nil {
+	// A user cancellation pauses the task; it is not a blocker to record.
+	cancelled := errors.Is(result.Error, ErrRequestCancelled) || errors.Is(result.Error, context.Canceled)
+	if result.Error != nil && !cancelled && a.workflow != nil {
 		saveCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		_, _ = a.workflow.Finish(saveCtx, sessionID, "blocked", clip(result.Error.Error(), 1500), checkCommands())
+		_, _ = a.workflow.Finish(saveCtx, sessionID, "blocked", tools.Clip(result.Error.Error(), 1500), checkCommands())
 		cancel()
 	}
 	a.runMu.Lock()

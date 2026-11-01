@@ -13,7 +13,16 @@ type recoveryActionSpan struct {
 	row, start, end int
 }
 
-func recoveryActionOptions(err error) []recoveryAction {
+func recoveryActionOptions(err error, changed bool) []recoveryAction {
+	actions := recoveryKindActions(err)
+	if changed {
+		// A stopped run can leave half-applied edits; reverting is reviewed first.
+		actions = append([]recoveryAction{{"undo", config.Text("Desfazer alterações", "Undo changes")}}, actions...)
+	}
+	return actions
+}
+
+func recoveryKindActions(err error) []recoveryAction {
 	kind := recoveryInterrupted
 	if err != nil {
 		kind = classifyRecovery(err)
@@ -30,7 +39,7 @@ func recoveryActionOptions(err error) []recoveryAction {
 	case recoveryAuthentication:
 		return []recoveryAction{{"settings", config.Text("Configurar acesso", "Configure access")}, details}
 	case recoveryCapacity:
-		return []recoveryAction{{"context", config.Text("Rever contexto", "Review context")}, models, {"error", ""}}
+		return []recoveryAction{{"context", config.Text("Rever contexto", "Review context")}, models, details}
 	case recoveryMemory:
 		return []recoveryAction{{"models", config.Text("Escolher modelo menor", "Choose smaller model")}, {"local-status", config.Text("Alocação", "Allocation")}, details}
 	case recoveryUnavailable:
@@ -51,11 +60,11 @@ func recoveryActionText(action recoveryAction, compact bool) string {
 }
 
 // Render and click use the same visible text and cell ranges.
-func layoutRecoveryActions(err error, width int) ([]string, []recoveryActionSpan) {
+func layoutRecoveryActions(err error, width int, changed bool) ([]string, []recoveryActionSpan) {
 	if width < 20 {
 		return nil, nil
 	}
-	actions := recoveryActionOptions(err)
+	actions := recoveryActionOptions(err, changed)
 	full := make([]string, len(actions))
 	for i, action := range actions {
 		full[i] = recoveryActionText(action, false)

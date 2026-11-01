@@ -148,7 +148,7 @@ func (e *explorationState) trackUsage(usage provider.TokenUsage) error {
 	return tracker(e.ctx, id, e.provider, usage)
 }
 func (e *explorationState) report(content string, step int) tools.ToolResponse {
-	raw, _ := json.Marshal(map[string]any{"findings": clip(tools.RedactCredentials(content), min(6000, max(0, e.parent.limits.ToolBudget-e.parent.toolBytes-1600))), "sources": e.sources, "steps": step + 1, "read_bytes": e.bytesRead, "untrusted_report": true, "current_evidence": "only the attached read receipts establish inspected sources; model prose is not verification"})
+	raw, _ := json.Marshal(map[string]any{"findings": tools.Clip(tools.RedactCredentials(content), min(6000, max(0, e.parent.limits.ToolBudget-e.parent.toolBytes-1600))), "sources": e.sources, "steps": step + 1, "read_bytes": e.bytesRead, "untrusted_report": true, "current_evidence": "only the attached read receipts establish inspected sources; model prose is not verification"})
 	return tools.NewTextResponse(string(raw))
 }
 func (e *explorationState) readBatch(calls []message.ToolCall) bool {
@@ -165,7 +165,7 @@ func (e *explorationState) readBatch(calls []message.ToolCall) bool {
 		result := e.tool.runSourceCall(e.ctx, call)
 		e.source(call, result)
 		remaining := min(8192, min(32768-e.bytesRead, max(0, e.parent.limits.ToolBudget-e.parent.toolBytes)))
-		result.Content = clip(result.Content, remaining)
+		result.Content = tools.Clip(result.Content, remaining)
 		e.bytesRead += len(result.Content)
 		e.parent.toolBytes += len(result.Content)
 		results = append(results, message.ToolResult{ToolCallID: call.ID, Name: call.Name, Content: result.Content, IsError: result.IsError})

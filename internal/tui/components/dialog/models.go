@@ -265,6 +265,10 @@ func (m *modelDialogCmp) choose() tea.Cmd {
 			defer cancel()
 			if found, err := lookup(ctx); err == nil {
 				selected = found
+			} else if selected.ContextEstimated {
+				// A catalog estimate (e.g. a model's maximum) never sizes a real request.
+				selected.ContextWindow = min(selected.ContextWindow, 4096)
+				selected.DefaultMaxTokens = min(selected.DefaultMaxTokens, selected.ContextWindow/2)
 			}
 			if ctx.Err() != nil {
 				return nil

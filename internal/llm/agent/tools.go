@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/raulaguila/opcode/internal/history"
+	"github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/message"
@@ -31,8 +32,8 @@ func CoderAgentTools(
 		bash = &ownedProcessTool{BaseTool: bash, manager: manager}
 	}
 	ctx := context.Background()
-	otherTools := append([]tools.BaseTool{}, GetMcpTools(ctx, permissions)...)
-	otherTools = append(otherTools, newMCPResourceTools(permissions)...)
+	otherTools := append([]tools.BaseTool{}, mcp.GetMcpTools(ctx, permissions)...)
+	otherTools = append(otherTools, mcp.ResourceTools(permissions)...)
 	otherTools = append(otherTools, tools.NewDiagnosticsTool(lspClients))
 	otherTools = append(otherTools, tools.NewNavigationTools(lspClients)...)
 	otherTools = append(otherTools, tools.NewGitTools()...)
@@ -60,30 +61,6 @@ func CoderAgentTools(
 			NewAgentTool(sessions, messages, lspClients, permissions),
 		}, otherTools...,
 	)
-	for i, tool := range result {
-		result[i] = tools.SecureTool(tool, permissions)
-	}
-	return result
-}
-
-func TaskAgentTools(lspClients map[string]*lsp.Client, services ...permission.Service) []tools.BaseTool {
-	var permissions permission.Service
-	if len(services) > 0 {
-		permissions = services[0]
-	}
-	result := []tools.BaseTool{
-		tools.NewGlobTool(),
-		tools.NewGrepTool(),
-		tools.NewLsTool(),
-		tools.NewSourcegraphTool(permissions),
-		tools.NewViewTool(lspClients),
-	}
-	result = append(result, tools.NewNavigationTools(lspClients)...)
-	result = append(result, tools.NewGitTools()...)
-	result = append(result, tools.NewProjectTools(lspClients)...)
-	result = append(result, tools.NewArtifactTools()...)
-	result = append(result, tools.NewValidationTools()...)
-	result = append(result, tools.NewCodeIndexTool(), tools.NewReadPageTool(), tools.NewLanguageSupportTool())
 	for i, tool := range result {
 		result[i] = tools.SecureTool(tool, permissions)
 	}

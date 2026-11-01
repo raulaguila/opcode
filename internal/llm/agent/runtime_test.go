@@ -320,3 +320,33 @@ func testStepAndResultBudget(t *testing.T, kind string) {
 		}
 	}
 }
+
+func TestPlanModeKeepsEveryStepPending(t *testing.T) {
+	a, p, _, _ := runtimeAgent(t, workflow.Plan)
+	done, err := a.Run(context.Background(), "s", "Planeje a alteração")
+	require.NoError(t, err)
+	first := nextGeneration(t, p)
+	replyTools(first, toolCall("update_plan", `{"objective":"Corrigir","steps":[{"title":"Inspecionar","status":"completed"},{"title":"Implementar","status":"in_progress"}],"criteria":["Funciona"],"checks":[]}`), toolCall("finish_task", `{"status":"planned","summary":"Pronto"}`))
+	next := nextGeneration(t, p)
+	next.reply <- provider.ProviderResponse{Content: "Plano pronto.", FinishReason: message.FinishReasonEndTurn}
+	require.NoError(t, finishGeneration(t, done).Error)
+	task, err := a.workflow.Get(context.Background(), "s")
+	require.NoError(t, err)
+	for _, step := range task.Steps {
+		require.Equal(t, "pending", step.Status, "nothing runs in plan mode")
+	}
+}
+
+func TestUserCancellationDoesNotBlockTheTask(t *testing.T) {
+	a, p, _, _ := runtimeAgent(t, workflow.Execute)
+	done, err := a.Run(context.Background(), "s", "Faça algo")
+	require.NoError(t, err)
+	nextGeneration(t, p)
+	a.Cancel("s")
+	result := finishGeneration(t, done)
+	require.Error(t, result.Error)
+	task, err := a.workflow.Get(context.Background(), "s")
+	require.NoError(t, err)
+	require.NotEqual(t, "blocked", task.Status)
+	require.NotContains(t, task.Summary, "cancelled")
+}

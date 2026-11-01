@@ -6,7 +6,6 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/lsp/protocol"
-	"github.com/raulaguila/opcode/internal/lsp/util"
 )
 
 // Requests
@@ -46,19 +45,10 @@ func HandleRegisterCapability(params json.RawMessage) (any, error) {
 	return nil, nil
 }
 
-func HandleApplyEdit(params json.RawMessage) (any, error) {
-	var edit protocol.ApplyWorkspaceEditParams
-	if err := json.Unmarshal(params, &edit); err != nil {
-		return nil, err
-	}
-
-	err := util.ApplyWorkspaceEdit(edit.Edit)
-	if err != nil {
-		logging.Error("Error applying workspace edit", "error", err)
-		return protocol.ApplyWorkspaceEditResult{Applied: false, FailureReason: err.Error()}, nil
-	}
-
-	return protocol.ApplyWorkspaceEditResult{Applied: true}, nil
+// HandleApplyEdit refuses server-initiated edits: they would bypass
+// permissions, undo history, workspace bounds and read-only modes.
+func HandleApplyEdit(json.RawMessage) (any, error) {
+	return protocol.ApplyWorkspaceEditResult{Applied: false, FailureReason: "workspace edits from language servers are not accepted"}, nil
 }
 
 // FileWatchRegistrationHandler is a function that will be called when file watch registrations are received

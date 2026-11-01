@@ -104,6 +104,11 @@ func (m *editorCmp) slashKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		if len(options) == 0 {
 			return nil, msg.String() == "tab"
 		}
+		// Enter on a complete command whose menu lists only its arguments runs
+		// the bare command (e.g. /mode opens the chooser) instead of the first argument.
+		if value := m.textarea.Value(); msg.String() == "enter" && m.slash.selected == 0 && !strings.HasSuffix(value, " ") && slashArgumentsOnly(value, options) {
+			return nil, false
+		}
 		option := options[min(m.slash.selected, len(options)-1)]
 		m.textarea.SetValue(option.text)
 		m.textarea.CursorEnd()
@@ -175,4 +180,13 @@ func slashOptionsWithState(priorities []string, query string, options *[]slashOp
 		return (*options), true, true
 	}
 	return extractedResult0, extractedResult1, false
+}
+
+func slashArgumentsOnly(value string, options []slashOption) bool {
+	for _, option := range options {
+		if !strings.HasPrefix(option.text, value+" ") {
+			return false
+		}
+	}
+	return value != ""
 }

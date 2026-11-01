@@ -94,7 +94,9 @@ func (m statusCmp) widths(state util.FooterState) (left, center, right int) {
 	case m.width >= 160:
 		right = 28
 	case m.width >= 110:
-		right = 20
+		// Grow toward the wide layout so a typical model name is not clipped.
+		_, _, label := m.labels(state)
+		right = min(28, max(20, ansi.StringWidth(label)+2))
 	case m.width >= 80:
 		right = 12
 	case m.width >= 60:

@@ -3,6 +3,9 @@ package dialog
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -94,6 +97,10 @@ type permissionDialogCmp struct {
 	selectedOption  int // 0: Allow, 1: Allow for session, 2: Deny
 	buttonHits      []permissionButtonHit
 	buttonY         int
+	// seen counts identical requests shown in this process, to point out the
+	// exact-scope option on repeats; it never preselects consent.
+	seen    map[string]int
+	repeats int
 
 	diffCache     map[string]string
 	markdownCache map[string]string
@@ -174,7 +181,61 @@ func (p *permissionDialogCmp) renderButtons() string {
 
 func (p *permissionDialogCmp) renderHeader() string {
 	lines := []string{config.Text("Ferramenta: ", "Tool: ") + p.permission.ToolName, config.Text("Escopo: ", "Scope: ") + p.permission.Path}
+	if summary := p.changeSummary(); summary != "" {
+		lines = append(lines, summary)
+	}
+	if p.repeats > 0 {
+		lines = append(lines, fmt.Sprintf(config.Text("Mesmo pedido já apareceu %d× · s repete este escopo exato nesta sessão", "Same request shown %d× before · s remembers this exact scope for the session"), p.repeats))
+	}
 	return dialogBody().Width(max(1, p.width-4)).Render(strings.Join(lines, "\n"))
+}
+
+// changeSummary states the size of a file change and any definitions it
+// deletes, so removals are not hidden below the visible part of the diff.
+func (p *permissionDialogCmp) changeSummary() string {
+	var raw, path string
+	switch params := p.permission.Params.(type) {
+	case tools.EditPermissionsParams:
+		raw, path = params.Diff, params.FilePath
+	case tools.WritePermissionsParams:
+		raw, path = params.Diff, params.FilePath
+	default:
+		return ""
+	}
+	added, removed, lost := summarizeDiff(raw)
+	summary := fmt.Sprintf("%s · +%d −%d", filepath.Base(path), added, removed)
+	if len(lost) > 0 {
+		summary += " · " + config.Text("remove ", "removes ") + strings.Join(lost, ", ")
+	}
+	return summary
+}
+
+var diffDefinition = regexp.MustCompile(`^\s*(?:func(?:\s*\([^)]*\))?|def|function|fn|class|type)\s+([A-Za-z_]\w*)`)
+
+func summarizeDiff(raw string) (added, removed int, lost []string) {
+	defined := map[string]bool{}
+	var dropped []string
+	for line := range strings.SplitSeq(raw, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
+		case strings.HasPrefix(line, "+"):
+			added++
+			if m := diffDefinition.FindStringSubmatch(line[1:]); m != nil {
+				defined[m[1]] = true
+			}
+		case strings.HasPrefix(line, "-"):
+			removed++
+			if m := diffDefinition.FindStringSubmatch(line[1:]); m != nil {
+				dropped = append(dropped, m[1])
+			}
+		}
+	}
+	for _, name := range dropped {
+		if !defined[name] && !slices.Contains(lost, name) {
+			lost = append(lost, name)
+		}
+	}
+	return added, removed, lost
 }
 
 func (p *permissionDialogCmp) renderBashContent() string {
@@ -321,6 +382,11 @@ func (p *permissionDialogCmp) render() string {
 		contentFinal = p.renderDefaultContent()
 	}
 
+	// Short content (a one-line command) gets a short dialog, not a blank screen.
+	if lines := p.contentViewPort.TotalLineCount(); contentFinal != "" && lines < p.contentViewPort.Height() {
+		p.contentViewPort.SetHeight(max(1, lines))
+		contentFinal = p.styleViewport()
+	}
 	p.buttonY = 2 + lipgloss.Height(title) + 1 + lipgloss.Height(headerContent) + lipgloss.Height(contentFinal)
 	content := lipgloss.JoinVertical(
 		lipgloss.Top,
@@ -340,7 +406,7 @@ func (p *permissionDialogCmp) render() string {
 		BorderBackground(t.BackgroundSecondary()).
 		BorderForeground(t.TextMuted()).
 		Width(p.width).
-		Height(p.height).
+		Height(min(p.height, lipgloss.Height(content)+1)).
 		Render(
 			content,
 		)
@@ -375,6 +441,15 @@ func (p *permissionDialogCmp) SetSize() tea.Cmd {
 }
 
 func (p *permissionDialogCmp) SetPermissions(permission permission.PermissionRequest) tea.Cmd {
+	if p.seen == nil {
+		p.seen = map[string]int{}
+	}
+	raw, _ := json.Marshal(permission.Params)
+	key := permission.SessionID + "\x00" + permission.ToolName + "\x00" + permission.Path + "\x00" + string(raw)
+	if p.permission.ID != permission.ID {
+		p.repeats = p.seen[key]
+		p.seen[key]++
+	}
 	p.permission = permission
 	p.selectedOption = 2
 	p.buttonHits = nil

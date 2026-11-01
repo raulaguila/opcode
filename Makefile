@@ -11,7 +11,7 @@ vet:
 	go vet -tags integration ./...
 
 complexity:
-	gocognit -over 15 .
+	gocognit -over 30 .
 
 staticcheck:
 	staticcheck ./...

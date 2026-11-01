@@ -224,7 +224,6 @@ func WithOpenAIBaseURL(baseURL string) OpenAIOption {
 func WithOpenAIExtraHeaders(headers map[string]string) OpenAIOption {
 	return func(o *openaiOptions) { o.extraHeaders = headers }
 }
-func WithOpenAIDisableCache() OpenAIOption { return func(o *openaiOptions) { o.disableCache = true } }
 func WithReasoningEffort(effort string) OpenAIOption {
 	return func(o *openaiOptions) {
 		switch effort {

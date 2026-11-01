@@ -214,10 +214,3 @@ func SaveProviderProfileInVault(id string, profile ProviderProfile, secret strin
 	}
 	return p.SaveProviderProfile(id, profile)
 }
-func SaveProviderInVault(backend models.ModelProvider, raw Provider, secret string) error {
-	p, err := PrepareVaultCredential(raw.APIKeyRef, secret)
-	if err != nil {
-		return err
-	}
-	return p.SaveProvider(backend, raw)
-}

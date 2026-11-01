@@ -122,7 +122,9 @@ func modelIdentity(text string) string {
 
 func (m *modelDialogCmp) modelLabel(model models.Model) string {
 	name, id := model.Name, model.APIModel
-	if name == "" {
+	// A configured model without a name falls back to its internal ID
+	// ("local.x"); show the provider's name like every other row.
+	if name == "" || (name == string(model.ID) && id != "") {
 		return id
 	}
 	if modelIdentity(name) == modelIdentity(id) {
@@ -238,12 +240,12 @@ func (m *modelDialogCmp) catalogView() string {
 		position += " · ↓"
 	}
 	rows = append(rows, dialogHint(position, g.width))
-	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P edita · Ctrl+D detalhes · Esc", "Enter choose · Tab provider · Ctrl+P edit · Ctrl+D details · Esc")
+	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P conexão · Ctrl+D detalhes · Esc", "Enter choose · Tab provider · Ctrl+P connection · Ctrl+D details · Esc")
 	if g.width < 48 {
 		hint = config.Text("Enter · Ctrl+D detalhes · Esc", "Enter · Ctrl+D details · Esc")
 	}
 	if len(m.filtered) == 0 && !m.loading {
-		hint = config.Text("Tab provedor · Ctrl+R tenta · Ctrl+P edita · Esc", "Tab provider · Ctrl+R retry · Ctrl+P edit · Esc")
+		hint = config.Text("Tab provedor · Ctrl+R tenta · Ctrl+P conexão · Esc", "Tab provider · Ctrl+R retry · Ctrl+P connection · Esc")
 	}
 	if g.height >= 14 {
 		rows = append(rows, styles.PanelDivider(g.width))
@@ -253,8 +255,8 @@ func (m *modelDialogCmp) catalogView() string {
 		if len(m.reasoningModel().ReasoningChoices()) > 0 {
 			rows = append(rows, dialogHint(config.Text("Ctrl+E esforço do modelo ativo", "Ctrl+E active model effort"), g.width))
 		}
-		rows = append(rows, dialogHint(config.Text("Alt+←/→ ou Tab/Shift+Tab provedor · Ctrl+R atualiza", "Alt+←/→ or Tab/Shift+Tab provider · Ctrl+R refresh"), g.width))
-		rows = append(rows, dialogHint(config.Text("Ctrl+A função · Ctrl+T testar · Ctrl+P conexão", "Ctrl+A role · Ctrl+T probe · Ctrl+P connection"), g.width))
+		// Details add only the shortcuts the main legend does not show.
+		rows = append(rows, dialogHint(config.Text("Shift+Tab/Alt+←→ provedor · Ctrl+R atualiza · Ctrl+A função · Ctrl+T testar", "Shift+Tab/Alt+←→ provider · Ctrl+R refresh · Ctrl+A role · Ctrl+T probe"), g.width))
 	}
 	frame := styles.Panel().Padding(g.padY, 2).Border(lipgloss.NormalBorder()).BorderForeground(t.TextMuted()).Render(strings.Join(rows, "\n"))
 	return lipgloss.NewStyle().MaxWidth(g.width + 6).MaxHeight(g.height).Render(frame)

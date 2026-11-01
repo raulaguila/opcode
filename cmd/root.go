@@ -12,7 +12,7 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/db"
 	"github.com/raulaguila/opcode/internal/format"
-	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
@@ -293,7 +293,7 @@ func initMCPTools(ctx context.Context, app *app.App) {
 		defer cancel()
 
 		// Set this up once with proper error handling
-		agent.GetMcpTools(ctxWithTimeout, app.Permissions)
+		mcp.GetMcpTools(ctxWithTimeout, app.Permissions)
 		logging.Info("MCP message handling goroutine exiting")
 	}()
 }

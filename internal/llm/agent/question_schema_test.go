@@ -2,13 +2,14 @@ package agent
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func TestGroupedQuestionsLoadProgressivelyAndWaitForHumanReview(t *testing.T) {

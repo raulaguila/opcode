@@ -67,11 +67,11 @@ type DeleteAttachmentKeyMaps struct {
 var editorMaps = EditorKeyMaps{
 	NewLine: key.NewBinding(
 		key.WithKeys("shift+enter", "alt+enter", "ctrl+j"),
-		key.WithHelp("shift+enter / alt+enter", "nova linha / new line"),
+		key.WithHelp("shift+enter / alt+enter", "new line"),
 	),
 	Send: key.NewBinding(
 		key.WithKeys("enter", "ctrl+s"),
-		key.WithHelp("enter", "enviar / send"),
+		key.WithHelp("enter", "send"),
 	),
 	OpenEditor: key.NewBinding(
 		key.WithKeys("ctrl+e"),

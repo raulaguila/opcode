@@ -121,3 +121,24 @@ func TestChangingPolicyDeniesPendingInsteadOfApprovingIt(t *testing.T) {
 	require.Empty(t, s.SessionGrants(opts.SessionID), "stale replies must not broaden the selected policy")
 	require.True(t, RequestProjectEdit(context.Background(), s, opts, filepath.Join(opts.Path, "new.go")))
 }
+
+func TestProjectEditConsentWorksThroughSymlinkedProjectPath(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	require.NoError(t, os.Mkdir(real, 0o700))
+	link := filepath.Join(base, "link")
+	require.NoError(t, os.Symlink(real, link))
+	s := NewPermissionService().(*permissionService)
+	require.NoError(t, s.SetApprovalPolicy("session", ApprovalProjectEdits, link))
+	opts := CreatePermissionRequest{SessionID: "session", ToolName: "write", Action: "write", Path: link, Params: map[string]string{"diff": "x"}}
+
+	require.True(t, RequestProjectEdit(context.Background(), s, opts, filepath.Join(link, "src", "main.go")))
+	require.True(t, RequestProjectEdit(context.Background(), s, opts, filepath.Join(real, "src", "main.go")))
+
+	// Retargeting the project link after consent must not redirect edits.
+	other := filepath.Join(base, "other")
+	require.NoError(t, os.Mkdir(other, 0o700))
+	require.NoError(t, os.Remove(link))
+	require.NoError(t, os.Symlink(other, link))
+	require.False(t, s.projectEditAllowed(context.Background(), opts, filepath.Join(link, "src", "main.go")))
+}

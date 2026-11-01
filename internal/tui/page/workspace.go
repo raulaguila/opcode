@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/tui/commands"
-	"github.com/raulaguila/opcode/internal/workflow"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/raulaguila/opcode/internal/tui/commands"
+	"github.com/raulaguila/opcode/internal/workflow"
 
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
@@ -83,6 +84,7 @@ type workspacePanel struct {
 type recoveryState struct {
 	err      error
 	resolved bool
+	changed  bool // the interrupted task changed files, so /undo is offered
 }
 
 type TerminalClipboardMsg struct {
@@ -309,7 +311,12 @@ func (p *chatPage) takeQueue(edit bool) tea.Cmd {
 }
 func (p *chatPage) openContext(compact bool) tea.Cmd {
 	p.showWorkspace("context", config.Text("Contexto · orçamento", "Context · budget"), "")
-	usage := fmt.Sprintf(config.Text("Uso acumulado da conversa\nEntrada: %d tokens · saída: %d tokens\nCusto estimado: $%.4f\n\n", "Conversation totals\nInput: %d tokens · output: %d tokens\nEstimated cost: $%.4f\n\n"), p.session.PromptTokens, p.session.CompletionTokens, p.session.Cost)
+	usage := fmt.Sprintf(config.Text("Uso acumulado da conversa\nEntrada: %d tokens · saída: %d tokens\n", "Conversation totals\nInput: %d tokens · output: %d tokens\n"), p.session.PromptTokens, p.session.CompletionTokens)
+	// Local models cost nothing; a $0.0000 line is noise.
+	if p.session.Cost > 0 {
+		usage += fmt.Sprintf(config.Text("Custo estimado: $%.4f\n", "Estimated cost: $%.4f\n"), p.session.Cost)
+	}
+	usage += "\n"
 	control, ok := p.app.CoderAgent.(agent.ContextControl)
 	if !ok {
 		p.workspace.body = usage + config.Text("Este agente não expõe o orçamento de contexto", "This agent does not expose its context budget")
@@ -475,6 +482,12 @@ func (p *chatPage) previewReversal(redo bool) tea.Cmd {
 		turnID = p.workspace.turnID
 	}
 	preview, err := p.reviewStore().Preview(p.session.ID, turnID, redo)
+	if errors.Is(err, review.ErrNothingToReview) {
+		if redo {
+			return util.ReportInfo(config.Text("Nada para refazer", "Nothing to redo"))
+		}
+		return util.ReportInfo(config.Text("Nada para desfazer: nenhuma edição de ferramenta nesta conversa", "Nothing to undo: no tool edits in this conversation"))
+	}
 	if err != nil {
 		return util.ReportError(err)
 	}
@@ -668,7 +681,7 @@ func (p *chatPage) workspaceView() string {
 	if p.workspace.kind == "contract" {
 		return styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary()).
 			Width(max(1, p.width)).Height(max(1, p.height)).MaxWidth(max(1, p.width)).MaxHeight(max(1, p.height)).
-			Render(ansi.Hardwrap(p.contractView(), max(1, p.width-2), true))
+			Render(ansi.Wrap(p.contractView(), max(1, p.width-2), ""))
 	}
 	w, h := max(1, p.width-4), max(1, p.height-7)
 	t := theme.CurrentTheme()
@@ -1005,7 +1018,7 @@ func workspaceViewTurn(p *chatPage, w int) {
 		if p.workspace.showDetails {
 			body += "\n\n" + p.workspace.details
 		}
-		p.workspace.view.SetContent(ansi.Hardwrap(safePanel(body), w, true))
+		p.workspace.view.SetContent(ansi.Wrap(safePanel(body), w, ""))
 	}
 }
 

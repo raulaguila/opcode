@@ -3,13 +3,14 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type explorationProvider struct {

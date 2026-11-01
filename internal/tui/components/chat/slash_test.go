@@ -125,3 +125,10 @@ func TestSlashSharesLocalizedSearchAndActivityPriorities(t *testing.T) {
 	require.Equal(t, "/permissions", m.textarea.Value())
 	require.False(t, m.submitting)
 }
+
+func TestBareModeCommandIsNotReplacedByItsFirstArgument(t *testing.T) {
+	options, _ := slashOptionsWith("/mode", nil)
+	require.True(t, slashArgumentsOnly("/mode", options))
+	options, _ = slashOptionsWith("/mo", nil)
+	require.False(t, slashArgumentsOnly("/mo", options))
+}

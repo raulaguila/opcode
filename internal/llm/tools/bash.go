@@ -139,14 +139,22 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 		return ToolResponse{}, fmt.Errorf("error executing command: %w", err)
 	}
 	<-record.done
-	stdout, _ := record.stdout.Snapshot()
-	stderr, _ := record.stderr.Snapshot()
+	stdout, stdoutDropped := record.stdout.Snapshot()
+	stderr, stderrDropped := record.stderr.Snapshot()
 	exitCode, interrupted := record.exit, record.timedOut || ctx.Err() != nil
+	// The process buffers already dropped the middle of long output, so an
+	// artifact can only hold what they retained.
+	dropped := stdoutDropped || stderrDropped
+	truncated := dropped || len(stdout) > MaxOutputLength || len(stderr) > MaxOutputLength
 
 	artifactNote := ""
 	if len(stdout)+len(stderr) > MaxOutputLength {
 		if snapshot, snapshotErr := SnapshotOutput(ctx, "bash", stdout+"\n"+stderr); snapshotErr == nil {
-			artifactNote = "\n[Command output saved as artifact]\n" + snapshot
+			label := "[Command output saved as artifact]"
+			if dropped {
+				label = "[Partial command output saved as artifact; the middle of the output was not retained]"
+			}
+			artifactNote = "\n" + label + "\n" + snapshot
 		}
 	}
 	stdout = truncateOutput(stdout)
@@ -158,7 +166,7 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 		ProcessID: record.id,
 		StartTime: startTime.UnixMilli(),
 		EndTime:   time.Now().UnixMilli(),
-		ExitCode:  exitCode, TimedOut: interrupted && ctx.Err() == nil, Cancelled: ctx.Err() != nil, Truncated: strings.Contains(stdout, "output truncated") || strings.Contains(stderr, "output truncated"),
+		ExitCode:  exitCode, TimedOut: interrupted && ctx.Err() == nil, Cancelled: ctx.Err() != nil, Truncated: truncated,
 	}
 	if stdout == "" {
 		return WithResponseMetadata(NewTextResponse("no output"), metadata), nil

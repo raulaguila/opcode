@@ -23,7 +23,7 @@ func (m *providerDialogCmp) settings() tea.Cmd {
 	m.settingsFilter.Prompt = config.Text("Buscar: ", "Search: ")
 	m.settingsFilter.CharLimit = 100
 	m.settingsFilter.Focus()
-	m.note = config.Text("Enter edita · Ctrl+A opções avançadas · Ctrl+E valores e origens · Esc volta", "Enter edits · Ctrl+A advanced · Ctrl+E effective values and origins · Esc back")
+	m.note = config.Text("Enter edita · Ctrl+A avançadas · Ctrl+E origens · Esc volta", "Enter edits · Ctrl+A advanced · Ctrl+E origins · Esc back")
 	return textinput.Blink
 }
 func (m *providerDialogCmp) filteredSettings() []config.Setting {
@@ -85,7 +85,7 @@ func (m *providerDialogCmp) experienceView() string {
 			if i == m.selected {
 				mark = "› "
 			}
-			lines = append(lines, line(mark+p.Profile.Name))
+			lines = append(lines, line(mark+interfaceCopy(p.Profile.Name)))
 		}
 	case "settings", "effective":
 		experienceViewProviderDialogCmpSettings(m, width, line, &lines, &title)
@@ -427,6 +427,6 @@ func experienceViewProviderDialogCmpSettingsSettingsStart(m *providerDialogCmp, 
 		if i == m.selected {
 			mark = "› "
 		}
-		(*lines) = append((*lines), line(mark+localizedSettingLabel(s.Label)+" = "+fmt.Sprint(v.Value)))
+		(*lines) = append((*lines), line(mark+localizedSettingLabel(s.Label)+" = "+localizedSettingValue(s.Path, v.Value)))
 	}
 }

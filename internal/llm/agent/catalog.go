@@ -66,11 +66,11 @@ func taskProjection(t workflow.Task) map[string]any {
 	pending := []workflow.Step{}
 	for _, step := range t.Steps {
 		if step.Status != "completed" && len(pending) < 3 {
-			step.Title = clip(step.Title, 180)
+			step.Title = tools.Clip(step.Title, 180)
 			pending = append(pending, step)
 		}
 	}
-	return map[string]any{"objective": clip(t.Objective, 600), "status": t.Status, "revision": t.Revision, "changed": t.Changed, "next_steps": pending, "criteria_count": len(t.Criteria), "checks": t.Checks, "affected_file_count": len(t.FileChanges), "file_changes_verified_at_commit": t.HasFileChanges(), "workspace_verification_required": t.NeedsWorkspaceVerification(checkCommands()), "details_tool": "get_task"}
+	return map[string]any{"objective": tools.Clip(t.Objective, 600), "status": t.Status, "revision": t.Revision, "changed": t.Changed, "next_steps": pending, "criteria_count": len(t.Criteria), "checks": t.Checks, "affected_file_count": len(t.FileChanges), "file_changes_verified_at_commit": t.HasFileChanges(), "workspace_verification_required": t.NeedsWorkspaceVerification(checkCommands()), "details_tool": "get_task"}
 }
 
 type toolCatalogQuery struct {
@@ -106,7 +106,7 @@ func toolCatalogEntries(run *generationRun, in toolCatalogQuery) []toolCatalogEn
 		if in.Query != "" && !strings.Contains(strings.ToLower(info.Name+" "+info.Description), strings.ToLower(in.Query)) {
 			continue
 		}
-		items = append(items, toolCatalogEntry{info.Name, clip(info.Description, 140), category, source, ro, run.selected[info.Name]})
+		items = append(items, toolCatalogEntry{info.Name, tools.Clip(info.Description, 140), category, source, ro, run.selected[info.Name]})
 	}
 
 	return items

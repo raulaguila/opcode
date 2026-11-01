@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/llm/prompt"
-	"github.com/raulaguila/opcode/internal/permission"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/llm/prompt"
+	"github.com/raulaguila/opcode/internal/permission"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"

@@ -1,4 +1,4 @@
-package agent
+package mcp
 
 import (
 	"context"
@@ -24,7 +24,7 @@ type mcpResourceTool struct {
 	factory     func(config.MCPServer) (MCPClient, error)
 }
 
-func newMCPResourceTools(permissions permission.Service) []tools.BaseTool {
+func ResourceTools(permissions permission.Service) []tools.BaseTool {
 	return []tools.BaseTool{&mcpResourceTool{"list_mcp_resources", permissions, newMCPClient}, &mcpResourceTool{"read_mcp_resource", permissions, newMCPClient}}
 }
 func (t *mcpResourceTool) Info() tools.ToolInfo {

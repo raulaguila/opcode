@@ -113,16 +113,14 @@ func (c *copilotClient) refreshToken(ctx context.Context) error {
 	}
 	return nil
 }
+func WithCopilotBearerToken(token string) CopilotOption {
+	return func(o *copilotOptions) { o.bearerToken = token }
+}
+
 func WithCopilotReasoningEffort(effort string) CopilotOption {
 	return func(o *copilotOptions) {
 		var options openaiOptions
 		WithReasoningEffort(effort)(&options)
 		o.reasoningEffort = options.reasoningEffort
 	}
-}
-func WithCopilotExtraHeaders(headers map[string]string) CopilotOption {
-	return func(o *copilotOptions) { o.extraHeaders = headers }
-}
-func WithCopilotBearerToken(token string) CopilotOption {
-	return func(o *copilotOptions) { o.bearerToken = token }
 }

@@ -53,3 +53,32 @@ func TestConnectUsesExistingLegacyDatabaseAndItsLiveWALWithoutCopying(t *testing
 	_, err = os.Stat(filepath.Join(data, "opcode.db"))
 	require.True(t, os.IsNotExist(err), "migration must not create a new database alongside the existing live database")
 }
+
+func TestConnectAppliesPragmasToEveryPooledConnection(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "config.json")
+	require.NoError(t, os.WriteFile(file, []byte(`{}`), 0600))
+	viper.SetConfigFile(file)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LOCAL_ENDPOINT", "")
+	_, err := config.Load(root, false)
+	require.NoError(t, err)
+	connection, err := Connect()
+	require.NoError(t, err)
+	defer connection.Close()
+
+	// Hold several connections at once so the pool must open new ones.
+	ctx := t.Context()
+	for range 3 {
+		conn, err := connection.Conn(ctx)
+		require.NoError(t, err)
+		defer conn.Close()
+		var foreignKeys int
+		var journal string
+		require.NoError(t, conn.QueryRowContext(ctx, "PRAGMA foreign_keys").Scan(&foreignKeys))
+		require.NoError(t, conn.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&journal))
+		require.Equal(t, 1, foreignKeys)
+		require.Equal(t, "wal", journal)
+	}
+}

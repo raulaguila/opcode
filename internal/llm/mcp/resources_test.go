@@ -1,4 +1,4 @@
-package agent
+package mcp
 
 import (
 	"context"
@@ -64,7 +64,7 @@ func (p *resourcePermissionsStub) Request(context.Context, permission.CreatePerm
 	return p.allowed
 }
 func TestMCPResourceDenialDoesNotStartTransport(t *testing.T) {
-	_, _, _ = steeringAgent(t)
+	loadTestConfig(t)
 	cfg := config.Get()
 	previous := cfg.MCPServers
 	cfg.MCPServers = map[string]config.MCPServer{"docs": {Type: config.MCPHTTP, URL: "http://example.invalid/mcp"}}

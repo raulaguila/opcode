@@ -3,7 +3,10 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
+	"strings"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
 
@@ -21,9 +24,23 @@ func Connect() (*sql.DB, error) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
-	dbPath := config.DatabasePath(dataDir)
-	// Open the SQLite database
-	db, err := sql.Open("sqlite3", dbPath)
+	dbPath, err := filepath.Abs(config.DatabasePath(dataDir))
+	if err != nil {
+		return nil, fmt.Errorf("invalid database path: %w", err)
+	}
+	// Pragmas belong in the DSN: database/sql pools connections, and a pragma
+	// run with Exec only reaches the one connection that executed it.
+	uriPath := filepath.ToSlash(dbPath)
+	if !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath // Windows volume paths: file:///C:/...
+	}
+	dsn := url.URL{Scheme: "file", Path: uriPath}
+	query := url.Values{}
+	for _, pragma := range []string{"foreign_keys(1)", "journal_mode(wal)", "page_size(4096)", "cache_size(-8000)", "synchronous(normal)"} {
+		query.Add("_pragma", pragma)
+	}
+	dsn.RawQuery = query.Encode()
+	db, err := sql.Open("sqlite3", dsn.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -32,23 +49,6 @@ func Connect() (*sql.DB, error) {
 	if err = db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// Set pragmas for better performance
-	pragmas := []string{
-		"PRAGMA foreign_keys = ON;",
-		"PRAGMA journal_mode = WAL;",
-		"PRAGMA page_size = 4096;",
-		"PRAGMA cache_size = -8000;",
-		"PRAGMA synchronous = NORMAL;",
-	}
-
-	for _, pragma := range pragmas {
-		if _, err = db.Exec(pragma); err != nil {
-			logging.Error("Failed to set pragma", pragma, err)
-		} else {
-			logging.Debug("Set pragma", "pragma", pragma)
-		}
 	}
 
 	goose.SetBaseFS(FS)

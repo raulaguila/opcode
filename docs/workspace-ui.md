@@ -815,7 +815,7 @@ Abrir ou navegar não muda consentimento; Enter ou clique na opção confirma.
 Em Perguntar/Planejar, a política continua identificada, mas as ferramentas de
 escrita permanecem indisponíveis; permitir edições só tem efeito em Executar.
 
-Rótulos longos são compactados para `Perm.: pedir` ou `P:pedir` (e `editar`),
+Rótulos longos são compactados para `Aprov.: pedir` ou `A:pedir` (e `editar`),
 preservando etapa, tempo, contexto e tok/s. Abaixo de 80 colunas, o contexto usa
 percentual; abaixo de 60, o nome do modelo cede espaço aos controles e continua
 acessível pelo atalho de modelos. O rodapé permanece em uma linha e a margem

@@ -26,7 +26,8 @@ type ApprovalPolicies interface {
 }
 
 type projectEditApproval struct {
-	root     string
+	root     string // symlink-free path of the project
+	logical  string // path as configured, which may traverse symlinks
 	identity os.FileInfo
 }
 
@@ -38,6 +39,10 @@ func (s *permissionService) SetApprovalPolicy(sessionID string, policy ApprovalP
 	switch policy {
 	case ApprovalPrompt:
 	case ApprovalProjectEdits:
+		logical, err := filepath.Abs(root)
+		if err != nil {
+			return err
+		}
 		resolved, err := filepath.EvalSymlinks(root)
 		if err != nil {
 			return err
@@ -53,7 +58,7 @@ func (s *permissionService) SetApprovalPolicy(sessionID string, policy ApprovalP
 		if !info.IsDir() {
 			return errors.New("approval policy requires a project directory")
 		}
-		approval = &projectEditApproval{root: resolved, identity: info}
+		approval = &projectEditApproval{root: resolved, logical: filepath.Clean(logical), identity: info}
 	default:
 		return errors.New("invalid approval policy")
 	}
@@ -128,19 +133,41 @@ func (a *projectEditApproval) contains(target string) bool {
 		target = filepath.Join(config.WorkingDirectory(), target)
 	}
 	target = filepath.Clean(target)
-	relative, err := filepath.Rel(a.root, target)
-	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+	// Tools build targets from the configured (logical) directory; map them
+	// onto the resolved root so a symlinked project path still matches.
+	relative, ok := projectRelative(a.logical, target)
+	if !ok {
+		relative, ok = projectRelative(a.root, target)
+	}
+	if !ok {
 		return false
 	}
-	info, err := os.Stat(a.root)
-	if err != nil || !os.SameFile(info, a.identity) || shell.SensitivePath(target) {
+	// Both spellings must still name the approved directory: a symlink in the
+	// logical path could have been retargeted since consent was given.
+	for _, root := range []string{a.root, a.logical} {
+		info, err := os.Stat(root)
+		if err != nil || !os.SameFile(info, a.identity) {
+			return false
+		}
+	}
+	if shell.SensitivePath(target) {
 		return false
 	}
-	return noSymlinkPath(target)
+	return noSymlinkBelow(a.root, filepath.Join(a.root, relative))
 }
 
-func noSymlinkPath(path string) bool {
-	for {
+func projectRelative(root, target string) (string, bool) {
+	relative, err := filepath.Rel(root, target)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		return "", false
+	}
+	return relative, true
+}
+
+// noSymlinkBelow rejects any symlink between root (exclusive) and path, so
+// project consent never follows a link out of the project.
+func noSymlinkBelow(root, path string) bool {
+	for path != root {
 		info, err := os.Lstat(path)
 		if err != nil && !os.IsNotExist(err) {
 			return false
@@ -150,8 +177,9 @@ func noSymlinkPath(path string) bool {
 		}
 		parent := filepath.Dir(path)
 		if parent == path {
-			return true
+			return false
 		}
 		path = parent
 	}
+	return true
 }

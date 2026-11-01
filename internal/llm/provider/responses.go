@@ -54,20 +54,20 @@ func (o *openaiClient) decodeResponses(raw json.RawMessage) (*ProviderResponse, 
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, err
 	}
-	if r.Error != nil {
-		return nil, fmt.Errorf("provider Responses API failed: %s", r.Error.Message)
-	}
-	if r.Status != "completed" && r.Status != "incomplete" {
-		return nil, fmt.Errorf("provider Responses API returned nonterminal status %q", r.Status)
-	}
-	if len(r.Output) == 0 {
-		return nil, fmt.Errorf("provider Responses API returned no output")
+	if err := r.validateStatus(); err != nil {
+		return nil, err
 	}
 	result := &ProviderResponse{FinishReason: message.FinishReasonEndTurn}
 	for _, rawItem := range r.Output {
 		if err := appendResponsesOutput(result, rawItem, r.Status); err != nil {
+			if r.outputLimited() {
+				return nil, fmt.Errorf("%w: incomplete Responses output", ErrOutputLimit)
+			}
 			return nil, err
 		}
+	}
+	if r.outputLimited() && result.Content == "" {
+		return nil, fmt.Errorf("%w: no visible Responses output", ErrOutputLimit)
 	}
 	result.ProviderState = newProviderState(o.providerOptions, "responses", r.Output)
 	if len(result.ToolCalls) > 0 {
@@ -77,6 +77,29 @@ func (o *openaiClient) decodeResponses(raw json.RawMessage) (*ProviderResponse, 
 	}
 	result.Usage = TokenUsage{InputTokens: max(0, r.Usage.Input-r.Usage.Details.Cached), OutputTokens: r.Usage.Output, CacheReadTokens: r.Usage.Details.Cached}
 	return result, nil
+}
+
+func (r responsesResponse) outputLimited() bool {
+	return r.Status == "incomplete" && r.IncompleteDetails != nil && r.IncompleteDetails.Reason == "max_output_tokens"
+}
+
+func (r responsesResponse) validateStatus() error {
+	if r.Error != nil {
+		return fmt.Errorf("provider Responses API failed: %s", r.Error.Message)
+	}
+	if r.Status != "completed" && r.Status != "incomplete" {
+		return fmt.Errorf("provider Responses API returned nonterminal status %q", r.Status)
+	}
+	if r.Status == "incomplete" && r.IncompleteDetails != nil && r.IncompleteDetails.Reason != "" && !r.outputLimited() {
+		return fmt.Errorf("provider Responses API returned an incomplete response unrelated to the output token limit")
+	}
+	if len(r.Output) == 0 {
+		if r.outputLimited() {
+			return fmt.Errorf("%w: no Responses output", ErrOutputLimit)
+		}
+		return fmt.Errorf("provider Responses API returned no output")
+	}
+	return nil
 }
 
 func (o *openaiClient) readResponsesStream(ctx context.Context, r io.Reader, events chan<- ProviderEvent) error {
@@ -161,7 +184,7 @@ func appendResponsesOutput(result *ProviderResponse, rawItem json.RawMessage, st
 			}
 		}
 	case "function_call":
-		if status != "completed" || item.Status != "" && item.Status != "completed" || item.CallID == "" || item.Name == "" || !json.Valid([]byte(item.Arguments)) {
+		if status != "completed" || item.Status != "" && item.Status != "completed" || item.CallID == "" || item.Name == "" || !functionArgumentsValid([]byte(item.Arguments)) {
 			return fmt.Errorf("provider Responses API returned an incomplete function call")
 		}
 		result.ToolCalls = append(result.ToolCalls, message.ToolCall{ID: item.CallID, Name: item.Name, Input: item.Arguments, Type: "function", Finished: true})

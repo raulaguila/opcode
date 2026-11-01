@@ -4,6 +4,7 @@ package tui
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,15 +22,31 @@ func TestPTYOutputLimitKeepsContextAndRejectsIncompleteCalls(t *testing.T) {
 	if os.Getenv("OPCODE_LIVE_TESTS") != "1" || runtime.GOOS != "linux" {
 		t.Skip("explicit Linux PTY acceptance opt-in required")
 	}
+	for _, api := range []string{"ollama", "chat_completions", "responses"} {
+		t.Run(api, func(t *testing.T) { testPTYOutputLimit(t, api) })
+	}
+}
+
+func testPTYOutputLimit(t *testing.T, api string) {
 	binary := os.Getenv("OPCODE_EVAL_BINARY")
 	require.True(t, filepath.IsAbs(binary))
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/chat" {
+		path := map[string]string{"ollama": "/api/chat", "chat_completions": "/v1/chat/completions", "responses": "/v1/responses"}[api]
+		if r.URL.Path != path {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		calls.Add(1)
+		if api != "ollama" {
+			w.Header().Set("Content-Type", "text/event-stream")
+			payload := `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"unfinished-call","type":"function","function":{"name":"bash","arguments":"{\"command\":\"touch SHOULD_NOT_EXIST\"}"}}]},"finish_reason":"length"}]}`
+			if api == "responses" {
+				payload = `{"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"function_call","call_id":"unfinished-call","name":"bash","arguments":"{\"command\":\"touch SHOULD_NOT_EXIST\"}"}]}}`
+			}
+			_, _ = fmt.Fprintf(w, "data: %s\n\ndata: [DONE]\n\n", payload)
+			return
+		}
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		_ = json.NewEncoder(w).Encode(map[string]any{"message": map[string]any{"role": "assistant", "tool_calls": []any{
 			map[string]any{"function": map[string]any{"name": "final_answer", "arguments": map[string]any{"answer": "UNVERIFIED_OUTPUT"}}},
@@ -38,6 +55,18 @@ func TestPTYOutputLimitKeepsContextAndRejectsIncompleteCalls(t *testing.T) {
 	}))
 	defer server.Close()
 	home, workspace, _ := conversationWorkspace(t, server.URL)
+	if api != "ollama" {
+		path := filepath.Join(home, ".opcode", "config.json")
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err)
+		var cfg map[string]any
+		require.NoError(t, json.Unmarshal(raw, &cfg))
+		cfg["providers"].(map[string]any)["local"].(map[string]any)["api"] = api
+		cfg["models"].(map[string]any)["local.conversation-fixture"].(map[string]any)["api"] = api
+		raw, err = json.Marshal(cfg)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(path, raw, 0600))
+	}
 	h := newPTYUIHarnessAtSize(t, binary, home, workspace, 120, 40)
 	h.wait("initialization", 20*time.Second, func(frame string) bool { return strings.Contains(frame, "Initialize Project") })
 	h.send("n")

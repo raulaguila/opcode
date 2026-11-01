@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-31",
+  "baseline": "347863c43f790d0ec46c6e9df0120eb4d12de62b",
+  "binary_sha256": "882496ca415d324dafca4abba372072d313cbe013ec18fad64b0b36c4a2ed0b8",
+  "source_sha256": {
+    "CHANGELOG.md": "53315e50c1f889dbdfa49064203121b17b2daf3c5400e959122486a600620f28",
+    "docs/agent-runtime.md": "a6259a34d175cf80710688657cac54cf6b6b852b6487fb92b1593228ae7e7e2c",
+    "docs/validation.md": "514daba5bfb1fe8a3c40d36d6464304b37e54b804b8cff60ea965b3e1fb21927",
+    "internal/llm/agent/citations_compatible_test.go": "e8acb3eea413bc81bb6c45a9b894979ef1a15ee22e62c49863bc7def2b68ac8f",
+    "internal/llm/provider/http.go": "bd935bcd054e58ddbce7a96cf275aef564a9341efcd67c4e13e131c0495d3c87",
+    "internal/llm/provider/ollama.go": "ecd70e7ceb8cb30b2d11edf74192d51b312eeb796827a52fa02a0f6303dda770",
+    "internal/llm/provider/openai.go": "c9e53687bcff1c9188014b93efe46fb8af261015dc2f005025031d26a25a3203",
+    "internal/llm/provider/openai_compatibility_test.go": "b3bbded26142580452dffaa4789d6be7bd077acbfa5d66e080a5f7f3cdc0066c",
+    "internal/llm/provider/responses.go": "f07a8d68aebed81d87571118ba101d761d9054d6a2797e26729f025636c61b74",
+    "internal/tui/pty_output_limit_test.go": "683b63f24891936b8688592141a7c32f41de87425867456f0be514c1bc5badb5"
+  },
+  "protected_unchanged_sha256": {
+    "go.mod": "b69606c07b1eb3ed19aae4c407554a7857bcf58e27ce859d77522b07225b1425",
+    "go.sum": "659d9fea2397880cc3968a56605298ebc5d7f8f5751308aa426cfbfa0ecaa74c",
+    "internal/evaluation/testdata/cases.json": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+    "internal/evaluation/testdata/explanation_quality.json": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7",
+    "internal/evaluation/testdata/project_questions.json": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600",
+    "internal/evaluation/testdata/retrieval.json": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "internal/evaluation/testdata/review_evidence.json": "e1f3e5ba75c2f893f41c8b7265ca0271cb418e5c808df494802f6bf89b07bbde",
+    "internal/evaluation/testdata/synonym_navigation.json": "c39b929d82928ec4fc9767da83c1b6c14588aa48f776c93864986c28860082c9",
+    "internal/llm/agent/calibration.go": "195656bcc8d66ace6a3e86854cdf2b6a24bcb61fab87b96c38a27254969bf661",
+    "internal/llm/agent/citation_revision.go": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c",
+    "internal/llm/agent/citations.go": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c",
+    "internal/llm/agent/citations_messages.go": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7",
+    "internal/llm/agent/generation.go": "ed75c0c3c658a26322b9de074c3832e95f5b369a96ea93d40d68f877e48c574f",
+    "internal/llm/agent/provider_failure.go": "6aa96dca2a0d4569aeccf11b936f1ec4a10d743391e3deebc03b44cf8f64c209",
+    "internal/llm/prompt/coder.go": "560709d80d9cdc03579070d67ac310e3ddb009f64dab3d6ecdbdea6357841867",
+    "internal/llm/provider/provider.go": "a20b2bba2b689219cdbdfce04be94f6db9a4968a89e5ccb100521508059f01f6",
+    "internal/llm/tools/access.go": "473cd65951c14b446ce6212e040e06495406536b83e09a6fdd6529972ea0f731",
+    "internal/llm/tools/source_receipt.go": "9d577433546bcacb83064f026d2e935361ddba021a14088f0759de699ec7da9e",
+    "internal/permission/exact_params_test.go": "50c801eb517d8cc1c2a2043d38a4cc367d94dca6be1b02d88b8cb49a6006256e",
+    "internal/permission/permission.go": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14",
+    "internal/permission/permission_test.go": "fa4d5da4ae2c63908c15520fc06039277e17c0dd738624c1f056b74164b6ae7d",
+    "internal/permission/status.go": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944"
+  },
+  "checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-openai-improvements/final/opcode",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 1.32
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 179.95
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.26
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.4
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.23
+    }
+  ],
+  "live": [
+    {
+      "name": "pty-three-protocols",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^TestPTYOutputLimitKeepsContextAndRejectsIncompleteCalls$",
+        "-count=1",
+        "-json",
+        "-timeout=3m"
+      ],
+      "exit_code": 0,
+      "seconds": 7.38
+    },
+    {
+      "name": "compatible-local",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/llm/provider/integration",
+        "-run",
+        "^TestLiveProviders$",
+        "-count=1",
+        "-json",
+        "-timeout=5m"
+      ],
+      "exit_code": 0,
+      "seconds": 4.59
+    }
+  ],
+  "parent_tests_passed": 1148,
+  "test_nodes_passed": 2473,
+  "pty_variants_passed": [
+    "TestPTYOutputLimitKeepsContextAndRejectsIncompleteCalls/ollama",
+    "TestPTYOutputLimitKeepsContextAndRejectsIncompleteCalls/chat_completions",
+    "TestPTYOutputLimitKeepsContextAndRejectsIncompleteCalls/responses"
+  ],
+  "local_compatible_stages_passed": [
+    "TestLiveProviders/local/response",
+    "TestLiveProviders/local/stream",
+    "TestLiveProviders/local/tool_round_trip"
+  ],
+  "failure_reproduced_before_fix": true,
+  "before_fix_log": "--- FAIL: TestChatPlainTextUsesStringAndKeepsVisionParts (0.00s)\n    openai_compatibility_test.go:19: \n        \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:19\n        \t            \t\t\t\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/contracts_test.go:38\n        \t            \t\t\t\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/contracts_test.go:21\n        \t            \t\t\t\t/home/raulaguila/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/net/http/client.go:266\n        \t            \t\t\t\t/home/raulaguila/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/net/http/client.go:187\n        \t            \t\t\t\t/home/raulaguila/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/net/http/client.go:745\n        \t            \t\t\t\t/home/raulaguila/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.3.linux-amd64/src/net/http/client.go:604\n        \t            \t\t\t\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/http.go:253\n        \t            \t\t\t\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/http.go:76\n        \t            \t\t\t\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/prepared_request.go:92\n        \t            \t\t\t\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/http.go:138\n        \t            \t\t\t\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:21\n        \tError:      \tNot equal: \n        \t            \texpected: string(\"inspect\")\n        \t            \tactual  : []interface {}([]interface {}{map[string]interface {}{\"text\":\"inspect\", \"type\":\"text\"}})\n        \tTest:       \tTestChatPlainTextUsesStringAndKeepsVisionParts\n        \tMessages:   \ttext-only compatible servers need no multimodal array\n--- FAIL: TestChatOutputLimitIsTypedAndNeverCompletesCalls (0.00s)\n    openai_compatibility_test.go:41: \n        \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:41\n        \tError:      \tTarget error should be in err chain:\n        \t            \texpected: \"model output token limit reached\"\n        \t            \tin chain: \"provider Chat Completions returned an incomplete function call\"\n        \tTest:       \tTestChatOutputLimitIsTypedAndNeverCompletesCalls\n--- FAIL: TestChatRejectsNonObjectArgumentsAndMissingCalls (0.00s)\n    openai_compatibility_test.go:53: \n        \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:53\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestChatRejectsNonObjectArgumentsAndMissingCalls\n        \tMessages:   \t[]\n--- FAIL: TestResponsesOutputLimitAndOtherIncompleteReasons (0.00s)\n    --- FAIL: TestResponsesOutputLimitAndOtherIncompleteReasons/no-output (0.00s)\n        openai_compatibility_test.go:93: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:93\n            \tError:      \tTarget error should be in err chain:\n            \t            \texpected: \"model output token limit reached\"\n            \t            \tin chain: \"provider Responses API returned no output\"\n            \tTest:       \tTestResponsesOutputLimitAndOtherIncompleteReasons/no-output\n    --- FAIL: TestResponsesOutputLimitAndOtherIncompleteReasons/reasoning-only (0.00s)\n        openai_compatibility_test.go:90: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:90\n            \tError:      \tAn error is expected but got nil.\n            \tTest:       \tTestResponsesOutputLimitAndOtherIncompleteReasons/reasoning-only\n    --- FAIL: TestResponsesOutputLimitAndOtherIncompleteReasons/function (0.00s)\n        openai_compatibility_test.go:93: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:93\n            \tError:      \tTarget error should be in err chain:\n            \t            \texpected: \"model output token limit reached\"\n            \t            \tin chain: \"provider Responses API returned an incomplete function call\"\n            \tTest:       \tTestResponsesOutputLimitAndOtherIncompleteReasons/function\n    --- FAIL: TestResponsesOutputLimitAndOtherIncompleteReasons/filtered (0.00s)\n        openai_compatibility_test.go:90: \n            \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:90\n            \tError:      \tAn error is expected but got nil.\n            \tTest:       \tTestResponsesOutputLimitAndOtherIncompleteReasons/filtered\n--- FAIL: TestResponsesRejectNonObjectToolArguments (0.00s)\n    openai_compatibility_test.go:110: \n        \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:110\n        \tError:      \tAn error is expected but got nil.\n        \tTest:       \tTestResponsesRejectNonObjectToolArguments\n        \tMessages:   \t[]\nFAIL\nFAIL\tgithub.com/raulaguila/opcode/internal/llm/provider\t0.012s\nFAIL\n",
+  "refusal_before_fix_log": "--- FAIL: TestChatRefusalRemainsVisibleWithoutContent (0.00s)\n    openai_compatibility_test.go:145: \n        \tError Trace:\t/home/raulaguila/Documents/ChatGPT/opencode/source/internal/llm/provider/openai_compatibility_test.go:145\n        \tError:      \tNot equal: \n        \t            \texpected: \"REQUEST_DECLINED\"\n        \t            \tactual  : \"\"\n        \t            \t\n        \t            \tDiff:\n        \t            \t--- Expected\n        \t            \t+++ Actual\n        \t            \t@@ -1 +1 @@\n        \t            \t-REQUEST_DECLINED\n        \t            \t+\n        \tTest:       \tTestChatRefusalRemainsVisibleWithoutContent\nFAIL\nFAIL\tgithub.com/raulaguila/opcode/internal/llm/provider\t0.017s\nFAIL\n",
+  "no_dependency_changes": true,
+  "no_personal_config_changes": true,
+  "no_automatic_retry_or_protocol_switch": true,
+  "official_contracts": [
+    "https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create",
+    "https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events",
+    "https://developers.openai.com/api/docs/guides/reasoning"
+  ],
+  "limits": [
+    "No live OpenAI account or company gateway requests.",
+    "Compatible vendor extensions beyond these protocols are not automatically guessed.",
+    "Legacy Responses incomplete replies without explicit reason retain existing partial-text behavior.",
+    "Ollama native keeps request/stream formats; argument-object guard is shared without changing its semantics."
+  ],
+  "stage": "OpenAI compatibility validation before context-footer implementation; source_sha256 identifies that historical snapshot. See 2026-10-31-context-progress-validation.json for the final combined source and checks."
+}

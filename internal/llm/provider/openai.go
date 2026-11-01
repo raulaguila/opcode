@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -49,11 +50,7 @@ func (o *openaiClient) convertMessages(messages []message.Message) []object {
 	for _, msg := range messages {
 		switch msg.Role {
 		case message.User:
-			parts := []object{{"type": "text", "text": msg.Content().String()}}
-			for _, image := range msg.BinaryContent() {
-				parts = append(parts, object{"type": "image_url", "image_url": object{"url": image.String(models.ProviderOpenAI)}})
-			}
-			result = append(result, object{"role": "user", "content": parts})
+			result = append(result, chatUserMessage(msg))
 		case message.Assistant:
 			item := object{"role": "assistant", "content": msg.Content().String()}
 			var calls []object
@@ -71,6 +68,20 @@ func (o *openaiClient) convertMessages(messages []message.Message) []object {
 		}
 	}
 	return result
+}
+
+func chatUserMessage(msg message.Message) object {
+	user := object{"role": "user", "content": msg.Content().String()}
+	images := msg.BinaryContent()
+	if len(images) == 0 {
+		return user
+	}
+	parts := []object{{"type": "text", "text": msg.Content().String()}}
+	for _, image := range images {
+		parts = append(parts, object{"type": "image_url", "image_url": object{"url": image.String(models.ProviderOpenAI)}})
+	}
+	user["content"] = parts
+	return user
 }
 
 func (o *openaiClient) request(messages []message.Message, tools []tools.BaseTool, stream bool) (string, any, error) {
@@ -111,6 +122,7 @@ type chatCall struct {
 }
 type chatMessage struct {
 	Content   string     `json:"content"`
+	Refusal   string     `json:"refusal"`
 	ToolCalls []chatCall `json:"tool_calls"`
 	Reasoning string     `json:"reasoning_content"`
 }
@@ -153,9 +165,19 @@ func (o *openaiClient) decodeResponse(raw json.RawMessage) (*ProviderResponse, e
 	return chatResultFrom(r.Choices[0].Message, r.Choices[0].FinishReason, r.Usage)
 }
 func chatResultFrom(msg chatMessage, finish string, usage chatUsage) (*ProviderResponse, error) {
-	result := &ProviderResponse{Content: msg.Content, Usage: usage.tokens(), FinishReason: chatFinishReason(finish)}
+	content := cmp.Or(msg.Content, msg.Refusal)
+	if finish == "content_filter" {
+		return nil, fmt.Errorf("provider Chat Completions response was blocked by a content filter")
+	}
+	if finish == "length" && (len(msg.ToolCalls) > 0 || content == "") {
+		return nil, fmt.Errorf("%w: incomplete Chat Completions output", ErrOutputLimit)
+	}
+	if finish == "tool_calls" && len(msg.ToolCalls) == 0 {
+		return nil, fmt.Errorf("provider Chat Completions finished tool use without any calls")
+	}
+	result := &ProviderResponse{Content: content, Usage: usage.tokens(), FinishReason: chatFinishReason(finish)}
 	for _, call := range msg.ToolCalls {
-		if finish != "tool_calls" || call.ID == "" || call.Function.Name == "" || !json.Valid([]byte(call.Function.Arguments)) {
+		if finish != "tool_calls" || call.ID == "" || call.Function.Name == "" || !functionArgumentsValid([]byte(call.Function.Arguments)) {
 			return nil, fmt.Errorf("provider Chat Completions returned an incomplete function call")
 		}
 		result.ToolCalls = append(result.ToolCalls, message.ToolCall{ID: call.ID, Name: call.Function.Name, Input: call.Function.Arguments, Type: "function", Finished: true})
@@ -251,8 +273,9 @@ func (s *chatStreamState) consume(_ string, raw json.RawMessage) (bool, error) {
 	return false, nil
 }
 func (s *chatStreamState) delta(delta chatMessage) error {
-	s.text.WriteString(delta.Content)
-	if delta.Content != "" && !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventContentDelta, Content: delta.Content}) {
+	content := cmp.Or(delta.Content, delta.Refusal)
+	s.text.WriteString(content)
+	if content != "" && !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventContentDelta, Content: content}) {
 		return s.ctx.Err()
 	}
 	if delta.Reasoning != "" && !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventThinkingDelta, Content: delta.Reasoning, Thinking: delta.Reasoning}) {

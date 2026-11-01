@@ -225,6 +225,10 @@ func toolSchema(tool tools.BaseTool) object {
 	return object{"type": "object", "properties": properties, "required": required}
 }
 
+func functionArgumentsValid(raw []byte) bool {
+	return strings.HasPrefix(strings.TrimSpace(string(raw)), "{") && json.Valid(raw)
+}
+
 func providerRequestURL(endpoint string) (string, error) {
 	parsed, err := url.Parse(endpoint)
 	if err != nil || parsed.Host == "" || parsed.User != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") {

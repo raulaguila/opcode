@@ -104,6 +104,7 @@ func runPTYStreamingSpeedBeforeCompletion(t *testing.T, env ...string) {
 		return strings.Contains(frame, "Streaming output while") && liveRate.MatchString(ptyUIFooter(frame))
 	})
 	h.assertComposer()
+	assertPTYLiveFooterResize(t, h, &finalSent)
 	releaseComplete()
 	h.wait("exact final provider speed", 10*time.Second, func(frame string) bool {
 		footer := ptyUIFooter(frame)
@@ -141,6 +142,26 @@ func runPTYStreamingSpeedBeforeCompletion(t *testing.T, env ...string) {
 		return cleared && strings.Contains(frame, "SPEED_DONE")
 	})
 	h.assertComposer()
+}
+
+func assertPTYLiveFooterResize(t *testing.T, h *ptyUIHarness, finalSent *atomic.Bool) {
+	t.Helper()
+	// Keep the stream open through resize: completion cannot supply these metrics.
+	for _, width := range []int{80, 60, 180} {
+		h.resize(width, 36)
+		h.wait(fmt.Sprintf("live context and time at %d columns", width), 5*time.Second, func(frame string) bool {
+			footer := ptyUIFooter(frame)
+			return strings.Contains(footer, "%") && strings.Contains(footer, "~") &&
+				regexp.MustCompile(`[0-9]+s`).MatchString(footer) && strings.Contains(footer, "Esc") &&
+				regexp.MustCompile(`~[0-9]+(?:\.[0-9]+)? (?:tok/s|t/s)`).MatchString(footer)
+		})
+		if width >= 80 {
+			require.Regexp(t, `\[[#-]{5}\] ~[0-9]+%`, ptyUIFooter(h.frame()))
+		}
+		t.Logf("live footer %d: %s", width, ptyUIFooter(h.frame()))
+		h.assertComposer()
+		require.False(t, finalSent.Load(), "all responsive indicators precede completion")
+	}
 }
 
 func runPTYStreamingSpeedBeforeCompletionStruct(first chan struct{}, second chan struct{}, complete chan struct{}, finalSent *atomic.Bool, w http.ResponseWriter, r *http.Request, flush http.Flusher) (handled bool) {

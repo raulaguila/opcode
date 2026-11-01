@@ -19,19 +19,26 @@ func TestFooterMetricsResizeAndClicksMatchVisibleCells(t *testing.T) {
 		plain := ansi.Strip(view)
 		require.Equal(t, 1, lipgloss.Height(view))
 		require.Equal(t, width, lipgloss.Width(view))
-		if width < 72 {
+		if width < 60 {
 			require.NotContains(t, plain, "ctx")
 			continue
 		}
-		require.Contains(t, plain, "~8k/32k ctx")
-		before, _, _ := strings.Cut(plain, "~8k")
+		if width >= 110 {
+			require.Contains(t, plain, "~8k/32k ctx")
+		}
+		require.Contains(t, plain, "~25%")
+		marker := "~25%"
+		if width >= 80 {
+			marker = "[##---]"
+		}
+		before, _, _ := strings.Cut(plain, marker)
 		x := ansi.StringWidth(before)
 		require.Equal(t, "context", m.ActionAt(x, state))
 		require.Equal(t, "models", m.ActionAt(width-2, state))
 		if width >= 110 {
 			require.Contains(t, plain, "24.5 tok/s")
 		} else {
-			require.NotContains(t, plain, "tok/s")
+			require.Contains(t, plain, "24.5 t/s")
 		}
 	}
 	m := statusCmp{width: 180}

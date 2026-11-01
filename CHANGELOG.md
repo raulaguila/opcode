@@ -2,6 +2,16 @@
 
 ## Em desenvolvimento — 2026-10-31
 
+- Rodapé apresenta barra e percentual de uso da janela efetiva, mantendo estimativas
+  identificadas e estado desconhecido explícito. Durante a geração, etapa, tempo
+  e tok/s são compactados para terminais estreitos; perguntas e avisos preservam
+  prioridade. Sem novas consultas, dependências ou mudanças nas validações.
+
+- OpenAI/compatíveis enviam texto simples sem blocos multimodais desnecessários,
+  exibem recusas do provedor e validam objetos JSON antes de encaminhar ferramentas.
+  Chat Completions e Responses distinguem limite de saída e filtragem de conteúdo,
+  preservando texto parcial e sem repetir gerações ou alterar os protocolos.
+
 - Chamadas Ollama interrompidas por limite de saída são rejeitadas com diagnóstico
   próprio e acesso às configurações, sem repetição automática ou redução do contexto.
 - A busca usa o híbrido existente por padrão quando embeddings locais já estão

@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -76,6 +75,9 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 		center = config.Shortcut("terminal") + config.Text(" conversa", " chat")
 	} else if state.Activity != "" || state.Busy {
 		center = footerActivityLabel(state)
+		if state.Busy && state.ElapsedKnown {
+			center += " · " + footerElapsed(state.ElapsedSeconds)
+		}
 		if state.Busy {
 			center += config.Text(" · Esc cancela", " · Esc cancels")
 		}
@@ -97,42 +99,22 @@ func (m statusCmp) widths() (left, center, right int) {
 	width := max(0, m.width-1)
 	left = min(12, width/3)
 	right = min(28, width/3)
+	if m.width < 110 {
+		right = min(right, 16)
+	}
+	if m.width < 80 {
+		left, right = min(left, 8), min(right, 10)
+	}
+	if m.width < 60 {
+		left, right = min(left, 6), min(right, 8)
+	}
 	center = width - left - right
 	return
 }
 
-func compactTokens(n int64) string {
-	if n >= 1024*1024 {
-		return fmt.Sprintf("%.1fM", float64(n)/(1024*1024))
-	}
-	if n >= 1024 {
-		if n%1024 == 0 {
-			return fmt.Sprintf("%dk", n/1024)
-		}
-		return fmt.Sprintf("%.1fk", float64(n)/1024)
-	}
-	return fmt.Sprint(n)
-}
-func (m statusCmp) metrics(state util.FooterState) string {
-	if m.width < 72 || state.ContextWindow <= 0 {
-		return ""
-	}
-	used := "—"
-	if state.ContextKnown {
-		used = compactTokens(state.ContextTokens)
-		if state.ContextEstimated {
-			used = "~" + used
-		}
-	}
-	text := used + "/" + compactTokens(state.ContextWindow) + " ctx"
-	if result0, handled := metricsWidth(&m, &state, &text); handled {
-		return result0
-	}
-	return text
-}
 func (m statusCmp) metricWidths(state util.FooterState) (lw, cw, mw, rw int) {
 	lw, cw, rw = m.widths()
-	mw = min(max(0, cw-12), ansi.StringWidth(m.metrics(state))+2)
+	mw = min(max(0, cw-20), ansi.StringWidth(m.metrics(state))+2)
 	if m.metrics(state) == "" {
 		mw = 0
 	}
@@ -160,7 +142,7 @@ func (m statusCmp) ViewFor(state util.FooterState) string {
 		return style.Render(ansi.Truncate(" "+text, width, "…"))
 	}
 	middle := m.middleSegment(center, cw, state)
-	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, segment(m.metrics(state), mw, false, true), segment(right, rw, true, true))
+	view := lipgloss.JoinHorizontal(lipgloss.Top, segment(left, lw, true, false), middle, m.metricsSegment(state, mw), segment(right, rw, true, true))
 	if m.width > 0 {
 		view += styles.BaseStyle().Background(t.BackgroundSecondary()).Render(" ")
 	}
@@ -182,6 +164,9 @@ func (m statusCmp) middleSegment(text string, width int, state util.FooterState)
 			color = t.Error()
 		}
 		style = style.Foreground(color)
+	}
+	if state.Busy && !state.Terminal && !m.hasPriorityInfo() {
+		text = compactFooterActivity(text, width-1, state)
 	}
 	return style.Width(width).MaxWidth(width).Render(ansi.Truncate(" "+text, width, "…"))
 }
@@ -251,30 +236,6 @@ func labelsTypeUtilInfoTypeError(m *statusCmp, state *util.FooterState, center *
 		}
 		if m.info.Type == util.InfoTypeError {
 			(*center) = config.Text("Erro: ", "Error: ") + (*center)
-		}
-	}
-}
-
-func metricsWidth(m *statusCmp, state *util.FooterState, text *string) (extractedResult0 string, handled bool) {
-	if m.width >= 110 {
-		if state.Busy && (state.AwaitingModel || state.SpeedLive && state.TokensPerSecond <= 0) {
-			return *text, true
-		}
-		rate := "—"
-		metricsWidthIsInfStateTokensPerSecond(state, &rate)
-		(*text) += " · " + rate + " tok/s"
-	}
-	return extractedResult0, false
-}
-
-func metricsWidthIsInfStateTokensPerSecond(state *util.FooterState, rate *string) {
-	if (!state.Busy || state.SpeedLive) && state.TokensPerSecond > 0 && !math.IsNaN(state.TokensPerSecond) && !math.IsInf(state.TokensPerSecond, 0) {
-		(*rate) = fmt.Sprintf("%.1f", state.TokensPerSecond)
-		if state.TokensPerSecond > 9999 {
-			(*rate) = fmt.Sprintf("%.3g", state.TokensPerSecond)
-		}
-		if state.SpeedEstimated || state.SpeedLive {
-			(*rate) = "~" + (*rate)
 		}
 	}
 }

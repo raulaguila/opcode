@@ -555,7 +555,10 @@ ou tecnologias assistivas. As evidências estão em
 ## Contexto e velocidade no rodapé
 
 À esquerda do modelo, a barra mostra, por exemplo,
-`~8k/32k ctx · 24.5 tok/s`. Clique na informação de contexto para abrir `/context`.
+`~8k/32k ctx [##---] ~25% · ~24.5 tok/s`. Clique na informação de contexto
+para abrir `/context`. O preenchimento e o percentual mostram o uso da janela,
+não a porcentagem de conclusão da resposta. O estado é informativo: não aumenta
+nem reduz limites, permissões ou exigências de citações.
 O denominador é a janela efetiva do pedido quando disponível; antes da primeira
 mensagem, usa a janela do provedor vinculado ao agente. Sem agente ativo, usa o
 limite configurado/conhecido como referência. Não é uma indicação de memória livre.
@@ -565,6 +568,10 @@ O numerador representa a entrada do último pedido: sem `~`, veio do uso informa
 pelo provedor; com `~`, é a estimativa do orçamento. Não soma uma conversa inteira
 sem considerar a recuperação e a compactação. `—` indica dado ainda indisponível.
 A renderização usa dados em memória e não consulta o provedor a cada quadro.
+Sem uma contagem conhecida, não mostra barra nem um falso 0%. O percentual fica
+entre 0 e 100; os números completos continuam disponíveis em `/context`. A cor
+é informativa, de aviso a partir de 85% e de alerta a partir de 95%; o desenho
+em caracteres e o percentual preservam a leitura em `NO_COLOR` e nos dois temas.
 
 Durante a geração, `~24.5 tok/s` é uma estimativa da chamada em andamento,
 atualizada pelo ciclo de renderização existente (100 ms). A estimativa divide os
@@ -572,7 +579,7 @@ bytes UTF-8 recebidos por quatro e pelo tempo desde o primeiro dado de saída.
 Não conta pacotes como tokens e não é um tokenizer; pode diferir bastante entre
 modelos e idiomas. Texto, raciocínio e deltas de argumentos disponibilizados pelo
 adaptador contam uma vez, sem reter o conteúdo nas métricas. Os primeiros 250 ms
-mostram `Gerando…` para evitar picos. Antes de qualquer saída, aparece
+mostram `Gerando…` e `— tok/s` para evitar picos. Antes de qualquer saída, aparece
 `Aguardando modelo…`; um servidor que acumula a resposta ou uma chamada de
 ferramenta até o final pode permanecer nesse estado, sem taxa inventada.
 
@@ -584,9 +591,18 @@ aprovações. Tokens de saída podem incluir argumentos de chamadas de ferrament
 não representam apenas palavras visíveis. Ferramentas e aprovações mostram `—`,
 sem reutilizar uma chamada anterior enquanto o agente trabalha. As métricas de
 streaming são removidas ao concluir, cancelar ou falhar e reiniciadas a cada
-chamada, inclusive nas correções de resposta. Em terminais estreitos, primeiro a
-velocidade e depois o contexto são ocultados para preservar os controles. O input
-mantém sua altura.
+chamada, inclusive nas correções de resposta. A velocidade pode aparecer mesmo
+quando a janela de contexto é desconhecida.
+
+Durante o trabalho, a etapa, o tempo decorrido e Esc ficam juntos: por exemplo,
+`Gerando resposta · 12s · Esc cancela`. O tempo cobre o trabalho desde o envio,
+incluindo espera e ferramentas; não é uma previsão. Acima de um minuto usa
+`1m05s`; acima de uma hora, `1h02m`. Em 80–109 colunas, o rodapé compacta os
+números para `[##---] ~25% · ~24.5 t/s`; em 60–79, mantém `~25% ctx` e a taxa.
+Abaixo disso, oculta métricas para priorizar etapa, tempo e cancelamento. Quando
+necessário, encurta a etapa e o nome do modelo. Perguntas aguardando o usuário
+em menos de 80 colunas e avisos/erros em menos de 110 têm prioridade sobre as
+métricas. Nada acrescenta linhas ao rodapé nem muda a altura do input.
 
 
 ## Leitura e estados da conversa

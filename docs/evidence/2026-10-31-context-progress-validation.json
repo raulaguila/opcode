@@ -1,0 +1,256 @@
+{
+  "date": "2026-10-31",
+  "baseline": "347863c43f790d0ec46c6e9df0120eb4d12de62b",
+  "binary_sha256": "2523e83f8ce64fbf8239ddabd4fd023b2b5629d3f2e69e4113a1647ffa5a6a9b",
+  "source_sha256": {
+    "CHANGELOG.md": "1d136936faae8506e29cc88145bf09aeb609a254e6df732950158cde3d435017",
+    "docs/agent-runtime.md": "a6259a34d175cf80710688657cac54cf6b6b852b6487fb92b1593228ae7e7e2c",
+    "docs/evidence/2026-10-31-openai-compatible-validation.json": "739efb4bae2d1c462fe1bb8f6aedc303f6c685a64d3a6491954ef741b41be170",
+    "docs/validation.md": "0f7bbdda7e23497c8de65878d48ca505f1dbc51e9df4bf7211d3377107be6563",
+    "docs/workspace-ui.md": "f285288387018cc13b60df4d42a2f68af8f82078aff0f3c41ffe45f3c425007e",
+    "internal/llm/agent/citations_compatible_test.go": "e8acb3eea413bc81bb6c45a9b894979ef1a15ee22e62c49863bc7def2b68ac8f",
+    "internal/llm/provider/http.go": "bd935bcd054e58ddbce7a96cf275aef564a9341efcd67c4e13e131c0495d3c87",
+    "internal/llm/provider/ollama.go": "ecd70e7ceb8cb30b2d11edf74192d51b312eeb796827a52fa02a0f6303dda770",
+    "internal/llm/provider/openai.go": "c9e53687bcff1c9188014b93efe46fb8af261015dc2f005025031d26a25a3203",
+    "internal/llm/provider/openai_compatibility_test.go": "b3bbded26142580452dffaa4789d6be7bd077acbfa5d66e080a5f7f3cdc0066c",
+    "internal/llm/provider/responses.go": "f07a8d68aebed81d87571118ba101d761d9054d6a2797e26729f025636c61b74",
+    "internal/tui/components/core/status.go": "f75e073735041e81090e06f85b46df894b99ef15756fc3d881c9f873d8f294b3",
+    "internal/tui/components/core/status_metrics.go": "d458e4135d2a0848197b7b943e225edc15b5a9ca0b729e9d15431c97fe4e7e13",
+    "internal/tui/components/core/status_metrics_test.go": "166843a4f773ce17b77bb11b5d97ddde3c55e859755d87211936abf46ea6d427",
+    "internal/tui/components/core/status_phase_test.go": "81f2244540686650c05184dc0f0b9e2bf89321e530b2ac14a072a36b03f1d9dc",
+    "internal/tui/components/core/status_progress_test.go": "c36dcd5f39579d3e76f012947da73657f5381a728d169a100f41e54110e6e747",
+    "internal/tui/page/footer.go": "ed2df84deb719bec2539672a827d4db43b3cf9cd39596aafb84fb83fed2675bb",
+    "internal/tui/page/footer_phase_test.go": "bc00654253ebd9fb0f11c3ade1e3fc246f3f59d9d26c1c5209d38f839189a412",
+    "internal/tui/pty_output_limit_test.go": "683b63f24891936b8688592141a7c32f41de87425867456f0be514c1bc5badb5",
+    "internal/tui/pty_stream_speed_test.go": "a4101e48a1dcff904d75ff1372b1fe28d1c7c370be53048f3b9a7a34c0148492",
+    "internal/tui/util/footer.go": "0fee0980d41af7a772f1d7d8d09de243998302379b5d9313313f3d7f0bb82674"
+  },
+  "manifest_scope": "All changed and new files except this self-referential evidence file; Go source unchanged between build, tests and manifest capture.",
+  "protected_unchanged_sha256": {
+    "go.mod": "b69606c07b1eb3ed19aae4c407554a7857bcf58e27ce859d77522b07225b1425",
+    "go.sum": "659d9fea2397880cc3968a56605298ebc5d7f8f5751308aa426cfbfa0ecaa74c",
+    "internal/evaluation/testdata/cases.json": "08b9aff679c7f9743feb5019658ffde63e9a9f679b566037edc016054860db24",
+    "internal/evaluation/testdata/explanation_quality.json": "53fc272eed15ef3cab1e3522edca9da3d390e844bcfcfc6b321f3e8af032c5b7",
+    "internal/evaluation/testdata/project_questions.json": "ac55f1b11c901e9863ab58bb4f6fdf273fbd582a62f4dad05d859524a8fd6600",
+    "internal/evaluation/testdata/retrieval.json": "23d4be6d0133cbd583387728fd58835c6b24c47e3e3e84da1006131fc9d32caa",
+    "internal/evaluation/testdata/review_evidence.json": "e1f3e5ba75c2f893f41c8b7265ca0271cb418e5c808df494802f6bf89b07bbde",
+    "internal/evaluation/testdata/synonym_navigation.json": "c39b929d82928ec4fc9767da83c1b6c14588aa48f776c93864986c28860082c9",
+    "internal/llm/agent/calibration.go": "195656bcc8d66ace6a3e86854cdf2b6a24bcb61fab87b96c38a27254969bf661",
+    "internal/llm/agent/citation_revision.go": "f35d52046d6ccd32a2d4dbdc7893141e817b6ab3fb9414fe352c6d7ec136a17c",
+    "internal/llm/agent/citations.go": "8134fc398150804c5ecaca1158a3bc00ba4a5b5a2bf90ee5e8ecb69c7722e26c",
+    "internal/llm/agent/citations_messages.go": "e31331b0c67b884b59c26cfb87fb36a3440aa1c1da690a58faf2fe3bab58c3b7",
+    "internal/llm/agent/generation.go": "ed75c0c3c658a26322b9de074c3832e95f5b369a96ea93d40d68f877e48c574f",
+    "internal/llm/agent/provider_failure.go": "6aa96dca2a0d4569aeccf11b936f1ec4a10d743391e3deebc03b44cf8f64c209",
+    "internal/llm/prompt/coder.go": "560709d80d9cdc03579070d67ac310e3ddb009f64dab3d6ecdbdea6357841867",
+    "internal/llm/provider/provider.go": "a20b2bba2b689219cdbdfce04be94f6db9a4968a89e5ccb100521508059f01f6",
+    "internal/llm/tools/access.go": "473cd65951c14b446ce6212e040e06495406536b83e09a6fdd6529972ea0f731",
+    "internal/llm/tools/source_receipt.go": "9d577433546bcacb83064f026d2e935361ddba021a14088f0759de699ec7da9e",
+    "internal/permission/exact_params_test.go": "50c801eb517d8cc1c2a2043d38a4cc367d94dca6be1b02d88b8cb49a6006256e",
+    "internal/permission/permission.go": "12085c57bc732ff3cfa90636d98176d8a0f3724018b6e9d3542ec4785bcded14",
+    "internal/permission/permission_test.go": "fa4d5da4ae2c63908c15520fc06039277e17c0dd738624c1f056b74164b6ae7d",
+    "internal/permission/status.go": "22e7f400f1c23890b14588db791ee736b2b23af53e4a8651168a5cdb20d66944"
+  },
+  "checks": [
+    {
+      "name": "build",
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-context-progress/final/opcode",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 1.71
+    },
+    {
+      "name": "integration",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-p",
+        "1",
+        "-tags",
+        "integration",
+        "-json",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 83.59
+    },
+    {
+      "name": "vet",
+      "command": [
+        "go",
+        "vet",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 0.5
+    },
+    {
+      "name": "staticcheck",
+      "command": [
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-analysis-bin/staticcheck",
+        "-tags",
+        "integration",
+        "./..."
+      ],
+      "exit_code": 0,
+      "seconds": 1.44
+    },
+    {
+      "name": "complexity",
+      "command": [
+        "/home/raulaguila/go/bin/gocognit",
+        "-over",
+        "15",
+        "."
+      ],
+      "exit_code": 0,
+      "seconds": 0.16
+    }
+  ],
+  "live": [
+    {
+      "name": "pty",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-context-progress/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestPTY|TestLiveBinary)",
+        "-count=1",
+        "-json",
+        "-timeout=6m"
+      ],
+      "exit_code": 0,
+      "seconds": 32.91
+    },
+    {
+      "name": "native-nemotron",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-context-progress/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^TestLiveOllamaPTYUI$",
+        "-count=1",
+        "-json",
+        "-timeout=12m"
+      ],
+      "exit_code": 0,
+      "seconds": 27.62
+    },
+    {
+      "name": "compatible-local",
+      "command": [
+        "go",
+        "test",
+        "-overlay",
+        "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-context-progress/final/overlay.json",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/llm/provider/integration",
+        "-run",
+        "^TestLiveProviders$",
+        "-count=1",
+        "-json",
+        "-timeout=5m"
+      ],
+      "exit_code": 0,
+      "seconds": 7.61
+    },
+    {
+      "name": "pty-startup",
+      "command": [
+        "go",
+        "test",
+        "-race",
+        "-tags",
+        "integration",
+        "./internal/tui",
+        "-run",
+        "^(TestPTYUICompactThemes|TestLiveBinaryFirstRunContractAndWorkspace|TestLiveBinaryResetConfigurationAndWorkspace)$",
+        "-count=1",
+        "-json",
+        "-timeout=3m"
+      ],
+      "exit_code": 0,
+      "package_elapsed_seconds": 26.395,
+      "environment": {
+        "OPCODE_LIVE_TESTS": "1",
+        "OPCODE_LIVE_OLLAMA": "1",
+        "OPCODE_LIVE_OLLAMA_MODEL": "nemotron-3.5-bolt:e4b",
+        "OPCODE_EVAL_BINARY": "/home/raulaguila/Documents/ChatGPT/opencode/.tmp-opcode-context-progress/final/opcode"
+      }
+    }
+  ],
+  "parent_tests_passed": 1152,
+  "test_nodes_passed": 2477,
+  "pty_controlled_parent_tests_passed": 20,
+  "native_ollama_full_pty_passed": true,
+  "native_model": "nemotron-3.5-bolt:e4b",
+  "native_fixture_context_window": 16384,
+  "live_footer_before_completion": [
+    "pty_stream_speed_test.go:107: live footer 80:  Ask ▾       Generating r… · 0s · Esc  [###--] ~45% · ~31.4 t/s speed-fixture ▾",
+    "pty_stream_speed_test.go:107: live footer 60:  Ask ▾   Generat… · 0s · Esc ~45% ctx · ~31.4 t/s speed-… ▾",
+    "pty_stream_speed_test.go:107: live footer 180:  Ask ▾       Generating response · 0s · Esc cancels                                                            ~7.3k/16k ctx [###--] ~45% · ~31.4 tok/s             speed-fixture ▾",
+    "pty_stream_speed_test.go:107: live footer 80:  Ask ▾       Generating r… · 0s · Esc  [###--] ~45% · ~29.5 t/s speed-fixture ▾",
+    "pty_stream_speed_test.go:107: live footer 60:  Ask ▾   Generat… · 0s · Esc ~45% ctx · ~29.5 t/s speed-… ▾",
+    "pty_stream_speed_test.go:107: live footer 180:  Ask ▾       Generating response · 0s · Esc cancels                                                            ~7.3k/16k ctx [###--] ~45% · ~29.5 tok/s             speed-fixture ▾",
+    "pty_stream_speed_test.go:107: live footer 80:  Ask ▾       Generating r… · 0s · Esc  [###--] ~45% · ~31.5 t/s speed-fixture ▾",
+    "pty_stream_speed_test.go:107: live footer 60:  Ask ▾   Generat… · 0s · Esc ~45% ctx · ~31.5 t/s speed-… ▾",
+    "pty_stream_speed_test.go:107: live footer 180:  Ask ▾       Generating response · 0s · Esc cancels                                                            ~7.3k/16k ctx [###--] ~45% · ~31.5 tok/s             speed-fixture ▾"
+  ],
+  "reviewed_vt_captures": [
+    "footer-dark",
+    "footer-light",
+    "footer-compact",
+    "question-compact"
+  ],
+  "capture_notes": "Read-only test overlay captures VT cells at existing successful checkpoints. Production binary and predicates are unchanged. PNG default terminal colors are approximations; semantic colors are also checked against actual VT glyphs in unit tests.",
+  "capture_overlay_sha256": "44057fe3f25998bdf4eb26dbdb6e20e2ff192edf9f117299a0e38ca178ceebf4",
+  "log_sha256": {
+    "integration.log": "d0aa7ed5ed900830d4b0d694226992ce6dfc28a97ee18569ed253ea27aa16076",
+    "vet.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "staticcheck.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "complexity.log": "d95ca46ac1c5ee5a2a58509a36eef3d730a264584d56b864023d831a38ffa7b6",
+    "pty.jsonl": "7d8bbf0999c26df701b34c830f37c9b1350a8ee305c29708caabe6bc77fc1048",
+    "native-nemotron.jsonl": "46dbcf4147d60d4864799a4c637e116bea06d756d2b415bfca5246d6d4b73483",
+    "compatible-local.jsonl": "0551817fc9ea933b4e329daf2ea407c267fe812633b9ca1bc5ea601ea9445d8e",
+    "pty-startup.jsonl": "01f31113c831a971c5077c26d78646378c016f0f37da9acff134aba2d2b1d0eb"
+  },
+  "previous_stage": "2026-10-31-openai-compatible-validation.json",
+  "no_dependency_changes": true,
+  "no_personal_config_changes": true,
+  "no_additional_provider_requests_for_footer": true,
+  "preserved": [
+    "permission implementation and exact approval scope",
+    "citation validators and source receipts",
+    "evaluation criteria",
+    "generation budgets and context allocation",
+    "single execution after approval"
+  ],
+  "limits": [
+    "Context bar measures request input/window, not response completion or live output token totals.",
+    "Live rate is an estimate and waits for a second sample and at least 250 ms.",
+    "Metrics compact at 60/80 columns and hide below 60; human questions and warnings take precedence when narrow.",
+    "No live company gateway or OpenAI account requests."
+  ],
+  "pty_startup_parent_tests_passed": 3
+}

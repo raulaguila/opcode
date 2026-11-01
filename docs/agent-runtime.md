@@ -338,3 +338,35 @@ somente dados derivados. Os detalhes ficam em painéis; não há outra barra fix
 `explore_code` devolve relatório limitado com fontes/recibos observados, passos e
 bytes; a prosa do modelo permanece não verificada. O orçamento auxiliar inclui
 os schemas efetivamente enviados.
+
+
+## OpenAI e endpoints compatíveis
+
+Chat Completions envia mensagens humanas sem imagens como `content` string.
+Mensagens com imagens mantêm os blocos de texto/imagem, e o orçamento é calculado
+sobre o envelope realmente enviado. Isso evita exigir suporte a partes multimodais
+em servidores que só atendem texto. O campo `refusal` é exibido quando não há
+`content`, inclusive no streaming.
+
+Chamadas de função precisam ter IDs, nomes e argumentos que sejam objetos JSON
+válidos. Arrays, `null`, escalares e chamadas interrompidas não chegam à execução.
+Os números e os bytes válidos dos argumentos são preservados. `finish_reason=length`
+sem texto legível ou com chamadas incompletas usa `ErrOutputLimit`; texto parcial
+legível mantém `FinishReasonMaxTokens`.
+
+Responses diferencia `incomplete_details.reason=max_output_tokens` de outros
+motivos de resposta incompleta. O limite sem saída visível, inclusive quando há
+apenas raciocínio, recebe diagnóstico de saída esgotada. Texto parcial legível é
+preservado. Filtragem de conteúdo não é apresentada como limite de tokens.
+
+Chat Completions e Responses continuam protocolos distintos escolhidos pela
+configuração. Não há tentativa automática de trocar protocolo, aumentar orçamento,
+remover parâmetros ou repetir uma geração já iniciada. Autenticação, TLS, limites,
+cancelamento, permissões e validação das citações continuam nos caminhos existentes.
+Ollama nativo mantém seus formatos e parâmetros; apenas compartilha a mesma
+validação de objeto JSON para argumentos.
+
+Contratos oficiais: [Chat Completions](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create),
+[streaming](https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events) e
+[limites de raciocínio/saída](https://developers.openai.com/api/docs/guides/reasoning).
+Suporte OpenAI-compatible não certifica todas as extensões de cada gateway.

@@ -126,11 +126,6 @@ type ollamaResponse struct {
 	Error           json.RawMessage `json:"error"`
 }
 
-func ollamaArgumentsValid(raw json.RawMessage) bool {
-	text := strings.TrimSpace(string(raw))
-	return strings.HasPrefix(text, "{") && json.Valid(raw)
-}
-
 func ollamaResult(value ollamaResponse, sources []string) (*ProviderResponse, error) {
 	if len(value.Error) > 0 && string(value.Error) != "null" {
 		return nil, ollamaFailure(value.Error)
@@ -232,7 +227,7 @@ func validateOllamaCall(call ollamaCall, finish message.FinishReason) error {
 	if finish == message.FinishReasonMaxTokens {
 		return fmt.Errorf("%w: incomplete Ollama tool call; increase the output token budget before retrying", ErrOutputLimit)
 	}
-	if call.Function.Name != "" && ollamaArgumentsValid(call.Function.Arguments) {
+	if call.Function.Name != "" && functionArgumentsValid(call.Function.Arguments) {
 		return nil
 	}
 	if call.Function.Name == ollamaFinalAnswer || call.Function.Name == ollamaSourceAnswer {
@@ -349,7 +344,7 @@ func (s *ollamaStreamState) complete(value ollamaResponse) error {
 func ollamaHistoryCalls(msg message.Message, names map[string]string) ([]object, error) {
 	var calls []object
 	for _, call := range msg.ToolCalls() {
-		if !ollamaArgumentsValid(json.RawMessage(call.Input)) {
+		if !functionArgumentsValid(json.RawMessage(call.Input)) {
 			return nil, fmt.Errorf("invalid Ollama tool arguments in history")
 		}
 		names[call.ID] = call.Name

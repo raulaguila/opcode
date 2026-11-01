@@ -15,7 +15,7 @@ func TestFooterPhaseIsNotRepeatedBesideContextMetrics(t *testing.T) {
 	state := util.FooterState{Busy: true, AwaitingModel: true, Activity: phase, ContextKnown: true, ContextWindow: 131072, ContextTokens: 100}
 	view := ansi.Strip(m.ViewFor(state))
 	require.Equal(t, 1, strings.Count(view, phase))
-	require.NotContains(t, view, "tok/s", "waiting cannot present the previous request's speed")
+	require.Contains(t, view, "— tok/s", "waiting cannot present the previous request's speed")
 	state.AwaitingModel, state.SpeedLive = false, true
 	state.Activity = config.Text("Gerando resposta", "Generating response")
 	state.TokensPerSecond = 70

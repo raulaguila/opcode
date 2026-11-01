@@ -5,6 +5,71 @@ transações, persistência, contexto, extensões e fluxos da interface. As aval
 com um modelo real medem outra coisa: se esse modelo consegue cumprir os
 critérios de uma tarefa usando a aplicação. Um resultado não substitui o outro.
 
+## Uso de contexto e geração no rodapé — 31/10/2026
+
+O rodapé mostra barra em caracteres, percentual e consumo da janela efetiva.
+Indica estimativas com `~`, sem apresentar uso desconhecido como zero nem
+confundir ocupação do contexto com progresso da resposta. Etapa e tempo decorrido
+ficam ao lado do cancelamento; a taxa ao vivo continua exigindo pelo menos duas
+amostras e 250 ms. Os dados usam o ciclo existente, sem consultas adicionais.
+Cores de informação, aviso (85%) e alerta (95%) têm equivalente textual.
+
+Os testes cobrem resize, cliques, tempo acima de um minuto, dados desconhecidos,
+limites extremos e taxa inválida. A regressão PTY mantém a conexão aberta durante
+os checkpoints em **60, 80 e 180 colunas**, antes da conclusão: etapa, tempo,
+contexto e taxa permanecem visíveis, nos perfis claro, escuro e `NO_COLOR`.
+Abaixo de 80 colunas, perguntas pendentes priorizam a instrução ao usuário;
+avisos e erros têm prioridade em menos de 110. Sem linhas extras no input.
+
+Passaram **1152 testes principais** com `go test -race -p 1 -tags integration
+-json ./...`, vet, staticcheck e `gocognit -over 15 .`. Passaram também **20 suítes
+PTY controladas**, três de temas/configuração inicial e o fluxo completo em PTY com
+**Nemotron 3.5 Bolt local no
+Ollama**, mantendo citações, perguntas, permissões exatas, Bubblewrap, comando
+interativo e continuação sem repetir ações. O mesmo binário passou resposta,
+streaming e ferramenta no endpoint OpenAI-compatible local do Ollama.
+
+O renderer e seu DTO de apresentação mudaram; permissões, recibos, validação de
+citações, critérios das avaliações, dependências e configuração pessoal não.
+As melhorias OpenAI da etapa anterior estão incluídas e foram revalidadas.
+Não houve chamada à API da empresa ou conta OpenAI. A taxa inicial pode ficar
+indisponível até chegarem amostras reais; o percentual representa a entrada do
+pedido, sem inventar uma contagem de saída em streaming.
+Ver [evidências desta rodada](evidence/2026-10-31-context-progress-validation.json)
+e [comportamento do rodapé](workspace-ui.md#contexto-e-velocidade-no-rodapé).
+
+## OpenAI e OpenAI-compatible — 31/10/2026
+
+A rodada corrige contratos observáveis de Chat Completions e Responses, mantendo
+os dois protocolos explícitos. Texto sem imagens é enviado como string, enquanto
+imagens continuam em blocos tipados. O campo `refusal` fica visível mesmo sem
+`content`, tanto em resposta normal quanto em streaming. As chamadas exigem
+argumentos que sejam objetos JSON; arrays, null e escalares são rejeitados antes
+de chegar às ferramentas. A mesma validação já usada pelo Ollama foi extraída
+para uso compartilhado, preservando seu comportamento.
+
+O limite de saída em chamadas incompletas, resposta vazia ou apenas raciocínio
+recebe `ErrOutputLimit`; o texto parcial legível mantém seu estado de saída
+interrompida. O motivo explícito `content_filter` não é apresentado como limite
+de tokens. Chat Completions não conclui tool use sem chamadas. A fixture de
+citações históricas passou a ler o novo payload string, preservando as verificações
+de referências, intervalos lidos, reparo e ausência de releitura.
+
+As falhas foram reproduzidas antes da implementação. Na fonte final passaram
+**1148 testes principais**, integração com race detector, vet, staticcheck
+e complexidade até 15. O mesmo binário passou a regressão em PTY para **Ollama,
+Chat Completions e Responses**: diagnóstico de saída, janela 16k, rascunho e fontes
+preservados, uma geração e nenhuma execução do comando incompleto. O endpoint
+OpenAI-compatible local do Ollama com `nemotron-3.5-bolt:e4b` passou resposta,
+streaming e round trip de ferramenta.
+
+Sem novas dependências, alterações de configuração pessoal, troca automática
+de protocolo ou repetição de geração. Permissões e validação das citações mantidas.
+A API da empresa e uma conta real da OpenAI não foram acessadas; os contratos
+oficiais são cobertos por fixtures locais, não por certificação desses serviços.
+Ver [evidências](evidence/2026-10-31-openai-compatible-validation.json) e
+[comportamento dos adaptadores](agent-runtime.md#openai-e-endpoints-compatíveis).
+
 ## Limite de saída e busca com embeddings explícitos — 31/10/2026
 
 O runtime classifica chamadas Ollama cortadas por saída como `ErrOutputLimit`.

@@ -9,5 +9,8 @@ type FooterState struct {
 	SpeedLive, AwaitingModel       bool
 	Mode, Activity                 string
 	Busy, Terminal                 bool
+	WaitingForAnswer               bool
+	ElapsedSeconds                 int
+	ElapsedKnown                   bool
 	Pending                        int
 }

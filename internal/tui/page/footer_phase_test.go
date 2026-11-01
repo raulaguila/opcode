@@ -7,6 +7,7 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
 func TestFooterPhaseFollowsCurrentStreamRepairAndOutcome(t *testing.T) {
@@ -18,7 +19,10 @@ func TestFooterPhaseFollowsCurrentStreamRepairAndOutcome(t *testing.T) {
 	cfg.Agents = map[config.AgentName]config.Agent{config.AgentCoder: {Model: models.GPT41}}
 	probe := &footerProbe{store: p.app.Workflows, busy: true, metrics: agent.UsageMetrics{StreamModel: models.GPT41, StreamActive: true}}
 	p.app.CoderAgent = probe
+	p.activityStarted = time.Now().Add(-3 * time.Second)
 	p.progress = config.Text("Consultando modelo", "Contacting model")
+	require.True(t, p.FooterState().ElapsedKnown)
+	require.Equal(t, 3, p.FooterState().ElapsedSeconds)
 	require.Contains(t, p.FooterState().Activity, config.Text("Aguardando modelo", "Awaiting model"))
 	probe.metrics.StreamOutputBytes = 100
 	require.Contains(t, p.FooterState().Activity, config.Text("Gerando resposta", "Generating response"), "the first real delta already establishes the phase without a rate sample")
@@ -35,4 +39,5 @@ func TestFooterPhaseFollowsCurrentStreamRepairAndOutcome(t *testing.T) {
 	p.outcome = "completed"
 	p.progress = ""
 	require.Equal(t, config.Text("Concluído", "Completed"), p.FooterState().Activity)
+	require.False(t, p.FooterState().ElapsedKnown, "completed generations do not retain a ticking timer")
 }

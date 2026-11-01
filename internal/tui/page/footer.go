@@ -2,7 +2,6 @@ package page
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -12,14 +11,15 @@ import (
 )
 
 func (p *chatPage) FooterState() util.FooterState {
-	state := util.FooterState{Mode: string(p.mode()), Terminal: p.terminal.focused}
+	state := util.FooterState{Mode: string(p.mode()), Terminal: p.terminal.focused, WaitingForAnswer: p.workflow.question.ID != ""}
 	applyAgentFooterState(p, &state)
 	state.Activity = p.footerActivity(state)
 	if state.Activity == "" && p.terminal.snapshot.Running && !state.Terminal {
 		state.Activity = config.Text("Terminal ativo · ", "Terminal running · ") + config.Shortcut("terminal")
 	}
 	if state.Busy && !p.activityStarted.IsZero() {
-		state.Activity += fmt.Sprintf(" · %ds", int(time.Since(p.activityStarted).Seconds()))
+		state.ElapsedKnown = true
+		state.ElapsedSeconds = max(0, int(time.Since(p.activityStarted).Seconds()))
 	}
 	return state
 }

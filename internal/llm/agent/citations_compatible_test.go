@@ -122,13 +122,9 @@ func (fixture *compatibleCitationFixture) ServeHTTP(w http.ResponseWriter, r *ht
 		assert.True(t, test.repair, "a valid historical reference needs no extra generation")
 		notice := string(body.Messages[len(body.Messages)-1].Content)
 		assert.Contains(t, notice, "counter.py:1-2")
-		var parts []struct {
-			Text string `json:"text"`
-		}
-		assert.NoError(t, json.Unmarshal(body.Messages[len(body.Messages)-1].Content, &parts))
-		if assert.NotEmpty(t, parts) {
-			assert.Contains(t, parts[0].Text, test.question)
-		}
+		var noticeText string
+		assert.NoError(t, json.Unmarshal(body.Messages[len(body.Messages)-1].Content, &noticeText))
+		assert.Contains(t, noticeText, test.question)
 		assert.Contains(t, notice, "Do not repeat successful reads")
 		delta = map[string]any{"content": "Em counter.py:2, add usa a - b em vez de a + b."}
 	default:

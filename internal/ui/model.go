@@ -35,7 +35,11 @@ type Model struct {
 	busy     bool
 	started  time.Time
 	approval *permission.PermissionRequest
+	policy   permission.ApprovalPolicy
 	notice   string
+	info     string   // a passing confirmation, shown in the footer
+	dialog   floating // the panel floating over the screen, if any
+	showPlan bool
 }
 
 type tickMsg struct{}
@@ -46,7 +50,7 @@ func New(a *app.App, initial ...session.Session) *Model {
 	composer.Prompt = ""
 	composer.ShowLineNumbers = false
 	composer.CharLimit = -1
-	composer.SetHeight(2)
+	composer.SetHeight(1)
 	styles := composer.Styles()
 	for _, s := range []*textarea.StyleState{&styles.Focused, &styles.Blurred} {
 		s.Base = on(P.Ground, P.Text)
@@ -86,6 +90,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.key(msg)
 	case tea.PasteMsg:
 		// Pasted text, newlines included, lands in the draft; it never sends.
+		if d, ok := m.dialog.(interface{ paste(string) }); ok {
+			d.paste(strings.TrimSpace(msg.Content))
+			return m, nil
+		}
 		m.composer.InsertString(msg.Content)
 		m.layout()
 		return m, nil
@@ -97,6 +105,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		if m.busy {
 			return m, tick()
+		}
+		return m, nil
+	case catalogMsg:
+		if picker, ok := m.dialog.(*modelPicker); ok {
+			picker.accept(m, msg)
 		}
 		return m, nil
 	case pubsub.Event[message.Message]:
@@ -128,9 +141,25 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.approval != nil {
 		return m.answerApproval(msg.String())
 	}
+	if m.dialog != nil {
+		cmd, _ := m.dialog.key(m, msg)
+		return cmd
+	}
 	switch msg.String() {
 	case "ctrl+c":
 		return tea.Quit
+	case "ctrl+k":
+		return m.openPalette()
+	case "ctrl+o":
+		return m.openModels()
+	case "ctrl+s":
+		return m.openSessions()
+	case "ctrl+n":
+		return m.newConversation()
+	case "/":
+		if strings.TrimSpace(m.composer.Value()) == "" {
+			return m.openPalette()
+		}
 	case "esc":
 		if m.busy && m.app.CoderAgent != nil {
 			m.app.CoderAgent.Cancel(m.session.ID)
@@ -177,10 +206,12 @@ func (m *Model) answerApproval(key string) tea.Cmd {
 
 func (m *Model) cycleMode() {
 	order := []string{"ask", "plan", "execute"}
-	m.mode = order[(slices.Index(order, m.mode)+1)%len(order)]
-	if m.session.ID != "" && m.app.CoderAgent != nil {
-		_ = m.app.CoderAgent.SetMode(context.Background(), m.session.ID, workflow.Mode(m.mode))
+	next := order[(slices.Index(order, m.mode)+1)%len(order)]
+	if m.app == nil {
+		m.mode = next
+		return
 	}
+	m.setMode(next)
 }
 
 func (m *Model) submit() tea.Cmd {
@@ -197,6 +228,9 @@ func (m *Model) submit() tea.Cmd {
 		}
 		m.session = created
 		_ = m.app.CoderAgent.SetMode(ctx, m.session.ID, workflow.Mode(m.mode))
+		if m.policy != "" {
+			m.setApproval(m.policy)
+		}
 	}
 	if _, _, err := m.app.CoderAgent.Submit(ctx, m.session.ID, text); err != nil {
 		m.notice = err.Error()
@@ -237,7 +271,7 @@ func (m *Model) layout() {
 	}
 	lines := strings.Count(m.composer.Value(), "\n") + 1
 	m.composer.SetWidth(max(1, m.width-8))
-	m.composer.SetHeight(min(6, max(2, lines)))
+	m.composer.SetHeight(min(6, max(1, lines)))
 	used := headerRows + m.composerRows() + footerRows + m.approvalRows()
 	m.transcript.SetWidth(m.width)
 	m.transcript.SetHeight(max(1, m.height-used))
@@ -248,7 +282,12 @@ func (m *Model) refresh() {
 	if m.width == 0 {
 		return
 	}
-	m.transcript.SetContent(m.renderTranscript(m.width))
+	// Every row is painted to the edge so no terminal background shows through.
+	rows := strings.Split(m.renderTranscript(m.width), "\n")
+	for i := range rows {
+		rows[i] = Line(rows[i], m.width, P.Ground)
+	}
+	m.transcript.SetContent(strings.Join(rows, "\n"))
 	if m.follow {
 		m.transcript.GotoBottom()
 	}

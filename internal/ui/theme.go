@@ -14,7 +14,7 @@ import (
 type Palette struct {
 	Ground, Surface, Raised, Field     color.Color
 	Rule, Border, BorderStrong         color.Color
-	Text, Strong, Muted, Faint         color.Color
+	Text, Strong, Muted, Faint, Dim    color.Color
 	Ask, Plan, Execute, User, Info     color.Color
 	Success, Danger, Selected, Warning color.Color
 }
@@ -31,6 +31,7 @@ var P = Palette{
 	Strong:       lipgloss.Color("#e1e3f0"),
 	Muted:        lipgloss.Color("#8a8fa8"),
 	Faint:        lipgloss.Color("#6f7490"),
+	Dim:          lipgloss.Color("#4d5069"),
 	Ask:          lipgloss.Color("#7aa2f7"),
 	Plan:         lipgloss.Color("#e0af68"),
 	Execute:      lipgloss.Color("#ff9e64"),

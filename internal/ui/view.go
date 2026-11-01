@@ -15,6 +15,7 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 )
 
@@ -33,6 +34,7 @@ func (m *Model) View() tea.View {
 		}
 		parts = append(parts, m.composerView(), m.footer())
 		body = lipgloss.NewStyle().Background(P.Ground).Width(m.width).Height(m.height).MaxHeight(m.height).Render(strings.Join(parts, "\n"))
+		body = m.overlay(body)
 	}
 	view := tea.NewView(styles.TerminalOutput(body))
 	view.AltScreen = true
@@ -243,13 +245,19 @@ func (m *Model) composerView() string {
 // footer: approval on the left, the run's activity, then context and model.
 func (m *Model) footer() string {
 	muted := on(P.Ground, P.Muted)
-	approval := on(P.Ground, P.Text).Render(" " + config.Text("Aprov.: pedir ▾", "Approval: ask ▾"))
+	label := config.Text("Aprov.: pedir ▾", "Approval: ask ▾")
+	if m.policy == permission.ApprovalProjectEdits {
+		label = config.Text("Aprov.: editar no projeto ▾", "Approval: project edits ▾")
+	}
+	approval := on(P.Ground, P.Text).Render(" " + label)
 	activity := ""
 	switch {
 	case m.busy:
 		activity = on(P.Ground, P.Plan).Render(fmt.Sprintf(config.Text("  Trabalhando · %s · Esc cancela", "  Working · %s · Esc cancels"), time.Since(m.started).Round(time.Second)))
 	case m.notice != "":
 		activity = on(P.Ground, P.Danger).Render("  " + strings.Join(strings.Fields(m.notice), " "))
+	case m.info != "":
+		activity = on(P.Ground, P.Success).Render("  " + m.info)
 	}
 	right := ""
 	model := models.Model{}

@@ -1,0 +1,156 @@
+package ui
+
+import (
+	"strings"
+)
+
+// Item is one row of a List. Group heads a run of rows; Right sits at the
+// row's end (a shortcut, a size); Mark sits before the title (✓, ●).
+type Item struct {
+	ID, Title, Desc, Right, Group, Mark string
+	Faint                               bool
+	Value                               any
+}
+
+// List is the proposal's searchable list: a search field, uppercase group
+// headings while unfiltered, and the selection drawn with a bar and a tint.
+type List struct {
+	Items    []Item
+	Query    string
+	Selected int
+	Offset   int
+	Grouped  bool
+}
+
+// Visible is the filtered items, in order.
+func (l *List) Visible() []Item {
+	query := strings.ToLower(strings.TrimSpace(l.Query))
+	if query == "" {
+		return l.Items
+	}
+	var out []Item
+	for _, item := range l.Items {
+		if strings.Contains(strings.ToLower(item.Title+" "+item.Desc+" "+item.ID), query) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+// Current is the selected item, if any.
+func (l *List) Current() (Item, bool) {
+	items := l.Visible()
+	if l.Selected < 0 || l.Selected >= len(items) {
+		return Item{}, false
+	}
+	return items[l.Selected], true
+}
+
+func (l *List) Move(delta, rows int) {
+	items := l.Visible()
+	if len(items) == 0 {
+		l.Selected = 0
+		return
+	}
+	l.Selected = (l.Selected + delta + len(items)) % len(items)
+	l.keepVisible(rows)
+}
+
+func (l *List) SetQuery(query string) {
+	l.Query, l.Selected, l.Offset = query, 0, 0
+}
+
+// layout maps rows to items: -1 is a group heading.
+func (l *List) layout(rows int) []int {
+	items := l.Visible()
+	grouped := l.Grouped && strings.TrimSpace(l.Query) == ""
+	var out []int
+	for i := l.Offset; i < len(items) && len(out) < rows; i++ {
+		if grouped && items[i].Group != "" && (i == l.Offset || items[i-1].Group != items[i].Group) {
+			out = append(out, -1)
+			if len(out) >= rows {
+				break
+			}
+		}
+		out = append(out, i)
+	}
+	return out
+}
+
+func (l *List) keepVisible(rows int) {
+	if l.Selected < l.Offset {
+		l.Offset = l.Selected
+	}
+	for l.Offset < l.Selected && !contains(l.layout(rows), l.Selected) {
+		l.Offset++
+	}
+}
+
+func contains(rows []int, want int) bool {
+	for _, row := range rows {
+		if row == want {
+			return true
+		}
+	}
+	return false
+}
+
+// ItemAt is the item drawn at a list row (zero-based), for mouse clicks.
+func (l *List) ItemAt(row, rows int) (int, bool) {
+	layout := l.layout(rows)
+	if row < 0 || row >= len(layout) || layout[row] < 0 {
+		return 0, false
+	}
+	return layout[row], true
+}
+
+// Render draws up to rows list rows at the given width on the surface.
+func (l *List) Render(width, rows int) []string {
+	items := l.Visible()
+	if len(items) == 0 {
+		return []string{on(P.Surface, P.Muted).Render("  " + empty())}
+	}
+	layout := l.layout(rows)
+	out := make([]string, 0, len(layout))
+	for k, i := range layout {
+		if i < 0 {
+			out = append(out, on(P.Surface, P.Muted).Render("  "+strings.ToUpper(items[layout[k+1]].Group)))
+			continue
+		}
+		out = append(out, l.row(items[i], i == l.Selected, width))
+	}
+	return out
+}
+
+func (l *List) row(item Item, selected bool, width int) string {
+	bg, fg := P.Surface, P.Text
+	if item.Faint {
+		fg = P.Faint
+	}
+	bar := on(bg, bg).Render("  ")
+	if selected {
+		bg, fg = P.Selected, P.Strong
+		bar = on(P.Surface, P.Ask).Render("▌") + on(bg, bg).Render(" ")
+	}
+	mark := ""
+	if item.Mark != "" {
+		mark = on(bg, P.Success).Render(item.Mark) + on(bg, fg).Render(" ")
+	}
+	title := on(bg, fg).Bold(selected).Render(item.Title)
+	if query := strings.TrimSpace(l.Query); query != "" {
+		if at := strings.Index(strings.ToLower(item.Title), strings.ToLower(query)); at >= 0 {
+			title = on(bg, fg).Bold(selected).Render(item.Title[:at]) + on(bg, fg).Bold(selected).Underline(true).Render(item.Title[at:at+len(query)]) + on(bg, fg).Bold(selected).Render(item.Title[at+len(query):])
+		}
+	}
+	left := bar + mark + title
+	if item.Desc != "" {
+		left += on(bg, P.Muted).Render("  " + item.Desc)
+	}
+	right := ""
+	if item.Right != "" {
+		right = on(bg, P.Muted).Render(item.Right) + on(bg, bg).Render(" ")
+	}
+	return Spread(left, right, width, bg)
+}
+
+func empty() string { return textFor("Nada encontrado", "Nothing found") }

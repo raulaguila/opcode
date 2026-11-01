@@ -90,7 +90,11 @@ func (p *chatPage) questionAnswerHint(item interaction.QuestionItem, batch bool)
 		return config.Text("Escreva uma resposta ou escolha uma opção", "Write an answer or choose an option")
 	}
 	if len(item.Choices) > 0 && p.workflow.choice < 0 {
-		return config.Text("1–9/↑↓ escolha ou escreva · F2 detalhes · Esc cancela", "1–9/↑↓ choose or type · F2 details · Esc cancel")
+		keys := fmt.Sprintf("1–%d", min(9, len(item.Choices)))
+		if item.Type == "multi_choice" {
+			return fmt.Sprintf(config.Text("%s marcar · Espaço alternar · Enter responder · F2 detalhes · Esc cancela", "%s check · Space toggle · Enter answer · F2 details · Esc cancel"), keys)
+		}
+		return fmt.Sprintf(config.Text("%s escolher ou escreva · ↑↓ navegar · F2 detalhes · Esc cancela", "%s choose or type · ↑↓ navigate · F2 details · Esc cancel"), keys)
 	}
 	target := config.Text("opção", "choice")
 	if p.customQuestionAnswer(len(item.Choices)) {

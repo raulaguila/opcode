@@ -67,7 +67,7 @@ func TestSessionAndThemeSelectionRemainVisible(t *testing.T) {
 		m.move(1)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
-	require.Contains(t, ansi.Strip(m.View()), "›")
+	require.Contains(t, ansi.Strip(m.View()), "▌")
 	before := theme.ColorProfile()
 	theme.SetColorProfile(colorprofile.Ascii)
 	defer theme.SetColorProfile(before)

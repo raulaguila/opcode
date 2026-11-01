@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -44,10 +45,23 @@ func (m *providerDialogCmp) navRows() []string {
 	if m.screen == "settings" || m.screen == "effective" {
 		current = max(1, slices.Index(settingsCategories, m.category))
 	}
+	// Connections and integrations show how many are configured.
+	counts := map[int]int{0: len(m.rows)}
+	if cfg := config.Get(); cfg != nil {
+		counts[len(settingsCategories)] = len(cfg.LSP) + len(cfg.MCPServers)
+	}
 	var rows []string
 	for i, section := range settingsSections() {
-		text := ansi.Truncate(selectionMark(i == current)+section, settingsNavWidth, "…")
-		text += strings.Repeat(" ", max(0, settingsNavWidth-ansi.StringWidth(text)))
+		mark := "  "
+		if i == current {
+			mark = "▌ "
+		}
+		count := ""
+		if n, ok := counts[i]; ok && n > 0 {
+			count = fmt.Sprint(n)
+		}
+		text := ansi.Truncate(mark+section, settingsNavWidth-ansi.StringWidth(count)-1, "…")
+		text += strings.Repeat(" ", max(1, settingsNavWidth-ansi.StringWidth(text)-ansi.StringWidth(count))) + count
 		if i == current {
 			rows = append(rows, styles.SelectedRow().Bold(true).Render(text))
 		} else {

@@ -175,10 +175,27 @@ func (s *sessionDialogCmp) View() string {
 		}
 		if listWidth > 0 {
 			// The preview reads beside the list, with the conversation's title.
-			right := []string{styles.PanelTitle().Render(ansi.Truncate(ansi.Strip(s.filtered[s.selectedIdx].Title), width-listWidth-3, "…")), ""}
-			for _, wrapped := range strings.Split(ansi.Wrap(preview, max(1, width-listWidth-3), ""), "\n") {
+			item := s.filtered[s.selectedIdx]
+			rightWidth := max(1, width-listWidth-3)
+			messages := fmt.Sprintf(config.Text("%d mensagens", "%d messages"), item.MessageCount)
+			if item.MessageCount == 1 {
+				messages = config.Text("1 mensagem", "1 message")
+			}
+			right := []string{
+				styles.PanelTitle().Render(ansi.Truncate(ansi.Strip(item.Title), rightWidth, "…")),
+				styles.PanelHint().Render(ansi.Truncate(messages+" · "+sessionRecency(item.UpdatedAt, time.Now()), rightWidth, "…")),
+				"",
+			}
+			for _, wrapped := range strings.Split(ansi.Wrap(preview, rightWidth, ""), "\n") {
 				right = append(right, dialogBody().Render(wrapped))
 			}
+			// The actions read as buttons under the preview.
+			chip := styles.BaseStyle().Background(t.BorderDim()).Foreground(styles.ReadableForeground(t.Text(), t.BorderDim()))
+			open := styles.BaseStyle().Background(t.Primary()).Foreground(styles.ReadableForeground(t.Background(), t.Primary())).Bold(true)
+			right = append(right, "", open.Render(config.Text(" Abrir ", " Open "))+dialogBody().Render(" ")+
+				chip.Render(config.Text(" Renomear ^R ", " Rename ^R "))+dialogBody().Render(" ")+
+				chip.Render(config.Text(" Exportar ^E ", " Export ^E "))+dialogBody().Render(" ")+
+				chip.Render(config.Text(" Arquivar ^A ", " Archive ^A ")))
 			rows = besideColumns(rows, right, listWidth)
 		} else {
 			rows = append(rows, line(""), line(preview))
@@ -197,7 +214,11 @@ func (s *sessionDialogCmp) View() string {
 		default:
 			meta = fmt.Sprintf(config.Text("%d conversas", "%d conversations"), n)
 		}
-		rows = dialogFooter(rows, width, s.height, dialogHint(config.Text("Ctrl+R renomear · Ctrl+A arquivar · Ctrl+E exportar · Ctrl+H arquivadas", "Ctrl+R rename · Ctrl+A archive · Ctrl+E export · Ctrl+H archived"), width))
+		if listWidth > 0 {
+			hint = config.Text("↑↓ navegar · Enter abrir · Ctrl+H arquivadas · Esc fechar", "↑↓ navigate · Enter open · Ctrl+H archived · Esc close")
+		} else {
+			rows = dialogFooter(rows, width, s.height, dialogHint(config.Text("Ctrl+R renomear · Ctrl+A arquivar · Ctrl+E exportar · Ctrl+H arquivadas", "Ctrl+R rename · Ctrl+A archive · Ctrl+E export · Ctrl+H archived"), width))
+		}
 	}
 	return styles.Frame(strings.Join(rows, "\n"), width, 2, 1, config.Text("Conversas", "Conversations"), meta, hint)
 }
@@ -388,13 +409,15 @@ func viewSOffset(s *sessionDialogCmp, width int, t theme.Theme, base *lipgloss.S
 		}
 		item := s.filtered[i]
 		label := ansi.Strip(item.Title)
-		if i == s.selectedIdx {
-			label = "› " + label
+		if item.ID == s.selectedSessionID {
+			label = "● " + label // the conversation open now
 		} else {
 			label = "  " + label
 		}
-		if item.ID == s.selectedSessionID {
-			label = "● " + label
+		if i == s.selectedIdx {
+			label = "▌ " + label
+		} else {
+			label = "  " + label
 		}
 		if s.archived[item.ID] {
 			label += config.Text(" · arquivada", " · archived")

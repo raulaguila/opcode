@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -30,14 +31,18 @@ func (m *providerDialogCmp) navOffset() int {
 	return 0
 }
 
+// settingsSections are the nav rows: connections, the preference categories
+// and integrations (its own dialog).
+var settingsCategories = []string{"", "interface", "execution", "shortcuts"}
+
 func settingsSections() []string {
-	return []string{config.Text("Conexões", "Connections"), config.Text("Preferências", "Preferences"), config.Text("Integrações", "Integrations")}
+	return []string{config.Text("Conexões", "Connections"), config.Text("Interface", "Interface"), config.Text("Trabalho", "Work"), config.Text("Atalhos", "Shortcuts"), config.Text("Integrações", "Integrations")}
 }
 
 func (m *providerDialogCmp) navRows() []string {
 	current := 0
 	if m.screen == "settings" || m.screen == "effective" {
-		current = 1
+		current = max(1, slices.Index(settingsCategories, m.category))
 	}
 	var rows []string
 	for i, section := range settingsSections() {
@@ -71,14 +76,19 @@ func (m *providerDialogCmp) navClick(msg tea.Msg) (tea.Cmd, bool) {
 	if row < 0 || row >= len(settingsSections()) {
 		return nil, true
 	}
-	if m.screen != "list" {
+	switch {
+	case row >= 1 && row < len(settingsCategories):
+		var cmd tea.Cmd
+		if m.screen == "list" {
+			_, cmd = m.Update(tea.KeyPressMsg{Text: "p"})
+		}
+		m.category, m.selected = settingsCategories[row], 0
+		return cmd, true
+	case m.screen != "list":
+		m.category = ""
 		m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	}
-	switch row {
-	case 1:
-		_, cmd := m.Update(tea.KeyPressMsg{Text: "p"})
-		return cmd, true
-	case 2:
+	if row == len(settingsCategories) {
 		_, cmd := m.Update(tea.KeyPressMsg{Text: "i"})
 		return cmd, true
 	}

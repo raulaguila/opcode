@@ -28,10 +28,10 @@ func TestPTYClearDraftRequiresEmptyComposerInsteadOfDraftMarker(t *testing.T) {
 }
 
 func TestPTYCancelConnectionRequiresClosedConfirmation(t *testing.T) {
-	list := "Connections and preferences\nNavigation fixture"
+	list := "╭─ Settings\nNavigation fixture"
 	require.False(t, testLiveOllamaPTYUICancelPreservesConnection(list+"\nDelete connection?\n[Cancel] [Delete]"))
 	require.True(t, testLiveOllamaPTYUICancelPreservesConnection(list))
-	require.False(t, testLiveOllamaPTYUICancelPreservesConnection("Connections and preferences"))
+	require.False(t, testLiveOllamaPTYUICancelPreservesConnection("╭─ Settings"))
 }
 
 func TestPTYSteeredFinalRequiresPersistedOrderAndIdleUI(t *testing.T) {

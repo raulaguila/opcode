@@ -104,10 +104,10 @@ func TestControlsHaveOneLanguage(t *testing.T) {
 		m.advanced = true
 		view := ansi.Strip(m.View())
 		if lang == "pt" {
-			require.Contains(t, view, "Configurar provedor")
-			require.NotContains(t, view, "Configure provider")
+			require.Contains(t, view, "Nova conexão")
+			require.NotContains(t, view, "New connection")
 		} else {
-			require.Contains(t, view, "Configure provider")
+			require.Contains(t, view, "New connection")
 		}
 		require.False(t, strings.Contains(view, "Disabled (true/false)"))
 	}

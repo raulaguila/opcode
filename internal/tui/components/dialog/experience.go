@@ -2,6 +2,8 @@ package dialog
 
 import (
 	"fmt"
+	"os"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -11,7 +13,6 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 )
 
@@ -20,17 +21,22 @@ func (m *providerDialogCmp) settings() tea.Cmd {
 	m.screen = "settings"
 	m.selected = 0
 	m.settingsFilter = newDialogInput()
-	m.settingsFilter.Prompt = config.Text("Buscar: ", "Search: ")
+	m.settingsFilter.Prompt = "⌕ "
+	m.settingsFilter.Placeholder = config.Text("Buscar preferência", "Search preferences")
 	m.settingsFilter.CharLimit = 100
 	m.settingsFilter.Focus()
-	m.note = config.Text("Enter edita · Ctrl+A avançadas · Ctrl+E origens · Esc volta", "Enter edits · Ctrl+A advanced · Ctrl+E origins · Esc back")
+	m.note = config.Text("↑↓ preferência · Enter edita · Tab seção · Ctrl+E origens · Esc volta", "↑↓ preference · Enter edits · Tab section · Ctrl+E origins · Esc back")
 	return textinput.Blink
 }
 func (m *providerDialogCmp) filteredSettings() []config.Setting {
 	result := []config.Setting{}
 	q := strings.ToLower(strings.TrimSpace(m.settingsFilter.Value()))
 	for _, s := range config.UserSettings {
-		if s.Advanced && !m.advanced {
+		// A section of the side nav narrows the list to its categories.
+		if m.category != "" && s.Category != m.category && (m.category != "interface" || s.Category != "sessions") {
+			continue
+		}
+		if s.Advanced && !m.advanced && m.category != "shortcuts" {
 			continue
 		}
 		if q == "" || strings.Contains(strings.ToLower(s.Path+" "+s.Label+" "+s.Category+" "+s.Help), q) {
@@ -94,14 +100,20 @@ func (m *providerDialogCmp) experienceView() string {
 		v := config.EffectiveSetting(m.settingPath)
 		lines = append(lines, line(config.Text("Origem: ", "Origin: ")+localizedOrigin(v.Origin)), line(localizedSettingLabel(m.labels[0])), line(choiceView(m.fields[0], settingOptions(m.settingPath))))
 	}
-	title = dialogBody().Foreground(theme.CurrentTheme().Primary()).Bold(true).Render(title)
-	lines = append([]string{line(title)}, lines...)
-	note := line(m.note)
-	if m.screen == "presets" || m.screen == "settings" || m.screen == "effective" {
-		note = dialogHint(m.note, width)
+	// Title and legend live in the frame's borders.
+	if m.screen == "settings" && m.navWidth() > 0 {
+		title = config.Text("Configurações", "Settings")
 	}
-	lines = dialogFooter(lines, width, m.height, note)
-	return styles.Panel().Padding(1, 2).Border(lipgloss.RoundedBorder()).BorderForeground(theme.CurrentTheme().TextMuted()).Render(lipgloss.JoinVertical(lipgloss.Left, m.withNav(lines)...))
+	meta := ""
+	if m.screen == "settings" || m.screen == "effective" {
+		meta = settingsFilePath()
+	}
+	hint := m.note
+	if m.screen == "setting" {
+		hint = ""
+		lines = append(lines, line(m.note))
+	}
+	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, m.withNav(lines)...), width+m.navOffset(), 2, 1, title, meta, interfaceCopy(hint))
 }
 
 func localizedSettingLabel(s string) string {
@@ -246,6 +258,13 @@ func experienceUpdateTeaKeyMsg(m *providerDialogCmp, msg tea.Msg) (extractedResu
 	}
 	list := m.filteredSettings()
 	switch key.String() {
+	case "tab":
+		if m.screen == "settings" {
+			order := []string{"interface", "execution", "shortcuts"}
+			m.category = order[(slices.Index(order, m.category)+1)%len(order)]
+			m.selected = 0
+			return nil, true, true
+		}
 	case "ctrl+a":
 		m.advanced = !m.advanced
 		m.selected = 0
@@ -346,7 +365,7 @@ func experienceViewProviderDialogCmpSettingsSettings(m *providerDialogCmp, line 
 		}
 		m.selected = min(m.selected, max(0, len(list)-1))
 		start := max(0, m.selected-rows+1)
-		if len(list) > 0 {
+		if len(list) > 0 && m.category == "" {
 			(*lines) = append((*lines), line(localizedCategory(list[m.selected].Category)))
 		}
 		experienceViewProviderDialogCmpSettingsSettingsStart(m, line, lines, rows, list, effective, start)
@@ -367,16 +386,17 @@ func experienceViewProviderDialogCmpSettingsSettings(m *providerDialogCmp, line 
 }
 
 func experienceUpdateTeaMouseMsgMouseXContentWidth(m *providerDialogCmp, mouse tea.MouseMsg) (extractedResult0 tea.Cmd, extractedResult1 bool, extractedResult2 bool, handled bool) {
-	if x := mouse.Mouse().X - m.navOffset(); leftClick(mouse) && mouse.Mouse().Y >= 4 && x >= 3 && x < m.contentWidth()+3 {
+	if x := mouse.Mouse().X - m.navOffset(); leftClick(mouse) && mouse.Mouse().Y >= 3 && x >= 3 && x < m.contentWidth()+3 {
 		if m.screen == "setting" {
 			return nil, true, true, true
 		}
-		if m.screen == "presets" && mouse.Mouse().Y-4 >= len(config.ProviderPresets) {
+		// Rows start under the frame border, padding and the intro/search line.
+		if m.screen == "presets" && mouse.Mouse().Y-3 >= len(config.ProviderPresets) {
 			return nil, true, true, true
 		}
-		offset := 4
-		if m.screen == "settings" {
-			offset = 5
+		offset := 3
+		if m.screen == "settings" && m.category == "" {
+			offset = 4
 		}
 		if mouse.Mouse().Y < offset {
 			return nil, true, true, true
@@ -427,6 +447,27 @@ func experienceViewProviderDialogCmpSettingsSettingsStart(m *providerDialogCmp, 
 		if i == m.selected {
 			mark = "› "
 		}
-		(*lines) = append((*lines), line(mark+localizedSettingLabel(s.Label)+" = "+localizedSettingValue(s.Path, v.Value)))
+		// Name on the left, the current value on the right.
+		name, value := mark+localizedSettingLabel(s.Label), localizedSettingValue(s.Path, v.Value)
+		width := m.contentWidth()
+		name = ansi.Truncate(name, max(1, width-ansi.StringWidth(value)-2), "…")
+		row := name + strings.Repeat(" ", max(2, width-ansi.StringWidth(name)-ansi.StringWidth(value))) + value
+		if i == m.selected {
+			(*lines) = append((*lines), styles.SelectedRow().Bold(true).Width(width).Render(row))
+		} else {
+			(*lines) = append((*lines), line(row))
+		}
 	}
+	if m.selected < len(list) && list[m.selected].Help != "" {
+		(*lines) = append((*lines), dialogHint(list[m.selected].Help, m.contentWidth()))
+	}
+}
+
+// settingsFilePath is the global configuration file, home-relative.
+func settingsFilePath() string {
+	path, _ := config.Paths(config.WorkingDirectory())
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home+string(os.PathSeparator)) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
 }

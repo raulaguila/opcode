@@ -87,6 +87,7 @@ type providerRow struct {
 }
 type providerDialogCmp struct {
 	baseline                       []string
+	category                       string // the preferences section shown; "" lists all
 	resumeDraft                    func()
 	allowSave                      func() error
 	rows                           []providerRow
@@ -361,9 +362,12 @@ func (m *providerDialogCmp) View() string {
 	width := m.contentWidth()
 	base := dialogBody().Width(width)
 	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), width, "…")) }
-	title := "Connections and preferences"
+	title := "Settings"
 	if m.screen == "provider" {
 		title = "Configure provider"
+		if m.originalID == "" {
+			title = "New connection"
+		}
 	}
 	if m.screen == "preferences" {
 		title = "Preferences"
@@ -391,7 +395,19 @@ func (m *providerDialogCmp) View() string {
 		lines = append(lines, line(config.Text("TLS sem validação: certificado e identidade não verificados.", "Insecure TLS: certificate and server identity are not verified.")))
 	}
 	lines = append(lines, m.noteLines(note)...)
-	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, m.withNav(lines)...), width+m.navOffset(), 2, 1, interfaceCopy(title), "", "")
+	meta, hint := "", ""
+	switch {
+	case m.screen == "list":
+		meta = settingsFilePath()
+		if m.navWidth() > 0 {
+			// Wide: the actions read as the frame's legend.
+			primary, secondary := m.providerListActions()
+			hint = strings.Join(append(primary, secondary...), " · ")
+		}
+	case m.screen == "provider" && m.originalID == "":
+		meta = m.fields[providerNameField].Value()
+	}
+	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, m.withNav(lines)...), width+m.navOffset(), 2, 1, interfaceCopy(title), meta, interfaceCopy(hint))
 }
 func (m *providerDialogCmp) BindingKeys() []key.Binding {
 	return []key.Binding{key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", config.Text("salvar", "save"))), key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("ctrl+t", config.Text("consultar catálogo", "query catalog"))), key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", config.Text("voltar", "back")))}

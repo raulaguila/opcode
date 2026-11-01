@@ -100,7 +100,7 @@ func TestPTYTranscriptSearchAndKeyboardSelection(t *testing.T) {
 	h.send("\x10")
 	h.wait("current connection editor", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Configure provider") })
 	h.send("\x1b")
-	h.wait("connection list after editor", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Connections and preferences") })
+	h.wait("connection list after editor", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "╭─ Settings") })
 	h.send("\x1b")
 	h.wait("same catalog and search after connection back", 10*time.Second, func(frame string) bool {
 		return strings.Contains(frame, "Choose model") && strings.Contains(frame, "fixture") && strings.Contains(frame, draft)

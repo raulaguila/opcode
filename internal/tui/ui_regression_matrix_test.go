@@ -291,7 +291,7 @@ func testRoutedModalRegressionMatrixStructStateState(size *[2]int, t *testing.T)
 				require.False(t, a.showHelp)
 			case "connections":
 				a, _ = matrixClick(t, a, "[Preferences]")
-				require.Contains(t, ansi.Strip(a.View().Content), "Preferences")
+				require.Regexp(t, `Preferences|› Interface`, ansi.Strip(a.View().Content), "the preferences section opens")
 				u, _ = a.Update(tea.KeyPressMsg{Code: tea.KeyEsc, Mod: 0})
 				a = u.(appModel)
 				u, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEsc, Mod: 0})

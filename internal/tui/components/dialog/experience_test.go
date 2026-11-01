@@ -85,7 +85,7 @@ func TestPreferencesAndPermissionControlsUseSelectedLocale(t *testing.T) {
 	require.Contains(t, m.View(), "Preferências")
 	require.NotContains(t, m.View(), "Notifications")
 	m.edit(nil)
-	require.Contains(t, m.View(), "Configurar provedor")
+	require.Contains(t, m.View(), "Nova conexão")
 	require.Contains(t, m.View(), "URL da API")
 	require.NotContains(t, m.View(), "ID da conexão")
 	m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})

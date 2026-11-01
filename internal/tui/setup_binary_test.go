@@ -107,11 +107,11 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 		require.Eventually(t, func() bool { return !strings.Contains(snapshot(), title) }, 5*time.Second, 20*time.Millisecond)
 		wait("/ commands")
 	}
-	wait("Connections and preferences")
+	wait("╭─ Settings")
 	send("n")
 	wait("Add connection")
 	send("\r")
-	wait("Configure provider")
+	wait("New connection")
 	send("\x13")
 	wait("Setup 2/3")
 	wait(" catalog · ")

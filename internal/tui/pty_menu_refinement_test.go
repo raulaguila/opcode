@@ -139,10 +139,10 @@ func assertPickerPTYSettingsClick(t *testing.T, h *ptyUIHarness, size [2]int, dr
 		return strings.Contains(frame, "Commands") && strings.Contains(frame, "/ settings") && strings.Contains(frame, "1 of 1")
 	})
 	h.clickLabel("Settings")
-	h.wait("settings opened by actual mouse", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Connections and preferences") })
+	h.wait("settings opened by actual mouse", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "╭─ Settings") })
 	h.send("\x1b")
 	h.wait("same unsent draft after settings", 5*time.Second, func(frame string) bool {
-		return !strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, draft)
+		return !strings.Contains(frame, "╭─ Settings") && strings.Contains(frame, draft)
 	})
 	h.assertComposer()
 }

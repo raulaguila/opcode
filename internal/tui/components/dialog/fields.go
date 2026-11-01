@@ -83,7 +83,7 @@ func choiceRadios(field textinput.Model, options []string, width int) string {
 		if option == field.Value() {
 			mark = "● "
 		}
-		parts = append(parts, mark+choiceLabel(option))
+		parts = append(parts, mark+radioLabel(option))
 	}
 	if line := strings.Join(parts, "   "); ansi.StringWidth(line) <= width {
 		return line
@@ -115,4 +115,23 @@ func fieldLabel(label string) string {
 		label = label[:p]
 	}
 	return interfaceCopy(label)
+}
+
+// radioLabel is the short form used when every option shows at once.
+func radioLabel(v string) string {
+	switch v {
+	case "none":
+		return config.Text("Nenhuma", "None")
+	case "api_key":
+		return config.Text("Chave da API", "API key")
+	case "environment":
+		return config.Text("Variável", "Variable")
+	case "vault":
+		return config.Text("Cofre", "Vault")
+	case "true":
+		return config.Text("Ativa", "On")
+	case "false":
+		return config.Text("Desativada", "Off")
+	}
+	return choiceLabel(v)
 }

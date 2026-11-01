@@ -1075,7 +1075,7 @@ func testLiveOllamaPTYUIModelSelectorDismissed(frame string) bool {
 }
 
 func testLiveOllamaPTYUIConnectionListBeforeDeletion(frame string) bool {
-	return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture")
+	return strings.Contains(frame, "╭─ Settings") && strings.Contains(frame, "Navigation fixture")
 }
 
 func testLiveOllamaPTYUIDeleteConnectionConfirmation(frame string) bool {
@@ -1083,15 +1083,15 @@ func testLiveOllamaPTYUIDeleteConnectionConfirmation(frame string) bool {
 }
 
 func testLiveOllamaPTYUICancelPreservesConnection(frame string) bool {
-	return strings.Contains(frame, "Connections and preferences") && strings.Contains(frame, "Navigation fixture") && !strings.Contains(frame, "Delete connection?")
+	return strings.Contains(frame, "╭─ Settings") && strings.Contains(frame, "Navigation fixture") && !strings.Contains(frame, "Delete connection?")
 }
 
 func testLiveOllamaPTYUIDeletedConnectionDisappears(frame string) bool {
-	return strings.Contains(frame, "Connections and preferences") && !strings.Contains(frame, "Navigation fixture")
+	return strings.Contains(frame, "╭─ Settings") && !strings.Contains(frame, "Navigation fixture")
 }
 
 func testLiveOllamaPTYUIConnectionListDismissed(frame string) bool {
-	return !strings.Contains(frame, "Connections and preferences") && ptyUIHasFooter(frame)
+	return !strings.Contains(frame, "╭─ Settings") && ptyUIHasFooter(frame)
 }
 
 func testLiveOllamaPTYUIModeChooser(frame string) bool {

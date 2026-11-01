@@ -38,6 +38,10 @@ func (m *providerDialogCmp) providerBodyLines(t theme.Theme, width int, base lip
 			style.Render(ansi.Truncate(selectionMark(i == m.selected)+dot+m.providerRowLabel(m.rows[i]), width, "…")),
 			detail.Render(ansi.Truncate("    "+m.providerRowDetail(m.rows[i]), width, "…")))
 	}
+	if m.navWidth() > 0 {
+		// Wide: sections are in the nav and actions in the frame's legend.
+		return append(lines, styles.PanelHint().Render(config.Text("  + Nova conexão · N · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "  + New connection · N · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…")))
+	}
 	lines = append(lines, styles.PanelDivider(width))
 	primary, secondary := m.providerListActions()
 	for _, action := range primary {

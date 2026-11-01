@@ -97,11 +97,11 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 			}
 		}
 	}
-	wait("Connections and preferences")
+	wait("Settings")
 	program.Send(testTextKey(string([]rune("n")), 0))
 	wait("Add connection")
 	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
-	wait("Configure provider")
+	wait("New connection")
 	// Basic setup starts with Name; the next visible field is the endpoint.
 	program.Send(tea.KeyPressMsg{Code: tea.KeyTab, Mod: 0})
 	program.Send(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})

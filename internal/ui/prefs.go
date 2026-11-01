@@ -345,11 +345,11 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ainda.", "No connections yet.")), "")
 	}
 	for i, c := range list {
-		box := Box{Width: width, PadX: 1, Accent: P.CardEdge, Background: P.Card, Outer: P.Surface}
+		edge, bg := P.CardEdge, P.Surface
 		if i == p.selected {
-			box.Accent, box.Background = P.CardSelectedEdge, P.CardSelected
+			edge, bg = P.CardSelectedEdge, P.CardSelected
 		}
-		bg, inner := box.Background, box.Inner()
+		inner := width - 4 // thin edges and a cell of air on each side
 		icon, iconColor, state, stateColor := "●", P.Success, "", P.Muted
 		switch {
 		case c.raw.Disabled:
@@ -361,10 +361,12 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 		}
 		name := on(bg, P.Strong).Bold(true).Render(c.name)
 		if c.raw.Disabled {
-			box.Dashed = true
 			name = on(bg, P.Muted).Render(c.name)
 		}
-		body := []string{Spread(on(bg, iconColor).Render(icon+"  ")+name, on(bg, stateColor).Render(state), inner, bg)}
+		pad := on(bg, bg).Render(" ")
+		indent := on(bg, bg).Render("    ")
+		body := []string{pad + Spread(on(bg, iconColor).Render(icon)+on(bg, bg).Render("   ")+name, on(bg, stateColor).Render(state), inner, bg)}
+		deleting := i == p.selected && p.deleting
 		if !c.raw.Disabled {
 			detail := on(bg, P.Muted).Render(connectionDetail(c))
 			if probe, ok := p.probes[c.provider]; ok {
@@ -374,30 +376,28 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 				}
 				detail += on(bg, P.Muted).Render(" · ") + on(bg, color).Render(probe.text)
 			}
-			gap := on(bg, bg).Render(" ")
-			button := func(label string) string { return on(P.Segment, P.Strong).Render(" " + label + " ") }
-			buttons := button(textFor("Editar", "Edit")) + gap + button(textFor("Testar", "Test")) + gap + button(textFor("Modelos", "Models"))
+			body = append(body, pad+indent+detail)
+			labels := []string{textFor("Editar", "Edit"), textFor("Testar", "Test"), textFor("Modelos", "Models")}
 			if keyMissing(c) {
-				buttons = button(textFor("Editar", "Edit")) + gap + button(textFor("Desativar", "Disable"))
+				labels = []string{textFor("Editar", "Edit"), textFor("Desativar", "Disable")}
 			}
-			if i == p.selected && p.deleting {
-				buttons = on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels"))
+			if deleting {
+				body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
+			} else {
+				for _, row := range OutlineButtons(labels, P.Border, P.Strong, bg) {
+					body = append(body, pad+on(bg, bg).Render("   ")+row)
+				}
 			}
-			body = append(body, on(bg, bg).Render("   ")+detail, on(bg, bg).Render("   ")+buttons)
-		} else if i == p.selected && p.deleting {
-			body = append(body, on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
+		} else if deleting {
+			body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
 		}
-		for j := range body {
-			body[j] = Line(body[j], inner, bg)
-		}
-		rows = append(rows, strings.Split(box.Render(strings.Join(body, "\n")), "\n")...)
-		rows = append(rows, "")
+		rows = append(rows, ThinBox(body, width, edge, bg, P.Surface, c.raw.Disabled)...)
 	}
 	if p.status != "" && p.failed {
 		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(p.status, width, "…")))
 	}
-	add := Box{Width: width, PadX: 1, Accent: P.CardSelectedEdge, Background: P.Surface, Dashed: true}
-	return append(rows, strings.Split(add.Render(on(P.Surface, P.Ask).Render(textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…"))), "\n")...)
+	offer := on(P.Surface, P.Ask).Render(" " + textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…"))
+	return append(rows, ThinBox([]string{offer}, width, P.CardSelectedEdge, P.Surface, P.Surface, true)...)
 }
 
 // integrationWarnings counts integrations that fail validation or were

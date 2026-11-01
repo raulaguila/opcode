@@ -153,3 +153,41 @@ func KeyRow(legend string, width int, bg color.Color) []string {
 func Chip(text string, fg, bg color.Color) string {
 	return on(P.Raised, fg).Render(" "+text+" ") + on(bg, bg).Render(" ")
 }
+
+// ThinBox frames rows with eighth-block lines, the nearest a terminal gets
+// to a one-pixel border: the edges hug the fill instead of taking a cell
+// of their own. Corners stay open, which reads as slightly rounded. A
+// dashed frame breaks its top and bottom lines.
+func ThinBox(body []string, width int, edge, fill, outer color.Color, dashed bool) []string {
+	inner := max(1, width-2)
+	line := func(mark string) string {
+		run := strings.Repeat(mark, inner)
+		if dashed {
+			run = strings.Repeat(mark+" ", inner/2) + strings.Repeat(mark, inner%2)
+		}
+		return on(outer, edge).Render(" " + run + " ")
+	}
+	rows := []string{line("▁")}
+	for _, row := range body {
+		rows = append(rows, on(outer, edge).Render("▕")+Line(row, inner, fill)+on(outer, edge).Render("▏"))
+	}
+	return append(rows, line("▔"))
+}
+
+// OutlineButtons draws buttons with thin outlines over three rows: a line
+// above, the labels between side edges, a line below.
+func OutlineButtons(labels []string, edge, text, bg color.Color) [3]string {
+	var out [3]string
+	for i, label := range labels {
+		if i > 0 {
+			for r := range out {
+				out[r] += on(bg, bg).Render(" ")
+			}
+		}
+		span := ansi.StringWidth(label) + 2
+		out[0] += on(bg, edge).Render(" " + strings.Repeat("▁", span) + " ")
+		out[1] += on(bg, edge).Render("▕") + on(bg, text).Render(" "+label+" ") + on(bg, edge).Render("▏")
+		out[2] += on(bg, edge).Render(" " + strings.Repeat("▔", span) + " ")
+	}
+	return out
+}

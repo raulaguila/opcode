@@ -59,3 +59,15 @@ func TestDashedBoxKeepsWidthAndCorners(t *testing.T) {
 		require.Equal(t, 12, ansi.StringWidth(line))
 	}
 }
+
+func TestThinBoxAndOutlineButtonsKeepWidths(t *testing.T) {
+	box := ThinBox([]string{"x"}, 10, P.Border, P.Card, P.Surface, false)
+	require.Equal(t, " ▁▁▁▁▁▁▁▁ ", ansi.Strip(box[0]))
+	require.Equal(t, "▕x       ▏", ansi.Strip(box[1]))
+	require.Equal(t, " ▔▔▔▔▔▔▔▔ ", ansi.Strip(box[2]))
+	dashed := ThinBox([]string{"x"}, 10, P.Border, P.Card, P.Surface, true)
+	require.Equal(t, 10, ansi.StringWidth(ansi.Strip(dashed[0])))
+	buttons := OutlineButtons([]string{"Editar", "Testar"}, P.Border, P.Text, P.Card)
+	require.Equal(t, "▕ Editar ▏ ▕ Testar ▏", ansi.Strip(buttons[1]))
+	require.Equal(t, ansi.StringWidth(ansi.Strip(buttons[1])), ansi.StringWidth(ansi.Strip(buttons[0])))
+}

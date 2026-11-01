@@ -459,7 +459,6 @@ func modelRowCapabilities(model models.Model, width int) string {
 // besideDetails joins the list rows with the selected model's details in a
 // right-hand column, separated by a rule.
 func (m *modelDialogCmp) besideDetails(left []string, leftWidth, rightWidth int) []string {
-	t := theme.CurrentTheme()
 	var right []string
 	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
 		right = append(right, styles.PanelTitle().Render(ansi.Truncate(m.modelLabel(m.filtered[m.selectedIdx]), rightWidth, "…")), "")
@@ -469,8 +468,13 @@ func (m *modelDialogCmp) besideDetails(left []string, leftWidth, rightWidth int)
 			right = append(right, dialogBody().Render(wrapped))
 		}
 	}
+	return besideColumns(left, right, leftWidth)
+}
+
+// besideColumns joins two row lists side by side with a vertical rule.
+func besideColumns(left, right []string, leftWidth int) []string {
 	fill := dialogBody()
-	rule := dialogBody().Foreground(t.BorderNormal()).Render(" │ ")
+	rule := dialogBody().Foreground(theme.CurrentTheme().BorderNormal()).Render(" │ ")
 	rows := make([]string, 0, max(len(left), len(right)))
 	for i := range max(len(left), len(right)) {
 		l, r := "", ""

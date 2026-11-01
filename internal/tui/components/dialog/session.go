@@ -129,25 +129,50 @@ func (s *sessionDialogCmp) filter() {
 		s.offset = s.selectedIdx - s.rows() + 1
 	}
 }
+// sessionListWidth is the list column when the preview sits beside it.
+func (s *sessionDialogCmp) sessionListWidth() int {
+	if s.width >= 110 {
+		return 40
+	}
+	return 0
+}
+
 func (s *sessionDialogCmp) View() string {
 	width := min(74, max(1, s.width-8))
 	if s.width == 0 {
 		width = 60
 	}
+	listWidth := s.sessionListWidth()
+	if listWidth > 0 {
+		width = min(108, s.width-8)
+	}
+	columnWidth := width
+	if listWidth > 0 {
+		columnWidth = listWidth
+	}
 	t := theme.CurrentTheme()
-	base := dialogBody().Width(width)
-	line := func(text string) string { return base.Render(ansi.Truncate(text, width, "…")) }
-	rows := []string{line(config.Text("Buscar: ", "Search: ") + s.query)}
+	base := dialogBody().Width(columnWidth)
+	line := func(text string) string { return base.Render(ansi.Truncate(text, columnWidth, "…")) }
+	rows := []string{line("⌕ " + s.query)}
 	if len(s.filtered) == 0 {
 		rows = append(rows, line(config.Text("Nenhuma conversa encontrada", "No conversations found")))
 	}
-	viewSOffset(s, width, t, &base, &rows)
-	if len(s.filtered) > 0 && !s.editing && (s.height == 0 || s.height >= 18) {
+	viewSOffset(s, columnWidth, t, &base, &rows)
+	if len(s.filtered) > 0 && !s.editing && (s.height == 0 || s.height >= 18 || listWidth > 0) {
 		preview := config.Text("Carregando prévia…", "Loading preview…")
 		if s.previewID == s.filtered[s.selectedIdx].ID {
 			preview = s.preview
 		}
-		rows = append(rows, line(""), line(preview))
+		if listWidth > 0 {
+			// The preview reads beside the list, with the conversation's title.
+			right := []string{styles.PanelTitle().Render(ansi.Truncate(ansi.Strip(s.filtered[s.selectedIdx].Title), width-listWidth-3, "…")), ""}
+			for _, wrapped := range strings.Split(ansi.Wrap(preview, max(1, width-listWidth-3), ""), "\n") {
+				right = append(right, dialogBody().Render(wrapped))
+			}
+			rows = besideColumns(rows, right, listWidth)
+		} else {
+			rows = append(rows, line(""), line(preview))
+		}
 	}
 	meta := ""
 	hint := config.Text("↑↓ navegar · Enter abrir · Esc fechar", "↑↓ navigate · Enter open · Esc close")
@@ -354,6 +379,9 @@ func updateCaseTeaMouseMsg(s *sessionDialogCmp, msg tea.MouseMsg) (extractedResu
 		s.move(1)
 	}
 	row := msg.Mouse().Y - 3
+	if listWidth := s.sessionListWidth(); listWidth > 0 && msg.Mouse().X >= 3+listWidth {
+		row = -1 // the preview column is not a list row
+	}
 	if leftClick(msg) && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
 		s.selectedIdx = s.offset + row
 		return s, s.requestPreview(), true

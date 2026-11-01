@@ -1,6 +1,9 @@
 package dialog
 
 import (
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -68,4 +71,20 @@ func TestSessionRecencyPreviewAndCompactLayout(t *testing.T) {
 	require.NotContains(t, d.View(), "STALE")
 	d.Update(SessionPreviewLoadedMsg{ID: "older", Text: "Older preview"})
 	require.Contains(t, d.View(), "Older preview")
+}
+
+func TestWideSessionDialogShowsPreviewBesideList(t *testing.T) {
+	d := NewSessionDialogCmp().(*sessionDialogCmp)
+	d.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
+	d.SetSessions([]session.Session{{ID: "one", Title: "Remove task"}, {ID: "two", Title: "Overview"}})
+	d.previewID, d.preview = "one", "Store.Remove created; tests pending."
+	view := ansi.Strip(d.View())
+	require.Contains(t, view, " │ ")
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "Store.Remove created") {
+			require.Greater(t, strings.Index(line, "Store.Remove"), strings.Index(line, "│ "), "preview sits right of the list")
+		}
+	}
+	d.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 3 + 40 + 5, Y: 4})
+	require.Equal(t, 0, d.selectedIdx, "the preview column is not a list row")
 }

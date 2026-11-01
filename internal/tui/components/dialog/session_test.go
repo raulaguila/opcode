@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -43,15 +44,21 @@ func TestSessionSearchRenameArchiveAndExportUseSelectedSession(t *testing.T) {
 }
 func TestSessionMouseSelectionUsesVisibleOffset(t *testing.T) {
 	d := NewSessionDialogCmp().(*sessionDialogCmp)
-	d.Update(tea.WindowSizeMsg{Width: 80, Height: 9})
-	d.SetSessions([]session.Session{{ID: "one"}, {ID: "two"}, {ID: "three"}})
-	d.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
-	d.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
-	require.Equal(t, 1, d.offset)
-	_, cmd := d.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: 3})
-	require.Equal(t, "two", cmd().(SessionPreviewRequestMsg).ID)
+	d.Update(tea.WindowSizeMsg{Width: 80, Height: 11})
+	d.SetSessions([]session.Session{{ID: "one"}, {ID: "two"}, {ID: "three"}, {ID: "four"}, {ID: "five"}})
+	for range 4 {
+		d.Update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	}
+	require.Greater(t, d.offset, 0, "the list scrolled")
+	require.Contains(t, d.sessionLayout(), d.selectedIdx, "the selection stays on screen")
+	layout := d.sessionLayout()
+	row := slices.IndexFunc(layout, func(i int) bool { return i >= 0 && i != d.selectedIdx })
+	require.GreaterOrEqual(t, row, 0)
+	want := d.filtered[layout[row]].ID
+	_, cmd := d.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 4, Y: 3 + row})
+	require.Equal(t, want, cmd().(SessionPreviewRequestMsg).ID, "a click picks the row as drawn, past day headings")
 	_, cmd = d.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	require.Equal(t, "two", cmd().(SessionSelectedMsg).Session.ID)
+	require.Equal(t, want, cmd().(SessionSelectedMsg).Session.ID)
 }
 
 func TestSessionRecencyPreviewAndCompactLayout(t *testing.T) {

@@ -106,6 +106,15 @@ func (s *sessionDialogCmp) move(delta int) {
 	if s.selectedIdx >= s.offset+s.rows() {
 		s.offset = s.selectedIdx - s.rows() + 1
 	}
+	s.keepSessionVisible()
+}
+
+// keepSessionVisible scrolls until the selection's row is on screen; day
+// headings take rows the plain offset arithmetic does not count.
+func (s *sessionDialogCmp) keepSessionVisible() {
+	for s.offset < s.selectedIdx && !slices.Contains(s.sessionLayout(), s.selectedIdx) {
+		s.offset++
+	}
 }
 func (s *sessionDialogCmp) filter() {
 	selected := s.selectedSessionID
@@ -128,6 +137,7 @@ func (s *sessionDialogCmp) filter() {
 	if s.selectedIdx >= s.rows() {
 		s.offset = s.selectedIdx - s.rows() + 1
 	}
+	s.keepSessionVisible()
 }
 // sessionListWidth is the list column when the preview sits beside it.
 func (s *sessionDialogCmp) sessionListWidth() int {
@@ -332,8 +342,50 @@ func updateSessionDialogCmpKeyMsgSEditing(s *sessionDialogCmp, msg *tea.KeyPress
 	return extractedResult0, extractedResult1, extractedResult2, false
 }
 
+// sessionDay groups conversations by when they last changed.
+func sessionDay(updated int64, now time.Time) string {
+	if updated <= 0 {
+		return config.Text("SEM DATA", "UNDATED")
+	}
+	y, m, d := now.Date()
+	today := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	switch at := time.Unix(updated, 0); {
+	case !at.Before(today):
+		return config.Text("HOJE", "TODAY")
+	case !at.Before(today.AddDate(0, 0, -1)):
+		return config.Text("ONTEM", "YESTERDAY")
+	case !at.Before(today.AddDate(0, 0, -7)):
+		return config.Text("ESTA SEMANA", "THIS WEEK")
+	}
+	return config.Text("ANTES", "EARLIER")
+}
+
+// sessionLayout maps list rows to conversations; -1 is a day heading, shown
+// while the list is not filtered.
+func (s *sessionDialogCmp) sessionLayout() []int {
+	var layout []int
+	now := time.Now()
+	for i := s.offset; i < len(s.filtered) && len(layout) < s.rows(); i++ {
+		if s.query == "" && (i == s.offset || sessionDay(s.filtered[i-1].UpdatedAt, now) != sessionDay(s.filtered[i].UpdatedAt, now)) {
+			layout = append(layout, -1)
+			if len(layout) >= s.rows() {
+				break
+			}
+		}
+		layout = append(layout, i)
+	}
+	return layout
+}
+
 func viewSOffset(s *sessionDialogCmp, width int, t theme.Theme, base *lipgloss.Style, rows *[]string) {
-	for i := s.offset; i < min(len(s.filtered), s.offset+s.rows()); i++ {
+	layout := s.sessionLayout()
+	for k, i := range layout {
+		if i < 0 {
+			if k+1 < len(layout) {
+				(*rows) = append((*rows), dialogHint(sessionDay(s.filtered[layout[k+1]].UpdatedAt, time.Now()), width))
+			}
+			continue
+		}
 		item := s.filtered[i]
 		label := ansi.Strip(item.Title)
 		if i == s.selectedIdx {
@@ -382,8 +434,9 @@ func updateCaseTeaMouseMsg(s *sessionDialogCmp, msg tea.MouseMsg) (extractedResu
 	if listWidth := s.sessionListWidth(); listWidth > 0 && msg.Mouse().X >= 3+listWidth {
 		row = -1 // the preview column is not a list row
 	}
-	if leftClick(msg) && row >= 0 && row < s.rows() && s.offset+row < len(s.filtered) {
-		s.selectedIdx = s.offset + row
+	layout := s.sessionLayout()
+	if leftClick(msg) && row >= 0 && row < len(layout) && layout[row] >= 0 {
+		s.selectedIdx = layout[row]
 		return s, s.requestPreview(), true
 	}
 	return extractedResult0, extractedResult1, false

@@ -2,6 +2,7 @@ package dialog
 
 import (
 	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 	"unicode"
@@ -16,7 +17,10 @@ import (
 
 // modelGeometry is shared by drawing and mouse hit testing, including compact
 // padding. List coordinates never depend on translated labels or model names.
-type modelGeometry struct{ width, height, padY, contentX, titleY, listY, rows, listWidth int }
+type modelGeometry struct {
+	width, height, padY, contentX, titleY, listY, rows, listWidth int
+	grouped                                                       bool
+}
 
 func (m *modelDialogCmp) geometry() modelGeometry {
 	width := 88
@@ -44,8 +48,19 @@ func (m *modelDialogCmp) geometry() modelGeometry {
 	if m.details && width >= 80 {
 		listWidth, details = width*9/20, 0
 	}
-	overhead := 2 + helpRows + 2 + pad*2 + details
-	return modelGeometry{width: width, height: height, padY: pad, contentX: 3, titleY: 0, listY: 3 + pad, rows: max(1, min(numVisibleModels, height-overhead)), listWidth: listWidth}
+	// Rows above the list: provider tabs, search and a transient note.
+	header, tabsY := 1, -1
+	if m.providerTabs() {
+		tabsY = 1 + pad
+		header++
+	}
+	if m.showNote() {
+		header++
+	}
+	overhead := header + helpRows + 2 + pad*2 + details
+	g := modelGeometry{width: width, height: height, padY: pad, contentX: 3, titleY: tabsY, listY: 1 + pad + header, rows: max(1, min(numVisibleModels, height-overhead)), listWidth: listWidth}
+	g.grouped = m.query == "" && m.hasCloudAndLocal() && len(m.filtered)+2 <= g.rows
+	return g
 }
 
 func (m *modelDialogCmp) activeModelID() models.ModelID {
@@ -59,19 +74,21 @@ func (m *modelDialogCmp) activeModelID() models.ModelID {
 	return ""
 }
 
-func (m *modelDialogCmp) providerLabel() string {
-	if id, ok := strings.CutPrefix(string(m.provider), "profile:"); ok {
+func (m *modelDialogCmp) providerLabel() string { return m.providerName(m.provider) }
+
+func (m *modelDialogCmp) providerName(provider models.ModelProvider) string {
+	if id, ok := strings.CutPrefix(string(provider), "profile:"); ok {
 		p := config.Get().ProviderProfiles[id]
 		if p.Name != "" {
 			return p.Name
 		}
 		return id
 	}
-	switch m.provider {
+	switch provider {
 	case "":
 		return config.Text("Sem provedor", "No provider")
 	case models.ProviderLocal:
-		if config.Get().Providers[m.provider].API == "ollama" {
+		if config.Get().Providers[provider].API == "ollama" {
 			return "Ollama"
 		}
 		for _, model := range m.models {
@@ -89,7 +106,7 @@ func (m *modelDialogCmp) providerLabel() string {
 	case models.ProviderOpenRouter:
 		return "OpenRouter"
 	default:
-		return string(m.provider)
+		return string(provider)
 	}
 }
 
@@ -103,13 +120,14 @@ func (m *modelDialogCmp) modelTitle() string {
 	case config.AgentSummarizer:
 		title = config.Text("Modelo de resumo", "Summary model")
 	}
-	title += " · " + m.providerLabel()
+	if !m.providerTabs() {
+		title += " · " + m.providerLabel()
+	}
+	if m.details && m.width >= 88 {
+		title += config.Text(" · detalhes", " · details")
+	}
 	if m.setup {
 		title = config.Text("Configuração 2/3 · ", "Setup 2/3 · ") + title
-	}
-	if len(m.availableProviders) > 1 {
-		title += fmt.Sprintf(" [%d/%d]", slices.Index(m.availableProviders, m.provider)+1, len(m.availableProviders))
-		title = "‹ " + title + " ›"
 	}
 	return title
 }
@@ -216,15 +234,20 @@ func (m *modelDialogCmp) catalogView() string {
 	base := dialogBody().Width(g.width).MaxWidth(g.width)
 	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), g.width, "…")) }
 	var rows []string
+	if m.providerTabs() {
+		rows = append(rows, m.providerTabsRow(g.width))
+	}
 	label := "⌕ "
 	m.search.SetWidth(max(1, g.width-ansi.StringWidth(label)))
-	m.search.Placeholder = config.Text("Nome ou ID", "Name or ID")
+	m.search.Placeholder = config.Text("Buscar por nome ou ID", "Search by name or ID")
 	rows = append(rows, base.Render(label+m.search.View()))
-	note := m.note
-	if m.loading {
-		note = config.Text("Carregando modelos…", "Loading provider models…")
+	if m.showNote() {
+		note := m.note
+		if m.loading {
+			note = config.Text("Carregando modelos…", "Loading provider models…")
+		}
+		rows = append(rows, dialogHint(note, g.width))
 	}
-	rows = append(rows, dialogHint(note, g.width))
 	active := m.activeModelID()
 	catalogViewScrollOffset(m, &g, t, &base, &rows, active)
 	catalogViewFiltered(m, line, &rows)
@@ -236,16 +259,29 @@ func (m *modelDialogCmp) catalogView() string {
 		rows = m.besideDetails(rows, g.width, full.width-g.width-3)
 	}
 	g.width = full.width
-	// An empty unfiltered list has no position; the title keeps the room.
-	position := ""
-	if m.query != "" {
-		position = config.Text("0 de 0", "0 of 0")
+	// The corner reads like the catalog: provider and chat models of the
+	// catalog, or the result count while searching.
+	position := m.providerLabel()
+	if !m.providerTabs() {
+		position = ""
 	}
-	if len(m.filtered) > 0 {
-		position = fmt.Sprintf(config.Text("%d de %d", "%d of %d"), m.selectedIdx+1, len(m.filtered))
+	counts := ""
+	switch {
+	case len(m.filtered) > g.rows:
+		// A list that scrolls says where the highlight is.
+		counts = fmt.Sprintf(config.Text("%d de %d", "%d of %d"), m.selectedIdx+1, len(m.filtered))
+	case m.query != "" && len(m.filtered) == 1:
+		counts = config.Text("1 resultado", "1 result")
+	case m.query != "":
+		counts = fmt.Sprintf(config.Text("%d resultados", "%d results"), len(m.filtered))
+	case len(m.models) > 0:
+		counts = fmt.Sprintf(config.Text("%d de %d", "%d of %d"), m.chatModelCount(), len(m.models))
 	}
-	if m.query != "" {
-		position += config.Text(" resultados", " results")
+	if counts != "" {
+		if position != "" {
+			position += " · "
+		}
+		position += counts
 	}
 	if m.scrollOffset > 0 {
 		position += " · ↑"
@@ -253,7 +289,7 @@ func (m *modelDialogCmp) catalogView() string {
 	if m.scrollOffset+g.rows < len(m.filtered) {
 		position += " · ↓"
 	}
-	hint := config.Text("Enter escolhe · Tab provedor · Ctrl+P conexão · Ctrl+D detalhes · Esc", "Enter choose · Tab provider · Ctrl+P connection · Ctrl+D details · Esc")
+	hint := config.Text("Enter usar · Tab provedor · Ctrl+D detalhes · Ctrl+P conexão · Esc fechar", "Enter use · Tab provider · Ctrl+D details · Ctrl+P connection · Esc close")
 	if g.width < 48 {
 		hint = config.Text("Enter · Ctrl+D detalhes · Esc", "Enter · Ctrl+D details · Esc")
 	}
@@ -272,13 +308,82 @@ func (m *modelDialogCmp) catalogView() string {
 }
 
 func (m *modelDialogCmp) catalogCounts() string {
+	return fmt.Sprintf(config.Text("%d catálogo · %d conversa", "%d catalog · %d chat"), len(m.models), m.chatModelCount())
+}
+
+func (m *modelDialogCmp) chatModelCount() int {
 	chat := 0
 	for _, model := range m.models {
 		if !model.EmbeddingOnly() {
 			chat++
 		}
 	}
-	return fmt.Sprintf(config.Text("%d catálogo · %d conversa", "%d catalog · %d chat"), len(m.models), chat)
+	return chat
+}
+
+func (m *modelDialogCmp) providerTabs() bool { return len(m.availableProviders) > 1 }
+
+// showNote: the catalog summary now lives in the corner, so the note row only
+// appears for loading and for messages such as errors.
+func (m *modelDialogCmp) showNote() bool {
+	return m.loading || m.note != "" && !strings.HasPrefix(m.note, m.catalogCounts())
+}
+
+// providerTabsRow lists the enabled providers as tabs; Tab moves between them.
+func (m *modelDialogCmp) providerTabsRow(width int) string {
+	t := theme.CurrentTheme()
+	row := ""
+	for _, provider := range m.availableProviders {
+		label := " " + m.providerName(provider) + " "
+		if provider == m.provider {
+			row += styles.SelectedRow().Bold(true).Render(label)
+		} else {
+			row += dialogBody().Foreground(styles.ReadableForeground(t.TextMuted(), t.BackgroundSecondary())).Render(label)
+		}
+		row += dialogBody().Render(" ")
+	}
+	return ansi.Truncate(row, width, "…")
+}
+
+// providerTabAt is the provider whose tab covers column x of the tabs row.
+func (m *modelDialogCmp) providerTabAt(x int) (models.ModelProvider, bool) {
+	start := 0
+	for _, provider := range m.availableProviders {
+		end := start + ansi.StringWidth(m.providerName(provider)) + 2
+		if x >= start && x < end {
+			return provider, true
+		}
+		start = end + 1
+	}
+	return "", false
+}
+
+func isCloudModel(model models.Model) bool {
+	return modelHostingLabel(model) == config.Text("Nuvem", "Cloud")
+}
+
+func (m *modelDialogCmp) hasCloudAndLocal() bool {
+	cloud, local := false, false
+	for _, model := range m.filtered {
+		if isCloudModel(model) {
+			cloud = true
+		} else {
+			local = true
+		}
+	}
+	return cloud && local
+}
+
+// modelRows maps list rows to models; -1 marks a group heading.
+func (m *modelDialogCmp) modelRows(g modelGeometry) []int {
+	var rows []int
+	for i := m.scrollOffset; i < min(len(m.filtered), m.scrollOffset+g.rows) && len(rows) < g.rows; i++ {
+		if g.grouped && (i == m.scrollOffset || isCloudModel(m.filtered[i-1]) != isCloudModel(m.filtered[i])) {
+			rows = append(rows, -1)
+		}
+		rows = append(rows, i)
+	}
+	return rows
 }
 
 func containsModel(list []models.ModelID, id models.ModelID) bool {
@@ -305,7 +410,16 @@ func modelDetailLinesSelectedContextWindow(selected *models.Model, contextNote s
 }
 
 func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme, base *lipgloss.Style, rows *[]string, active models.ModelID) {
-	for i := m.scrollOffset; i < min(len(m.filtered), m.scrollOffset+g.rows); i++ {
+	layout := m.modelRows(*g)
+	for k, i := range layout {
+		if i < 0 {
+			heading := config.Text("LOCAIS", "LOCAL")
+			if k+1 < len(layout) && isCloudModel(m.filtered[layout[k+1]]) {
+				heading = config.Text("NUVEM", "CLOUD")
+			}
+			(*rows) = append((*rows), dialogHint(heading, g.width))
+			continue
+		}
 		model := m.filtered[i]
 		caret, mark := " ", " "
 		if i == m.selectedIdx {
@@ -459,15 +573,50 @@ func modelRowCapabilities(model models.Model, width int) string {
 // besideDetails joins the list rows with the selected model's details in a
 // right-hand column, separated by a rule.
 func (m *modelDialogCmp) besideDetails(left []string, leftWidth, rightWidth int) []string {
+	t := theme.CurrentTheme()
 	var right []string
 	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
-		right = append(right, styles.PanelTitle().Render(ansi.Truncate(m.modelLabel(m.filtered[m.selectedIdx]), rightWidth, "…")), "")
+		model := m.filtered[m.selectedIdx]
+		right = append(right, styles.PanelTitle().Render(ansi.Truncate(m.modelLabel(model), rightWidth, "…")))
+		// Capability tags, as the provider reports them.
+		tag := func(text string, c color.Color) string {
+			return dialogBody().Foreground(styles.ReadableForeground(c, t.BackgroundSecondary())).Render("[" + text + "]")
+		}
+		var tags []string
+		if model.SupportsTools != nil && *model.SupportsTools {
+			tags = append(tags, tag(config.Text("ferramentas", "tools"), t.Success()))
+		}
+		if model.CanReason {
+			tags = append(tags, tag(config.Text("raciocínio", "reasoning"), t.Info()))
+		}
+		if model.SupportsAttachments {
+			tags = append(tags, tag(config.Text("imagens", "images"), t.Accent()))
+		} else {
+			tags = append(tags, tag(config.Text("sem imagens", "no images"), t.TextMuted()))
+		}
+		if hosting := modelHostingLabel(model); hosting != "" {
+			tags = append(tags, tag(hosting, t.TextMuted()))
+		}
+		right = append(right, strings.Join(tags, dialogBody().Render(" ")), "")
 	}
+	// "Label: value" details read as a key-value list.
+	keyWidth := 13
 	for _, detail := range m.modelDetailLines() {
-		for _, wrapped := range strings.Split(ansi.Wrap(interfaceCopy(detail), max(1, rightWidth), ""), "\n") {
-			right = append(right, dialogBody().Render(wrapped))
+		key, value, ok := strings.Cut(interfaceCopy(detail), ": ")
+		if !ok || ansi.StringWidth(key) > keyWidth {
+			key, value = "", interfaceCopy(detail)
+		}
+		valueWidth := max(1, rightWidth-keyWidth-1)
+		for i, wrapped := range strings.Split(ansi.Wrap(value, valueWidth, ""), "\n") {
+			name := ""
+			if i == 0 {
+				name = key
+			}
+			name += strings.Repeat(" ", max(0, keyWidth-ansi.StringWidth(name)))
+			right = append(right, styles.PanelHint().Render(name+" ")+dialogBody().Render(wrapped))
 		}
 	}
+	right = append(right, "", dialogBody().Render(config.Text("[Usar] Enter", "[Use] Enter"))+styles.PanelHint().Render(config.Text(" · Ctrl+E raciocínio · Ctrl+T testar", " · Ctrl+E reasoning · Ctrl+T probe")))
 	return besideColumns(left, right, leftWidth)
 }
 

@@ -329,6 +329,12 @@ func (m *modelDialogCmp) filter() {
 		}
 		return strings.Compare(a.APIModel, b.APIModel)
 	})
+	if m.query == "" && len(m.filtered)+2 <= m.geometry().rows {
+		// Local models first, then hosted ones, each group keeping its order.
+		slices.SortStableFunc(m.filtered, func(a, b models.Model) int {
+			return boolRank(isCloudModel(a)) - boolRank(isCloudModel(b))
+		})
+	}
 	m.selectedIdx, m.scrollOffset = 0, 0
 	target := m.target
 	if target == "" {
@@ -444,15 +450,16 @@ func updateModelDialogCmpMouseMsg(m *modelDialogCmp, msg tea.MouseMsg) (extracte
 	}
 	geometry := m.geometry()
 	if leftClick(msg) && msg.Mouse().X >= geometry.contentX && msg.Mouse().X < geometry.contentX+geometry.listWidth {
-		if msg.Mouse().Y == geometry.titleY && len(m.availableProviders) > 1 {
-			if msg.Mouse().X < geometry.contentX+geometry.width/2 {
-				return m, m.switchProvider(-1), true
+		if msg.Mouse().Y == geometry.titleY && geometry.titleY >= 0 {
+			if provider, ok := m.providerTabAt(msg.Mouse().X - geometry.contentX); ok && provider != m.provider {
+				index := slices.Index(m.availableProviders, provider) - slices.Index(m.availableProviders, m.provider)
+				return m, m.switchProvider(index), true
 			}
-			return m, m.switchProvider(1), true
+			return m, nil, true
 		}
-		index := msg.Mouse().Y - geometry.listY + m.scrollOffset
-		if msg.Mouse().Y >= geometry.listY && msg.Mouse().Y < geometry.listY+geometry.rows && index >= 0 && index < len(m.filtered) {
-			m.selectedIdx = index
+		layout := m.modelRows(geometry)
+		if row := msg.Mouse().Y - geometry.listY; row >= 0 && row < len(layout) && layout[row] >= 0 {
+			m.selectedIdx = layout[row]
 			return m, m.choose(), true
 		}
 	}
@@ -623,4 +630,11 @@ func filterFiltered(m *modelDialogCmp, selected models.ModelID) {
 			break
 		}
 	}
+}
+
+func boolRank(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }

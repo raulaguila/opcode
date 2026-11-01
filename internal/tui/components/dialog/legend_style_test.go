@@ -70,7 +70,7 @@ func TestMenuLegendsAreSecondaryWhileSelectionAndConsentStayDistinct(t *testing.
 	hint := legendGlyph(t, styles.PanelHint().Render("legend"), "legend")
 	body := legendGlyph(t, dialogBody().Render("body"), "body")
 	view := m.View()
-	actual := legendGlyph(t, view, "Enter choose")
+	actual := legendGlyph(t, view, "Enter use")
 	require.Equal(t, hint.FG, actual.FG)
 	require.NotEqual(t, body.FG, actual.FG)
 	require.Zero(t, actual.Mode&23)

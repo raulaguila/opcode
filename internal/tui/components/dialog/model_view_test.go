@@ -98,10 +98,10 @@ func TestModelDetailsUnknownCapabilitiesAndConsistentLanguage(t *testing.T) {
 	view := ansi.Strip(m.View())
 	require.Contains(t, view, "Escolher modelo")
 	require.Contains(t, view, "⌕")
-	require.Contains(t, view, "Capacidades: não informadas")
+	require.Regexp(t, `Capacidades +não informadas`, view, "details read as key and value")
 	require.NotContains(t, view, "Search")
 	config.Get().TUI.Language = "en"
-	require.Contains(t, ansi.Strip(m.View()), "Capabilities: not reported")
+	require.Regexp(t, `Capabilities +not reported`, ansi.Strip(m.View()))
 }
 
 func TestSelectingModelCannotBeChangedUntilCancelled(t *testing.T) {

@@ -56,17 +56,15 @@ func TestCatalogCountsSeparateChatEligibilityAndSearchResults(t *testing.T) {
 			}})
 			require.Len(t, m.models, 4)
 			require.Len(t, m.filtered, 3)
-			summary := config.Text("4 catálogo · 3 conversa", "4 catalog · 3 chat")
-			require.Contains(t, ansi.Strip(m.View()), summary)
+			// Chat models of the catalog, in the frame's corner.
+			summary := config.Text("3 de 4", "3 of 4")
+			require.Contains(t, strings.Split(ansi.Strip(m.View()), "\n")[0], summary)
 			m.Update(tea.KeyPressMsg{Text: "unknown"})
 			require.Len(t, m.filtered, 1)
-			view := ansi.Strip(m.View())
-			require.Contains(t, view, summary)
-			require.Contains(t, view, config.Text("1 de 1 resultados", "1 of 1 results"))
+			require.Contains(t, ansi.Strip(m.View()), config.Text("1 resultado", "1 result"))
 			m.Update(tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl})
 			m.Update(tea.KeyPressMsg{Text: "no-match"})
-			require.Contains(t, ansi.Strip(m.View()), config.Text("0 de 0 resultados", "0 of 0 results"))
-			require.Contains(t, ansi.Strip(m.View()), summary)
+			require.Contains(t, ansi.Strip(m.View()), config.Text("0 resultados", "0 results"))
 		})
 	}
 }

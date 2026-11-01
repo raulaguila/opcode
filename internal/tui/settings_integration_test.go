@@ -108,7 +108,7 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 	program.Send(testTextKey(string([]rune("http://local.invalid/v1")), 0))
 	wait("http://local.invalid/v1")
 	program.Send(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
-	wait("2 catalog · 2 chat")
+	wait("2 of 2")
 	program.Send(testTextKey(string([]rune("llama3.1:8b")), 0))
 	wait("⌕ llama3.1:8b")
 	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})

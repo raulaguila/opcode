@@ -131,7 +131,9 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	}
 	h.send("\x0f") // Ctrl+O opens model selection even with a draft.
 	h.wait("model selector", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Choose model") })
-	h.wait("provider catalog", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "Ollama · ") && strings.Contains(frame, " of ") })
+	h.wait("provider catalog", 10*time.Second, func(frame string) bool {
+		return strings.Contains(frame, "Ollama · ") && strings.Contains(frame, " of ")
+	})
 	testLiveOllamaPTYUIStruct(h)
 	h.send("\t")
 	h.wait("catalog before outage", 10*time.Second, func(frame string) bool { return strings.Contains(frame, "UI_NAVIGATION_ONLY_MODEL") })
@@ -451,6 +453,7 @@ func (h *ptyUIHarness) clearDraft() {
 	h.send(strings.Repeat("\x7f", 512))
 	h.wait("draft cleared", 5*time.Second, ptyUIComposerEmpty)
 }
+
 // ptyUIComposerText drops the composer frame's border cells: "│ > draft │"
 // reads as "> draft" and the frame's bottom edge as empty.
 func ptyUIComposerText(line string) string {
@@ -529,6 +532,7 @@ func resizePTYUIScreen(screen vt10x.Terminal, cols, rows int) {
 	fmt.Fprintf(&controls, "\x1b[%dG", cursor.X+1)
 	_, _ = screen.Write([]byte(controls.String()))
 }
+
 // clickMode clicks the mode's name in the composer's top border.
 func (h *ptyUIHarness) clickMode() {
 	h.t.Helper()
@@ -967,7 +971,7 @@ func testLiveOllamaPTYUICallback(catalogAvailable *atomic.Bool, w http.ResponseW
 
 func testLiveOllamaPTYUIContextAndMeasuredProviderSpeedInFooter(frame string) bool {
 	footer := ptyUIFooter(frame)
-	return strings.Contains(footer, "/16k ctx") && strings.Contains(footer, "tok/s") && !strings.Contains(footer, "— tok/s")
+	return regexp.MustCompile(`[█░]{5} ~?[0-9]+%`).MatchString(footer) && strings.Contains(footer, "tok/s") && !strings.Contains(footer, "— tok/s")
 }
 
 func testLiveOllamaPTYUIRealModelQuestionWithSelectableChoices(frame string) bool {

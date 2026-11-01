@@ -37,18 +37,9 @@ func (m statusCmp) contextMetric(state util.FooterState) string {
 	return m.contextMetricFor(state, m.shortContext(state))
 }
 
-// shortContext drops the token fraction when the full metrics would be clipped.
-func (m statusCmp) shortContext(state util.FooterState) bool {
-	if m.width < 110 {
-		return true
-	}
-	_, cw, _ := m.widths(state)
-	reserve := 20
-	if m.compactIdle(state) {
-		reserve = 10
-	}
-	return ansi.StringWidth(m.metricsFor(state, false))+1 > cw-reserve
-}
+// shortContext: the footer shows the bar and percentage; the token fraction
+// lives in /context.
+func (m statusCmp) shortContext(util.FooterState) bool { return true }
 
 func (m statusCmp) contextMetricFor(state util.FooterState, short bool) string {
 	if state.ContextWindow <= 0 {

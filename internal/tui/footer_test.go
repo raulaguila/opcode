@@ -38,9 +38,8 @@ func TestFooterApprovalClickFocusesSelectedPolicyWithoutChangingMode(t *testing.
 			status, _ := core.NewStatusCmp(nil).Update(tea.WindowSizeMsg{Width: width})
 			a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: &approvalFooterPage{state: state}}, status: status.(core.StatusCmp), commandDialog: dialog.NewCommandDialogCmp()}
 			a.commands = []dialog.Command{{ID: "mode-ask"}, {ID: "mode-plan"}, {ID: "mode-execute"}}
-			before, _, found := strings.Cut(ansi.Strip(a.statusView()), "▾")
-			require.True(t, found)
-			require.Nil(t, a.footerClick(ansi.StringWidth(before)+2), "opening a chooser does not change consent")
+			require.True(t, strings.HasPrefix(strings.TrimSpace(ansi.Strip(a.statusView())), "A"), "approval opens the footer; the mode lives in the composer")
+			require.Nil(t, a.footerClick(1), "opening a chooser does not change consent")
 			require.True(t, a.showCommandDialog)
 			require.Contains(t, a.commandDialog.View(), "✓ Execute")
 			_, selected := a.commandDialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -52,7 +51,7 @@ func TestFooterApprovalClickFocusesSelectedPolicyWithoutChangingMode(t *testing.
 	}
 }
 
-func TestFooterModeClickOpensOnlyModesAndKeepsExistingCommandHandler(t *testing.T) {
+func TestModeChooserOpensOnlyModesAndKeepsExistingCommandHandler(t *testing.T) {
 	status, _ := core.NewStatusCmp(nil).Update(tea.WindowSizeMsg{Width: 80})
 	a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: &inputPage{}}, status: status.(core.StatusCmp), commandDialog: dialog.NewCommandDialogCmp()}
 	a.commands = []dialog.Command{
@@ -63,9 +62,9 @@ func TestFooterModeClickOpensOnlyModesAndKeepsExistingCommandHandler(t *testing.
 		{ID: "mode-plan", Title: "Plan"},
 		{ID: "mode-execute", Title: "Execute"},
 	}
-	updated, cmd := a.Update(tea.MouseClickMsg{X: 1, Y: 0, Button: tea.MouseLeft})
+	// The composer's mode label asks for the chooser; the footer has no mode.
+	updated, _ := a.Update(page.OpenModeChooserMsg{})
 	a = updated.(appModel)
-	require.Nil(t, cmd, "opening the selector must not change mode")
 	require.True(t, a.showCommandDialog)
 	require.Contains(t, a.commandDialog.View(), "Ask")
 	require.NotContains(t, a.commandDialog.View(), "Settings")

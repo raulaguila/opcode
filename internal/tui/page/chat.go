@@ -3,6 +3,7 @@ package page
 import (
 	"context"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"time"
 
@@ -316,7 +317,10 @@ func (p *chatPage) View() string {
 		}
 	}
 
-	if p.height >= 12 {
+	switch p.headerRows() {
+	case 2:
+		layoutView = lipgloss.JoinVertical(lipgloss.Left, p.headerView(), p.headerRule(), layoutView)
+	case 1:
 		layoutView = lipgloss.JoinVertical(lipgloss.Left, p.headerView(), layoutView)
 	}
 	return layoutView
@@ -382,11 +386,16 @@ func updateChatPageMouseMsg(p *chatPage, msg *tea.MouseMsg) (extractedResult0 ut
 	if result0, result1, result2, handled := updateChatPageMouseMsgTranscriptChatSelectionControl(p, msg); handled {
 		return result0, result1, result2
 	}
-	if p.height >= 12 {
-		if (*msg).Mouse().Y == 0 {
+	// The mode's name in the composer's top border opens the mode chooser.
+	if mouse := (*msg).Mouse(); util.MousePressed(*msg) && mouse.Button == tea.MouseLeft && mouse.Y == p.ComposerTop() &&
+		mouse.X >= 2 && mouse.X < 4+ansi.StringWidth(modeLabel(p.mode())) {
+		return p, util.CmdHandler(OpenModeChooserMsg{}), true
+	}
+	if rows := p.headerRows(); rows > 0 {
+		if (*msg).Mouse().Y < rows {
 			return p, nil, true
 		}
-		*msg = util.TranslateMouse(*msg, 0, -1)
+		*msg = util.TranslateMouse(*msg, 0, -rows)
 	}
 	// Mouse coordinates are relative to the terminal. The message panel
 	// starts at the top left; don't scroll it over the editor or sidebar.
@@ -642,9 +651,7 @@ func updateChatPageMouseMsgTranscriptChatSelectionControl(p *chatPage, msg *tea.
 	if selection, ok := p.transcript.(chat.SelectionControl); ok && selection.SelectionDragging() &&
 		(util.MouseMoved((*msg)) || util.MouseReleased((*msg))) {
 		// Capture the drag even when its endpoint leaves the message panel.
-		if p.height >= 12 {
-			*msg = util.TranslateMouse(*msg, 0, -1)
-		}
+		*msg = util.TranslateMouse(*msg, 0, -p.headerRows())
 		updated, cmd := p.messages.Update((*msg))
 		p.messages = updated.(layout.Container)
 		return p, cmd, true, true

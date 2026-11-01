@@ -23,9 +23,7 @@ func TestFooterMetricsResizeAndClicksMatchVisibleCells(t *testing.T) {
 			require.NotContains(t, plain, "ctx")
 			continue
 		}
-		if width >= 110 {
-			require.Contains(t, plain, "~8k/32k ctx")
-		}
+		require.NotContains(t, plain, "/32k", "the token fraction lives in /context")
 		require.Contains(t, plain, "~25%")
 		marker := "~25%"
 		if width >= 80 {

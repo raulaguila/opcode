@@ -12,12 +12,29 @@ import (
 	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
+// headerRows is the space the top bar takes: the bar, then a rule under it
+// when the terminal is tall enough.
+func (p *chatPage) headerRows() int {
+	switch {
+	case p.height >= 20:
+		return 2
+	case p.height >= 12:
+		return 1
+	}
+	return 0
+}
+
+func (p *chatPage) headerRule() string {
+	t := theme.CurrentTheme()
+	return styles.BaseStyle().Foreground(t.BorderNormal()).Render(strings.Repeat("─", max(1, p.width)))
+}
+
 // headerView is the top bar: product, project path and Git branch on the
 // left, the conversation title on the right.
 func (p *chatPage) headerView() string {
 	t := theme.CurrentTheme()
-	bar := styles.BaseStyle().Background(t.BackgroundSecondary())
-	muted := styles.HintOn(t.BackgroundSecondary())
+	bar := styles.BaseStyle().Background(t.Background())
+	muted := styles.HintOn(t.Background())
 	left := bar.Bold(true).Foreground(t.Text()).Render(" opcode")
 	plain := " opcode"
 	if config.Get() != nil {

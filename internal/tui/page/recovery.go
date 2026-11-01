@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/tui/styles"
@@ -24,9 +25,20 @@ func (p *chatPage) composerPanel() string {
 			state = config.Text("Execução retomada", "Run resumed")
 		}
 		// An error card: the state in its border, the actions inside.
-		rows, _ := p.recoveryLayout()
+		rows, spans := p.recoveryLayout()
 		t := theme.CurrentTheme()
-		panels = append(panels, styles.FrameOn(strings.Join(rows, "\n"), max(1, p.width-2), 0, 0, state, config.Text("rascunho e progresso preservados", "draft and progress preserved"), "", t.Error(), t.Background()))
+		// Actions read as buttons: each span gets a chip background.
+		chip := styles.BaseStyle().Background(t.BorderDim()).Foreground(styles.ReadableForeground(t.Text(), t.BorderDim()))
+		for i := len(spans) - 1; i >= 0; i-- {
+			span := spans[i]
+			row := rows[span.row]
+			rows[span.row] = ansi.Cut(row, 0, span.start-1) + chip.Render(ansi.Cut(row, span.start-1, span.end-1)) + ansi.Cut(row, span.end-1, ansi.StringWidth(row))
+		}
+		if len(rows) > 0 {
+			rows[0] = styles.HintOn(t.Background()).Render(ansi.Strip(rows[0]))
+		}
+		title := styles.BaseStyle().Render("■ " + state)
+		panels = append(panels, styles.FrameOn(strings.Join(rows, "\n"), max(1, p.width-2), 0, 0, ansi.Strip(title), "", "", t.Error(), t.Background()))
 	}
 	return strings.Join(panels, "\n")
 }
@@ -39,13 +51,17 @@ func (p *chatPage) recoveryHeight() int {
 }
 
 // recoveryLayout lays the actions inside the card, with screen columns.
+// The first row is the error's own first line; actions follow it.
 func (p *chatPage) recoveryLayout() ([]string, []recoveryActionSpan) {
 	rows, spans := layoutRecoveryActions(p.recovery.err, max(1, p.width-2), p.recovery.changed)
 	for i := range spans {
 		spans[i].start++
 		spans[i].end++
+		spans[i].row++
 	}
-	return rows, spans
+	// Raw provider errors stay in /error; the card says what was kept.
+	detail := " " + ansi.Truncate(config.Text("Rascunho e progresso foram preservados · /error mostra os detalhes técnicos", "Draft and progress were preserved · /error shows the technical details"), max(1, p.width-4), "…")
+	return append([]string{detail}, rows...), spans
 }
 func (p *chatPage) composerPanelHeight() int { return p.workflowHeight() + p.recoveryHeight() }
 func (p *chatPage) insertComposerPanel(view string) string {

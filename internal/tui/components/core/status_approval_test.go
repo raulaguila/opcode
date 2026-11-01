@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFooterAlwaysShowsIndependentModeAndApprovalControls(t *testing.T) {
+func TestFooterAlwaysShowsApprovalControlWithoutMode(t *testing.T) {
 	for _, mode := range []string{"ask", "plan", "execute"} {
 		for _, policy := range []string{"prompt", "project_edits"} {
 			for _, width := range []int{36, 60, 80, 110, 120, 180} {
@@ -77,9 +77,10 @@ func assertApprovalControls(t *testing.T, width int, state util.FooterState) {
 	for x := start; x < start+ansi.StringWidth(label); x++ {
 		require.Equal(t, "approval", m.ActionAt(x, state))
 	}
-	require.Equal(t, "mode", m.ActionAt(1, state))
+	require.Equal(t, "approval", m.ActionAt(1, state), "the footer opens with approval; the mode is in the composer")
+	require.NotContains(t, view, "Perguntar ▾")
 	if width >= 60 {
-		require.Equal(t, 3, strings.Count(view, "▾"))
+		require.Equal(t, 2, strings.Count(view, "▾"))
 		require.Equal(t, "models", m.ActionAt(width-2, state))
 	}
 	require.Empty(t, m.ActionAt(width-1, state))

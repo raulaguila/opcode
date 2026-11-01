@@ -23,7 +23,7 @@ func TestFooterStaysOnOneRowAndMouseMatchesVisibleSegments(t *testing.T) {
 			plain := ansi.Strip(view)
 			modeEnd := strings.Index(plain, "▾")
 			require.Positive(t, modeEnd)
-			require.Equal(t, "mode", m.ActionAt(1, state))
+			require.Equal(t, "approval", m.ActionAt(1, state))
 			require.Equal(t, "commands", m.ActionAt(width/2, state))
 			if width >= 60 {
 				require.Equal(t, "models", m.ActionAt(width-2, state))

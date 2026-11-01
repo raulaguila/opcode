@@ -467,7 +467,7 @@ func ptyUIComposerEmpty(frame string) bool {
 	}
 	lines := strings.Split(frame, "\n")
 	for index := len(lines) - 1; index >= 0; index-- {
-		if strings.Count(lines[index], "▾") == 3 {
+		if strings.Count(lines[index], "▾") == 2 {
 			lines = lines[:index]
 			break
 		}
@@ -529,29 +529,53 @@ func resizePTYUIScreen(screen vt10x.Terminal, cols, rows int) {
 	fmt.Fprintf(&controls, "\x1b[%dG", cursor.X+1)
 	_, _ = screen.Write([]byte(controls.String()))
 }
+// clickMode clicks the mode's name in the composer's top border.
 func (h *ptyUIHarness) clickMode() {
 	h.t.Helper()
+	if row := ptyUIComposerTopRow(h.frame()); row >= 0 {
+		// SGR mouse coordinates are one-based; x=5 is inside "╭─ Mode".
+		h.send(fmt.Sprintf("\x1b[<0;5;%dM\x1b[<0;5;%dm", row+1, row+1))
+		return
+	}
+	h.t.Fatal("mode label is absent from the composer frame")
+}
+
+// clickApproval clicks the approval control that opens the footer.
+func (h *ptyUIHarness) clickApproval() {
+	h.t.Helper()
 	for row, line := range strings.Split(h.frame(), "\n") {
-		if strings.Count(line, "▾") == 3 {
-			// SGR mouse coordinates are one-based; x=3 is inside the mode button.
+		if strings.Count(line, "▾") == 2 {
 			h.send(fmt.Sprintf("\x1b[<0;3;%dM\x1b[<0;3;%dm", row+1, row+1))
 			return
 		}
 	}
-	h.t.Fatal("mode button is absent from the current footer")
+	h.t.Fatal("approval button is absent from the current footer")
 }
 
-func (h *ptyUIHarness) clickApproval() {
-	h.t.Helper()
-	for row, line := range strings.Split(h.frame(), "\n") {
-		if strings.Count(line, "▾") == 3 {
-			before, _, _ := strings.Cut(line, "▾")
-			x := ansi.StringWidth(before) + 3
-			h.send(fmt.Sprintf("\x1b[<0;%d;%dM\x1b[<0;%d;%dm", x, row+1, x, row+1))
-			return
+// ptyUIComposerTopRow is the row of the composer frame's top border: the last
+// "╭─" above the footer.
+func ptyUIComposerTopRow(frame string) int {
+	top := -1
+	for row, line := range strings.Split(frame, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "╭─ ") {
+			top = row
+		}
+		if strings.Count(line, "▾") == 2 {
+			break
 		}
 	}
-	h.t.Fatal("approval button is absent from the current footer")
+	return top
+}
+
+// ptyUIMode reads the session mode from the composer frame's title.
+func ptyUIMode(frame string) string {
+	row := ptyUIComposerTopRow(frame)
+	if row < 0 {
+		return ""
+	}
+	title := strings.TrimPrefix(strings.TrimSpace(strings.Split(frame, "\n")[row]), "╭─ ")
+	title, _, _ = strings.Cut(title, " ─")
+	return title
 }
 func (h *ptyUIHarness) wait(label string, timeout time.Duration, predicate func(string) bool) {
 	h.t.Helper()
@@ -581,7 +605,7 @@ func (h *ptyUIHarness) assertComposer() {
 		if strings.HasPrefix(ptyUIComposerText(line), ">") {
 			prompts++
 		}
-		if strings.Count(line, "▾") == 3 {
+		if strings.Count(line, "▾") == 2 {
 			footers++
 		}
 	}
@@ -618,7 +642,7 @@ func TestPTYIdleFooterRejectsCompactActiveStates(t *testing.T) {
 
 func ptyUIFooter(frame string) string {
 	for line := range strings.SplitSeq(frame, "\n") {
-		if strings.Count(line, "▾") == 3 {
+		if strings.Count(line, "▾") == 2 {
 			return line
 		}
 	}
@@ -1137,7 +1161,7 @@ func testLiveOllamaPTYUISSHCopyPanelDismissed(frame string) bool {
 func testLiveOllamaPTYUIExecuteModeAndAcknowledgedCommandSubmission(frame string) bool {
 	// The workflow mode update precedes the editor submission receipt. Do
 	// not append the next prompt to a draft still awaiting that receipt.
-	return strings.HasPrefix(strings.TrimSpace(ptyUIFooter(frame)), "Execute") && !strings.Contains(frame, "/mode execute")
+	return ptyUIMode(frame) == "Execute" && !strings.Contains(frame, "/mode execute")
 }
 
 func TestPTYUITerminalStartupQueries(t *testing.T) {

@@ -53,7 +53,7 @@ func (m statusCmp) controlWidths(state util.FooterState) (mode, approval int) {
 		padding = 2
 	}
 	available := max(0, m.width-1)
-	mode = min(ansi.StringWidth(m.modeLabel(state))+padding, available)
-	approval = min(ansi.StringWidth(m.approvalLabel(state))+padding, available-mode)
+	// The mode lives in the composer's frame; the footer keeps approval.
+	approval = min(ansi.StringWidth(m.approvalLabel(state))+padding, available)
 	return
 }

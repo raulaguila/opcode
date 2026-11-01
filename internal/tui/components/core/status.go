@@ -62,7 +62,7 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	center = ""
 	if state.Terminal {
 		center = config.Shortcut("terminal") + config.Text(" conversa", " chat")
-	} else if state.Activity != "" || state.Busy {
+	} else if state.Busy || state.Activity != "" && state.Activity != config.Text("Concluído", "Completed") {
 		center = footerActivityLabel(state)
 		if state.Busy && state.ElapsedKnown {
 			center += " · " + footerElapsed(state.ElapsedSeconds)

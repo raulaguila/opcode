@@ -46,7 +46,7 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 			h.paste("/mode plan")
 			h.send("\r")
 			h.wait("plan mode", 5*time.Second, func(frame string) bool {
-				return strings.HasPrefix(strings.TrimSpace(ptyUIFooter(frame)), "Plan") && ptyUIComposerEmpty(frame)
+				return ptyUIMode(frame) == "Plan" && ptyUIComposerEmpty(frame)
 			})
 			h.paste("/plan")
 			h.send("\r")
@@ -81,7 +81,7 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 			h.send("\x1b[1;3A")
 			h.wait("plan scrolls to earlier step", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "○ 8. Step 8") })
 			require.Contains(t, h.frame(), draft)
-			require.True(t, strings.HasPrefix(strings.TrimSpace(ptyUIFooter(h.frame())), "Plan"), "viewing the plan never changes mode")
+			require.True(t, ptyUIMode(h.frame()) == "Plan", "viewing the plan never changes mode")
 			conversationQuit(t, h, false)
 			readme, err := os.ReadFile(filepath.Join(workspace, "README.md"))
 			require.NoError(t, err)

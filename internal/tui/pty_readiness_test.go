@@ -11,7 +11,7 @@ import (
 )
 
 func TestPTYClearDraftRequiresEmptyComposerInsteadOfDraftMarker(t *testing.T) {
-	footer := " Ask ▾ P:ask ▾ / commands · Alt+Enter new line  llama3.1:8b ▾ "
+	footer := " A:ask ▾  llama3.1:8b ▾ "
 	for _, tc := range []struct {
 		name, body string
 		empty      bool
@@ -49,7 +49,7 @@ func TestPTYSteeredFinalRequiresPersistedOrderAndIdleUI(t *testing.T) {
 		_, err = conn.Exec("INSERT INTO messages(role,parts) VALUES(?,?)", row.role, row.parts)
 		require.NoError(t, err)
 	}
-	idle := "Ask ▾ P:ask ▾ / commands · Alt+Enter new line  llama3.1:8b ▾"
+	idle := "A:ask ▾ / commands  llama3.1:8b ▾"
 	require.False(t, testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(&conn, strings.Replace(idle, "/ commands", "Checking answer and sources · Esc cancels", 1)), "SQL finish precedes validation and UI completion")
 	require.False(t, testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(&conn, ""), "a missing footer is not ready")
 	require.True(t, testLiveOllamaPTYUISteeredResponseAndPersistedToolResult(&conn, idle))

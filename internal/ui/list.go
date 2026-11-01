@@ -28,13 +28,17 @@ func (l *List) Visible() []Item {
 	if query == "" {
 		return l.Items
 	}
-	var out []Item
+	// Title matches lead; description and ID matches follow.
+	var titles, others []Item
 	for _, item := range l.Items {
-		if strings.Contains(strings.ToLower(item.Title+" "+item.Desc+" "+item.ID), query) {
-			out = append(out, item)
+		switch {
+		case strings.Contains(strings.ToLower(item.Title), query):
+			titles = append(titles, item)
+		case strings.Contains(strings.ToLower(item.Desc+" "+item.ID), query):
+			others = append(others, item)
 		}
 	}
-	return out
+	return append(titles, others...)
 }
 
 // Current is the selected item, if any.

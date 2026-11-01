@@ -311,6 +311,10 @@ func (m *Model) workView() string {
 
 func (m *Model) togglePlan() tea.Cmd {
 	m.poll()
+	if len(m.task.Steps) == 0 {
+		m.info = textFor("Sem plano ainda · peça um em Planejar", "No plan yet · ask for one in Plan")
+		return nil
+	}
 	m.showPlan = !m.showPlan
 	m.layout()
 	return nil

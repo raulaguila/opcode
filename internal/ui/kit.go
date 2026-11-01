@@ -105,7 +105,7 @@ func Line(text string, width int, bg color.Color) string {
 
 // Spread places left and right text on one row of the given width.
 func Spread(left, right string, width int, bg color.Color) string {
-	room := max(0, width-ansi.StringWidth(right))
+	room := max(0, width-ansi.StringWidth(right)-1) // keep a gap between the two
 	left = ansi.Truncate(left, room, "…")
 	gap := lipgloss.NewStyle().Background(bg).Render(strings.Repeat(" ", max(0, width-ansi.StringWidth(left)-ansi.StringWidth(right))))
 	return left + gap + right

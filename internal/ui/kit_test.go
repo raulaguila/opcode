@@ -34,3 +34,10 @@ func TestSpreadAndMeter(t *testing.T) {
 	require.Equal(t, "██░░░", ansi.Strip(Meter(0.45, P.Info, P.Ground)))
 	require.Equal(t, "█████", ansi.Strip(Meter(2, P.Info, P.Ground)))
 }
+
+func TestListSearchRanksTitleMatchesFirst(t *testing.T) {
+	l := List{Items: []Item{{Title: "Planejar", Desc: "prepara um plano"}, {Title: "Plano", Desc: "mostrar"}}}
+	l.SetQuery("plano")
+	require.Equal(t, "Plano", l.Visible()[0].Title)
+	require.Len(t, l.Visible(), 2)
+}

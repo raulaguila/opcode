@@ -141,6 +141,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tickMsg:
 		m.poll()
+		// The final event can arrive before the agent marks the session free.
+		if m.app != nil && m.app.CoderAgent != nil {
+			m.busy = m.app.CoderAgent.IsSessionBusy(m.session.ID)
+		}
+		m.refresh()
 		if m.busy {
 			return m, tick()
 		}
@@ -173,6 +178,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.failure = event.Error
 			}
 			m.poll()
+			if !m.busy {
+				return m, tick() // confirm the session settled
+			}
 		}
 	}
 	m.refresh()

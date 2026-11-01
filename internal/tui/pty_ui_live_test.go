@@ -208,8 +208,8 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	h.send("\x1b")
 	h.wait("LSP form restored", 5*time.Second, testLiveOllamaPTYUILSPFormRestored)
 	h.send("\x14") // Ctrl+T requests a connection test, with its own permission.
-	h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })
-	if !strings.Contains(h.frame(), "Tool: test_lsp_connection") {
+	h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow once") })
+	if !strings.Contains(h.frame(), "test_lsp_connection") {
 		h.send("d")
 		t.Fatal("unexpected integration permission request; denied")
 	}
@@ -218,8 +218,8 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	require.Contains(t, h.frame(), "/bin/bash")
 	require.Contains(t, h.frame(), "lsp-stderr.sh")
 	testLiveOllamaPTYUIState(t, workspace, h)
-	h.clickLabel("Allow (a)")
-	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow (a)") })
+	h.clickLabel("Allow once")
+	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow once") })
 	h.wait("LSP stderr fixture executed", 10*time.Second, func(string) bool {
 		_, err := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
 		return err == nil
@@ -291,7 +291,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 	assertLiveProjectEditPolicy(t, h, conn, workspace)
 	h.paste(`Call bash with these arguments: {"command":"bash interactive.sh","pty":true,"timeout":120000}. Wait for the actual tool result. The human will provide terminal input. Do not execute any other command.`)
 	h.send("\r")
-	h.wait("explicit permission dialog", 120*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow (a)") })
+	h.wait("explicit permission dialog", 120*time.Second, func(frame string) bool { return strings.Contains(frame, "Allow once") })
 	_, err = os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "command-started"))
 	require.True(t, os.IsNotExist(err), "command must not execute before UI approval")
 	approved := false
@@ -301,7 +301,7 @@ func TestLiveOllamaPTYUI(t *testing.T) {
 		t.Fatal("permission request had no matching persisted PTY tool call; denied")
 	}
 	h.send("a") // approve once, through the actual permission dialog.
-	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow (a)") })
+	h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool { return !strings.Contains(frame, "Allow once") })
 	h.wait("live command output before process exit", 15*time.Second, func(frame string) bool { return strings.Contains(frame, "LIVE_READY ação 漢字") })
 	t.Log("one exact PTY bash command approved through UI; live output appeared before process exit")
 	steering := "Nova instrução: quando o comando atual terminar, responda apenas LIVE_STEERING_OK. Não execute mais ferramentas."
@@ -585,7 +585,7 @@ func (h *ptyUIHarness) wait(label string, timeout time.Duration, predicate func(
 		if predicate(frame) {
 			return
 		}
-		if strings.Contains(frame, "Allow (a)") && label != "explicit permission dialog" && label != "approval dialog dismissed" {
+		if strings.Contains(frame, "Allow once") && label != "explicit permission dialog" && label != "approval dialog dismissed" {
 			h.send("d")
 			h.t.Fatalf("unexpected privileged operation during %s; denied", label)
 		}
@@ -750,7 +750,7 @@ func (h *ptyUIHarness) clickLabel(label string) {
 	h.t.Helper()
 	x, y := -1, -1
 	waitLabel := "stable click target: " + label
-	if label == "Allow (a)" {
+	if label == "Allow once" {
 		waitLabel = "explicit permission dialog"
 	}
 	// A VT paint arrives in fragments; do not click a label while its row moves.
@@ -871,15 +871,15 @@ func testLiveOllamaPTYUIOPCODELIVEOLLAMA(t *testing.T) {
 
 func testLiveOllamaPTYUIState(t *testing.T, workspace string, h *ptyUIHarness) {
 	for _, refuse := range []string{"\x1b", "\r"} {
-		require.Contains(t, h.frame(), "› 3 Deny (Esc/d)")
+		require.Contains(t, h.frame(), "› 3 Deny · Esc")
 		h.send(refuse)
 		h.wait("approval dialog dismissed", 5*time.Second, func(frame string) bool {
-			return !strings.Contains(frame, "Allow (a)") && strings.Contains(frame, "Test failed:")
+			return !strings.Contains(frame, "Allow once") && strings.Contains(frame, "Test failed:")
 		})
 		_, statErr := os.Stat(filepath.Join(workspace, ".cache/ui-acceptance-artifacts", "lsp-stderr-ran"))
 		require.True(t, os.IsNotExist(statErr), "denied probe must never run")
 		h.send("\x14")
-		h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "› 3 Deny (Esc/d)") })
+		h.wait("explicit permission dialog", 5*time.Second, func(frame string) bool { return strings.Contains(frame, "› 3 Deny · Esc") })
 	}
 }
 

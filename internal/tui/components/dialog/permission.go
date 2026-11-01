@@ -150,7 +150,7 @@ type permissionButtonHit struct{ x, y, width int }
 
 func (p *permissionDialogCmp) renderButtons() string {
 	t := theme.CurrentTheme()
-	labels := []string{config.Text("1 Permitir (a)", "1 Allow (a)"), config.Text("2 Repetir escopo exato (s)", "2 Remember exact scope (s)"), config.Text("3 Recusar (Esc/d)", "3 Deny (Esc/d)")}
+	labels := []string{config.Text("1 Permitir uma vez", "1 Allow once"), config.Text("2 Permitir este escopo na sessão", "2 Allow this scope for the session"), config.Text("3 Recusar · Esc", "3 Deny · Esc")}
 	buttons := make([]string, len(labels))
 	total := 4
 	for i, label := range labels {
@@ -180,10 +180,12 @@ func (p *permissionDialogCmp) renderButtons() string {
 }
 
 func (p *permissionDialogCmp) renderHeader() string {
-	lines := []string{config.Text("Ferramenta: ", "Tool: ") + p.permission.ToolName, config.Text("Escopo: ", "Scope: ") + p.permission.Path}
+	// The changed file and what the change does lead; the scope follows.
+	var lines []string
 	if summary := p.changeSummary(); summary != "" {
-		lines = append(lines, summary)
+		lines = append(lines, dialogBody().Bold(true).Render(summary))
 	}
+	lines = append(lines, styles.PanelHint().Render(config.Text("Escopo: ", "Scope: ")+p.permission.Path))
 	if p.repeats > 0 {
 		lines = append(lines, fmt.Sprintf(config.Text("Mesmo pedido já apareceu %d× · s repete este escopo exato nesta sessão", "Same request shown %d× before · s remembers this exact scope for the session"), p.repeats))
 	}
@@ -515,7 +517,7 @@ func NewPermissionDialogCmp() PermissionDialogCmp {
 func (p *permissionDialogCmp) permissionHint() string {
 	switch p.permission.ToolName {
 	case tools.EditToolName, tools.PatchToolName, tools.WriteToolName:
-		return config.Text("T diff · F tela cheia · [ ] arquivo", "T diff · F full screen · [ ] file")
+		return config.Text("T diff · F tela cheia · [ ] arquivo · comandos, rede e caminhos externos seguem pedindo aprovação", "T diff · F full screen · [ ] file · commands, network and outside paths still ask")
 	default:
 		return config.Text("F tela cheia · escopo exato nesta sessão", "F full screen · exact scope for this session")
 	}

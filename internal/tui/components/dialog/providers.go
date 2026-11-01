@@ -407,6 +407,9 @@ func (m *providerDialogCmp) View() string {
 	case m.screen == "provider" && m.originalID == "":
 		meta = m.fields[providerNameField].Value()
 	}
+	if m.screen == "provider" {
+		hint = config.Text("Tab campos · ←→ opção", "Tab fields · ←→ option")
+	}
 	return styles.Frame(lipgloss.JoinVertical(lipgloss.Left, m.withNav(lines)...), width+m.navOffset(), 2, 1, interfaceCopy(title), meta, interfaceCopy(hint))
 }
 func (m *providerDialogCmp) BindingKeys() []key.Binding {
@@ -424,7 +427,8 @@ func (m *providerDialogCmp) formRows() int {
 	if m.height == 0 {
 		return m.fieldCount()
 	}
-	available := m.height - 11 - (len(wrapDialogActions(m.providerFormHint(), m.contentWidth())) - 1)
+	// Advanced toggle and blank rows around it take three rows.
+	available := m.height - 13 - (len(wrapDialogActions(m.providerFormHint(), m.contentWidth())) - 1)
 	if m.screen == "provider" && len(m.fields) > 9 && m.fields[9].Value() == "true" {
 		available--
 	}

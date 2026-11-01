@@ -152,7 +152,7 @@ func TestUserApprovesTerminalEntersInputAndReturnsToChat(t *testing.T) {
 	}
 	waitFrame("opcode ·")
 	program.Send(tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
-	waitFrame("Allow (a)")
+	waitFrame("Allow once")
 	require.Empty(t, manager.List("terminal-session"), "no process starts before approval")
 	program.Send(testTextKey(string([]rune("a")), 0))
 	waitFrame("Terminal • running")

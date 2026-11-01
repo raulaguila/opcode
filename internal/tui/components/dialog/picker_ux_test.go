@@ -91,13 +91,13 @@ func TestProviderFormShortcutLegendWrapsAndRemainsClickable(t *testing.T) {
 				}
 			}
 			m.advanced = false
-			m.Update(pickerClickLabel(t, m.View(), config.Text("[Mais]", "[More]")))
+			m.Update(pickerClickLabel(t, m.View(), config.Text("Avançado", "Advanced")))
 			require.True(t, m.advanced)
-			_, cmd := m.Update(pickerClickLabel(t, m.View(), config.Text("[Catálogo]", "[Catalog]")))
+			_, cmd := m.Update(pickerClickLabel(t, m.View(), config.Text("Testar catálogo", "Test catalog")))
 			require.NotNil(t, cmd)
 			require.True(t, m.testing)
 			m.Update(cmd())
-			_, cmd = m.Update(pickerClickLabel(t, m.View(), config.Text("[Salvar]", "[Save]")))
+			_, cmd = m.Update(pickerClickLabel(t, m.View(), config.Text("Salvar · Ctrl+S", "Save · Ctrl+S")))
 			require.NotNil(t, cmd)
 			require.True(t, cmd().(ProviderSettingsSavedMsg).Disabled)
 		})

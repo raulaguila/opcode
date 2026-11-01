@@ -142,13 +142,32 @@ func (m *providerDialogCmp) providerFormLines(width int, line func(string) strin
 		m.fields[i].SetWidth(max(8, valueWidth-1))
 		lines = append(lines, line(label+dialogBody().Render("  ")+choiceRadios(m.fields[i], fieldOptions(m.labels[i]), valueWidth)))
 	}
+	if m.screen == "provider" {
+		// The advanced toggle, then the actions as buttons.
+		advanced := config.Text("› Avançado · Ctrl+A: janela de contexto, tokens de saída, TLS", "› Advanced · Ctrl+A: context window, output tokens, TLS")
+		if m.advanced {
+			advanced = config.Text("‹ Ocultar avançado · Ctrl+A", "‹ Hide advanced · Ctrl+A")
+		}
+		lines = append(lines, "", dialogHint(advanced, width), "")
+		t := theme.CurrentTheme()
+		chip := styles.BaseStyle().Background(t.BorderDim()).Foreground(styles.ReadableForeground(t.Text(), t.BorderDim()))
+		primary := styles.BaseStyle().Background(t.Primary()).Foreground(styles.ReadableForeground(t.Background(), t.Primary())).Bold(true)
+		for _, row := range wrapDialogActions(m.providerFormHint(), width) {
+			var parts []string
+			for i, action := range strings.Split(row, " · ") {
+				style := chip
+				if i == 0 && strings.Contains(action, "Ctrl+S") || strings.Contains(action, "Ctrl+G") {
+					style = primary
+				}
+				parts = append(parts, style.Render(" "+strings.ReplaceAll(action, " — ", " · ")+" "))
+			}
+			lines = append(lines, strings.Join(parts, dialogBody().Render("  ")))
+		}
+		return lines
+	}
 	lines = append(lines, styles.PanelDivider(width))
 	for _, hint := range wrapDialogActions(m.providerFormHint(), width) {
-		if m.screen != "provider" {
-			lines = append(lines, dialogHint(hint, width))
-		} else {
-			lines = append(lines, line(hint))
-		}
+		lines = append(lines, dialogHint(hint, width))
 	}
 	return lines
 }
@@ -157,9 +176,10 @@ func (m *providerDialogCmp) providerFormHint() string {
 	if m.screen != "provider" {
 		return "Tab/↑↓ fields · Ctrl+S save · Esc back"
 	}
-	hint := config.Text("[Salvar] Ctrl+S · [Catálogo] Ctrl+T · [Mais] Ctrl+A · Tab campos · Esc", "[Save] Ctrl+S · [Catalog] Ctrl+T · [More] Ctrl+A · Tab fields · Esc")
+	// Buttons, separated by " · "; " — " joins a label to its key.
+	hint := config.Text("Salvar — Ctrl+S · Testar catálogo — Ctrl+T · Cancelar — Esc", "Save — Ctrl+S · Test catalog — Ctrl+T · Cancel — Esc")
 	if m.fields[providerActiveField].Value() == "false" {
-		return config.Text("Ctrl+G salvar e ativar · ", "Ctrl+G save and enable · ") + hint
+		return config.Text("Salvar e ativar — Ctrl+G · ", "Save and enable — Ctrl+G · ") + hint
 	}
 	return hint
 }

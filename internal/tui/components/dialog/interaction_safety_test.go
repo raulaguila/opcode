@@ -31,7 +31,7 @@ func TestApprovalResetsConsentAndSupportsEscapeAndExactMouseTargets(t *testing.T
 		view := ansi.Strip(m.View())
 		clicked := false
 		for y, line := range strings.Split(view, "\n") {
-			if before, _, ok := strings.Cut(line, "Allow (a)"); ok {
+			if before, _, ok := strings.Cut(line, "Allow once"); ok {
 				x := ansi.StringWidth(before)
 				_, cmd = m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
 				require.NotNil(t, cmd)

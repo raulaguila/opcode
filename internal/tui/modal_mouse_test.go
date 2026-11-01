@@ -34,7 +34,7 @@ func TestPermissionClickMatchesRenderedRootAtEverySize(t *testing.T) {
 			frame := ansi.Strip(a.View().Content)
 			found := false
 			for y, line := range strings.Split(frame, "\n") {
-				if before, _, ok := strings.Cut(line, "Allow (a)"); ok {
+				if before, _, ok := strings.Cut(line, "Allow once"); ok {
 					_, cmd := a.Update(tea.MouseClickMsg{X: ansi.StringWidth(before), Y: y, Button: tea.MouseLeft})
 					require.NotNil(t, cmd, "visible approval target must be clickable:\n%s", frame)
 					response := cmd().(dialog.PermissionResponseMsg)

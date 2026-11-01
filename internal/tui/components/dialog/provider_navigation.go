@@ -229,7 +229,7 @@ func (m *providerDialogCmp) providerFooterClick(msg tea.MouseMsg) connectionActi
 		for _, action := range []struct {
 			label string
 			key   tea.KeyPressMsg
-		}{{config.Text("[Salvar]", "[Save]"), tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}}, {config.Text("[Catálogo]", "[Catalog]"), tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl}}, {config.Text("[Mais]", "[More]"), tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}}} {
+		}{{config.Text("Salvar · Ctrl+S", "Save · Ctrl+S"), tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}}, {config.Text("Testar catálogo", "Test catalog"), tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl}}, {config.Text("Avançado", "Advanced"), tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}}, {config.Text("Ocultar avançado", "Hide advanced"), tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}}} {
 			if clickedLabel(m.View(), action.label, msg) {
 				_, cmd := m.Update(action.key)
 				return connectionHandled(cmd)

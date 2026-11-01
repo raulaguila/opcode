@@ -29,7 +29,7 @@ func assertLiveProjectEditPolicy(t *testing.T, h *ptyUIHarness, conn *sql.DB, wo
 	h.paste(`First call request_tools with {"names":["write"],"replace":true} to load the native file tool. Then call write exactly once with {"file_path":"policy-created.txt","content":"PROJECT_EDIT_OK"}. Do not use bash, commands, patches or change any other file. After write succeeds, reply exactly POLICY_FILE_CREATED.`)
 	h.send("\r")
 	h.wait("real model creates file with scoped edit consent", 120*time.Second, func(frame string) bool {
-		if strings.Contains(frame, "Allow (a)") {
+		if strings.Contains(frame, "Allow once") {
 			h.send("d")
 			t.Fatalf("ordinary native project creation unexpectedly requested additional approval:\n%s", frame)
 		}

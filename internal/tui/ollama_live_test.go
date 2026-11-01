@@ -162,7 +162,7 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 	diagnosticSession = request.SessionID
 	validateLiveCommandApproval(t, application, request, command)
 	require.Empty(t, application.Processes.List(request.SessionID), "nothing executes before UI approval")
-	waitFrame("Allow (a)")
+	waitFrame("Allow once")
 	program.Send(testTextKey(string([]rune("a")), 0))
 	waitFrame("LIVE_READY")
 	processes := application.Processes.List(request.SessionID)

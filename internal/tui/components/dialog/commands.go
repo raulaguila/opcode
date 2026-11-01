@@ -79,7 +79,11 @@ type commandDialogCmp struct {
 	title      string
 	activeID   string
 	approvalID string
+	// featured: the leading, hand-ordered commands shown first as a group.
+	featured int
 }
+
+const featuredCommands = 6
 
 type commandKeyMap struct {
 	Enter  key.Binding
@@ -164,10 +168,38 @@ func (c *commandDialogCmp) geometry() commandGeometry {
 		available = max(1, available-1)
 	}
 	g.details = g.details[:min(len(g.details), max(0, available-1))]
-	g.count = max(1, min(8, available-len(g.details)))
+	room := max(1, min(8, available-len(g.details)))
 	_, selected := c.listView.GetSelectedItem()
-	g.start = max(0, selected-g.count+1)
+	items := c.listView.GetItems()
+	// Category headings take rows too: shrink the window until both fit.
+	for g.count = room; ; g.count-- {
+		g.start = max(0, selected-g.count+1)
+		headings := 0
+		for i := g.start; i < min(len(items), g.start+g.count); i++ {
+			if c.categoryHeading(i, g.start, items) {
+				headings++
+			}
+		}
+		if g.count <= 1 || g.count+headings <= room {
+			break
+		}
+	}
 	return g
+}
+
+// categoryHeading groups the unfiltered palette by category, like a menu.
+func (c *commandDialogCmp) categoryHeading(i, start int, items []Command) bool {
+	if c.activeID != "" || strings.TrimSpace(c.search.Value()) != "" || i >= len(items) {
+		return false
+	}
+	return i == start || c.commandGroup(i-1, items) != c.commandGroup(i, items)
+}
+
+func (c *commandDialogCmp) commandGroup(i int, items []Command) string {
+	if i < c.featured {
+		return config.Text("Principais", "Main")
+	}
+	return commands.Category(items[i].ID)
 }
 
 func (c *commandDialogCmp) detailLines(width int) []string {
@@ -182,10 +214,8 @@ func (c *commandDialogCmp) detailLines(width int) []string {
 			description = config.Text("Somente leitura neste modo; edições só em Executar. ", "Read only in this mode; edits only apply in Execute. ") + description
 		}
 	} else {
-		description = "/" + item.ID + " · " + description
-	}
-	if c.activeID == "" {
-		return []string{ansi.Truncate(description, width, "…")}
+		// Rows already carry the description inline.
+		return nil
 	}
 	return strings.Split(ansi.Wrap(description, width, ""), "\n")
 }
@@ -222,6 +252,9 @@ func (c *commandDialogCmp) View() string {
 	for i := g.start; i < min(len(items), g.start+g.count); i++ {
 		if c.approvalHeading(i, g.start, items) {
 			rows = append(rows, styles.PanelTitle().Render(config.Text("Aprovação", "Approval")))
+		}
+		if c.categoryHeading(i, g.start, items) {
+			rows = append(rows, styles.PanelHint().Render(strings.ToUpper(c.commandGroup(i, items))))
 		}
 		rows = append(rows, c.commandRow(items[i], i == selected, g.width))
 	}
@@ -270,16 +303,23 @@ func (c *commandDialogCmp) commandRow(item Command, selected bool, width int) st
 	if c.activeID != "" || width < 48 {
 		return style.Width(width).Render(ansi.Truncate(mark+name, width, "…"))
 	}
-	// A shortcut teaches more than a category; commands without one keep it.
-	category := commands.Category(item.ID)
+	// Title, a muted description and the shortcut as a key chip; commands
+	// without a shortcut show their slash form.
+	t := theme.CurrentTheme()
+	_, description := commands.Presentation(item.ID, item.Title, item.Description)
+	key := "/" + item.ID
+	chip := style.Foreground(t.TextMuted()).Bold(false).Render(key)
 	if shortcut := commandShortcut(item.ID); shortcut != "" {
-		category = keyLabel(shortcut)
+		key = " " + keyLabel(shortcut) + " "
+		chip = styles.BaseStyle().Background(t.BorderDim()).Foreground(styles.ReadableForeground(t.Text(), t.BorderDim())).Render(key)
 	}
-	titleWidth := max(1, width-ansi.StringWidth(category)-3)
-	title := ansi.Truncate(mark+name, titleWidth, "…")
-	title += strings.Repeat(" ", max(0, width-ansi.StringWidth(title)-ansi.StringWidth(category)))
-	quiet := style.Foreground(theme.CurrentTheme().TextMuted()).Bold(false).Render(category)
-	return style.Width(width).Render(title + quiet)
+	room := max(1, width-ansi.StringWidth(key)-2)
+	title := ansi.Truncate(mark+name, room, "…")
+	if gap := room - ansi.StringWidth(title) - 2; gap > 4 && description != "" {
+		title += "  " + style.Foreground(styles.ReadableForeground(t.TextMuted(), styles.PanelHint().GetBackground())).Bold(false).Render(ansi.Truncate(description, gap, "…"))
+	}
+	title += style.Render(strings.Repeat(" ", max(0, width-ansi.StringWidth(title)-ansi.StringWidth(key))))
+	return style.Width(width).Render(title + chip)
 }
 
 func (c *commandDialogCmp) BindingKeys() []key.Binding {
@@ -339,6 +379,22 @@ func (c *commandDialogCmp) filter() {
 		}
 	}
 	slices.SortStableFunc(matches, func(a, b Command) int { return commands.Rank(query, a.ID) - commands.Rank(query, b.ID) })
+	c.featured = 0
+	if query == "" && c.activeID == "" {
+		// Unfiltered, the palette reads as a menu: the hand-ordered leading
+		// commands first, then one group per category.
+		c.featured = min(featuredCommands, len(matches))
+		rest := matches[c.featured:]
+		order := map[string]int{}
+		for _, item := range rest {
+			if _, ok := order[commands.Category(item.ID)]; !ok {
+				order[commands.Category(item.ID)] = len(order)
+			}
+		}
+		slices.SortStableFunc(rest, func(a, b Command) int {
+			return order[commands.Category(a.ID)] - order[commands.Category(b.ID)]
+		})
+	}
 	c.listView.SetItems(matches)
 }
 
@@ -369,6 +425,9 @@ func updateCommandDialogCmpMouseMsg(c *commandDialogCmp, msg tea.MouseMsg) (util
 	row := g.firstRow
 	for i := g.start; i < min(len(items), g.start+g.count); i++ {
 		if c.approvalHeading(i, g.start, items) {
+			row++
+		}
+		if c.categoryHeading(i, g.start, items) {
 			row++
 		}
 		if msg.Mouse().X >= 3 && msg.Mouse().X < 3+g.width && msg.Mouse().Y == row {

@@ -217,12 +217,12 @@ func (m *modelDialogCmp) catalogView() string {
 	if m.loading {
 		note = config.Text("Carregando modelos…", "Loading provider models…")
 	}
-	rows = append(rows, line(note))
+	rows = append(rows, dialogHint(note, g.width))
 	active := m.activeModelID()
 	catalogViewScrollOffset(m, &g, t, &base, &rows, active)
 	catalogViewFiltered(m, line, &rows)
 	for _, detail := range m.modelDetailLines() {
-		rows = append(rows, line(detail))
+		rows = append(rows, dialogHint(detail, g.width))
 	}
 	// An empty unfiltered list has no position; the title keeps the room.
 	position := ""
@@ -315,7 +315,7 @@ func catalogViewScrollOffset(m *modelDialogCmp, g *modelGeometry, t theme.Theme,
 		group := ""
 		catalogViewScrollOffsetModelIDActive(active, &model, &prefs, &group)
 		rendered := fmt.Sprintf("%s %s %s", caret, mark, label)
-		rendered = modelRowGroup(rendered, group, modelRowContext(model), g.width, model.ID == active)
+		rendered = modelRowGroup(rendered, group, modelRowContext(model)+modelRowCapabilities(model, g.width), g.width, model.ID == active)
 		row := (*base)
 		if i == m.selectedIdx {
 			row = row.Background(t.BorderDim()).Foreground(t.Text()).Bold(true)
@@ -371,15 +371,10 @@ func modelDetailLinesDetails(m *modelDialogCmp, context string, effective string
 		selected := m.filtered[m.selectedIdx]
 		if selected.ContextWindow > 0 && selected.ID == m.activeContextModel && m.target == config.AgentCoder && selected.ContextWindow == m.activeContextWindow {
 			context = fmt.Sprintf(config.Text("Contexto em uso: %s", "Context in use: %s"), compactModelTokens(selected.ContextWindow))
-			if m.height > 0 && m.height < 18 {
-				return []string{context}, true
-			}
-			return []string{context, tools}, true
+			// Tools and images sit in the row itself; Ctrl+D has the rest.
+			return []string{context}, true
 		}
-		if m.height > 0 && m.height < 18 {
-			return []string{context, effective}, true
-		}
-		return []string{context, effective, tools}, true
+		return []string{context, effective}, true
 	}
 	return extractedResult0, false
 }
@@ -428,4 +423,19 @@ func catalogViewFiltered(m *modelDialogCmp, line func(s string) string, rows *[]
 		}
 		(*rows) = append((*rows), line(empty))
 	}
+}
+
+// modelRowCapabilities tags a row with what the provider reports it can do.
+func modelRowCapabilities(model models.Model, width int) string {
+	if width < 64 {
+		return ""
+	}
+	var tags string
+	if model.SupportsTools != nil && *model.SupportsTools {
+		tags += config.Text(" · ferramentas", " · tools")
+	}
+	if model.SupportsAttachments {
+		tags += config.Text(" · imagens", " · images")
+	}
+	return tags
 }

@@ -62,10 +62,9 @@ func TestPTYMarkdownProposalAndQuestionDivider(t *testing.T) {
 	require.Contains(t, frame, "choose or type")
 	require.Contains(t, frame, "F2 details")
 	lines := strings.Split(frame, "\n")
-	for i, line := range lines {
+	for _, line := range lines {
 		if strings.Contains(line, "choose or type") {
-			require.Greater(t, i, 0)
-			require.Contains(t, lines[i-1], strings.Repeat("─", 50), "divider must directly precede controls")
+			require.True(t, strings.HasPrefix(strings.TrimSpace(line), "╰─ "), "controls sit in the question frame's bottom border")
 		}
 	}
 	h.send("\x1b[B\x1b[B")

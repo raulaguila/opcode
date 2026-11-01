@@ -3,6 +3,7 @@ package page
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"strings"
 	"time"
 	"unicode"
@@ -16,6 +17,7 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
 	"github.com/raulaguila/opcode/internal/tui/styles"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/tui/util"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
@@ -98,6 +100,21 @@ func (p *chatPage) mode() workflow.Mode {
 	}
 	return workflow.Execute
 }
+
+// syncComposerMode frames the composer in the current mode's label and color.
+func (p *chatPage) syncComposerMode() {
+	composer, ok := p.composer.(interface{ SetMode(string, color.Color) })
+	if !ok {
+		return
+	}
+	t := theme.CurrentTheme()
+	accent := map[workflow.Mode]color.Color{workflow.Ask: t.Info(), workflow.Plan: t.Warning()}[p.mode()]
+	if accent == nil {
+		accent = t.Accent()
+	}
+	composer.SetMode(modeLabel(p.mode()), accent)
+}
+
 func modeLabel(mode workflow.Mode) string {
 	switch mode {
 	case workflow.Ask:

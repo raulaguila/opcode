@@ -279,6 +279,7 @@ func (p *chatPage) GetSize() (int, int) {
 }
 
 func (p *chatPage) View() string {
+	p.syncComposerMode()
 	if p.WorkspaceFocused() {
 		return p.workspaceView()
 	}
@@ -345,10 +346,8 @@ func NewChatPage(app *app.App) util.Model {
 		layout.WithPadding(1, 1, 0, 1),
 	)
 	composer := chat.NewEditorCmp(app)
-	editorContainer := layout.NewContainer(
-		composer,
-		layout.WithBorder(true, false, false, false),
-	)
+	// The composer draws its own frame in the mode color.
+	editorContainer := layout.NewContainer(composer)
 	return &chatPage{
 		inputEnabled:     true,
 		app:              app,

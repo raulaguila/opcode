@@ -451,6 +451,16 @@ func (h *ptyUIHarness) clearDraft() {
 	h.send(strings.Repeat("\x7f", 512))
 	h.wait("draft cleared", 5*time.Second, ptyUIComposerEmpty)
 }
+// ptyUIComposerText drops the composer frame's border cells: "│ > draft │"
+// reads as "> draft" and the frame's bottom edge as empty.
+func ptyUIComposerText(line string) string {
+	line = strings.TrimSpace(line)
+	if strings.HasPrefix(line, "╰") {
+		return ""
+	}
+	return strings.TrimSpace(strings.Trim(line, "│"))
+}
+
 func ptyUIComposerEmpty(frame string) bool {
 	if !ptyUIHasFooter(frame) {
 		return false
@@ -463,7 +473,7 @@ func ptyUIComposerEmpty(frame string) bool {
 		}
 	}
 	for index := len(lines) - 1; index >= 0; index-- {
-		line := strings.TrimSpace(lines[index])
+		line := ptyUIComposerText(lines[index])
 		if strings.HasPrefix(line, ">") {
 			return line == ">"
 		}
@@ -568,7 +578,7 @@ func (h *ptyUIHarness) assertComposer() {
 	frame := h.frame()
 	prompts, footers := 0, 0
 	for line := range strings.SplitSeq(frame, "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), ">") {
+		if strings.HasPrefix(ptyUIComposerText(line), ">") {
 			prompts++
 		}
 		if strings.Count(line, "▾") == 3 {

@@ -88,8 +88,18 @@ func PanelDivider(width int) string {
 // innerWidth; padX/padY are the blank cells between border and body.
 func Frame(body string, innerWidth, padX, padY int, title, meta, hint string) string {
 	t := theme.CurrentTheme()
-	bg := t.BackgroundSecondary()
-	border := BaseStyle().Background(bg).Foreground(t.TextMuted())
+	return FrameOn(body, innerWidth, padX, padY, title, meta, hint, t.TextMuted(), t.BackgroundSecondary())
+}
+
+// FrameOn is Frame with an explicit border/title accent and background, as
+// the composer uses for the current mode.
+func FrameOn(body string, innerWidth, padX, padY int, title, meta, hint string, accent, bg color.Color) string {
+	border := BaseStyle().Background(bg).Foreground(accent)
+	titleStyle := BaseStyle().Background(bg).Foreground(ReadableForeground(accent, bg)).Bold(true)
+	if accent == theme.CurrentTheme().TextMuted() {
+		titleStyle = PanelTitle().Background(bg)
+	}
+	hintStyle := HintOn(bg)
 	span := innerWidth + 2*padX
 	edge := func(left, right string, label lipgloss.Style, text, trailing string) string {
 		// "╭─ title ───── meta ─╮": labels sit two cells in from each corner.
@@ -112,7 +122,7 @@ func Frame(body string, innerWidth, padX, padY int, title, meta, hint string) st
 		}
 		tail := ""
 		if trailing != "" {
-			tail = border.Render(" ") + PanelHint().Render(trailing) + border.Render(" ")
+			tail = border.Render(" ") + hintStyle.Render(trailing) + border.Render(" ")
 			used += ansi.StringWidth(trailing) + 2
 		}
 		b.WriteString(border.Render(strings.Repeat("─", max(0, span-1-used-1))))
@@ -122,7 +132,7 @@ func Frame(body string, innerWidth, padX, padY int, title, meta, hint string) st
 	fill := BaseStyle().Background(bg)
 	pad := fill.Render(strings.Repeat(" ", padX))
 	blank := border.Render("│") + fill.Render(strings.Repeat(" ", span)) + border.Render("│")
-	rows := []string{edge("╭", "╮", PanelTitle(), title, meta)}
+	rows := []string{edge("╭", "╮", titleStyle, title, meta)}
 	for range padY {
 		rows = append(rows, blank)
 	}
@@ -134,6 +144,6 @@ func Frame(body string, innerWidth, padX, padY int, title, meta, hint string) st
 	for range padY {
 		rows = append(rows, blank)
 	}
-	rows = append(rows, edge("╰", "╯", PanelHint(), hint, ""))
+	rows = append(rows, edge("╰", "╯", hintStyle, hint, ""))
 	return strings.Join(rows, "\n")
 }

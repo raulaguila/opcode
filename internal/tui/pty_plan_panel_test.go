@@ -51,7 +51,7 @@ func TestPTYPlanPanelSharedStyleAndResizePreserveDraft(t *testing.T) {
 			h.paste("/plan")
 			h.send("\r")
 			h.wait("empty styled plan", 5*time.Second, func(frame string) bool {
-				return strings.Contains(frame, "No plan yet") && !strings.Contains(frame, "╭") && ptyUIComposerEmpty(frame)
+				return strings.Contains(frame, "No plan yet") && !strings.Contains(frame, "Alt+↑/↓ scroll") && ptyUIComposerEmpty(frame)
 			})
 			h.paste("Use update_plan to save the fixture plan and finish_task as planned without modifying files.")
 			h.send("\r")

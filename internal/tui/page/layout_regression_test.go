@@ -111,7 +111,8 @@ func testChatFrameFitsWithDraftPlanRecoveryAndQuestionState(state string, t *tes
 		require.LessOrEqual(t, lipgloss.Width(view), size[0], state)
 		prompts := 0
 		for line := range strings.SplitSeq(ansi.Strip(view), "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), ">") {
+			// The composer frame wraps the prompt in "│ … │".
+			if strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "│")), ">") {
 				prompts++
 			}
 		}

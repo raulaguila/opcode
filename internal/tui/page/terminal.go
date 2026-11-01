@@ -157,6 +157,7 @@ func (p *chatPage) terminalVisible() bool {
 }
 
 func (p *chatPage) resizeContent() tea.Cmd {
+	p.syncComposerMode()
 	height := p.height - p.composerPanelHeight()
 	if p.height >= 12 {
 		height--

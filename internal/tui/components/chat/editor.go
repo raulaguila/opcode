@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"os"
 	"os/exec"
@@ -50,6 +51,23 @@ type editorCmp struct {
 	submissionText        string
 	submissionUnassigned  bool
 	submissionAttachments []message.Attachment
+	// modeLabel and modeColor frame the composer in the current mode; empty
+	// keeps the plain prompt for hosts that draw their own border.
+	modeLabel string
+	modeColor color.Color
+}
+
+// SetMode labels and colors the composer frame with the session mode.
+func (m *editorCmp) SetMode(label string, accent color.Color) {
+	m.modeLabel, m.modeColor = label, accent
+}
+
+// frameRows are the rows the composer frame adds around the text.
+func (m *editorCmp) frameRows() int {
+	if m.modeLabel == "" {
+		return 0
+	}
+	return 2
 }
 
 type EditorKeyMaps struct {
@@ -258,22 +276,29 @@ func (m *editorCmp) View() string {
 		Bold(true).
 		Foreground(t.Primary())
 
+	var body string
 	if len(m.attachments) == 0 {
-		return lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"), m.textarea.View())
+		body = lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"), m.textarea.View())
+	} else {
+		m.textarea.SetHeight(max(1, m.height-m.frameRows()-m.attachmentRows(m.width)))
+		body = lipgloss.JoinVertical(lipgloss.Top,
+			m.attachmentsContent(),
+			lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"),
+				m.textarea.View()),
+		)
 	}
-	m.textarea.SetHeight(max(1, m.height-m.attachmentRows(m.width)))
-	return lipgloss.JoinVertical(lipgloss.Top,
-		m.attachmentsContent(),
-		lipgloss.JoinHorizontal(lipgloss.Top, style.Render(">"),
-			m.textarea.View()),
-	)
+	if m.modeLabel == "" {
+		return body
+	}
+	return styles.FrameOn(body, max(1, m.width-2), 0, 0, m.modeLabel, "", "", m.modeColor, t.Background())
 }
 
 func (m *editorCmp) SetSize(width, height int) tea.Cmd {
 	m.width = width
 	m.height = height
-	m.textarea.SetWidth(max(1, width-2))
-	m.textarea.SetHeight(max(1, height-m.attachmentRows(width)))
+	frame := m.frameRows()
+	m.textarea.SetWidth(max(1, width-2-frame))
+	m.textarea.SetHeight(max(1, height-frame-m.attachmentRows(width)))
 	return nil
 }
 
@@ -369,7 +394,7 @@ func newEditorWithDraftStorage(app *app.App, root, path string) *editorCmp {
 
 // DesiredHeight includes attachment rows and the surrounding editor border.
 func (m *editorCmp) DesiredHeight(width, available int) int {
-	textWidth := max(1, width-3)
+	textWidth := max(1, width-3-m.frameRows())
 	rows := 0
 	for line := range strings.SplitSeq(m.textarea.Value(), "\n") {
 		rows += max(1, (ansi.StringWidth(line)+textWidth-1)/textWidth)
@@ -381,10 +406,13 @@ func (m *editorCmp) DesiredHeight(width, available int) int {
 	// Keep useful writing space instead of capping it to a third of the screen.
 	// A short conversation viewport remains available as the input grows.
 	conversationRows := min(6, max(1, available/2))
+	// The host's top border is one row; the composer frame replaces it with two.
+	chrome := max(1, m.frameRows())
+	least := 1 + chrome
 	if available < 12 {
-		return min(max(2, rows+1), max(2, available/3))
+		return min(max(least, rows+chrome), max(least, available/3))
 	}
-	return min(max(2, rows+1), max(2, available-conversationRows))
+	return min(max(least, rows+chrome), max(least, available-conversationRows))
 }
 
 func (m *editorCmp) attachmentRows(width int) int {

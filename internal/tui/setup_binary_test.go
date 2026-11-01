@@ -264,7 +264,7 @@ func testBinaryFirstRunStateCase(t *testing.T, ctx context.Context, snapshot fun
 
 func testBinaryFirstRunFrame(frame []string, promptRow *int, footerRow *int) {
 	for row, line := range frame {
-		if strings.TrimSpace(line) == ">" {
+		if strings.TrimSpace(strings.Trim(strings.TrimSpace(line), "│")) == ">" {
 			(*promptRow) = row
 		}
 		if strings.Contains(line, "/ commands") {

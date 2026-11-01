@@ -41,10 +41,3 @@ func (m *Model) approvalView() string {
 	}
 	return strings.Join(out, "\n")
 }
-
-func (m *Model) approvalRows() int {
-	if m.approval == nil {
-		return 0
-	}
-	return 9
-}

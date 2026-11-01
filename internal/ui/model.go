@@ -40,6 +40,8 @@ type Model struct {
 	info     string   // a passing confirmation, shown in the footer
 	dialog   floating // the panel floating over the screen, if any
 	showPlan bool
+	question *question
+	task     workflow.Task
 }
 
 type tickMsg struct{}
@@ -103,6 +105,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.follow = m.transcript.AtBottom()
 		return m, cmd
 	case tickMsg:
+		m.poll()
 		if m.busy {
 			return m, tick()
 		}
@@ -131,6 +134,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if event.Error != nil {
 				m.notice = event.Error.Error()
 			}
+			m.poll()
 		}
 	}
 	m.refresh()
@@ -144,6 +148,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if m.dialog != nil {
 		cmd, _ := m.dialog.key(m, msg)
 		return cmd
+	}
+	if m.question != nil && msg.String() != "ctrl+c" {
+		return m.questionKey(msg)
 	}
 	switch msg.String() {
 	case "ctrl+c":
@@ -272,7 +279,10 @@ func (m *Model) layout() {
 	lines := strings.Count(m.composer.Value(), "\n") + 1
 	m.composer.SetWidth(max(1, m.width-8))
 	m.composer.SetHeight(min(6, max(1, lines)))
-	used := headerRows + m.composerRows() + footerRows + m.approvalRows()
+	used := headerRows + m.composerRows() + footerRows
+	if work := m.workView(); work != "" {
+		used += strings.Count(work, "\n") + 1
+	}
 	m.transcript.SetWidth(m.width)
 	m.transcript.SetHeight(max(1, m.height-used))
 	m.refresh()

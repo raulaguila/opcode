@@ -29,8 +29,8 @@ func (m *Model) View() tea.View {
 	body := ""
 	if m.width > 0 && m.height > 0 {
 		parts := []string{m.header(), m.transcript.View()}
-		if m.approval != nil {
-			parts = append(parts, m.approvalView())
+		if work := m.workView(); work != "" {
+			parts = append(parts, work)
 		}
 		parts = append(parts, m.composerView(), m.footer())
 		body = lipgloss.NewStyle().Background(P.Ground).Width(m.width).Height(m.height).MaxHeight(m.height).Render(strings.Join(parts, "\n"))

@@ -159,7 +159,7 @@ func conversationWorkspace(t *testing.T, endpoint string) (home, workspace, data
 }
 
 func conversationCompleted(frame string) bool {
-	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Perfeito") && strings.Contains(frame, "You answered: Agora não") && !strings.Contains(frame, "Agent question") && ptyUIIdleFooter(frame)
+	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Perfeito") && strings.Contains(frame, "You answered: Agora não") && !strings.Contains(frame, "╭─ Agent question") && ptyUIIdleFooter(frame)
 }
 
 func assertConversationOrder(t *testing.T, frame string) {

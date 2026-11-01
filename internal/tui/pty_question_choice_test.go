@@ -102,7 +102,7 @@ func testPTYQuestionChoice(t *testing.T, binary string, suggested bool) {
 }
 
 func questionExchangeCompleted(frame, answer string) bool {
-	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Agent question") && strings.Contains(frame, "Quer implementar as melhorias?") && strings.Contains(frame, "You answered: "+answer) && strings.Contains(frame, "Perfeito") && !strings.Contains(frame, "Agent question") && ptyUIIdleFooter(frame)
+	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Agent question") && strings.Contains(frame, "Quer implementar as melhorias?") && strings.Contains(frame, "You answered: "+answer) && strings.Contains(frame, "Perfeito") && !strings.Contains(frame, "╭─ Agent question") && ptyUIIdleFooter(frame)
 }
 
 func assertQuestionExchangeOrder(t *testing.T, frame string) {

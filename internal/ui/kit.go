@@ -18,6 +18,7 @@ type Box struct {
 	Accent, Background  color.Color
 	TitleColor          color.Color // defaults to Strong
 	Dashed              bool        // a dashed edge, for what is off or only offered
+	Outer               color.Color // the ground the edge sits on; Background when nil
 }
 
 // Render draws the box around body; body lines are clipped and padded.
@@ -34,7 +35,13 @@ func (b Box) Render(body string) string {
 	if titleColor == nil {
 		titleColor = P.Strong
 	}
-	edge := on(bg, accent)
+	outer := b.Outer
+	if outer == nil {
+		outer = bg
+	}
+	// The edge sits on the ground around the box, so a tinted card stays
+	// inside its rounded corners.
+	edge := on(outer, accent)
 	h, v := "─", "│"
 	if b.Dashed {
 		h, v = "┄", "┆"
@@ -42,7 +49,7 @@ func (b Box) Render(body string) string {
 	inner := max(1, b.Width-2)
 	content := max(1, inner-2*b.PadX)
 	label := func(text string, c color.Color, bold bool) string {
-		return on(bg, c).Bold(bold).Render(text)
+		return on(outer, c).Bold(bold).Render(text)
 	}
 	border := func(left, right, title, meta string, titleStyle func(string) string) string {
 		// "╭─ title ──── meta ─╮": labels sit two cells in from the corners.

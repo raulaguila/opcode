@@ -40,7 +40,7 @@ func (m *Model) approvalView() string {
 		title = config.Text("Aprovar acesso à rede", "Approve network access")
 	}
 	bg := P.ApprovalCard
-	box := Box{Title: title, Meta: request.ToolName, Width: m.width - 2*gutter + 2, PadX: 2, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg}
+	box := Box{Title: title, Meta: request.ToolName, Width: m.width - 2*gutter + 2, PadX: 2, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg, Outer: P.Ground}
 	inner := box.Inner()
 	preview, added, removed := diffPreview(diff, inner)
 	if diff != "" {

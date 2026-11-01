@@ -144,7 +144,7 @@ func (m *Model) answerQuestion() tea.Cmd {
 func (m *Model) questionView() string {
 	q := m.question
 	item := q.item()
-	box := Box{Title: textFor("Pergunta do agente", "Agent question"), Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Ask, TitleColor: P.Ask, Background: P.AskCard}
+	box := Box{Title: textFor("Pergunta do agente", "Agent question"), Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Ask, TitleColor: P.Ask, Background: P.AskCard, Outer: P.Ground}
 	if n := len(q.q.Questions); n > 1 {
 		box.Meta = fmt.Sprintf(textFor("%d de %d", "%d of %d"), q.index+1, n)
 	}
@@ -241,7 +241,7 @@ func (m *Model) planView() string {
 	box := Box{
 		Title: fmt.Sprintf(textFor("Plano · %d de %d concluídas", "Plan · %d of %d completed"), done, len(steps)),
 		Meta:  modeLabel(string(m.task.Mode)) + textFor(" · tarefa salva", " · task saved"),
-		Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg,
+		Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg, Outer: P.Ground,
 	}
 	inner := box.Inner()
 	filled := done * inner / max(1, len(steps))
@@ -323,7 +323,7 @@ func (m *Model) togglePlan() tea.Cmd {
 // failureView is the proposal's error card: what stopped, that the draft and
 // progress were kept, and the ways forward as buttons.
 func (m *Model) failureView() string {
-	box := Box{Width: m.width - 2*gutter + 2, PadX: 2, PadY: 1, Accent: P.DangerEdge, Background: P.DangerCard}
+	box := Box{Width: m.width - 2*gutter + 2, PadX: 2, PadY: 1, Accent: P.DangerEdge, Background: P.DangerCard, Outer: P.Ground}
 	inner := box.Inner()
 	reason := strings.Join(strings.Fields(m.failure.Error()), " ")
 	bg := P.DangerCard

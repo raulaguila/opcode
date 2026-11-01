@@ -345,7 +345,7 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ainda.", "No connections yet.")), "")
 	}
 	for i, c := range list {
-		box := Box{Width: width, PadX: 1, Accent: P.CardEdge, Background: P.Card}
+		box := Box{Width: width, PadX: 1, Accent: P.CardEdge, Background: P.Card, Outer: P.Surface}
 		if i == p.selected {
 			box.Accent, box.Background = P.CardSelectedEdge, P.CardSelected
 		}
@@ -375,9 +375,10 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 				detail += on(bg, P.Muted).Render(" · ") + on(bg, color).Render(probe.text)
 			}
 			gap := on(bg, bg).Render(" ")
-			buttons := Button(textFor("Editar", "Edit"), false, P.Ask) + gap + Button(textFor("Testar", "Test"), false, P.Ask) + gap + Button(textFor("Modelos", "Models"), false, P.Ask)
+			button := func(label string) string { return on(P.Segment, P.Strong).Render(" " + label + " ") }
+			buttons := button(textFor("Editar", "Edit")) + gap + button(textFor("Testar", "Test")) + gap + button(textFor("Modelos", "Models"))
 			if keyMissing(c) {
-				buttons = Button(textFor("Editar", "Edit"), false, P.Ask) + gap + Button(textFor("Desativar", "Disable"), false, P.Ask)
+				buttons = button(textFor("Editar", "Edit")) + gap + button(textFor("Desativar", "Disable"))
 			}
 			if i == p.selected && p.deleting {
 				buttons = on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels"))

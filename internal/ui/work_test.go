@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -53,4 +54,19 @@ func TestPlanCardAndStrip(t *testing.T) {
 	require.Contains(t, card, "✓ 1. Ler")
 	require.Contains(t, card, "● 2. Ligar")
 	require.Contains(t, card, "○ 3. Testar")
+}
+
+func TestFailureCardNamesTheCauseAndHidesTheRawError(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 100, 30
+	m.failure = errors.New("dial tcp 127.0.0.1:11434: connection refused")
+	view := ansi.Strip(m.workView())
+	require.Contains(t, view, "■ Run stopped")
+	require.Contains(t, view, "Provider unavailable")
+	require.Contains(t, view, "Resume · Ctrl+R")
+	require.NotContains(t, view, "11434", "the raw reason waits for Ctrl+E")
+	m.failureKey("ctrl+e")
+	require.Contains(t, ansi.Strip(m.workView()), "connection refused")
+	m.failureKey("esc")
+	require.Nil(t, m.failure)
 }

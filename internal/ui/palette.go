@@ -97,3 +97,12 @@ func results(n int) string {
 	}
 	return fmt.Sprintf(textFor("%d resultados", "%d results"), n)
 }
+
+// openPaletteWith opens the palette already filtered, as a footer control does.
+func (m *Model) openPaletteWith(query string) tea.Cmd {
+	cmd := m.openPalette()
+	if d, ok := m.dialog.(*listDialog); ok {
+		d.list.SetQuery(query)
+	}
+	return cmd
+}

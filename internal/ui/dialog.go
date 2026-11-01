@@ -126,5 +126,6 @@ func (m *Model) overlay(base string) string {
 	panel := m.dialog.view(m)
 	x := max(0, (m.width-ansi.StringWidth(strings.SplitN(panel, "\n", 2)[0]))/2)
 	y := max(1, (m.height-strings.Count(panel, "\n")-1)/3)
+	m.placeHosted(x, y)
 	return layout.PlaceOverlay(x, y, panel, base, false)
 }

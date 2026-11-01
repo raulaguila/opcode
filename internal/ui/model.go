@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
@@ -42,6 +44,10 @@ type Model struct {
 	showPlan bool
 	question *question
 	task     workflow.Task
+
+	failure     error  // why the last run stopped, until dismissed
+	showFailure bool   // the raw reason, on request
+	lastText    string // the last message sent, for resuming
 }
 
 type tickMsg struct{}
@@ -83,10 +89,44 @@ func New(a *app.App, initial ...session.Session) *Model {
 func (m *Model) Init() tea.Cmd { return textarea.Blink }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, ok := m.settingsMessage(msg); ok {
+		return m, cmd
+	}
+	// A hosted settings dialog also hears its own async results.
+	var hostedCmd tea.Cmd
+	if h, ok := m.dialog.(*hosted); ok {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseMsg, tea.WindowSizeMsg:
+		default:
+			hostedCmd = h.forward(msg)
+		}
+	}
+	model, cmd := m.update(msg)
+	return model, tea.Batch(hostedCmd, cmd)
+}
+
+func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
+		if h, ok := m.dialog.(*hosted); ok {
+			return m, h.forward(msg)
+		}
+		return m, nil
+	case tea.MouseMsg:
+		if _, ok := m.dialog.(*hosted); ok {
+			return m, m.hostedMouse(msg)
+		}
+		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft && m.dialog == nil {
+			return m, m.click(click.X, click.Y)
+		}
+		if wheel, ok := msg.(tea.MouseWheelMsg); ok {
+			var cmd tea.Cmd
+			m.transcript, cmd = m.transcript.Update(wheel)
+			m.follow = m.transcript.AtBottom()
+			return m, cmd
+		}
 		return m, nil
 	case tea.KeyPressMsg:
 		return m, m.key(msg)
@@ -99,11 +139,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.composer.InsertString(msg.Content)
 		m.layout()
 		return m, nil
-	case tea.MouseWheelMsg:
-		var cmd tea.Cmd
-		m.transcript, cmd = m.transcript.Update(msg)
-		m.follow = m.transcript.AtBottom()
-		return m, cmd
 	case tickMsg:
 		m.poll()
 		if m.busy {
@@ -131,8 +166,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		event := msg.Payload
 		if event.Type == agent.AgentEventTypeError || event.Done || event.Type == agent.AgentEventTypeResponse {
 			m.busy = m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID)
-			if event.Error != nil {
-				m.notice = event.Error.Error()
+			switch {
+			case errors.Is(event.Error, agent.ErrRequestCancelled):
+				m.info = textFor("Execução cancelada · rascunho preservado", "Run cancelled · draft kept")
+			case event.Error != nil:
+				m.failure = event.Error
 			}
 			m.poll()
 		}
@@ -151,6 +189,11 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	if m.question != nil && msg.String() != "ctrl+c" {
 		return m.questionKey(msg)
+	}
+	if m.failure != nil {
+		if cmd, ok := m.failureKey(msg.String()); ok {
+			return cmd
+		}
 	}
 	switch msg.String() {
 	case "ctrl+c":
@@ -244,6 +287,7 @@ func (m *Model) submit() tea.Cmd {
 		return nil
 	}
 	m.composer.Reset()
+	m.lastText, m.failure, m.info = text, nil, ""
 	m.busy, m.started, m.notice, m.follow = true, time.Now(), "", true
 	m.layout()
 	return tick()
@@ -301,4 +345,22 @@ func (m *Model) refresh() {
 	if m.follow {
 		m.transcript.GotoBottom()
 	}
+}
+
+// click handles the footer controls and the mode's name on the composer.
+func (m *Model) click(x, y int) tea.Cmd {
+	switch y {
+	case m.height - 1:
+		if x < 3+ansi.StringWidth(textFor("Aprov.: editar no projeto ▾", "Approval: project edits ▾")) && x < m.width/3 {
+			return m.openPaletteWith(textFor("Aprovação", "Approval"))
+		}
+		if m.app != nil && m.app.CoderAgent != nil && x >= m.width-2-ansi.StringWidth(modelName(m.app.CoderAgent.Model().ID)+" ▾") {
+			return m.openModels()
+		}
+	case m.height - 1 - m.composerRows():
+		if x >= 2 && x < 4+ansi.StringWidth(modeLabel(m.mode)) {
+			m.cycleMode()
+		}
+	}
+	return nil
 }

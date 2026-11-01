@@ -299,10 +299,85 @@ func (m *Model) workView() string {
 		return m.approvalView()
 	case m.question != nil:
 		return m.questionView()
+	case m.failure != nil:
+		return m.failureView()
 	case len(m.task.Steps) > 0 && m.showPlan:
 		return m.planView()
 	case len(m.task.Steps) > 0 && m.width >= 40:
 		return m.planStrip()
 	}
 	return ""
+}
+
+func (m *Model) togglePlan() tea.Cmd {
+	m.poll()
+	m.showPlan = !m.showPlan
+	m.layout()
+	return nil
+}
+
+// failureView is the proposal's error card: what stopped, that the draft and
+// progress were kept, and the ways forward as buttons.
+func (m *Model) failureView() string {
+	box := Box{Title: "■ " + textFor("Execução interrompida", "Run stopped"), Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Danger, TitleColor: P.Danger, Background: P.Surface,
+		Legend: textFor("Ctrl+R retomar · Ctrl+O modelo · Ctrl+E detalhes · Esc dispensar", "Ctrl+R resume · Ctrl+O model · Ctrl+E details · Esc dismiss")}
+	inner := box.Inner()
+	reason := strings.Join(strings.Fields(m.failure.Error()), " ")
+	rows := []string{
+		on(P.Surface, P.Strong).Bold(true).Render(" " + ansi.Truncate(failureTitle(reason), inner-2, "…")),
+		on(P.Surface, P.Muted).Render(" " + textFor("Rascunho e progresso foram preservados.", "Draft and progress were kept.")),
+	}
+	if m.showFailure {
+		for _, line := range strings.Split(ansi.Wrap(reason, inner-2, ""), "\n") {
+			rows = append(rows, on(P.Surface, P.Faint).Render(" "+line))
+		}
+	}
+	rows = append(rows, "", " "+Button(textFor("Retomar · Ctrl+R", "Resume · Ctrl+R"), true, P.Danger)+on(P.Surface, P.Surface).Render("  ")+
+		Button(textFor("Trocar modelo · Ctrl+O", "Change model · Ctrl+O"), false, P.Danger)+on(P.Surface, P.Surface).Render("  ")+
+		Button(textFor("Detalhes · Ctrl+E", "Details · Ctrl+E"), false, P.Danger))
+	for i := range rows {
+		rows[i] = Line(rows[i], inner, P.Surface)
+	}
+	return indentBlock(box.Render(strings.Join(rows, "\n")))
+}
+
+// failureTitle names the common causes in the user's words.
+func failureTitle(reason string) string {
+	lower := strings.ToLower(reason)
+	switch {
+	case strings.Contains(lower, "context canceled"), strings.Contains(lower, "cancel"):
+		return textFor("Execução cancelada", "Run cancelled")
+	case strings.Contains(lower, "out of memory"):
+		return textFor("Memória insuficiente no servidor do modelo", "The model server ran out of memory")
+	case strings.Contains(lower, "connection refused"), strings.Contains(lower, "deadline exceeded"), strings.Contains(lower, "no such host"):
+		return textFor("Provedor indisponível", "Provider unavailable")
+	case strings.Contains(lower, "401"), strings.Contains(lower, "unauthorized"), strings.Contains(lower, "api key"):
+		return textFor("Autenticação necessária", "Authentication required")
+	case strings.Contains(lower, "repeated tool calls"), strings.Contains(lower, "failed 3 times"):
+		return textFor("O modelo repetiu a mesma ação sem progresso", "The model repeated the same action without progress")
+	case strings.Contains(lower, "step limit"), strings.Contains(lower, "max steps"):
+		return textFor("Limite de etapas atingido", "Step limit reached")
+	}
+	return textFor("A execução parou com um erro", "The run stopped with an error")
+}
+
+func (m *Model) failureKey(key string) (tea.Cmd, bool) {
+	switch key {
+	case "ctrl+r":
+		m.failure, m.showFailure = nil, false
+		if m.lastText != "" {
+			m.composer.SetValue(m.lastText)
+			return m.submit(), true
+		}
+		return nil, true
+	case "ctrl+e":
+		m.showFailure = !m.showFailure
+		m.layout()
+		return nil, true
+	case "esc":
+		m.failure, m.showFailure = nil, false
+		m.layout()
+		return nil, true
+	}
+	return nil, false
 }

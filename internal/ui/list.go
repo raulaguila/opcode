@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"strings"
 )
 
@@ -8,6 +9,7 @@ import (
 // row's end (a shortcut, a size); Mark sits before the title (✓, ●).
 type Item struct {
 	ID, Title, Desc, Right, Group, Mark string
+	MarkColor                           color.Color // Success when nil
 	Faint                               bool
 	Value                               any
 }
@@ -20,6 +22,8 @@ type List struct {
 	Selected int
 	Offset   int
 	Grouped  bool
+	Cursor   string // drawn in the mark column of the selected row ("◆")
+	Chips    bool   // Right is a key, drawn as a chip
 }
 
 // Visible is the filtered items, in order.
@@ -115,18 +119,22 @@ func (l *List) Render(width, rows int) []string {
 		return []string{on(P.Surface, P.Muted).Render("  " + empty())}
 	}
 	layout := l.layout(rows)
+	marks := l.Cursor != ""
+	for _, item := range items {
+		marks = marks || item.Mark != ""
+	}
 	out := make([]string, 0, len(layout))
 	for k, i := range layout {
 		if i < 0 {
 			out = append(out, on(P.Surface, P.Muted).Render("  "+strings.ToUpper(items[layout[k+1]].Group)))
 			continue
 		}
-		out = append(out, l.row(items[i], i == l.Selected, width))
+		out = append(out, l.row(items[i], i == l.Selected, marks, width))
 	}
 	return out
 }
 
-func (l *List) row(item Item, selected bool, width int) string {
+func (l *List) row(item Item, selected, marks bool, width int) string {
 	bg, fg := P.Surface, P.Text
 	if item.Faint {
 		fg = P.Faint
@@ -136,9 +144,19 @@ func (l *List) row(item Item, selected bool, width int) string {
 		bg, fg = P.Selected, P.Strong
 		bar = on(P.Surface, P.Ask).Render("▌") + on(bg, bg).Render(" ")
 	}
+	// Rows line up past a shared mark column, as in the proposal.
 	mark := ""
-	if item.Mark != "" {
-		mark = on(bg, P.Success).Render(item.Mark) + on(bg, fg).Render(" ")
+	switch {
+	case item.Mark != "":
+		markColor := item.MarkColor
+		if markColor == nil {
+			markColor = P.Success
+		}
+		mark = on(bg, markColor).Render(item.Mark) + on(bg, fg).Render(" ")
+	case selected && l.Cursor != "":
+		mark = on(bg, P.Ask).Render(l.Cursor) + on(bg, fg).Render(" ")
+	case marks:
+		mark = on(bg, bg).Render("  ")
 	}
 	title := on(bg, fg).Bold(selected).Render(item.Title)
 	if query := strings.TrimSpace(l.Query); query != "" {
@@ -151,7 +169,10 @@ func (l *List) row(item Item, selected bool, width int) string {
 		left += on(bg, P.Muted).Render("  " + item.Desc)
 	}
 	right := ""
-	if item.Right != "" {
+	switch {
+	case item.Right != "" && l.Chips:
+		right = on(P.Raised, P.Muted).Render(" "+item.Right+" ") + on(bg, bg).Render(" ")
+	case item.Right != "":
 		right = on(bg, P.Muted).Render(item.Right) + on(bg, bg).Render(" ")
 	}
 	return Spread(left, right, width, bg)

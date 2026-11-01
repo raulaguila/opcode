@@ -53,7 +53,8 @@ func (m *Model) openPalette() tea.Cmd {
 		legend:       textFor("↑↓ escolher · Enter abrir · Esc fechar", "↑↓ choose · Enter open · Esc close"),
 		searchPrompt: "/",
 		width:        74,
-		list:         List{Items: items, Grouped: true},
+		placeholder:  textFor("Buscar comando", "Search commands"),
+		list:         List{Items: items, Grouped: true, Cursor: "◆", Chips: true},
 		meta: func(d *listDialog) string {
 			if d.list.Query != "" {
 				return results(len(d.list.Visible()))

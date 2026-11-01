@@ -41,3 +41,12 @@ func TestListSearchRanksTitleMatchesFirst(t *testing.T) {
 	require.Equal(t, "Plano", l.Visible()[0].Title)
 	require.Len(t, l.Visible(), 2)
 }
+
+func TestKeyRowPushesTheLastPairRight(t *testing.T) {
+	rows := KeyRow("Enter usar · Tab provedor · Esc fechar", 50, P.Surface)
+	require.Len(t, rows, 2)
+	row := ansi.Strip(rows[1])
+	require.Equal(t, 50, ansi.StringWidth(row))
+	require.True(t, strings.HasPrefix(row, "Enter usar   Tab provedor"))
+	require.True(t, strings.HasSuffix(row, "Esc fechar"))
+}

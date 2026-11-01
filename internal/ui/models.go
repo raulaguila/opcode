@@ -3,7 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
-	"image/color"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -26,6 +26,7 @@ type modelPicker struct {
 	providers []models.ModelProvider
 	provider  models.ModelProvider
 	catalog   []models.Model
+	active    models.ModelID
 	loading   bool
 	details   bool
 	err       error
@@ -100,6 +101,7 @@ func (m *Model) openModels() tea.Cmd {
 		title:        textFor("Escolher modelo", "Choose model"),
 		legend:       textFor("Enter usar · Tab provedor · Ctrl+D detalhes · Ctrl+P conexão · Esc fechar", "Enter use · Tab provider · Ctrl+D details · Ctrl+P connection · Esc close"),
 		searchPrompt: "⌕",
+		placeholder:  textFor("Buscar por nome ou ID", "Search by name or ID"),
 		width:        96,
 		list:         List{Grouped: true},
 		meta:         func(*listDialog) string { return picker.meta() },
@@ -107,6 +109,7 @@ func (m *Model) openModels() tea.Cmd {
 		choose:       picker.choose,
 		keys:         picker.keys,
 	}
+	picker.setDetails(false)
 	m.dialog = picker
 	return picker.load()
 }
@@ -130,42 +133,62 @@ func (p *modelPicker) load() tea.Cmd {
 }
 
 // accept fills the list: local models first, then hosted ones; the active
-// model carries a check and its details.
+// model carries a check.
 func (p *modelPicker) accept(m *Model, msg catalogMsg) {
 	if msg.provider != p.provider {
 		return
 	}
 	p.loading, p.err, p.catalog = false, msg.err, msg.models
-	active := models.ModelID("")
 	if m.app != nil && m.app.CoderAgent != nil {
-		active = m.app.CoderAgent.Model().ID
+		p.active = m.app.CoderAgent.Model().ID
 	}
+	p.fill()
+}
+
+// fill lists the catalog. The details view drops groups and facts, and shows
+// embedding models greyed out, as the proposal does.
+func (p *modelPicker) fill() {
 	var items []Item
-	for _, model := range msg.models {
-		if model.EmbeddingOnly() {
+	for _, model := range p.catalog {
+		item := Item{ID: string(model.ID), Title: modelLabel(model), Value: model, Group: textFor("Locais", "Local")}
+		switch {
+		case model.EmbeddingOnly() && !p.details:
 			continue
+		case model.EmbeddingOnly():
+			item.Faint, item.Right = true, "embeddings"
+		case !p.details:
+			item.Right = modelFacts(model, model.ID == p.active)
 		}
-		item := Item{ID: string(model.ID), Title: modelLabel(model), Right: modelFacts(model, model.ID == active), Value: model, Group: textFor("Locais", "Local")}
 		if isCloud(model) {
 			item.Group = textFor("Nuvem", "Cloud")
 		}
-		if model.ID == active {
+		if model.ID == p.active {
 			item.Mark = "✓"
 		}
 		items = append(items, item)
 	}
-	slices.SortStableFunc(items, func(a, b Item) int {
-		if a.Mark != b.Mark {
-			return strings.Compare(b.Mark, a.Mark)
+	rank := func(item Item) int {
+		switch {
+		case item.Faint:
+			return 3
+		case item.Mark != "":
+			return 0
+		case isCloudGroup(item):
+			return 2
 		}
-		if a.Group != b.Group {
-			return strings.Compare(b.Group, a.Group)
+		return 1
+	}
+	slices.SortStableFunc(items, func(a, b Item) int {
+		if ra, rb := rank(a), rank(b); ra != rb {
+			return ra - rb
 		}
 		return strings.Compare(a.Title, b.Title)
 	})
-	// Local stays above Cloud even after the active model is lifted.
-	slices.SortStableFunc(items, func(a, b Item) int { return boolRank(isCloudGroup(a)) - boolRank(isCloudGroup(b)) })
-	p.list = List{Items: items, Grouped: true}
+	// The active cloud model leads the list but stays in its group.
+	if len(items) > 0 && items[0].Mark != "" && isCloudGroup(items[0]) {
+		slices.SortStableFunc(items, func(a, b Item) int { return boolRank(isCloudGroup(a)) - boolRank(isCloudGroup(b)) })
+	}
+	p.list = List{Items: items, Grouped: !p.details}
 }
 
 func isCloudGroup(item Item) bool { return item.Group == textFor("Nuvem", "Cloud") }
@@ -182,14 +205,11 @@ func isCloud(model models.Model) bool {
 	return model.Hosting == "cloud" || strings.HasSuffix(name, ":cloud") || strings.HasSuffix(name, "-cloud")
 }
 
+// modelLabel is the model's API ID, as the proposal lists it: catalog names
+// drop the size tag ("Gemma4" for gemma4:12b).
 func modelLabel(model models.Model) string {
-	// Catalog names drop the size tag ("Gemma4" for gemma4:12b); the ID keeps it.
-	squash := func(s string) string { return strings.ToLower(strings.ReplaceAll(s, " ", "")) }
-	if model.APIModel != "" && (model.Name == "" || model.Name == string(model.ID) || strings.HasPrefix(squash(model.APIModel), squash(model.Name))) {
+	if model.APIModel != "" {
 		return model.APIModel
-	}
-	if model.Name != "" {
-		return model.Name
 	}
 	return string(model.ID)
 }
@@ -237,6 +257,11 @@ func (p *modelPicker) meta() string {
 	switch {
 	case p.provider == "":
 		return ""
+	case p.details:
+		if host := providerHost(p.provider); host != "" {
+			return name + " · " + host
+		}
+		return name
 	case p.loading:
 		return name + textFor(" · carregando…", " · loading…")
 	case p.list.Query != "":
@@ -245,26 +270,45 @@ func (p *modelPicker) meta() string {
 	return fmt.Sprintf(textFor("%s · %d de %d", "%s · %d of %d"), name, chat, len(p.catalog))
 }
 
-// tabs are the enabled providers; the selected one is filled.
-func (p *modelPicker) tabs(_ *Model, width int) []string {
-	row := ""
-	for _, provider := range p.providers {
-		label := " " + providerName(provider) + " "
-		if provider == p.provider {
-			row += on(P.Selected, P.Strong).Bold(true).Render(label)
-		} else {
-			row += on(P.Surface, P.Muted).Render(label)
-		}
-		row += on(P.Surface, P.Surface).Render(" ")
+// providerHost is the connection's address without scheme and path.
+func providerHost(p models.ModelProvider) string {
+	cfg := config.Get()
+	base := cfg.Providers[p].BaseURL
+	if id, ok := strings.CutPrefix(string(p), "profile:"); ok {
+		base = cfg.ProviderProfiles[id].BaseURL
 	}
-	rows := []string{Line(ansi.Truncate(row, width, "…"), width, P.Surface)}
+	if u, err := url.Parse(base); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return ""
+}
+
+// tabs are the enabled providers; the selected one is raised.
+func (p *modelPicker) tabs(_ *Model, width int) []string {
+	var rows []string
+	if !p.details {
+		row := ""
+		for _, provider := range p.providers {
+			label := " " + providerName(provider) + " "
+			if provider == p.provider {
+				row += on(P.Raised, P.Strong).Bold(true).Render(label)
+			} else {
+				row += on(P.Surface, P.Muted).Render(label)
+			}
+			row += on(P.Surface, P.Surface).Render(" ")
+		}
+		rows = append(rows, Line(ansi.Truncate(row, width, "…"), width, P.Surface), "")
+	}
 	switch {
 	case p.provider == "":
 		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ativa · Ctrl+P configura uma", "No active connection · Ctrl+P sets one up")))
 	case p.err != nil:
 		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(textFor("Catálogo indisponível: ", "Catalog unavailable: ")+p.err.Error(), width, "…")))
 	}
-	return append(rows, Line("", width, P.Surface))
+	if len(rows) > 0 && rows[len(rows)-1] != "" {
+		rows = append(rows, "")
+	}
+	return rows
 }
 
 func (p *modelPicker) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
@@ -282,12 +326,7 @@ func (p *modelPicker) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		p.catalog, p.list = nil, List{Grouped: true}
 		return p.load(), true
 	case "ctrl+d":
-		p.details = !p.details
-		if p.details {
-			p.side = p.detailColumn
-		} else {
-			p.side = nil
-		}
+		p.setDetails(!p.details)
 		return nil, true
 	case "ctrl+p":
 		m.dialog = nil
@@ -296,7 +335,32 @@ func (p *modelPicker) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	return nil, false
 }
 
+// setDetails switches to the proposal's two-column sheet and back, keeping
+// the selected model.
+func (p *modelPicker) setDetails(on bool) {
+	current, _ := p.list.Current()
+	p.details, p.noSearch, p.side, p.split, p.width = on, on, nil, 0, 96
+	p.title = textFor("Escolher modelo", "Choose model")
+	p.legend = textFor("Enter usar · Tab provedor · Ctrl+D detalhes · Ctrl+P conexão · Esc fechar", "Enter use · Tab provider · Ctrl+D details · Ctrl+P connection · Esc close")
+	if on {
+		p.side, p.split, p.width = p.detailColumn, 36, 120
+		p.title = textFor("Escolher modelo · detalhes", "Choose model · details")
+		p.legend = textFor("Enter usar · Ctrl+D ocultar detalhes · Tab provedor · Esc fechar", "Enter use · Ctrl+D hide details · Tab provider · Esc close")
+	}
+	p.fill()
+	for i, item := range p.list.Visible() {
+		if item.ID == current.ID {
+			p.list.Selected = i
+			p.list.keepVisible(min(listRows, 20))
+		}
+	}
+}
+
 func (p *modelPicker) choose(m *Model, item Item) tea.Cmd {
+	if item.Faint {
+		m.info = textFor("Modelo de embeddings: não conversa", "Embedding model: not for chat")
+		return nil
+	}
 	model := item.Value.(models.Model)
 	selected, err := m.app.CoderAgent.SelectModel(config.AgentCoder, model)
 	if err != nil {
@@ -309,48 +373,57 @@ func (p *modelPicker) choose(m *Model, item Item) tea.Cmd {
 	return nil
 }
 
-// detailColumn is the proposal's model sheet: name, capability tags and a
-// key-value list.
+// detailColumn is the proposal's model sheet: the ID, capability chips, a
+// key-value list and the action.
 func (p *modelPicker) detailColumn(_ *Model, item Item, width int) []string {
 	model := item.Value.(models.Model)
-	tag := func(text string, c color.Color) string { return on(P.Surface, c).Render("[" + text + "]") }
-	tags := []string{}
-	if model.SupportsTools != nil && *model.SupportsTools {
-		tags = append(tags, tag(textFor("ferramentas", "tools"), P.Success))
+	var tags string
+	if model.EmbeddingOnly() {
+		tags += Chip("embeddings", P.Faint, P.Surface)
+	} else if model.SupportsTools != nil && *model.SupportsTools {
+		tags += Chip(textFor("ferramentas", "tools"), P.Success, P.Surface)
 	}
 	if model.CanReason {
-		tags = append(tags, tag(textFor("raciocínio", "reasoning"), P.Info))
+		tags += Chip(textFor("raciocínio", "reasoning"), P.Info, P.Surface)
 	}
 	if model.SupportsAttachments {
-		tags = append(tags, tag(textFor("imagens", "images"), P.User))
+		tags += Chip(textFor("imagens", "images"), P.User, P.Surface)
 	} else {
-		tags = append(tags, tag(textFor("sem imagens", "no images"), P.Faint))
-	}
-	if isCloud(model) {
-		tags = append(tags, tag(textFor("nuvem", "cloud"), P.Muted))
+		tags += Chip(textFor("sem imagens", "no images"), P.Faint, P.Surface)
 	}
 	rows := []string{
 		on(P.Surface, P.Strong).Bold(true).Render(ansi.Truncate(modelLabel(model), width, "…")),
-		strings.Join(tags, on(P.Surface, P.Surface).Render(" ")),
+		tags,
 		"",
 	}
 	pair := func(key, value string) {
-		rows = append(rows, on(P.Surface, P.Muted).Render(fmt.Sprintf("%-12s ", key))+on(P.Surface, P.Strong).Render(ansi.Truncate(value, max(1, width-13), "…")))
+		rows = append(rows, on(P.Surface, P.Muted).Render(fmt.Sprintf("%-14s", key))+on(P.Surface, P.Strong).Render(ansi.Truncate(value, max(1, width-14), "…")))
 	}
-	pair("ID", model.APIModel)
 	context := textFor("não informado", "not reported")
 	if model.ContextWindow > 0 {
 		context = compactTokens(model.ContextWindow)
 		if model.ContextEstimated {
-			context += textFor(" (estimado)", " (estimated)")
+			context = "~" + context + textFor(" estimado", " estimated")
+		}
+		if model.ID == p.active {
+			context += textFor(" · em uso", " · in use")
 		}
 	}
 	pair(textFor("Contexto", "Context"), context)
-	pair(textFor("Saída", "Output"), fmt.Sprintf(textFor("%d tokens por resposta", "%d tokens per reply"), model.DefaultMaxTokens))
-	api := model.API
-	if api == "" {
-		api = textFor("padrão do provedor", "provider default")
+	if model.DefaultMaxTokens > 0 {
+		pair(textFor("Saída", "Output"), fmt.Sprintf(textFor("%d tokens por resposta", "%d tokens per reply"), model.DefaultMaxTokens))
 	}
-	pair("API", api)
-	return append(rows, "", Button(textFor("Usar · Enter", "Use · Enter"), true, P.Ask))
+	where := textFor("local", "local")
+	if isCloud(model) {
+		where = textFor("nuvem", "cloud")
+	}
+	pair(textFor("Execução", "Runs"), where)
+	if model.API != "" {
+		pair("API", model.API)
+	}
+	rows = append(rows, "")
+	if model.EmbeddingOnly() {
+		return append(rows, on(P.Surface, P.Muted).Render(textFor("Gera embeddings; não serve para conversar.", "Makes embeddings; not for chat.")))
+	}
+	return append(rows, Button(textFor("Usar este modelo", "Use this model"), true, P.Ask))
 }

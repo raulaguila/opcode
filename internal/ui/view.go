@@ -203,12 +203,8 @@ func barredRendered(body, bar string, barColor color.Color, indent string) strin
 }
 
 func modelName(id models.ModelID) string {
-	model := models.SupportedModels[id]
-	if model.APIModel != "" && (model.Name == "" || model.Name == string(model.ID)) {
-		return model.APIModel
-	}
-	if model.Name != "" {
-		return model.Name
+	if model, ok := models.SupportedModels[id]; ok {
+		return modelLabel(model)
 	}
 	return string(id)
 }
@@ -252,6 +248,10 @@ func (m *Model) footer() string {
 	approval := on(P.Ground, P.Text).Render(" " + label)
 	activity := ""
 	switch {
+	case m.question != nil:
+		activity = on(P.Ground, P.Ask).Render("  " + config.Text("Aguardando sua resposta", "Waiting for your answer"))
+	case m.approval != nil:
+		activity = on(P.Ground, P.Plan).Render("  " + config.Text("Aguardando sua aprovação", "Waiting for your approval"))
 	case m.busy:
 		activity = on(P.Ground, P.Plan).Render(fmt.Sprintf(config.Text("  Trabalhando · %s · Esc cancela", "  Working · %s · Esc cancels"), time.Since(m.started).Round(time.Second)))
 	case m.notice != "":

@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/raulaguila/opcode/internal/clipboard"
 	"io"
-	"path/filepath"
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -15,7 +13,6 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
-	"github.com/raulaguila/opcode/internal/localstate"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/transcript"
 	"github.com/raulaguila/opcode/internal/tui/components/chat"
@@ -277,22 +274,8 @@ func sessionActionAppModelExport(a *appModel, msg *dialog.SessionActionMsg, cfg 
 	if err != nil {
 		return util.ReportError(err)
 	}
-	data, err := transcript.Markdown(msg.Session, messages, tools.RedactCredentials)
+	path, err := transcript.Save(cfg.Data.Directory, cfg.WorkingDir, msg.Session, messages, tools.RedactCredentials)
 	if err != nil {
-		return util.ReportError(err)
-	}
-	safe := strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
-			return r
-		}
-		return '_'
-	}, msg.Session.ID)
-	dir := cfg.Data.Directory
-	if !filepath.IsAbs(dir) {
-		dir = filepath.Join(cfg.WorkingDir, dir)
-	}
-	path := filepath.Join(dir, "exports", safe+"-"+time.Now().Format("20060102-150405.000000000")+".md")
-	if err = localstate.WriteBytes(path, data); err != nil {
 		return util.ReportError(err)
 	}
 	return util.ReportInfo("Conversa exportada: " + path)

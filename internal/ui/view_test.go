@@ -42,3 +42,14 @@ func TestEmptyScreenAndComposerFollowTheMode(t *testing.T) {
 	m.cycleMode()
 	require.Equal(t, "ask", m.mode, "Shift+Tab wraps from Execute to Ask")
 }
+
+func TestDiffPreviewNumbersLinesAndCountsChanges(t *testing.T) {
+	diff := "--- a/store.go\n+++ b/store.go\n@@ -44,2 +44,4 @@\n }\n+func Remove() {\n+}\n-old\n"
+	rows, added, removed := diffPreview(diff, 40)
+	require.Equal(t, 2, added)
+	require.Equal(t, 1, removed)
+	text := ansi.Strip(strings.Join(rows, "\n"))
+	require.Contains(t, text, "   44   }")
+	require.Contains(t, text, "   45  +func Remove() {")
+	require.Contains(t, text, "   45  -old")
+}

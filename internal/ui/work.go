@@ -144,25 +144,23 @@ func (m *Model) answerQuestion() tea.Cmd {
 func (m *Model) questionView() string {
 	q := m.question
 	item := q.item()
-	box := Box{Title: textFor("Pergunta do agente", "Agent question"), Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Ask, TitleColor: P.Ask}
+	box := Box{Title: textFor("Pergunta do agente", "Agent question"), Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Ask, TitleColor: P.Ask, Background: P.AskCard}
 	if n := len(q.q.Questions); n > 1 {
 		box.Meta = fmt.Sprintf(textFor("%d de %d", "%d of %d"), q.index+1, n)
 	}
-	keys := fmt.Sprintf("1–%d", max(1, min(9, len(item.Choices))))
-	box.Legend = fmt.Sprintf(textFor("%s escolher · ↑↓ navegar · Enter responder · Esc cancela", "%s choose · ↑↓ navigate · Enter answer · Esc cancels"), keys)
+	keys := fmt.Sprintf("1–%d", max(1, min(9, len(item.Choices)+1)))
+	legend := fmt.Sprintf(textFor("%s escolher · ↑↓ navegar · Enter responder · Esc cancelar", "%s choose · ↑↓ navigate · Enter answer · Esc cancel"), keys)
 	if item.Type == "multi_choice" {
-		box.Legend = fmt.Sprintf(textFor("%s marcar · Espaço alternar · Enter responder · Esc cancela", "%s check · Space toggle · Enter answer · Esc cancels"), keys)
-	}
-	if q.required {
-		box.Legend = textFor("Escolha uma opção ou escreva uma resposta", "Choose an option or write an answer")
+		legend = fmt.Sprintf(textFor("%s marcar · Espaço alternar · Enter responder (%d) · Esc cancelar", "%s check · Space toggle · Enter answer (%d) · Esc cancel"), keys, len(q.checked))
 	}
 	inner := box.Inner()
+	bg0 := P.AskCard
 	var rows []string
 	for _, line := range strings.Split(ansi.Wrap(item.Question, inner-2, ""), "\n") {
-		rows = append(rows, on(P.Surface, P.Strong).Bold(true).Render(" "+line))
+		rows = append(rows, on(bg0, P.Strong).Bold(true).Render("  "+line))
 	}
 	if item.Explanation != "" {
-		rows = append(rows, on(P.Surface, P.Muted).Render(" "+ansi.Truncate(item.Explanation, inner-2, "…")))
+		rows = append(rows, on(bg0, P.Muted).Render("  "+ansi.Truncate(item.Explanation, inner-3, "…")))
 	}
 	rows = append(rows, "")
 	for i, choice := range item.Choices {
@@ -181,21 +179,21 @@ func (m *Model) questionView() string {
 		if i < 9 {
 			number = fmt.Sprintf("%d ", i+1)
 		}
-		bg, fg := P.Surface, P.Text
+		bg, fg := bg0, P.Text
 		bar := on(bg, bg).Render(" ")
 		if i == q.cursor {
 			bg, fg = P.Selected, P.Strong
-			bar = on(P.Surface, P.Ask).Render("▌")
+			bar = on(bg0, P.Ask).Render("▌")
 		}
-		row := bar + on(bg, P.Muted).Render(number) + on(bg, markColor).Render(mark) + on(bg, fg).Render(" "+choice)
+		row := bar + on(bg, P.Muted).Render(" "+number) + on(bg, markColor).Render(mark) + on(bg, fg).Render(" "+choice)
 		rows = append(rows, Line(row, inner, bg))
 	}
 	if len(item.Choices) > 0 || item.Type == "text" || len(item.Choices) == 0 {
-		bg, fg := P.Surface, P.Faint
+		bg, fg := bg0, P.Faint
 		bar := on(bg, bg).Render(" ")
 		if q.cursor == len(item.Choices) {
 			bg, fg = P.Selected, P.Strong
-			bar = on(P.Surface, P.Ask).Render("▌")
+			bar = on(bg0, P.Ask).Render("▌")
 		}
 		text := q.text
 		if text == "" {
@@ -207,10 +205,15 @@ func (m *Model) questionView() string {
 		if len(item.Choices) == 0 || len(item.Choices) >= 9 {
 			number = "  "
 		}
-		rows = append(rows, Line(bar+on(bg, P.Muted).Render(number)+on(bg, P.Faint).Render("✎")+on(bg, fg).Render(" "+text), inner, bg))
+		rows = append(rows, Line(bar+on(bg, P.Muted).Render(" "+number)+on(bg, P.Faint).Render("✎")+on(bg, fg).Render(" "+text), inner, bg))
 	}
+	if q.required {
+		rows = append(rows, on(bg0, P.Danger).Render("  "+textFor("Escolha uma opção ou escreva uma resposta", "Choose an option or write an answer")))
+	}
+	rows = append(rows, "")
+	rows = append(rows, KeyRow(legend, inner, bg0)...)
 	for i := range rows {
-		rows[i] = Line(rows[i], inner, P.Surface)
+		rows[i] = Line(rows[i], inner, bg0)
 	}
 	return indentBlock(box.Render(strings.Join(rows, "\n")))
 }
@@ -234,36 +237,37 @@ func (m *Model) planView() string {
 			done++
 		}
 	}
+	bg := P.PlanCard
 	box := Box{
-		Title:  fmt.Sprintf(textFor("Plano · %d de %d concluídas", "Plan · %d of %d completed"), done, len(steps)),
-		Meta:   modeLabel(string(m.task.Mode)) + textFor(" · tarefa salva", " · task saved"),
-		Legend: textFor("/plan recolher · /task detalhes", "/plan fold · /task details"),
-		Width:  m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Plan, TitleColor: P.Plan,
+		Title: fmt.Sprintf(textFor("Plano · %d de %d concluídas", "Plan · %d of %d completed"), done, len(steps)),
+		Meta:  modeLabel(string(m.task.Mode)) + textFor(" · tarefa salva", " · task saved"),
+		Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg,
 	}
 	inner := box.Inner()
-	label := fmt.Sprintf(" %d%%", done*100/max(1, len(steps)))
-	span := max(1, inner-len(label)-2)
-	filled := done * span / max(1, len(steps))
-	rows := []string{" " + on(P.Surface, P.Plan).Render(strings.Repeat("█", filled)) + on(P.Surface, P.Rule).Render(strings.Repeat("░", span-filled)) + on(P.Surface, P.Muted).Render(label), ""}
+	filled := done * inner / max(1, len(steps))
+	rows := []string{on(bg, P.Plan).Render(strings.Repeat("━", filled)) + on(bg, P.Rule).Render(strings.Repeat("━", inner-filled)), ""}
 	for i, step := range steps {
-		bg, fg, mark, markColor := P.Surface, P.Text, "○", P.Faint
-		title := on(bg, fg).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
+		rowBg, mark, markColor := bg, "○", P.Faint
+		bar := on(bg, bg).Render(" ")
+		title := on(rowBg, P.Text).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
 		switch step.Status {
 		case "completed":
 			mark, markColor = "✓", P.Success
-			title = on(bg, P.Muted).Strikethrough(true).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
+			title = on(rowBg, P.Muted).Strikethrough(true).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
 		case "in_progress":
-			bg, mark, markColor = P.Selected, "●", P.Plan
-			title = on(bg, P.Strong).Bold(true).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
+			rowBg, mark, markColor = P.PlanStep, "●", P.Plan
+			bar = on(bg, P.Plan).Render("▌")
+			title = on(rowBg, P.Strong).Bold(true).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
 		}
-		row := on(bg, markColor).Render(" "+mark+" ") + title
-		rows = append(rows, Line(row, inner, bg))
+		rows = append(rows, Line(bar+on(rowBg, markColor).Render(" "+mark+" ")+title, inner, rowBg))
 	}
+	keys := KeyRow(textFor("/plan recolher", "/plan fold"), inner, bg)
 	if objective := strings.TrimSpace(m.task.Objective); objective != "" {
-		rows = append(rows, "", on(P.Surface, P.Muted).Render(" "+ansi.Truncate(textFor("Objetivo: ", "Objective: ")+objective, inner-2, "…")))
+		keys[1] = Spread(on(bg, P.Muted).Render(textFor("Resultado esperado: ", "Expected result: ")+objective), on(bg, P.Strong).Bold(true).Render("/plan")+on(bg, P.Muted).Render(textFor(" recolher", " fold")), inner, bg)
 	}
+	rows = append(append(rows, ""), keys...)
 	for i := range rows {
-		rows[i] = Line(rows[i], inner, P.Surface)
+		rows[i] = Line(rows[i], inner, bg)
 	}
 	return indentBlock(box.Render(strings.Join(rows, "\n")))
 }
@@ -278,17 +282,13 @@ func (m *Model) planStrip() string {
 		}
 		if current == "" && step.Status != "completed" {
 			current = fmt.Sprintf("%d. %s", i+1, step.Title)
-			if step.Status == "in_progress" {
-				current = "● " + current
-			} else {
-				current = "○ " + current
-			}
+			current = "→ " + current
 		}
 	}
-	head := on(P.Raised, P.Plan).Bold(true).Render(fmt.Sprintf(textFor(" Plano %d/%d ", " Plan %d/%d "), done, len(steps)))
-	tail := on(P.Raised, P.Muted).Render(" /plan ")
-	middle := on(P.Raised, P.Text).Render(" " + current)
-	strip := Spread(head+middle, tail, m.width-2*gutter, P.Raised)
+	head := on(P.Surface, P.Plan).Render(fmt.Sprintf(textFor(" Plano %d/%d ", " Plan %d/%d "), done, len(steps)))
+	tail := on(P.Surface, P.Muted).Render(" /plan ")
+	middle := on(P.Surface, P.Muted).Render(" " + current)
+	strip := Spread(head+middle, tail, m.width-2*gutter, P.Surface)
 	return on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter)) + strip + on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter))
 }
 
@@ -323,24 +323,25 @@ func (m *Model) togglePlan() tea.Cmd {
 // failureView is the proposal's error card: what stopped, that the draft and
 // progress were kept, and the ways forward as buttons.
 func (m *Model) failureView() string {
-	box := Box{Title: "■ " + textFor("Execução interrompida", "Run stopped"), Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Danger, TitleColor: P.Danger, Background: P.Surface,
-		Legend: textFor("Ctrl+R retomar · Ctrl+O modelo · Ctrl+E detalhes · Esc dispensar", "Ctrl+R resume · Ctrl+O model · Ctrl+E details · Esc dismiss")}
+	box := Box{Width: m.width - 2*gutter + 2, PadX: 2, PadY: 1, Accent: P.DangerEdge, Background: P.DangerCard}
 	inner := box.Inner()
 	reason := strings.Join(strings.Fields(m.failure.Error()), " ")
+	bg := P.DangerCard
 	rows := []string{
-		on(P.Surface, P.Strong).Bold(true).Render(" " + ansi.Truncate(failureTitle(reason), inner-2, "…")),
-		on(P.Surface, P.Muted).Render(" " + textFor("Rascunho e progresso foram preservados.", "Draft and progress were kept.")),
+		on(bg, P.Danger).Bold(true).Render(ansi.Truncate("■ "+textFor("Parado: ", "Stopped: ")+failureTitle(reason), inner, "…")),
+		on(bg, P.Muted).Render(textFor("Rascunho e progresso foram preservados.", "Draft and progress were kept.")),
 	}
 	if m.showFailure {
-		for _, line := range strings.Split(ansi.Wrap(reason, inner-2, ""), "\n") {
-			rows = append(rows, on(P.Surface, P.Faint).Render(" "+line))
+		for _, line := range strings.Split(ansi.Wrap(reason, inner, ""), "\n") {
+			rows = append(rows, on(bg, P.Faint).Render(line))
 		}
 	}
-	rows = append(rows, "", " "+Button(textFor("Retomar · Ctrl+R", "Resume · Ctrl+R"), true, P.Danger)+on(P.Surface, P.Surface).Render("  ")+
-		Button(textFor("Trocar modelo · Ctrl+O", "Change model · Ctrl+O"), false, P.Danger)+on(P.Surface, P.Surface).Render("  ")+
-		Button(textFor("Detalhes · Ctrl+E", "Details · Ctrl+E"), false, P.Danger))
+	gap := on(bg, bg).Render("  ")
+	rows = append(rows, "", Button(textFor("Retomar · Ctrl+R", "Resume · Ctrl+R"), false, P.Danger)+gap+
+		Button(textFor("Detalhes · Ctrl+E", "Details · Ctrl+E"), false, P.Danger)+gap+
+		Button(textFor("Trocar modelo · Ctrl+O", "Change model · Ctrl+O"), false, P.Danger)+gap+on(bg, P.Faint).Render(textFor("Esc dispensa", "Esc dismisses")))
 	for i := range rows {
-		rows[i] = Line(rows[i], inner, P.Surface)
+		rows[i] = Line(rows[i], inner, bg)
 	}
 	return indentBlock(box.Render(strings.Join(rows, "\n")))
 }

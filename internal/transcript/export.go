@@ -2,9 +2,11 @@ package transcript
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/raulaguila/opcode/internal/localstate"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
 )
@@ -55,4 +57,24 @@ func fenced(text string) string {
 		fence += "`"
 	}
 	return fence + "text\n" + text + "\n" + fence
+}
+
+// Save writes the conversation as Markdown under <dataDir>/exports and
+// returns the file path. A relative dataDir is taken from workingDir.
+func Save(dataDir, workingDir string, s session.Session, messages []message.Message, redact func(string) string) (string, error) {
+	data, err := Markdown(s, messages, redact)
+	if err != nil {
+		return "", err
+	}
+	safe := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			return r
+		}
+		return '_'
+	}, s.ID)
+	if !filepath.IsAbs(dataDir) {
+		dataDir = filepath.Join(workingDir, dataDir)
+	}
+	path := filepath.Join(dataDir, "exports", safe+"-"+time.Now().Format("20060102-150405.000000000")+".md")
+	return path, localstate.WriteBytes(path, data)
 }

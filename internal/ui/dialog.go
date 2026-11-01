@@ -19,6 +19,9 @@ type listDialog struct {
 	list          List
 	width         int
 	searchPrompt  string
+	placeholder   string
+	noSearch      bool // the details view lists without a field
+	split         int  // percent of the width the list takes beside a side column; 45 by default
 	// header adds rows between search and list (tabs); side draws a column
 	// beside the list (details, a preview); choose acts on Enter.
 	header func(*Model, int) []string
@@ -31,7 +34,7 @@ const listRows = 12
 
 func (d *listDialog) view(m *Model) string {
 	width := min(d.width, m.width-4)
-	box := Box{Title: d.title, Legend: d.legend, Width: width, PadX: 2, PadY: 1}
+	box := Box{Title: d.title, Width: width, PadX: 2, PadY: 1}
 	if d.meta != nil {
 		box.Meta = d.meta(d)
 	}
@@ -39,18 +42,28 @@ func (d *listDialog) view(m *Model) string {
 	listWidth := inner
 	var side []string
 	if current, ok := d.list.Current(); ok && d.side != nil && inner >= 70 {
-		listWidth = inner * 9 / 20
+		split := d.split
+		if split == 0 {
+			split = 45
+		}
+		listWidth = inner * split / 100
 		side = d.side(m, current, inner-listWidth-3)
 	}
 	var rows []string
 	if d.header != nil {
 		rows = append(rows, d.header(m, listWidth)...)
 	}
-	field := on(P.Field, P.Ask).Render(" "+d.searchPrompt+" ") + on(P.Field, P.Strong).Render(d.list.Query) + on(P.Field, P.Ask).Render("▏")
-	if d.list.Query == "" {
-		field = on(P.Field, P.Ask).Render(" "+d.searchPrompt+" ") + on(P.Field, P.Faint).Render(textFor("Buscar", "Search"))
+	if !d.noSearch {
+		placeholder := d.placeholder
+		if placeholder == "" {
+			placeholder = textFor("Buscar", "Search")
+		}
+		field := on(P.Field, P.Ask).Render(" "+d.searchPrompt+" ") + on(P.Field, P.Strong).Render(d.list.Query) + on(P.Field, P.Ask).Render("▏")
+		if d.list.Query == "" {
+			field = on(P.Field, P.Ask).Render(" "+d.searchPrompt+" ") + on(P.Field, P.Faint).Render(placeholder)
+		}
+		rows = append(rows, Line(field, listWidth, P.Field), Line("", listWidth, P.Surface))
 	}
-	rows = append(rows, Line(field, listWidth, P.Field), Line("", listWidth, P.Surface))
 	rows = append(rows, d.list.Render(listWidth, min(listRows, max(3, m.height-14)))...)
 	for i := range rows {
 		rows[i] = Line(rows[i], listWidth, P.Surface)
@@ -67,6 +80,10 @@ func (d *listDialog) view(m *Model) string {
 			}
 			rows[i] += rule + right
 		}
+	}
+	if d.legend != "" {
+		rows = append(rows, "")
+		rows = append(rows, KeyRow(d.legend, inner, P.Surface)...)
 	}
 	return box.Render(strings.Join(rows, "\n"))
 }

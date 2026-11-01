@@ -45,12 +45,12 @@ func TestPlanCardAndStrip(t *testing.T) {
 	}}
 	strip := ansi.Strip(m.workView())
 	require.Contains(t, strip, "Plan 1/3")
-	require.Contains(t, strip, "● 2. Ligar")
+	require.Contains(t, strip, "→ 2. Ligar")
 	m.showPlan = true
 	card := ansi.Strip(m.workView())
 	require.Contains(t, card, "Plan · 1 of 3 completed")
 	require.Contains(t, card, "Execute · task saved")
-	require.Contains(t, card, "33%")
+	require.NotContains(t, card, "%", "the bar alone shows progress")
 	require.Contains(t, card, "✓ 1. Ler")
 	require.Contains(t, card, "● 2. Ligar")
 	require.Contains(t, card, "○ 3. Testar")
@@ -61,8 +61,7 @@ func TestFailureCardNamesTheCauseAndHidesTheRawError(t *testing.T) {
 	m.width, m.height = 100, 30
 	m.failure = errors.New("dial tcp 127.0.0.1:11434: connection refused")
 	view := ansi.Strip(m.workView())
-	require.Contains(t, view, "■ Run stopped")
-	require.Contains(t, view, "Provider unavailable")
+	require.Contains(t, view, "■ Stopped: Provider unavailable")
 	require.Contains(t, view, "Resume · Ctrl+R")
 	require.NotContains(t, view, "11434", "the raw reason waits for Ctrl+E")
 	m.failureKey("ctrl+e")

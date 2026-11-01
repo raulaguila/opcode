@@ -116,3 +116,28 @@ func Meter(fraction float64, color color.Color, bg color.Color) string {
 	filled := min(5, max(0, int(fraction*5)))
 	return on(bg, color).Render(strings.Repeat("█", filled)) + on(bg, P.Faint).Render(strings.Repeat("░", 5-filled))
 }
+
+// KeyRow is a panel's footer: "Enter use · Tab provider · Esc close" with the
+// keys bright and the last pair pushed right, under a rule.
+func KeyRow(legend string, width int, bg color.Color) []string {
+	pair := func(segment string) string {
+		key, desc, _ := strings.Cut(segment, " ")
+		return on(bg, P.Strong).Bold(true).Render(key) + on(bg, P.Muted).Render(" "+desc)
+	}
+	parts := strings.Split(legend, " · ")
+	gap := on(bg, bg).Render("   ")
+	var left []string
+	for _, part := range parts[:len(parts)-1] {
+		left = append(left, pair(part))
+	}
+	right := pair(parts[len(parts)-1])
+	if len(parts) == 1 {
+		return []string{on(bg, P.Rule).Render(strings.Repeat("─", width)), Line(right, width, bg)}
+	}
+	return []string{on(bg, P.Rule).Render(strings.Repeat("─", width)), Spread(strings.Join(left, gap), right, width, bg)}
+}
+
+// Chip is a short tag on a raised tint: "ferramentas", "Ctrl+O".
+func Chip(text string, fg, bg color.Color) string {
+	return on(P.Raised, fg).Render(" "+text+" ") + on(bg, bg).Render(" ")
+}

@@ -17,6 +17,9 @@ type Palette struct {
 	Text, Strong, Muted, Faint, Dim    color.Color
 	Ask, Plan, Execute, User, Info     color.Color
 	Success, Danger, Selected, Warning color.Color
+	// Card grounds, each tinted toward its accent, and the diff rows.
+	AskCard, PlanCard, ApprovalCard, DangerCard, DangerEdge, PlanStep color.Color
+	Added, AddedText, AddedNumber, Removed, RemovedText               color.Color
 }
 
 var P = Palette{
@@ -41,6 +44,17 @@ var P = Palette{
 	Danger:       lipgloss.Color("#f7768e"),
 	Selected:     lipgloss.Color("#262840"),
 	Warning:      lipgloss.Color("#e0af68"),
+	AskCard:      lipgloss.Color("#181a28"),
+	PlanCard:     lipgloss.Color("#1a1a22"),
+	ApprovalCard: lipgloss.Color("#1a1924"),
+	DangerCard:   lipgloss.Color("#1d1a26"),
+	DangerEdge:   lipgloss.Color("#4a2b38"),
+	PlanStep:     lipgloss.Color("#262420"),
+	Added:        lipgloss.Color("#18261c"),
+	AddedText:    lipgloss.Color("#b5e08a"),
+	AddedNumber:  lipgloss.Color("#6f9a5a"),
+	Removed:      lipgloss.Color("#2a1a22"),
+	RemovedText:  lipgloss.Color("#f0a0b0"),
 }
 
 // on returns a style with the given foreground on the given background.

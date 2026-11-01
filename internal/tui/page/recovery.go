@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/tui/styles"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
 // The plan and recovery actions stay beside the composer, where the next
@@ -22,9 +23,10 @@ func (p *chatPage) composerPanel() string {
 		if p.recovery.resolved {
 			state = config.Text("Execução retomada", "Run resumed")
 		}
-		first := state + " · " + config.Text("Rascunho e progresso preservados", "Draft and progress preserved")
-		rows, _ := layoutRecoveryActions(p.recovery.err, p.width, p.recovery.changed)
-		panels = append(panels, ansi.Truncate(first, max(1, p.width), "…")+"\n"+strings.Join(rows, "\n"))
+		// An error card: the state in its border, the actions inside.
+		rows, _ := p.recoveryLayout()
+		t := theme.CurrentTheme()
+		panels = append(panels, styles.FrameOn(strings.Join(rows, "\n"), max(1, p.width-2), 0, 0, state, config.Text("rascunho e progresso preservados", "draft and progress preserved"), "", t.Error(), t.Background()))
 	}
 	return strings.Join(panels, "\n")
 }
@@ -32,8 +34,18 @@ func (p *chatPage) recoveryHeight() int {
 	if p.recovery.err == nil || p.recovery.resolved || p.width < 20 || p.height < 12 {
 		return 0
 	}
-	rows, _ := layoutRecoveryActions(p.recovery.err, p.width, p.recovery.changed)
-	return 1 + len(rows)
+	rows, _ := p.recoveryLayout()
+	return 2 + len(rows)
+}
+
+// recoveryLayout lays the actions inside the card, with screen columns.
+func (p *chatPage) recoveryLayout() ([]string, []recoveryActionSpan) {
+	rows, spans := layoutRecoveryActions(p.recovery.err, max(1, p.width-2), p.recovery.changed)
+	for i := range spans {
+		spans[i].start++
+		spans[i].end++
+	}
+	return rows, spans
 }
 func (p *chatPage) composerPanelHeight() int { return p.workflowHeight() + p.recoveryHeight() }
 func (p *chatPage) insertComposerPanel(view string) string {
@@ -55,7 +67,7 @@ func (p *chatPage) recoveryMouse(msg tea.MouseMsg) tea.Cmd {
 	_, height := p.layout.GetSize()
 	_, editorHeight := p.editor.GetSize()
 	row := msg.Mouse().Y - (height - editorHeight + p.workflowHeight() + 1)
-	_, actions := layoutRecoveryActions(p.recovery.err, p.width, p.recovery.changed)
+	_, actions := p.recoveryLayout()
 	for _, action := range actions {
 		if row == action.row && msg.Mouse().X >= action.start && msg.Mouse().X < action.end {
 			return p.workspaceCommand(action.command, "")

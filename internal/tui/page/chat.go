@@ -3,8 +3,6 @@ package page
 import (
 	"context"
 	"fmt"
-	"github.com/charmbracelet/x/ansi"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -38,6 +36,8 @@ type chatPage struct {
 	session              session.Session
 	completionDialog     dialog.CompletionDialog
 	showCompletionDialog bool
+	branch               string
+	branchRead           time.Time
 	terminal             terminalPanel
 	width, height        int
 	workflow             workflowPanel
@@ -317,11 +317,7 @@ func (p *chatPage) View() string {
 	}
 
 	if p.height >= 12 {
-		project := "Opcode"
-		if config.Get() != nil {
-			project += " · " + filepath.Base(config.WorkingDirectory())
-		}
-		layoutView = lipgloss.JoinVertical(lipgloss.Left, ansi.Truncate(project, max(1, p.width), "…"), layoutView)
+		layoutView = lipgloss.JoinVertical(lipgloss.Left, p.headerView(), layoutView)
 	}
 	return layoutView
 }

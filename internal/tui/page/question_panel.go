@@ -70,9 +70,9 @@ func (p *chatPage) questionAnswerField(item interaction.QuestionItem, width int)
 	style := styles.BaseStyle().Background(t.BackgroundSecondary())
 	p.workflow.answer.Prompt = config.Text("Resposta: ", "Answer: ")
 	if len(item.Choices) > 0 {
-		prefix := "  ○ "
+		prefix := "    ○ "
 		if p.customQuestionAnswer(len(item.Choices)) {
-			prefix = "› ● "
+			prefix = "  › ● "
 			style = styles.SelectedRow()
 		}
 		p.workflow.answer.Prompt = prefix + config.Text("Outra resposta: ", "Other answer: ")
@@ -128,7 +128,12 @@ func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) 
 		if p.workflow.choice == i {
 			cursor = "›"
 		}
-		prefix := fmt.Sprintf("%s %s ", cursor, mark)
+		// The number is the 1–9 shortcut for this choice.
+		number := "  "
+		if i < 9 {
+			number = fmt.Sprintf("%d ", i+1)
+		}
+		prefix := fmt.Sprintf("%s%s %s ", number, cursor, mark)
 		choice = questionChoiceLabel(panelText(choice), max(0, width-ansi.StringWidth(prefix)), p.workflow.details)
 		line := prefix + choice
 		if cursor == "›" {

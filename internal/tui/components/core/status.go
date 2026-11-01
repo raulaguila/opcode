@@ -58,10 +58,8 @@ func (m statusCmp) labels(state util.FooterState) (left, center, right string) {
 	}
 	labelsGet(&right)
 	right += " ▾"
-	center = config.Text("/ comandos · Alt+Enter nova linha", "/ commands · Alt+Enter new line")
-	if m.enhancedKeyboard {
-		center = config.Text("/ comandos · Shift+Enter nova linha", "/ commands · Shift+Enter new line")
-	}
+	// Idle key hints live in the composer's bottom border.
+	center = ""
 	if state.Terminal {
 		center = config.Shortcut("terminal") + config.Text(" conversa", " chat")
 	} else if state.Activity != "" || state.Busy {

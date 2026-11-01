@@ -6,6 +6,8 @@ import (
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/tui/util"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -121,3 +123,12 @@ type benchmarkAgent struct{ agent.Service }
 
 func (benchmarkAgent) IsBusy() bool              { return false }
 func (benchmarkAgent) IsSessionBusy(string) bool { return false }
+
+func TestComposerBorderAdvertisesOnlyConfirmedEnhancedNewline(t *testing.T) {
+	m := &editorCmp{textarea: CreateTextArea(nil)}
+	m.SetMode("Ask", theme.CurrentTheme().Info())
+	m.SetSize(100, 4)
+	require.Contains(t, m.View(), "Alt+Enter")
+	m.Update(util.EnhancedKeyboardMsg{Supported: true})
+	require.Contains(t, m.View(), "Shift+Enter")
+}

@@ -32,9 +32,7 @@ func TestFooterHintKeepsPanelBackgroundAndSemanticWarnings(t *testing.T) {
 		theme.SetColorProfile(colorprofile.TrueColor)
 		m := statusCmp{width: 160}
 		reference := footerGlyph(t, styles.PanelHint().Render("hint"), "hint")
-		actual := footerGlyph(t, m.View(), "/ commands")
-		require.Equal(t, reference.FG, actual.FG)
-		require.Equal(t, reference.BG, actual.BG, "outer footer rendering preserves the contrast-tested hint background")
+		require.NotContains(t, ansi.Strip(m.View()), "/ commands", "idle key hints live in the composer border")
 		m.info = util.InfoMsg{Type: util.InfoTypeWarn, Msg: "fixture"}
 		warning := footerGlyph(t, m.View(), "Warning:")
 		want := footerGlyph(t, styles.BaseStyle().Background(theme.CurrentTheme().BackgroundSecondary()).Foreground(theme.CurrentTheme().Warning()).Render("warning"), "warning")

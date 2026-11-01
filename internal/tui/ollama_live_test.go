@@ -151,7 +151,7 @@ func TestLiveOllamaTerminalAndSteering(t *testing.T) {
 		program.Send(testTextKey(string([]rune(text)), 0))
 		program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	}
-	waitFrame("Opcode")
+	waitFrame("opcode ·")
 	program.Send(tea.WindowSizeMsg{Width: 160, Height: 40})
 	const command = "bash interactive.sh"
 	arguments, err := json.Marshal(tools.BashParams{Command: command, PTY: true, Timeout: 120000})

@@ -53,8 +53,9 @@ type editorCmp struct {
 	submissionAttachments []message.Attachment
 	// modeLabel and modeColor frame the composer in the current mode; empty
 	// keeps the plain prompt for hosts that draw their own border.
-	modeLabel string
-	modeColor color.Color
+	modeLabel        string
+	modeColor        color.Color
+	enhancedKeyboard bool
 }
 
 // SetMode labels and colors the composer frame with the session mode.
@@ -205,6 +206,8 @@ func (m *editorCmp) Update(msg tea.Msg) (util.Model, tea.Cmd) {
 	m.invalidatePreparedDraft(msg)
 
 	switch msg := msg.(type) {
+	case util.EnhancedKeyboardMsg:
+		m.enhancedKeyboard = msg.Supported
 	case CommandContextMsg:
 		m.commandPriorities = msg.Priorities
 		return m, nil
@@ -290,7 +293,16 @@ func (m *editorCmp) View() string {
 	if m.modeLabel == "" {
 		return body
 	}
-	return styles.FrameOn(body, max(1, m.width-2), 0, 0, m.modeLabel, "", "", m.modeColor, t.Background())
+	return styles.FrameOn(body, max(1, m.width-2), 0, 0, m.modeLabel, "", m.composerHint(), m.modeColor, t.Background())
+}
+
+// composerHint is the key legend in the composer's bottom border.
+func (m *editorCmp) composerHint() string {
+	newline := "Alt+Enter"
+	if m.enhancedKeyboard {
+		newline = "Shift+Enter"
+	}
+	return config.Text("Shift+Tab modo · / comandos · @ arquivos · "+newline+" nova linha", "Shift+Tab mode · / commands · @ files · "+newline+" new line")
 }
 
 func (m *editorCmp) SetSize(width, height int) tea.Cmd {

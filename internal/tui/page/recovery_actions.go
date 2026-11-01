@@ -61,7 +61,7 @@ func recoveryActionText(action recoveryAction, compact bool) string {
 
 // Render and click use the same visible text and cell ranges.
 func layoutRecoveryActions(err error, width int, changed bool) ([]string, []recoveryActionSpan) {
-	if width < 20 {
+	if width < 16 {
 		return nil, nil
 	}
 	actions := recoveryActionOptions(err, changed)

@@ -164,7 +164,7 @@ func TestPlanRenderingShowsProgressAndRemainsBounded(t *testing.T) {
 	p.workflow.expanded = true
 	p.refreshWorkflow()
 	view := p.workflowView()
-	require.Contains(t, view, config.Text("Plano 1/2", "Plan 1/2"))
+	require.Contains(t, view, config.Text("Plano · 1 de 2", "Plan · 1 of 2"))
 	require.Contains(t, view, "Validar")
 	p.width, p.height = 24, 10
 	require.LessOrEqual(t, p.workflowHeight(), p.height-5)

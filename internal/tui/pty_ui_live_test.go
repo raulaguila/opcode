@@ -947,7 +947,7 @@ func testLiveOllamaPTYUIContextAndMeasuredProviderSpeedInFooter(frame string) bo
 }
 
 func testLiveOllamaPTYUIRealModelQuestionWithSelectableChoices(frame string) bool {
-	return strings.Contains(frame, "Question for you") && strings.Contains(frame, "Waiting for your answer") && strings.Contains(frame, "UI") && strings.Contains(frame, "Contexto")
+	return strings.Contains(frame, "Agent question") && strings.Contains(frame, "Waiting for your answer") && strings.Contains(frame, "UI") && strings.Contains(frame, "Contexto")
 }
 
 func testPTYUICompactThemesStructCallback(binary **string, variant *struct {

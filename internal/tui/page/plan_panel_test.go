@@ -26,14 +26,14 @@ func TestPlanPanelUsesSharedSurfaceProgressAndSecondaryControls(t *testing.T) {
 	p.SetSize(60, 20)
 	view := ansi.Strip(p.workflowView())
 	require.Contains(t, view, "╭")
-	require.Contains(t, view, config.Text("Plano 1/3 concluídas", "Plan 1/3 completed"))
-	require.Contains(t, strings.Split(view, "\n")[0], "███░░░░░░░", "progress sits in the top border")
+	require.Contains(t, view, config.Text("Plano · 1 de 3 concluídas", "Plan · 1 of 3 completed"))
+	require.Contains(t, view, "33%", "a progress row opens the plan")
 	require.Contains(t, view, "✓ 1. Inspect")
-	require.Contains(t, view, "→ 2. Verify")
+	require.Contains(t, view, "● 2. Verify")
 	require.Contains(t, view, "○ 3. Report")
 	require.Contains(t, view, "/task")
 	require.NotContains(t, view, "Session:")
-	require.NotContains(t, view, "Execute")
+	require.Contains(t, strings.Split(view, "\n")[0], config.Text("tarefa salva", "task saved"), "mode and saved state sit in the corner")
 	require.Contains(t, p.taskBody(), config.Text("Sessão: s", "Session: s"), "session identity remains available in task details")
 	lines := strings.Split(view, "\n")
 	for i, line := range lines {
@@ -60,7 +60,7 @@ func TestPlanPanelResizeScrollAndPendingQuestionPreserveDraft(t *testing.T) {
 		view := ansi.Strip(p.workflowView())
 		require.Equal(t, p.workflowHeight(), lipgloss.Height(view))
 		require.LessOrEqual(t, lipgloss.Width(view), size[0])
-		require.Contains(t, view, "→ 16.", "the active step remains visible when the panel is small")
+		require.Contains(t, view, "● 16.", "the active step remains visible when the panel is small")
 		draft, _ := p.composer.(chat.DraftControl).Draft()
 		require.Equal(t, "Draft remains ação 漢字", draft)
 	}
@@ -69,7 +69,7 @@ func TestPlanPanelResizeScrollAndPendingQuestionPreserveDraft(t *testing.T) {
 	require.Contains(t, p.workflowView(), "Long plan", "scrolling can reach the objective and earlier steps")
 	p.workflow.question = interaction.Question{ID: "q", Question: "Choose the next action", Choices: []string{"Continue", "Stop"}}
 	view := ansi.Strip(p.workflowView())
-	require.Contains(t, view, config.Text("Pergunta para você", "Question for you"))
+	require.Contains(t, view, config.Text("Pergunta do agente", "Agent question"))
 	require.NotContains(t, view, config.Text("Plano 0/20", "Plan 0/20"), "questions retain priority over the expanded plan")
 }
 
@@ -93,7 +93,7 @@ func TestPlanPanelHighlightAndLegendKeepThemeContrastAndNoColorMarkers(t *testin
 			selected := panelHintGlyph(t, styles.SelectedRow().Bold(true).Render("selected"), "selected")
 			require.Equal(t, selected.FG, active.FG)
 			require.Equal(t, selected.BG, active.BG)
-			require.Contains(t, ansi.Strip(view), "→ 1. ACTIVE_STEP", "active state is readable without color")
+			require.Contains(t, ansi.Strip(view), "● 1. ACTIVE_STEP", "active state is readable without color")
 		}
 	}
 }
@@ -107,7 +107,7 @@ func TestPlanPanelLabelsCompletionAndHiddenRows(t *testing.T) {
 	}
 	p.SetSize(60, 20)
 	title := strings.Split(ansi.Strip(p.workflowView()), "\n")[0]
-	require.Contains(t, title, config.Text("0/20 concluídas", "0/20 completed"))
+	require.Contains(t, title, config.Text("0 de 20 concluídas", "0 of 20 completed"))
 	require.Contains(t, title, "↓")
 	require.NotContains(t, title, "↑")
 	p.workflow.offset = 10

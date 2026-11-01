@@ -53,13 +53,13 @@ func TestPTYConversationChronologyQuitAndResume(t *testing.T) {
 	h.paste("Explique o projeto atual e pergunte se quero implementar as melhorias.")
 	h.send("\r")
 	h.wait("visible diagnosis and pending question", 20*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Question for you") && strings.Contains(frame, "Waiting for your answer")
+		return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Agent question") && strings.Contains(frame, "Waiting for your answer")
 	})
 	require.Contains(t, h.frame(), "README.md:1-2")
 	require.Contains(t, h.frame(), "Inspecting source")
 	h.resize(60, 20)
 	h.wait("question remains usable in compact terminal", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Question for you") && strings.Contains(frame, "Waiting for your answer") && strings.Contains(frame, "Agora não")
+		return strings.Contains(frame, "Agent question") && strings.Contains(frame, "Waiting for your answer") && strings.Contains(frame, "Agora não")
 	})
 	h.assertComposer()
 	t.Logf("question panel at 60x20:\n%s", h.frame())
@@ -159,7 +159,7 @@ func conversationWorkspace(t *testing.T, endpoint string) (home, workspace, data
 }
 
 func conversationCompleted(frame string) bool {
-	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Perfeito") && strings.Contains(frame, "You answered: Agora não") && !strings.Contains(frame, "Question for you") && ptyUIIdleFooter(frame)
+	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Perfeito") && strings.Contains(frame, "You answered: Agora não") && !strings.Contains(frame, "Agent question") && ptyUIIdleFooter(frame)
 }
 
 func assertConversationOrder(t *testing.T, frame string) {

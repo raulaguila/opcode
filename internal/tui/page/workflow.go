@@ -138,7 +138,7 @@ func (p *chatPage) planRows() []string {
 			mark = "✓"
 		}
 		if step.Status == "in_progress" {
-			mark = "→"
+			mark = "●"
 		}
 		rows = append(rows, fmt.Sprintf(" %s %d. %s", mark, i+1, panelText(step.Title)))
 	}

@@ -20,7 +20,8 @@ func (p *chatPage) planPanelRows() []string {
 }
 
 func (p *chatPage) planPanelHeight() int {
-	return min(max(5, 2+min(len(p.planPanelRows()), max(1, min(8, p.height/3)))), max(1, p.height-5))
+	// Borders, the progress row and the visible steps.
+	return min(max(5, 3+min(len(p.planPanelRows()), max(1, min(8, p.height/3)))), max(1, p.height-5))
 }
 
 func (p *chatPage) planVisibleRows() int {
@@ -28,7 +29,7 @@ func (p *chatPage) planVisibleRows() int {
 	if height < 5 {
 		return max(0, height-1)
 	}
-	return height - 2
+	return height - 3
 }
 
 func (p *chatPage) planOffset() int {
@@ -36,7 +37,7 @@ func (p *chatPage) planOffset() int {
 	if offset < 0 {
 		offset = 0
 		for i, row := range rows {
-			if strings.HasPrefix(row, " → ") {
+			if strings.HasPrefix(row, " ● ") {
 				offset = i
 				break
 			}
@@ -54,7 +55,7 @@ func (p *chatPage) planPanelTitle() string {
 				done++
 			}
 		}
-		title += fmt.Sprintf(config.Text(" %d/%d concluídas", " %d/%d completed"), done, len(p.workflow.task.Steps))
+		title += fmt.Sprintf(config.Text(" · %d de %d concluídas", " · %d of %d completed"), done, len(p.workflow.task.Steps))
 	}
 	return title
 }
@@ -77,10 +78,17 @@ func (p *chatPage) planPanelView(height int) string {
 		rows = append(rows, styles.PanelTitle().Render(ansi.Truncate(title, width, "…")))
 	}
 	t := theme.CurrentTheme()
+	if height >= 5 {
+		rows = append(rows, p.planProgressBar(width))
+	}
 	for _, row := range body[offset : offset+min(limit, len(body)-offset)] {
 		style := styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Text())
-		if strings.HasPrefix(row, " → ") {
+		switch {
+		case strings.HasPrefix(row, " ● "):
 			style = styles.SelectedRow().Bold(true)
+		case strings.HasPrefix(row, " ✓ "):
+			// Done steps recede: muted and struck through, as a checklist.
+			style = styles.PanelHint().Strikethrough(true)
 		}
 		rows = append(rows, style.Width(width).Render(ansi.Truncate(strings.TrimPrefix(row, " "), width, "…")))
 	}
@@ -94,12 +102,14 @@ func (p *chatPage) planPanelView(height int) string {
 		rows = append(rows, "")
 	}
 	hint := config.Text("Alt+↑/↓ rola · /task detalhes", "Alt+↑/↓ scroll · /task details")
-	// Title, progress and legend sit in the frame's borders.
-	return styles.Frame(strings.Join(rows, "\n"), width, 1, 0, title, p.planProgressBar(), hint)
+	// Title, mode and legend sit in the frame's borders.
+	meta := modeLabel(p.mode()) + config.Text(" · tarefa salva", " · task saved")
+	t = theme.CurrentTheme()
+	return styles.FrameOn(strings.Join(rows, "\n"), width, 1, 0, title, meta, hint, t.Warning(), t.BackgroundSecondary())
 }
 
-// planProgressBar draws completed steps as blocks, e.g. "██░░░".
-func (p *chatPage) planProgressBar() string {
+// planProgressBar is a full-width bar of completed steps with the percentage.
+func (p *chatPage) planProgressBar(width int) string {
 	steps := p.workflow.task.Steps
 	if len(steps) == 0 {
 		return ""
@@ -110,6 +120,10 @@ func (p *chatPage) planProgressBar() string {
 			done++
 		}
 	}
-	filled := done * 10 / len(steps)
-	return strings.Repeat("█", filled) + strings.Repeat("░", 10-filled)
+	label := fmt.Sprintf(" %d%%", done*100/len(steps))
+	span := max(1, width-ansi.StringWidth(label))
+	filled := done * span / len(steps)
+	t := theme.CurrentTheme()
+	return styles.BaseStyle().Background(t.BackgroundSecondary()).Foreground(t.Warning()).Render(strings.Repeat("█", filled)) +
+		styles.PanelHint().Render(strings.Repeat("░", span-filled)+label)
 }

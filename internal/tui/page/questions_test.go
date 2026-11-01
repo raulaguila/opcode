@@ -28,7 +28,7 @@ func TestQuestionPanelSeparatesQuestionChoicesAndControls(t *testing.T) {
 		p.workflow.batchAnswers = make([]interaction.AnswerItem, 1)
 		view := ansi.Strip(p.workflowView())
 		require.Contains(t, view, "╭", "question needs a boundary without depending on color")
-		require.Contains(t, view, config.Text("Pergunta para você", "Question for you"))
+		require.Contains(t, view, config.Text("Pergunta do agente", "Agent question"))
 		require.NotContains(t, view, config.Text("Aguardando sua resposta", "Waiting for your answer"), "the footer already exposes the waiting state")
 		require.Contains(t, view, "repository?", "question wraps instead of silently losing its end")
 		require.Contains(t, view, config.Text("Outra resposta", "Other answer"))

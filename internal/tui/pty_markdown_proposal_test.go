@@ -50,7 +50,7 @@ func TestPTYMarkdownProposalAndQuestionDivider(t *testing.T) {
 	h.paste("Explique o projeto atual e pergunte se quero implementar melhorias.")
 	h.send("\r")
 	h.wait("readable diagnosis and question card", 20*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "DIAGNOSIS: Fluxo de dados") && strings.Contains(frame, "Question for you") && strings.Contains(frame, "Other answer:")
+		return strings.Contains(frame, "DIAGNOSIS: Fluxo de dados") && strings.Contains(frame, "Agent question") && strings.Contains(frame, "Other answer:")
 	})
 	frame := h.frame()
 	require.NotContains(t, frame, "## DIAGNOSIS")
@@ -77,7 +77,7 @@ func TestPTYMarkdownProposalAndQuestionDivider(t *testing.T) {
 	saveProposalPTYFrame(t, h)
 	h.resize(60, 20)
 	h.wait("compact card keeps selected answer", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Question for you") && strings.Contains(frame, "› ● Agora não")
+		return strings.Contains(frame, "Agent question") && strings.Contains(frame, "› ● Agora não")
 	})
 	h.send("\r")
 	h.resize(120, 44)

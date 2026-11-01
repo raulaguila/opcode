@@ -46,7 +46,6 @@ func (p *chatPage) questionPanelContent(width int) questionContent {
 	item := interaction.QuestionItem{Question: q.Question, Explanation: q.Explanation, Choices: q.Choices}
 	if len(q.Questions) > 0 {
 		item = q.Questions[index]
-		item.Question = fmt.Sprintf("%d/%d · %s", index+1, len(q.Questions), item.Question)
 	}
 	c := questionContent{intro: questionWrapped(item.Question, width), focus: p.workflow.choice}
 	if item.Explanation != "" {
@@ -113,7 +112,7 @@ func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) 
 	for i, choice := range item.Choices {
 		mark, cursor := "○", " "
 		if item.Type == "multi_choice" {
-			mark = "[ ]"
+			mark = "☐"
 		}
 		selected := !p.customQuestionAnswer(len(item.Choices)) && p.workflow.selectedChoices[i]
 		if item.Type != "multi_choice" {
@@ -122,7 +121,7 @@ func (p *chatPage) questionChoiceRows(item interaction.QuestionItem, width int) 
 		if selected {
 			mark = "●"
 			if item.Type == "multi_choice" {
-				mark = "[✓]"
+				mark = "☑"
 			}
 		}
 		if p.workflow.choice == i {
@@ -214,7 +213,7 @@ func (c questionContent) visibleRows(height int, divider string) []string {
 func (p *chatPage) questionPanelView(height int) string {
 	width := max(1, p.width-4)
 	c := p.questionPanelContent(width)
-	title := config.Text("Pergunta para você", "Question for you")
+	title := config.Text("Pergunta do agente", "Agent question")
 	if height < 5 {
 		rows := append([]string{title}, c.visibleRows(height-1, "")...)
 		for i := range rows {
@@ -235,7 +234,12 @@ func (p *chatPage) questionPanelView(height int) string {
 	for len(rows) < height-2 {
 		rows = append(rows, "")
 	}
-	return styles.Frame(strings.Join(rows, "\n"), width, 1, 0, title, "", hint)
+	meta := ""
+	if n := len(p.workflow.question.Questions); n > 1 && p.workflow.questionIndex < n {
+		meta = fmt.Sprintf(config.Text("%d de %d", "%d of %d"), p.workflow.questionIndex+1, n)
+	}
+	t := theme.CurrentTheme()
+	return styles.FrameOn(strings.Join(rows, "\n"), width, 1, 0, title, meta, hint, t.Info(), t.BackgroundSecondary())
 }
 
 func (p *chatPage) questionDetailsRows(c questionContent, width, height int) []string {

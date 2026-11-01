@@ -57,7 +57,7 @@ func testPTYQuestionChoice(t *testing.T, binary string, suggested bool) {
 	h.paste("Explique o projeto atual e pergunte se quero implementar as melhorias.")
 	h.send("\r")
 	h.wait("question with visible custom answer row", 20*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Question for you") && strings.Contains(frame, "Other answer:") && strings.Contains(frame, "DIAGNOSIS:")
+		return strings.Contains(frame, "Agent question") && strings.Contains(frame, "Other answer:") && strings.Contains(frame, "DIAGNOSIS:")
 	})
 	h.send("\x1b[A") // Up from no selection chooses the final, custom-answer row.
 	h.wait("custom answer selected by keyboard", 5*time.Second, func(frame string) bool {
@@ -65,7 +65,7 @@ func testPTYQuestionChoice(t *testing.T, binary string, suggested bool) {
 	})
 	h.send("\r")
 	h.wait("empty custom answer rejected without submitting", 5*time.Second, func(frame string) bool {
-		return strings.Contains(frame, "Question for you") && strings.Contains(frame, "Write an answer or choose an option") && !strings.Contains(frame, "answer must contain")
+		return strings.Contains(frame, "Agent question") && strings.Contains(frame, "Write an answer or choose an option") && !strings.Contains(frame, "answer must contain")
 	})
 	require.EqualValues(t, 2, generations.Load(), "empty answers must not resume model generation")
 	require.Empty(t, persistedQuestionResponses(t, data))
@@ -102,7 +102,7 @@ func testPTYQuestionChoice(t *testing.T, binary string, suggested bool) {
 }
 
 func questionExchangeCompleted(frame, answer string) bool {
-	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Agent question") && strings.Contains(frame, "Quer implementar as melhorias?") && strings.Contains(frame, "You answered: "+answer) && strings.Contains(frame, "Perfeito") && !strings.Contains(frame, "Question for you") && ptyUIIdleFooter(frame)
+	return strings.Contains(frame, "DIAGNOSIS:") && strings.Contains(frame, "Agent question") && strings.Contains(frame, "Quer implementar as melhorias?") && strings.Contains(frame, "You answered: "+answer) && strings.Contains(frame, "Perfeito") && !strings.Contains(frame, "Agent question") && ptyUIIdleFooter(frame)
 }
 
 func assertQuestionExchangeOrder(t *testing.T, frame string) {

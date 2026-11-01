@@ -74,6 +74,7 @@ func TestModelContextSeparatesCatalogAndActiveLimitsWithoutProbing(t *testing.T)
 	m.target = config.AgentCoder
 	m.SetActiveContext("", 0, "")
 	require.NotContains(t, strings.Join(m.modelDetailLines(), "\n"), "32k")
+	m.details = true // context sources are details (Ctrl+D)
 	for _, size := range []tea.WindowSizeMsg{{Width: 36, Height: 12}, {Width: 80, Height: 24}} {
 		m.SetActiveContext(m.models[0].ID, 32768, "configuration")
 		m.Update(size)

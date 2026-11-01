@@ -1,6 +1,7 @@
 package dialog
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"io"
 	"net/http"
 	"strings"
@@ -24,7 +25,8 @@ func TestGatewayAdvertisedContextAppearsInModelPicker(t *testing.T) {
 	m.Update(cmd())
 	require.Contains(t, m.View(), "Office gateway")
 	require.Contains(t, m.View(), "128k")
-	require.Contains(t, m.View(), "provider metadata")
+	m.details = true // the context source is a detail (Ctrl+D)
+	require.Regexp(t, `provider[\s│]+metadata`, ansi.Strip(m.View()))
 	require.NotContains(t, m.View(), "fallback estimate")
 	require.EqualValues(t, 131072, m.filtered[0].ContextWindow)
 }

@@ -20,6 +20,10 @@ func (m *providerDialogCmp) settings() tea.Cmd {
 	m.Close()
 	m.screen = "settings"
 	m.selected = 0
+	if m.width >= 110 {
+		// With the side nav, preferences open on their first section.
+		m.category = "interface"
+	}
 	m.settingsFilter = newDialogInput()
 	m.settingsFilter.Prompt = "⌕ "
 	m.settingsFilter.Placeholder = config.Text("Buscar preferência", "Search preferences")
@@ -458,7 +462,8 @@ func experienceViewProviderDialogCmpSettingsSettingsStart(m *providerDialogCmp, 
 			(*lines) = append((*lines), line(row))
 		}
 	}
-	if m.selected < len(list) && list[m.selected].Help != "" {
+	// Help texts are written in English only.
+	if m.selected < len(list) && list[m.selected].Help != "" && config.Text("pt", "en") == "en" {
 		(*lines) = append((*lines), dialogHint(list[m.selected].Help, m.contentWidth()))
 	}
 }

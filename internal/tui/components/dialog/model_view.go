@@ -44,7 +44,12 @@ func (m *modelDialogCmp) geometry() modelGeometry {
 		}
 	}
 	// Wide details sit beside the list instead of below it.
-	listWidth, details := width, len(m.modelDetailLines())
+	// The compact list carries context and capabilities in its rows; details
+	// show on demand (Ctrl+D), beside the list when there is room.
+	listWidth, details := width, 0
+	if m.details {
+		details = len(m.modelDetailLines())
+	}
 	if m.details && width >= 80 {
 		listWidth, details = width*9/20, 0
 	}
@@ -251,11 +256,11 @@ func (m *modelDialogCmp) catalogView() string {
 	active := m.activeModelID()
 	catalogViewScrollOffset(m, &g, t, &base, &rows, active)
 	catalogViewFiltered(m, line, &rows)
-	if g.width == full.width {
+	if g.width == full.width && m.details {
 		for _, detail := range m.modelDetailLines() {
 			rows = append(rows, dialogHint(detail, g.width))
 		}
-	} else {
+	} else if g.width != full.width {
 		rows = m.besideDetails(rows, g.width, full.width-g.width-3)
 	}
 	g.width = full.width

@@ -110,7 +110,7 @@ func TestFirstRunConfiguresNamedProviderAndSelectsInstalledModelThroughKeyboard(
 	program.Send(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	wait("2 catalog · 2 chat")
 	program.Send(testTextKey(string([]rune("llama3.1:8b")), 0))
-	wait("Search: llama3.1:8b")
+	wait("⌕ llama3.1:8b")
 	program.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: 0})
 	wait("Model changed to")
 	program.Quit()

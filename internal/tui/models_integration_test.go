@@ -119,7 +119,7 @@ func TestUserClicksActiveModelSearchesProviderAndPersistsSelection(t *testing.T)
 	program.Send(tea.MouseClickMsg{X: ansi.StringWidth(last[:x]) + 1, Y: len(lines) - 1, Button: tea.MouseLeft})
 	wait("2 catalog · 2 chat")
 	program.Send(testTextKey(string([]rune("new.model")), 0))
-	frame = wait("Search: new.model")
+	frame = wait("⌕ new.model")
 	lines = strings.Split(frame, "\n")
 	y := -1
 	x = -1

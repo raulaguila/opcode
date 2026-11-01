@@ -16,7 +16,7 @@ import (
 
 // modelGeometry is shared by drawing and mouse hit testing, including compact
 // padding. List coordinates never depend on translated labels or model names.
-type modelGeometry struct{ width, height, padY, contentX, titleY, listY, rows int }
+type modelGeometry struct{ width, height, padY, contentX, titleY, listY, rows, listWidth int }
 
 func (m *modelDialogCmp) geometry() modelGeometry {
 	width := 88
@@ -39,8 +39,13 @@ func (m *modelDialogCmp) geometry() modelGeometry {
 			helpRows++
 		}
 	}
-	overhead := 2 + helpRows + 2 + pad*2 + len(m.modelDetailLines())
-	return modelGeometry{width: width, height: height, padY: pad, contentX: 3, titleY: 0, listY: 3 + pad, rows: max(1, min(numVisibleModels, height-overhead))}
+	// Wide details sit beside the list instead of below it.
+	listWidth, details := width, len(m.modelDetailLines())
+	if m.details && width >= 80 {
+		listWidth, details = width*9/20, 0
+	}
+	overhead := 2 + helpRows + 2 + pad*2 + details
+	return modelGeometry{width: width, height: height, padY: pad, contentX: 3, titleY: 0, listY: 3 + pad, rows: max(1, min(numVisibleModels, height-overhead)), listWidth: listWidth}
 }
 
 func (m *modelDialogCmp) activeModelID() models.ModelID {
@@ -204,12 +209,14 @@ func (m *modelDialogCmp) modelDetailLines() []string {
 }
 
 func (m *modelDialogCmp) catalogView() string {
-	g := m.geometry()
+	full := m.geometry()
+	g := full
+	g.width = full.listWidth
 	t := theme.CurrentTheme()
 	base := dialogBody().Width(g.width).MaxWidth(g.width)
 	line := func(s string) string { return base.Render(ansi.Truncate(interfaceCopy(s), g.width, "…")) }
 	var rows []string
-	label := config.Text("Buscar: ", "Search: ")
+	label := "⌕ "
 	m.search.SetWidth(max(1, g.width-ansi.StringWidth(label)))
 	m.search.Placeholder = config.Text("Nome ou ID", "Name or ID")
 	rows = append(rows, base.Render(label+m.search.View()))
@@ -221,9 +228,14 @@ func (m *modelDialogCmp) catalogView() string {
 	active := m.activeModelID()
 	catalogViewScrollOffset(m, &g, t, &base, &rows, active)
 	catalogViewFiltered(m, line, &rows)
-	for _, detail := range m.modelDetailLines() {
-		rows = append(rows, dialogHint(detail, g.width))
+	if g.width == full.width {
+		for _, detail := range m.modelDetailLines() {
+			rows = append(rows, dialogHint(detail, g.width))
+		}
+	} else {
+		rows = m.besideDetails(rows, g.width, full.width-g.width-3)
 	}
+	g.width = full.width
 	// An empty unfiltered list has no position; the title keeps the room.
 	position := ""
 	if m.query != "" {
@@ -393,6 +405,10 @@ func modelHostingLabel(model models.Model) string {
 	case "cloud":
 		return config.Text("Nuvem", "Cloud")
 	}
+	// Ollama names its hosted models "name:cloud" or "name-cloud".
+	if name := strings.ToLower(model.APIModel); strings.HasSuffix(name, ":cloud") || strings.HasSuffix(name, "-cloud") {
+		return config.Text("Nuvem", "Cloud")
+	}
 	return ""
 }
 
@@ -438,4 +454,34 @@ func modelRowCapabilities(model models.Model, width int) string {
 		tags += config.Text(" · imagens", " · images")
 	}
 	return tags
+}
+
+// besideDetails joins the list rows with the selected model's details in a
+// right-hand column, separated by a rule.
+func (m *modelDialogCmp) besideDetails(left []string, leftWidth, rightWidth int) []string {
+	t := theme.CurrentTheme()
+	var right []string
+	if m.selectedIdx >= 0 && m.selectedIdx < len(m.filtered) {
+		right = append(right, styles.PanelTitle().Render(ansi.Truncate(m.modelLabel(m.filtered[m.selectedIdx]), rightWidth, "…")), "")
+	}
+	for _, detail := range m.modelDetailLines() {
+		for _, wrapped := range strings.Split(ansi.Wrap(interfaceCopy(detail), max(1, rightWidth), ""), "\n") {
+			right = append(right, dialogBody().Render(wrapped))
+		}
+	}
+	fill := dialogBody()
+	rule := dialogBody().Foreground(t.BorderNormal()).Render(" │ ")
+	rows := make([]string, 0, max(len(left), len(right)))
+	for i := range max(len(left), len(right)) {
+		l, r := "", ""
+		if i < len(left) {
+			l = ansi.Truncate(left[i], leftWidth, "…")
+		}
+		if i < len(right) {
+			r = right[i]
+		}
+		gap := fill.Render(strings.Repeat(" ", max(0, leftWidth-ansi.StringWidth(l))))
+		rows = append(rows, l+gap+rule+r)
+	}
+	return rows
 }

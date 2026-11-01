@@ -443,7 +443,7 @@ func updateModelDialogCmpMouseMsg(m *modelDialogCmp, msg tea.MouseMsg) (extracte
 		m.move(1)
 	}
 	geometry := m.geometry()
-	if leftClick(msg) && msg.Mouse().X >= geometry.contentX && msg.Mouse().X < geometry.contentX+geometry.width {
+	if leftClick(msg) && msg.Mouse().X >= geometry.contentX && msg.Mouse().X < geometry.contentX+geometry.listWidth {
 		if msg.Mouse().Y == geometry.titleY && len(m.availableProviders) > 1 {
 			if msg.Mouse().X < geometry.contentX+geometry.width/2 {
 				return m, m.switchProvider(-1), true

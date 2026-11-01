@@ -97,7 +97,7 @@ func TestModelDetailsUnknownCapabilitiesAndConsistentLanguage(t *testing.T) {
 	config.Get().TUI.Language = "pt"
 	view := ansi.Strip(m.View())
 	require.Contains(t, view, "Escolher modelo")
-	require.Contains(t, view, "Buscar:")
+	require.Contains(t, view, "⌕")
 	require.Contains(t, view, "Capacidades: não informadas")
 	require.NotContains(t, view, "Search")
 	config.Get().TUI.Language = "en"
@@ -134,4 +134,17 @@ func TestModelPreferencesAndRoleSelectionRemainIndependent(t *testing.T) {
 	view := ansi.Strip(m.View())
 	require.Contains(t, view, "Task model")
 	require.Contains(t, view, "› ✓ ↺ Model 9")
+}
+
+func TestWideModelDetailsSitBesideTheList(t *testing.T) {
+	m := populatedModelDialog(t)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m.details = true
+	view := ansi.Strip(m.View())
+	require.Contains(t, view, " │ ", "a rule separates list and details")
+	require.LessOrEqual(t, lipgloss.Width(m.View()), 120)
+	require.LessOrEqual(t, lipgloss.Height(m.View()), 30)
+	g := m.geometry()
+	_, cmd := m.Update(tea.MouseClickMsg{X: g.contentX + g.listWidth + 4, Y: g.listY, Button: tea.MouseLeft})
+	require.Nil(t, cmd, "clicks on the details column never pick a model")
 }

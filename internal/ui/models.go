@@ -18,6 +18,7 @@ type catalogMsg struct {
 	provider models.ModelProvider
 	models   []models.Model
 	err      error
+	loaded   map[string]models.OllamaRuntime // what a local Ollama holds in memory
 }
 
 // modelPicker holds the provider tabs and the catalog of the selected one.
@@ -26,6 +27,7 @@ type modelPicker struct {
 	providers []models.ModelProvider
 	provider  models.ModelProvider
 	catalog   []models.Model
+	loaded    map[string]models.OllamaRuntime
 	active    models.ModelID
 	loading   bool
 	details   bool
@@ -127,8 +129,21 @@ func (p *modelPicker) load() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		found, err := fetch(models.WithoutCatalogMetadata(ctx))
-		return catalogMsg{provider, found, err}
+		// Metadata says which models take tools and images; the plain list is the fallback.
+		found, err := fetch(ctx)
+		if err != nil {
+			found, err = fetch(models.WithoutCatalogMetadata(ctx))
+		}
+		msg := catalogMsg{provider: provider, models: found, err: err}
+		if base, key, ok := config.OllamaConnection(provider); ok {
+			if running, err := models.InspectOllama(ctx, base, key); err == nil {
+				msg.loaded = map[string]models.OllamaRuntime{}
+				for _, model := range running {
+					msg.loaded[model.Name] = model
+				}
+			}
+		}
+		return msg
 	}
 }
 
@@ -138,7 +153,7 @@ func (p *modelPicker) accept(m *Model, msg catalogMsg) {
 	if msg.provider != p.provider {
 		return
 	}
-	p.loading, p.err, p.catalog = false, msg.err, msg.models
+	p.loading, p.err, p.catalog, p.loaded = false, msg.err, msg.models, msg.loaded
 	if m.app != nil && m.app.CoderAgent != nil {
 		p.active = m.app.CoderAgent.Model().ID
 	}
@@ -312,6 +327,9 @@ func (p *modelPicker) tabs(_ *Model, width int) []string {
 }
 
 func (p *modelPicker) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	if p.details && (msg.String() == "c" || msg.String() == "r") && m.app != nil && m.app.CoderAgent != nil {
+		return p.cycleKnob(m, msg.String()), true
+	}
 	switch msg.String() {
 	case "tab", "shift+tab":
 		if len(p.providers) < 2 {
@@ -345,7 +363,7 @@ func (p *modelPicker) setDetails(on bool) {
 	if on {
 		p.side, p.split, p.width = p.detailColumn, 36, 120
 		p.title = textFor("Escolher modelo · detalhes", "Choose model · details")
-		p.legend = textFor("Enter usar · Ctrl+D ocultar detalhes · Tab provedor · Esc fechar", "Enter use · Ctrl+D hide details · Tab provider · Esc close")
+		p.legend = textFor("Enter usar · C contexto · R raciocínio · Ctrl+D ocultar detalhes · Tab provedor · Esc fechar", "Enter use · C context · R reasoning · Ctrl+D hide details · Tab provider · Esc close")
 	}
 	p.fill()
 	for i, item := range p.list.Visible() {
@@ -375,7 +393,7 @@ func (p *modelPicker) choose(m *Model, item Item) tea.Cmd {
 
 // detailColumn is the proposal's model sheet: the ID, capability chips, a
 // key-value list and the action.
-func (p *modelPicker) detailColumn(_ *Model, item Item, width int) []string {
+func (p *modelPicker) detailColumn(m *Model, item Item, width int) []string {
 	model := item.Value.(models.Model)
 	var tags string
 	if model.EmbeddingOnly() {
@@ -399,8 +417,12 @@ func (p *modelPicker) detailColumn(_ *Model, item Item, width int) []string {
 	pair := func(key, value string) {
 		rows = append(rows, on(P.Surface, P.Muted).Render(fmt.Sprintf("%-14s", key))+on(P.Surface, P.Strong).Render(ansi.Truncate(value, max(1, width-14), "…")))
 	}
+	held, isLoaded := p.loaded[model.APIModel]
 	context := textFor("não informado", "not reported")
-	if model.ContextWindow > 0 {
+	switch {
+	case isLoaded && held.Context > 0 && model.ContextWindow > 0 && held.Context != model.ContextWindow:
+		context = fmt.Sprintf(textFor("%s em uso · %s suportado", "%s in use · %s supported"), compactTokens(held.Context), compactTokens(model.ContextWindow))
+	case model.ContextWindow > 0:
 		context = compactTokens(model.ContextWindow)
 		if model.ContextEstimated {
 			context = "~" + context + textFor(" estimado", " estimated")
@@ -417,7 +439,19 @@ func (p *modelPicker) detailColumn(_ *Model, item Item, width int) []string {
 	if isCloud(model) {
 		where = textFor("nuvem", "cloud")
 	}
+	if p.loaded != nil && !isCloud(model) {
+		state := textFor("não", "no")
+		if isLoaded {
+			state = fmt.Sprintf(textFor("● sim · %s · %.1f GB", "● yes · %s · %.1f GB"), held.Placement(), float64(held.Size)/1e9)
+		}
+		pair(textFor("Carregado", "Loaded"), state)
+	}
 	pair(textFor("Execução", "Runs"), where)
+	if model.ID == p.active {
+		if speed := m.speed(); speed > 0 {
+			pair(textFor("Velocidade", "Speed"), fmt.Sprintf(textFor("≈ %d t/s na última resposta", "≈ %d t/s on the last reply"), int(speed+0.5)))
+		}
+	}
 	if model.API != "" {
 		pair("API", model.API)
 	}
@@ -425,5 +459,79 @@ func (p *modelPicker) detailColumn(_ *Model, item Item, width int) []string {
 	if model.EmbeddingOnly() {
 		return append(rows, on(P.Surface, P.Muted).Render(textFor("Gera embeddings; não serve para conversar.", "Makes embeddings; not for chat.")))
 	}
-	return append(rows, Button(textFor("Usar este modelo", "Use this model"), true, P.Ask))
+	rows = append(rows, Button(textFor("Usar este modelo", "Use this model"), true, P.Ask))
+	if model.ID == p.active {
+		// The knobs of the model in use: C cycles its context, R its reasoning.
+		gap := on(P.Surface, P.Surface).Render(" ")
+		window := textFor("automático", "automatic")
+		if current := config.ModelWithProviderDefaults(model); !current.UsesAutomaticContext() {
+			window = compactTokens(current.ContextWindow)
+		}
+		effort := textFor("não suportado", "not supported")
+		if choices := config.ModelWithProviderDefaults(model).ReasoningChoices(); len(choices) > 0 {
+			effort = effortName(config.Get().Agents[config.AgentCoder].ReasoningEffort)
+		}
+		rows = append(rows, "", Button(textFor("Contexto: ", "Context: ")+window+" ▾", false, P.Ask)+on(P.Surface, P.Muted).Render(" C")+gap+gap+
+			Button(textFor("Raciocínio: ", "Reasoning: ")+effort+" ▾", false, P.Ask)+on(P.Surface, P.Muted).Render(" R"))
+	}
+	return rows
+}
+
+func effortName(effort string) string {
+	switch effort {
+	case "low":
+		return textFor("baixo", "low")
+	case "medium":
+		return textFor("médio", "medium")
+	case "high":
+		return textFor("alto", "high")
+	case "minimal":
+		return textFor("mínimo", "minimal")
+	case "":
+		return textFor("padrão", "default")
+	}
+	return effort
+}
+
+// contextWindows are the context sizes C cycles through; 0 is automatic.
+var contextWindows = []int64{0, 8192, 16384, 32768, 65536, 131072}
+
+// cycleKnob changes the active model's context (C) or reasoning (R), saved
+// with the model as the terminal saves any choice of model.
+func (p *modelPicker) cycleKnob(m *Model, knob string) tea.Cmd {
+	if err := m.saveGuard(); err != nil {
+		m.notice = err.Error()
+		return nil
+	}
+	model := m.app.CoderAgent.Model()
+	switch knob {
+	case "c":
+		current := config.ModelWithProviderDefaults(model)
+		at := 0
+		if !current.UsesAutomaticContext() {
+			at = slices.Index(contextWindows, current.ContextWindow)
+		}
+		next := contextWindows[(at+1)%len(contextWindows)]
+		model.ContextWindow, model.ContextAuto, model.ContextEstimated, model.ContextSource = next, next == 0, false, ""
+		if _, err := m.app.CoderAgent.SelectModel(config.AgentCoder, model); err != nil {
+			m.notice = err.Error()
+			return nil
+		}
+	case "r":
+		choices := config.ModelWithProviderDefaults(model).ReasoningChoices()
+		coder, ok := m.app.CoderAgent.(interface {
+			SetReasoning(config.AgentName, models.ModelID, string) error
+		})
+		if len(choices) == 0 || !ok {
+			m.info = textFor("Este modelo não ajusta raciocínio", "This model does not adjust reasoning")
+			return nil
+		}
+		at := slices.Index(choices, config.Get().Agents[config.AgentCoder].ReasoningEffort)
+		if err := coder.SetReasoning(config.AgentCoder, model.ID, choices[(at+1)%len(choices)]); err != nil {
+			m.notice = err.Error()
+			return nil
+		}
+	}
+	p.active = m.app.CoderAgent.Model().ID
+	return p.load()
 }

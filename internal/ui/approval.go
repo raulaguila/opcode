@@ -42,7 +42,11 @@ func (m *Model) approvalView() string {
 	bg := P.ApprovalCard
 	box := Box{Title: title, Meta: request.ToolName, Width: m.width - 2*gutter + 2, PadX: 2, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg, Outer: P.Ground}
 	inner := box.Inner()
-	preview, added, removed := diffPreview(diff, inner)
+	limit := diffRows
+	if m.fullDiff {
+		limit = max(diffRows, m.height-20) // the whole change, as far as the screen allows
+	}
+	preview, added, removed := diffPreview(diff, inner, limit)
 	if diff != "" {
 		box.Meta = fmt.Sprintf(config.Text("1 arquivo · +%d −%d", "1 file · +%d −%d"), added, removed)
 	}
@@ -80,7 +84,7 @@ func (m *Model) approvalView() string {
 
 // diffPreview draws the first changed lines of a unified diff with their
 // line numbers, on the field ground, and counts additions and removals.
-func diffPreview(diff string, width int) (rows []string, added, removed int) {
+func diffPreview(diff string, width, limit int) (rows []string, added, removed int) {
 	newLine, oldLine, shown, hidden := 0, 0, 0, 0
 	for _, line := range strings.Split(diff, "\n") {
 		switch {
@@ -116,7 +120,7 @@ func diffPreview(diff string, width int) (rows []string, added, removed int) {
 			newLine++
 			oldLine++
 		}
-		if shown >= diffRows {
+		if shown >= limit {
 			hidden++
 			continue
 		}
@@ -125,7 +129,7 @@ func diffPreview(diff string, width int) (rows []string, added, removed int) {
 		rows = append(rows, Line(on(bg, numberColor).Render(fmt.Sprintf("%5d  ", number))+on(bg, fg).Render(ansi.Strip(text)), width, bg))
 	}
 	if hidden > 0 {
-		rows = append(rows, Line(on(P.Field, P.Faint).Render(fmt.Sprintf(config.Text("    …  mais %d linhas", "    …  %d more lines"), hidden)), width, P.Field))
+		rows = append(rows, Line(on(P.Field, P.Faint).Render(fmt.Sprintf(config.Text("    …  mais %d linhas · T mostra tudo", "    …  %d more lines · T shows all"), hidden)), width, P.Field))
 	}
 	if len(rows) > 0 {
 		rows = append([]string{Line("", width, P.Field)}, append(rows, Line("", width, P.Field))...)

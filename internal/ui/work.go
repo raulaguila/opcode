@@ -59,7 +59,9 @@ func (m *Model) questionKey(msg tea.KeyPressMsg) tea.Cmd {
 	key := msg.String()
 	switch {
 	case key == "esc":
-		m.app.CoderAgent.Cancel(m.session.ID)
+		// Answer later: the card steps aside and the agent keeps waiting.
+		m.laterQuestion = q.q.ID
+		m.layout()
 		return nil
 	case key == "up":
 		q.cursor = max(0, q.cursor-1)
@@ -149,9 +151,9 @@ func (m *Model) questionView() string {
 		box.Meta = fmt.Sprintf(textFor("%d de %d", "%d of %d"), q.index+1, n)
 	}
 	keys := fmt.Sprintf("1–%d", max(1, min(9, len(item.Choices)+1)))
-	legend := fmt.Sprintf(textFor("%s escolher · ↑↓ navegar · Enter responder · Esc cancelar", "%s choose · ↑↓ navigate · Enter answer · Esc cancel"), keys)
+	legend := fmt.Sprintf(textFor("%s escolher · ↑↓ navegar · Enter responder · Esc responder depois", "%s choose · ↑↓ navigate · Enter answer · Esc answer later"), keys)
 	if item.Type == "multi_choice" {
-		legend = fmt.Sprintf(textFor("%s marcar · Espaço alternar · Enter responder (%d) · Esc cancelar", "%s check · Space toggle · Enter answer (%d) · Esc cancel"), keys, len(q.checked))
+		legend = fmt.Sprintf(textFor("%s marcar · Espaço alternar · Enter responder (%d) · Esc responder depois", "%s check · Space toggle · Enter answer (%d) · Esc answer later"), keys, len(q.checked))
 	}
 	inner := box.Inner()
 	bg0 := P.AskCard
@@ -264,9 +266,9 @@ func (m *Model) planView() string {
 		}
 		rows = append(rows, Line(bar+on(rowBg, markColor).Render(" "+mark+" ")+title, inner, rowBg))
 	}
-	keys := KeyRow(textFor("/plan recolher", "/plan fold"), inner, bg)
+	keys := KeyRow(textFor("Alt+↑↓ rolar · /plan recolher", "Alt+↑↓ scroll · /plan fold"), inner, bg)
 	if objective := strings.TrimSpace(m.task.Objective); objective != "" {
-		keys[1] = Spread(on(bg, P.Muted).Render(textFor("Resultado esperado: ", "Expected result: ")+objective), on(bg, P.Strong).Bold(true).Render("/plan")+on(bg, P.Muted).Render(textFor(" recolher", " fold")), inner, bg)
+		keys[1] = Spread(on(bg, P.Muted).Render(textFor("Resultado esperado: ", "Expected result: ")+objective), on(bg, P.Strong).Bold(true).Render("Alt+↑↓")+on(bg, P.Muted).Render(textFor(" rolar  ", " scroll  "))+on(bg, P.Strong).Bold(true).Render("/plan")+on(bg, P.Muted).Render(textFor(" recolher", " fold")), inner, bg)
 	}
 	rows = append(append(rows, ""), keys...)
 	for i := range rows {
@@ -300,7 +302,7 @@ func (m *Model) workView() string {
 	switch {
 	case m.approval != nil:
 		return m.approvalView()
-	case m.question != nil:
+	case m.question != nil && !m.answeringLater():
 		return m.questionView()
 	case len(m.task.Steps) > 0 && m.showPlan:
 		return m.planView()
@@ -330,7 +332,7 @@ func (m *Model) failureView() string {
 	bg := P.DangerCard
 	rows := []string{
 		on(bg, P.Danger).Bold(true).Render(ansi.Truncate("■ "+textFor("Parado: ", "Stopped: ")+failureTitle(reason), inner, "…")),
-		on(bg, P.Muted).Render(textFor("Rascunho e progresso foram preservados.", "Draft and progress were kept.")),
+		on(bg, P.Muted).Render(ansi.Truncate(strings.TrimSpace(cause(reason)+" "+textFor("Rascunho e progresso foram preservados.", "Draft and progress were kept.")), inner, "…")),
 	}
 	if m.showFailure {
 		for _, line := range strings.Split(ansi.Wrap(reason, inner, ""), "\n") {
@@ -386,4 +388,23 @@ func (m *Model) failureKey(key string) (tea.Cmd, bool) {
 		return nil, true
 	}
 	return nil, false
+}
+
+// cause explains a known failure in a sentence, without the raw error,
+// which waits for Ctrl+E; an unknown failure has no sentence.
+func cause(reason string) string {
+	lower := strings.ToLower(reason)
+	switch {
+	case strings.Contains(lower, "connection refused"), strings.Contains(lower, "deadline exceeded"), strings.Contains(lower, "no such host"):
+		return textFor("O servidor do modelo não respondeu.", "The model server did not answer.")
+	case strings.Contains(lower, "401"), strings.Contains(lower, "unauthorized"), strings.Contains(lower, "api key"):
+		return textFor("A chave da API foi recusada ou está ausente.", "The API key was refused or is missing.")
+	case strings.Contains(lower, "out of memory"):
+		return textFor("O modelo não coube na memória disponível.", "The model did not fit in the available memory.")
+	case strings.Contains(lower, "repeated tool calls"), strings.Contains(lower, "failed 3 times"):
+		return textFor("A mesma ação falhou várias vezes do mesmo jeito.", "The same action failed the same way several times.")
+	case strings.Contains(lower, "step limit"), strings.Contains(lower, "max steps"):
+		return textFor("A tarefa usou todas as etapas permitidas.", "The task used every step it was allowed.")
+	}
+	return ""
 }

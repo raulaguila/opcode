@@ -3,7 +3,9 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 )
@@ -68,4 +70,45 @@ func TestThinEdgesHugTheFillAndButtonsKeepWidths(t *testing.T) {
 	buttons := OutlineButtons([]string{"Editar", "Testar"}, P.Border, P.Text, P.Card)
 	require.Equal(t, "▕ Editar ▏ ▕ Testar ▏", ansi.Strip(buttons[1]))
 	require.Equal(t, ansi.StringWidth(ansi.Strip(buttons[1])), ansi.StringWidth(ansi.Strip(buttons[0])))
+}
+
+func TestRecentCommandsKeepThreeNewestFirst(t *testing.T) {
+	m := New(nil)
+	for _, title := range []string{"A", "B", "C", "B", "D"} {
+		m.remember(title)
+	}
+	require.Equal(t, []string{"D", "B", "C"}, m.recent)
+}
+
+func TestMentionInsertsTheChosenFile(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 80, 24
+	m.composer.SetValue("veja @mod")
+	m.files, m.filesAt = []string{"cmd/root.go", "internal/ui/model.go"}, time.Now()
+	m.findMention()
+	if len(m.mention) != 1 {
+		t.Fatalf("mention = %v", m.mention)
+	}
+	m.mentionKey("tab")
+	if got := m.composer.Value(); got != "veja @internal/ui/model.go " {
+		t.Fatalf("composer = %q", got)
+	}
+	if m.findMention(); m.mention != nil {
+		t.Fatalf("a finished mention should close the list, got %v", m.mention)
+	}
+}
+
+func TestConversationArrowsWalkThePreviewButtons(t *testing.T) {
+	d := &sessionsDialog{listDialog: &listDialog{}}
+	press := func(code rune) { d.keys(nil, tea.KeyPressMsg{Code: code}) }
+	press(tea.KeyRight)
+	press(tea.KeyRight)
+	if !d.acting || d.action != 1 {
+		t.Fatalf("acting=%v action=%d, want Rename", d.acting, d.action)
+	}
+	press(tea.KeyLeft)
+	press(tea.KeyLeft)
+	if d.acting {
+		t.Fatal("← from the first button should return to the list")
+	}
 }

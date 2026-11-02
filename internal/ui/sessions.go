@@ -58,7 +58,17 @@ type sessionsDialog struct {
 	showArchived bool
 	renaming     bool
 	draft        string
-	previews     map[string][2]string // last prompt and last reply
+	acting       bool // → moved from the list to the preview's buttons
+	action       int  // the button Enter presses while acting
+	previews     map[string]preview
+}
+
+// preview is what the side column shows of a conversation.
+type preview struct {
+	prompt, reply, mode, model string
+	planDone, planTotal        int
+	calls                      []message.ToolCall
+	results                    map[string]message.ToolResult
 }
 
 // openSessions lists conversations by day, the selected one previewed beside.
@@ -66,7 +76,7 @@ func (m *Model) openSessions() tea.Cmd {
 	if m.app == nil || m.app.Sessions == nil {
 		return nil
 	}
-	d := &sessionsDialog{previews: map[string][2]string{}}
+	d := &sessionsDialog{previews: map[string]preview{}}
 	d.listDialog = &listDialog{
 		title:        textFor("Conversas", "Conversations"),
 		searchPrompt: "⌕",
@@ -93,7 +103,7 @@ func (d *sessionsDialog) catalog() *session.Catalog {
 
 // reload reads the conversations again and keeps the selection on keep.
 func (d *sessionsDialog) reload(m *Model, keep string) {
-	d.legend = textFor("Enter abrir · Ctrl+R renomear · Ctrl+E exportar · Ctrl+A arquivar · Ctrl+H arquivadas · Esc fechar", "Enter open · Ctrl+R rename · Ctrl+E export · Ctrl+A archive · Ctrl+H archived · Esc close")
+	d.legend = textFor("Enter abrir · → ações · Ctrl+R renomear · Ctrl+E exportar · Ctrl+A arquivar · Ctrl+H arquivadas · Esc fechar", "Enter open · → actions · Ctrl+R rename · Ctrl+E export · Ctrl+A archive · Ctrl+H archived · Esc close")
 	list, err := m.app.Sessions.List(context.Background())
 	if err != nil {
 		m.notice = err.Error()
@@ -119,6 +129,10 @@ func (d *sessionsDialog) reload(m *Model, keep string) {
 			item.Mark, item.MarkColor = "○", P.Faint
 		case m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(s.ID):
 			item.Mark, item.MarkColor = "●", P.Execute
+		case m.failed[s.ID]:
+			item.Mark, item.MarkColor = "■", P.Danger
+		case planning(m, s.ID):
+			item.Mark, item.MarkColor = "◐", P.Plan
 		}
 		if s.ID == keep {
 			selected = len(items)
@@ -163,13 +177,38 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 		return nil, true
 	}
-	switch msg.String() {
+	key := msg.String()
+	switch key {
+	case "right":
+		d.action = min(d.action+1, 3)
+		if !d.acting {
+			d.acting, d.action = true, 0
+		}
+		return nil, true
+	case "left":
+		d.acting, d.action = d.action > 0 && d.acting, max(0, d.action-1)
+		return nil, true
+	case "enter":
+		if d.acting {
+			key = []string{"enter", "ctrl+r", "ctrl+e", "ctrl+a"}[d.action]
+			d.acting = false
+			if key == "enter" {
+				return nil, false // the list opens it
+			}
+		}
+	default:
+		d.acting = false
+	}
+	switch key {
 	case "ctrl+h":
 		d.showArchived = !d.showArchived
 		d.reload(m, "")
 		return nil, true
 	case "ctrl+r", "ctrl+e", "ctrl+a":
 	default:
+		if key == "enter" {
+			return nil, false
+		}
 		return nil, false
 	}
 	if !ok {
@@ -180,7 +219,7 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.notice = textFor("Aguarde ou cancele esta conversa antes de gerenciá-la", "Wait for or cancel this conversation before managing it")
 		return nil, true
 	}
-	switch msg.String() {
+	switch key {
 	case "ctrl+r":
 		d.renaming, d.draft = true, s.Title
 	case "ctrl+e":
@@ -232,14 +271,26 @@ func (d *sessionsDialog) rename(m *Model, item Item) {
 func (d *sessionsDialog) preview(m *Model, item Item, width int) []string {
 	s := item.Value.(session.Session)
 	if _, ok := d.previews[s.ID]; !ok {
-		d.previews[s.ID] = m.lastExchange(s.ID)
+		d.previews[s.ID] = m.lookInto(s.ID)
 	}
 	title := on(P.Surface, P.Strong).Bold(true).Render(ansi.Truncate(s.Title, width, "…"))
 	if d.renaming {
 		draft := ansi.TruncateLeft(d.draft, max(0, ansi.StringWidth(d.draft)-width+5), "…")
 		title = Line(on(P.Field, P.Ask).Render(" ✎ ")+on(P.Field, P.Strong).Render(draft)+on(P.Field, P.Ask).Render("▏"), width, P.Field)
 	}
-	facts := []string{fmt.Sprintf(textFor("%d mensagens", "%d messages"), s.MessageCount)}
+	look := d.previews[s.ID]
+	// "Executar · nemotron · 14 mensagens · plano 2/5"
+	var facts []string
+	if look.mode != "" {
+		facts = append(facts, modeLabel(look.mode))
+	}
+	if look.model != "" {
+		facts = append(facts, look.model)
+	}
+	facts = append(facts, fmt.Sprintf(textFor("%d mensagens", "%d messages"), s.MessageCount))
+	if look.planTotal > 0 {
+		facts = append(facts, fmt.Sprintf(textFor("plano %d/%d", "plan %d/%d"), look.planDone, look.planTotal))
+	}
 	if s.Cost > 0 {
 		facts = append(facts, fmt.Sprintf("$%.2f", s.Cost))
 	}
@@ -257,10 +308,15 @@ func (d *sessionsDialog) preview(m *Model, item Item, width int) []string {
 		}
 		rows = append(rows, "")
 	}
-	if prompt := d.previews[s.ID][0]; prompt != "" {
-		quote(prompt, "┃", P.User, P.Text, 3)
+	if look.prompt != "" {
+		quote(look.prompt, "┃", P.User, P.Text, 3)
 	}
-	if reply := d.previews[s.ID][1]; reply != "" {
+	if len(look.calls) > 0 {
+		steps := stepsRows(look.calls, look.results, width, false, P.Surface)
+		rows = append(rows, steps[max(0, len(steps)-3):]...)
+		rows = append(rows, "")
+	}
+	if reply := look.reply; reply != "" {
 		quote(strings.NewReplacer("**", "", "`", "", "#", "").Replace(reply), "│", P.Ask, P.Muted, 4)
 	}
 	gap := on(P.Surface, P.Surface).Render(" ")
@@ -271,26 +327,68 @@ func (d *sessionsDialog) preview(m *Model, item Item, width int) []string {
 	if d.archived[s.ID] {
 		archive = textFor("Restaurar", "Restore")
 	}
-	return append(rows, Button(textFor("Abrir", "Open"), true, P.Ask)+gap+Button(textFor("Renomear", "Rename"), false, P.Ask)+gap+Button(textFor("Exportar", "Export"), false, P.Ask)+gap+Button(archive, false, P.Ask))
+	// The pressed-looking button is the one Enter presses: Open, unless → moved on.
+	var buttons []string
+	for i, label := range []string{textFor("Abrir", "Open"), textFor("Renomear", "Rename"), textFor("Exportar", "Export"), archive} {
+		buttons = append(buttons, Button(label, (d.acting && i == d.action) || (!d.acting && i == 0), P.Ask))
+	}
+	return append(rows, strings.Join(buttons, gap))
 }
 
-// lastExchange is the conversation's latest prompt from you and its reply.
-func (m *Model) lastExchange(id string) [2]string {
+// lookInto reads a conversation's last exchange, its steps, the model that
+// answered and its plan.
+func (m *Model) lookInto(id string) preview {
+	var out preview
 	messages, err := m.app.Messages.List(context.Background(), id)
 	if err != nil {
-		return [2]string{}
+		return out
 	}
-	var out [2]string
-	for i := len(messages) - 1; i >= 0 && out[0] == ""; i-- {
-		text := strings.TrimSpace(messages[i].Content().String())
+	out.results = map[string]message.ToolResult{}
+	for i := len(messages) - 1; i >= 0 && out.prompt == ""; i-- {
+		msg := messages[i]
+		for _, result := range msg.ToolResults() {
+			out.results[result.ToolCallID] = result
+		}
+		text := strings.TrimSpace(msg.Content().String())
 		switch {
-		case messages[i].Role == message.User && !messages[i].IsApplication():
-			out[0] = text
-		case messages[i].Role == message.Assistant && out[1] == "" && text != "":
-			out[1] = text
+		case msg.Role == message.User && !msg.IsApplication():
+			out.prompt = text
+		case msg.Role == message.Assistant:
+			if out.reply == "" && text != "" {
+				out.reply = text
+			}
+			if out.model == "" && msg.Model != "" {
+				out.model = modelName(msg.Model)
+			}
+			out.calls = append(msg.ToolCalls(), out.calls...)
+		}
+	}
+	if task, err := m.app.Workflows.Get(context.Background(), id); err == nil {
+		out.mode, out.planTotal = string(task.Mode), len(task.Steps)
+		for _, step := range task.Steps {
+			if step.Status == "completed" {
+				out.planDone++
+			}
 		}
 	}
 	return out
+}
+
+// planning says whether a conversation's plan has steps left.
+func planning(m *Model, id string) bool {
+	if m.app == nil || m.app.Workflows == nil {
+		return false
+	}
+	task, err := m.app.Workflows.Get(context.Background(), id)
+	if err != nil {
+		return false
+	}
+	for _, step := range task.Steps {
+		if step.Status != "completed" {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) openSession(s session.Session) {

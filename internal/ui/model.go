@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -48,6 +49,19 @@ type Model struct {
 	failure     error  // why the last run stopped, until dismissed
 	showFailure bool   // the raw reason, on request
 	lastText    string // the last message sent, for resuming
+
+	numbered string // the session whose number is counted
+	number   int
+
+	failed        map[string]bool // conversations whose last run stopped on an error
+	fullDiff      bool            // the approval shows its whole diff (T)
+	laterQuestion string          // a question put away to answer later (Esc)
+	recent        []string        // palette commands used last, this run
+
+	mention     []string  // files matching the @ being typed
+	mentionPick int       // the one Tab or Enter inserts
+	files       []string  // the workspace's files, for @
+	filesAt     time.Time // when files was listed
 }
 
 type tickMsg struct{}
@@ -191,6 +205,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case event.Error != nil:
 				m.failure = event.Error
 			}
+			if id := cmp.Or(event.SessionID, event.Message.SessionID, m.session.ID); event.Error != nil && !errors.Is(event.Error, agent.ErrRequestCancelled) {
+				if m.failed == nil {
+					m.failed = map[string]bool{}
+				}
+				m.failed[id] = true
+			}
 			m.poll()
 			if !m.busy {
 				return m, tick() // confirm the session settled
@@ -209,13 +229,21 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		cmd, _ := m.dialog.key(m, msg)
 		return cmd
 	}
-	if m.question != nil && msg.String() != "ctrl+c" {
+	if m.question != nil && !m.answeringLater() && msg.String() != "ctrl+c" {
 		return m.questionKey(msg)
+	}
+	if m.answeringLater() && msg.String() == "enter" && strings.TrimSpace(m.composer.Value()) == "" {
+		m.laterQuestion = "" // the empty composer's Enter brings the question back
+		m.layout()
+		return nil
 	}
 	if m.failure != nil {
 		if cmd, ok := m.failureKey(msg.String()); ok {
 			return cmd
 		}
+	}
+	if len(m.mention) > 0 && m.mentionKey(msg.String()) {
+		return nil
 	}
 	switch msg.String() {
 	case "ctrl+c":
@@ -246,6 +274,14 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		m.composer.InsertString("\n")
 		m.layout()
 		return nil
+	case "alt+up", "alt+down":
+		if msg.String() == "alt+up" {
+			m.transcript.ScrollUp(3)
+		} else {
+			m.transcript.ScrollDown(3)
+		}
+		m.follow = m.transcript.AtBottom()
+		return nil
 	case "pgup", "pgdown":
 		var cmd tea.Cmd
 		m.transcript, cmd = m.transcript.Update(msg)
@@ -254,6 +290,7 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	m.composer, cmd = m.composer.Update(msg)
+	m.findMention()
 	m.layout()
 	return cmd
 }
@@ -262,6 +299,10 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 func (m *Model) answerApproval(key string) tea.Cmd {
 	request := *m.approval
 	switch key {
+	case "t", "T":
+		m.fullDiff = !m.fullDiff
+		m.layout()
+		return nil
 	case "1", "a", "enter":
 		m.app.Permissions.Grant(request)
 	case "2", "s":
@@ -271,9 +312,14 @@ func (m *Model) answerApproval(key string) tea.Cmd {
 	default:
 		return nil
 	}
-	m.approval = nil
+	m.approval, m.fullDiff = nil, false
 	m.layout()
 	return nil
+}
+
+// answeringLater is a pending question put away with Esc.
+func (m *Model) answeringLater() bool {
+	return m.question != nil && m.laterQuestion == m.question.q.ID
 }
 
 func (m *Model) cycleMode() {
@@ -310,6 +356,7 @@ func (m *Model) submit() tea.Cmd {
 	}
 	m.composer.Reset()
 	m.lastText, m.failure, m.info = text, nil, ""
+	delete(m.failed, m.session.ID)
 	m.busy, m.started, m.notice, m.follow = true, time.Now(), "", true
 	m.layout()
 	return tick()
@@ -345,7 +392,7 @@ func (m *Model) layout() {
 	lines := strings.Count(m.composer.Value(), "\n") + 1
 	m.composer.SetWidth(max(1, m.width-8))
 	m.composer.SetHeight(min(6, max(1, lines)))
-	used := headerRows + m.composerRows() + footerRows
+	used := headerRows + m.composerRows() + len(m.mention) + footerRows
 	if work := m.workView(); work != "" {
 		used += strings.Count(work, "\n") + 1
 	}

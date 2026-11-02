@@ -49,11 +49,24 @@ func TestEmptyScreenAndComposerFollowTheMode(t *testing.T) {
 
 func TestDiffPreviewNumbersLinesAndCountsChanges(t *testing.T) {
 	diff := "--- a/store.go\n+++ b/store.go\n@@ -44,2 +44,4 @@\n }\n+func Remove() {\n+}\n-old\n"
-	rows, added, removed := diffPreview(diff, 40)
+	rows, added, removed := diffPreview(diff, 40, diffRows)
 	require.Equal(t, 2, added)
 	require.Equal(t, 1, removed)
 	text := ansi.Strip(strings.Join(rows, "\n"))
 	require.Contains(t, text, "   44   }")
 	require.Contains(t, text, "   45  +func Remove() {")
 	require.Contains(t, text, "   45  -old")
+}
+
+func TestFooterNamesWhatTheRunIsDoing(t *testing.T) {
+	m := New(nil)
+	m.messages = []message.Message{
+		{ID: "a1", Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: "c1", Name: "view", Input: `{"file_path":"/w/README.md"}`, Finished: true}}},
+		{ID: "r1", Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: "c1", Content: "ok"}}},
+		{ID: "a2", Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: "c2", Name: "edit", Input: `{"file_path":"/w/main.go"}`, Finished: true}}},
+	}
+	require.Contains(t, m.doing(), "main.go") // the call without a result is the one running
+	require.Equal(t, "+12 −3", sizeLabel(12, 3))
+	require.Equal(t, "+12", sizeLabel(12, 0))
+	require.Empty(t, sizeLabel(0, 0))
 }

@@ -3,6 +3,9 @@ package ui
 import (
 	"context"
 	"fmt"
+	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/transcript"
+	"slices"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
@@ -36,6 +39,18 @@ func (m *Model) commands() []command {
 		{textFor("Planejar", "Plan"), textFor("prepara um plano, sem editar", "prepares a plan, no edits"), "Shift+Tab", work, mode("plan")},
 		{textFor("Executar", "Execute"), textFor("altera arquivos com aprovação", "changes files with approval"), "Shift+Tab", work, mode("execute")},
 		{textFor("Plano", "Plan"), textFor("mostrar ou recolher o plano", "show or fold the plan"), "/plan", work, (*Model).togglePlan},
+		{textFor("Retomar tarefa", "Resume task"), textFor("abre a última conversa e o plano salvo", "opens the last conversation and its saved plan"), "/resume", work, (*Model).resumeLast},
+		{textFor("Responder pergunta", "Answer question"), textFor("reabre a pergunta pendente do agente", "reopens the agent's pending question"), "Enter", work, func(m *Model) tea.Cmd { m.laterQuestion = ""; m.layout(); return nil }},
+		{textFor("Cancelar execução", "Cancel run"), textFor("para a tarefa em andamento", "stops the running task"), "Esc", work, func(m *Model) tea.Cmd {
+			if m.busy && m.app.CoderAgent != nil {
+				m.app.CoderAgent.Cancel(m.session.ID)
+			}
+			return nil
+		}},
+		{textFor("Exportar conversa", "Export conversation"), textFor("salva em Markdown", "saves as Markdown"), "/export", conversation, (*Model).exportCurrent},
+		{textFor("Conexões", "Connections"), textFor("provedores e chaves", "providers and keys"), "/connections", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionConnections) }},
+		{textFor("Preferências", "Preferences"), textFor("idioma, notificações, modo inicial", "language, notifications, initial mode"), "/preferences", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionInterface) }},
+		{textFor("Atalhos", "Shortcuts"), textFor("teclas dos comandos", "command keys"), "/keys", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionShortcuts) }},
 		{textFor("Aprovação: pedir", "Approval: ask"), textFor("pede antes de cada alteração", "asks before every change"), "/approval", settings, approval(permission.ApprovalPrompt)},
 		{textFor("Aprovação: editar no projeto", "Approval: project edits"), textFor("edita arquivos do projeto sem pedir", "edits project files without asking"), "/approval", settings, approval(permission.ApprovalProjectEdits)},
 		{textFor("Sair", "Quit"), textFor("fechar o opcode", "close opcode"), "Ctrl+C", conversation, func(*Model) tea.Cmd { return tea.Quit }},
@@ -44,9 +59,19 @@ func (m *Model) commands() []command {
 
 func (m *Model) openPalette() tea.Cmd {
 	cmds := m.commands()
-	items := make([]Item, len(cmds))
+	// The commands used last lead, under Recent; they are kept for this run.
+	var items []Item
+	for _, title := range m.recent {
+		for i, c := range cmds {
+			if c.title == title {
+				items = append(items, Item{ID: fmt.Sprint(i), Title: c.title, Desc: c.desc, Right: c.key, Group: textFor("Recentes", "Recent"), Value: c.run})
+			}
+		}
+	}
 	for i, c := range cmds {
-		items[i] = Item{ID: fmt.Sprint(i), Title: c.title, Desc: c.desc, Right: c.key, Group: c.group, Value: c.run}
+		if !slices.Contains(m.recent, c.title) {
+			items = append(items, Item{ID: fmt.Sprint(i), Title: c.title, Desc: c.desc, Right: c.key, Group: c.group, Value: c.run})
+		}
 	}
 	m.dialog = &listDialog{
 		title:        textFor("Comandos", "Commands"),
@@ -63,6 +88,7 @@ func (m *Model) openPalette() tea.Cmd {
 		},
 		choose: func(m *Model, item Item) tea.Cmd {
 			m.dialog = nil
+			m.remember(item.Title)
 			return item.Value.(func(*Model) tea.Cmd)(m)
 		},
 	}
@@ -106,4 +132,59 @@ func (m *Model) openPaletteWith(query string) tea.Cmd {
 		d.list.SetQuery(query)
 	}
 	return cmd
+}
+
+// resumeLast opens the most recent other conversation, its plan unfolded.
+func (m *Model) resumeLast() tea.Cmd {
+	if m.app == nil || m.app.Sessions == nil {
+		return nil
+	}
+	list, err := m.app.Sessions.List(context.Background())
+	if err != nil {
+		m.notice = err.Error()
+		return nil
+	}
+	slices.SortFunc(list, func(a, b session.Session) int { return int(b.UpdatedAt - a.UpdatedAt) })
+	for _, s := range list {
+		if s.ParentSessionID == "" && s.ID != m.session.ID {
+			m.openSession(s)
+			m.poll()
+			m.showPlan = len(m.task.Steps) > 0
+			m.layout()
+			return nil
+		}
+	}
+	m.info = textFor("Nenhuma outra conversa para retomar", "No other conversation to resume")
+	return nil
+}
+
+// exportCurrent saves this conversation as Markdown.
+func (m *Model) exportCurrent() tea.Cmd {
+	if m.session.ID == "" || m.app == nil {
+		m.info = textFor("Nada para exportar ainda", "Nothing to export yet")
+		return nil
+	}
+	messages, err := m.app.Messages.List(context.Background(), m.session.ID)
+	if err == nil {
+		cfg := config.Get()
+		var path string
+		if path, err = transcript.Save(cfg.Data.Directory, cfg.WorkingDir, m.session, messages, tools.RedactCredentials); err == nil {
+			m.info = textFor("Conversa exportada: ", "Conversation exported: ") + homeRelative(path)
+		}
+	}
+	if err != nil {
+		m.notice = err.Error()
+	}
+	return nil
+}
+
+// remember puts a command first among the recent ones, keeping three.
+func (m *Model) remember(title string) {
+	recent := []string{title}
+	for _, other := range m.recent {
+		if other != title && len(recent) < 3 {
+			recent = append(recent, other)
+		}
+	}
+	m.recent = recent
 }

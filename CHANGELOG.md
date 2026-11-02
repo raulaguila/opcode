@@ -14,7 +14,7 @@
   raciocínio ajustáveis nos detalhes do modelo; setas em todas as janelas, com
   menu e seção em dois níveis nas configurações; JetBrains Mono embutida.
 - Perguntas do agente podem trazer uma nota curta por opção; a resposta própria
-  é a última opção numerada; no app, `Esc` guarda a pergunta para depois.
+  é a última opção numerada; `Esc` guarda a pergunta para depois.
 - Conexões: uma variável de chave não definida não impede mais o início; a
   conexão aparece como **chave ausente** e pode ser editada ou desativada.
 - Conversas mostram estado (em execução, plano pendente, falha), modo, modelo e
@@ -22,6 +22,13 @@
   primeira fonte; o rodapé mostra a etapa em curso e a velocidade.
 - Na primeira execução sem modelo, as duas interfaces novas abrem em **Nova
   conexão**.
+- Terminal ganha o que o app já tinha: `@` para citar arquivos; `C` e `R`
+  ajustam contexto e raciocínio nos detalhes do modelo, que mostram também
+  carregado e velocidade; `Esc` guarda a pergunta para depois; `T` mostra o
+  diff inteiro na aprovação, com o campo de mensagem em cinza guardando o
+  rascunho; configurações em dois níveis com as setas; `→` nas ações de
+  Conversas; card **Parado** com a causa em uma frase; paleta com Recentes e
+  comandos novos; largura de leitura e mostrar processo aplicados.
 
 ## Em desenvolvimento — 2026-11-01
 

@@ -69,3 +69,15 @@ func TestFailureCardNamesTheCauseAndHidesTheRawError(t *testing.T) {
 	m.failureKey("esc")
 	require.Nil(t, m.failure)
 }
+
+func TestEscPutsTheQuestionAwayAndAnEmptyEnterBringsItBack(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 100, 30
+	m.question = &question{q: interaction.Question{ID: "q1", Question: "Qual?", Choices: []string{"A", "B"}}}
+	require.Zero(t, m.composerRows())
+	m.key(tea.KeyPressMsg{Code: tea.KeyEscape})
+	require.True(t, m.answeringLater())
+	require.NotZero(t, m.composerRows())
+	m.key(tea.KeyPressMsg{Code: tea.KeyEnter})
+	require.False(t, m.answeringLater())
+}

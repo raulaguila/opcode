@@ -65,6 +65,7 @@ type probeMsg struct {
 // section's connections or preferences on the right, saved on change.
 type settingsPanel struct {
 	section, selected int
+	inside            bool // ←→ move between the menu and the section's items
 	query             string
 	editing           bool
 	draft             string
@@ -78,7 +79,7 @@ type settingsPanel struct {
 }
 
 func (m *Model) openSettingsAt(section int) tea.Cmd {
-	p := &settingsPanel{section: section, probes: map[models.ModelProvider]probeMsg{}}
+	p := &settingsPanel{section: section, inside: true, probes: map[models.ModelProvider]probeMsg{}}
 	if m.app != nil && m.app.CoderAgent != nil {
 		p.active = m.app.CoderAgent.Model().Provider
 	}
@@ -99,7 +100,12 @@ func keyMissing(c connection) bool {
 	return config.KeyMissing(c.provider) || (!c.raw.Disabled && c.raw.APIKeyEnv != "" && os.Getenv(c.raw.APIKeyEnv) == "" && c.raw.APIKey == "" && c.raw.APIKeyRef == "")
 }
 
-func (m *Model) openSettings() tea.Cmd { return m.openSettingsAt(sectionConnections) }
+// openSettings starts on the menu; openSettingsAt goes into a section.
+func (m *Model) openSettings() tea.Cmd {
+	cmd := m.openSettingsAt(sectionConnections)
+	m.dialog.(*settingsPanel).inside = false
+	return cmd
+}
 
 func (p *settingsPanel) reload() {
 	p.values, p.origins = map[string]string{}, map[string]string{}
@@ -300,6 +306,9 @@ func (p *settingsPanel) navRows(width int) []string {
 		bg, fg, bar := P.Surface, P.Text, on(P.Surface, P.Surface).Render("  ")
 		if i == p.section {
 			bg, fg, bar = P.Selected, P.Strong, on(P.Selected, P.Ask).Render("▌ ")
+			if p.inside { // the menu waits while you are in the section
+				fg, bar = P.Muted, on(P.Selected, P.Muted).Render("▌ ")
+			}
 		}
 		count := on(bg, P.Muted).Render(counts[i] + " ")
 		if n := integrationWarnings(); i == sectionIntegrations && n > 0 {
@@ -320,18 +329,20 @@ func (p *settingsPanel) legend() string {
 		return textFor("Enter excluir · Esc cancelar", "Enter delete · Esc cancel")
 	case p.editing:
 		return textFor("Enter salvar · Esc cancelar", "Enter save · Esc cancel")
+	case !p.inside:
+		return textFor("↑↓ seção · → entrar · Esc fechar", "↑↓ section · → enter · Esc close")
 	case p.section == sectionConnections:
-		return textFor("N nova · Enter editar · T testar · D excluir · Tab seção · Esc fechar", "N new · Enter edit · T test · D delete · Tab section · Esc close")
+		return textFor("N nova · Enter editar · T testar · D excluir · ← menu · Esc fechar", "N new · Enter edit · T test · D delete · ← menu · Esc close")
 	case p.section == sectionApproval:
-		return textFor("←→ política · Tab seção · Esc fechar", "←→ policy · Tab section · Esc close")
+		return textFor("→ política · ← menu · Esc fechar", "→ policy · ← menu · Esc close")
 	case p.section == sectionIntegrations:
-		return textFor("Enter abrir integrações · Tab seção · Esc fechar", "Enter open integrations · Tab section · Esc close")
+		return textFor("Enter abrir integrações · ← menu · Esc fechar", "Enter open integrations · ← menu · Esc close")
 	}
 	saved := ""
 	if p.status != "" && !p.failed {
 		saved = " · " + p.status
 	}
-	return textFor("↑↓ preferência · ←→ valor · Tab seção"+saved+" · Esc fechar", "↑↓ preference · ←→ value · Tab section"+saved+" · Esc close")
+	return textFor("↑↓ preferência · → valor · ← menu"+saved+" · Esc fechar", "↑↓ preference · → value · ← menu"+saved+" · Esc close")
 }
 
 // connectionRows draws each connection as a framed card: state, name and
@@ -570,6 +581,25 @@ func (p *settingsPanel) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		p.section = (p.section + step + len(sectionNames())) % len(sectionNames())
 		p.selected, p.query, p.status, p.failed = 0, "", "", false
 		return nil, true
+	}
+	if !p.inside {
+		switch key {
+		case "up", "down":
+			step := 1
+			if key == "up" {
+				step = -1
+			}
+			p.section = (p.section + step + len(sectionNames())) % len(sectionNames())
+			p.selected, p.query, p.status, p.failed = 0, "", "", false
+		case "right", "enter", "space":
+			p.inside = true
+		}
+		return nil, true
+	}
+	switch key {
+	case "left":
+		p.inside = false
+		return nil, true
 	case "up", "down":
 		if n := p.count(); n > 0 {
 			step := 1
@@ -589,7 +619,7 @@ func (p *settingsPanel) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 		return nil, true
 	case sectionApproval:
-		if key == "left" || key == "right" || key == "space" || key == "enter" {
+		if key == "right" || key == "space" || key == "enter" {
 			if m.policy == permission.ApprovalProjectEdits {
 				m.setApproval(permission.ApprovalPrompt)
 			} else {
@@ -744,16 +774,12 @@ func (p *settingsPanel) preferenceKey(m *Model, key, text string) tea.Cmd {
 	s := settings[p.selected]
 	options := settingOptions(s)
 	switch key {
-	case "left", "right", "space":
+	case "right", "space":
 		if len(options) == 0 {
 			return nil
 		}
-		step := 1
-		if key == "left" {
-			step = -1
-		}
 		i := slices.Index(options, p.values[s.Path])
-		p.save(m, s, options[(i+step+len(options))%len(options)])
+		p.save(m, s, options[(i+1)%len(options)])
 	case "enter":
 		if len(options) > 0 {
 			i := slices.Index(options, p.values[s.Path])

@@ -86,18 +86,22 @@ function failureTitle(reason) {
   return t("a execução parou com um erro", "the run stopped with an error");
 }
 
-// cause is the error's first sentence, short enough for the card.
+// cause explains a known failure in a sentence; the raw error waits for Details.
 function cause(reason) {
-  const first = reason.split(/(?<=[.!?])\s/)[0].replace(/^[a-z ]*error:\s*/i, "");
-  const text = first.length > 140 ? first.slice(0, 139) + "…" : first;
-  return text.endsWith(".") || text.endsWith("…") ? text : text + ".";
+  const lower = reason.toLowerCase();
+  if (/connection refused|deadline exceeded|no such host/.test(lower)) return t("O servidor do modelo não respondeu.", "The model server did not answer.");
+  if (/401|unauthorized|api key/.test(lower)) return t("A chave da API foi recusada ou está ausente.", "The API key was refused or is missing.");
+  if (/out of memory/.test(lower)) return t("O modelo não coube na memória disponível.", "The model did not fit in the available memory.");
+  if (/repeated tool calls|failed 3 times/.test(lower)) return t("A mesma ação falhou várias vezes do mesmo jeito.", "The same action failed the same way several times.");
+  if (/step limit|max steps/.test(lower)) return t("A tarefa usou todas as etapas permitidas.", "The task used every step it was allowed.");
+  return "";
 }
 
 function failureCard(reason) {
   const detail = el("p", { class: "detail", hidden: "" }, reason);
   return el("div", { class: "failure" },
     el("b", {}, "■ " + t("Parado: ", "Stopped: ") + failureTitle(reason)),
-    el("p", {}, `${cause(reason)} ${t("Rascunho e progresso foram preservados.", "Draft and progress were kept.")}`),
+    el("p", {}, `${cause(reason)} ${t("Rascunho e progresso foram preservados.", "Draft and progress were kept.")}`.trim()),
     detail,
     el("div", { class: "row" },
       el("button", { type: "button", class: "btn primary", onclick: retry }, t("/retry Retomar", "/retry Resume")),

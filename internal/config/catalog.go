@@ -388,3 +388,22 @@ func (snapshot providerCatalogSnapshot) refreshAutomaticModel(existing, model mo
 	}
 	return existing
 }
+
+// OllamaConnection returns the address and key of a connection served by
+// Ollama, to ask it which models it holds in memory; ok is false otherwise.
+func OllamaConnection(p models.ModelProvider) (baseURL, key string, ok bool) {
+	raw := cfg.Providers[p]
+	if id, isProfile := strings.CutPrefix(string(p), "profile:"); isProfile {
+		profile := cfg.ProviderProfiles[id]
+		if profile.Backend != models.ProviderLocal {
+			return "", "", false
+		}
+		raw = profile.Provider
+	} else if p != models.ProviderLocal {
+		return "", "", false
+	}
+	if raw.API != "ollama" {
+		return "", "", false
+	}
+	return raw.BaseURL, raw.APIKey, true
+}

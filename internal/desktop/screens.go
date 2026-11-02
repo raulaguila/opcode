@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -167,21 +165,11 @@ type Loaded struct {
 
 // loaded asks a local Ollama connection which models it holds in memory.
 func loaded(ctx context.Context, p models.ModelProvider) map[string]Loaded {
-	cfg := config.Get()
-	raw := cfg.Providers[p]
-	if id, ok := strings.CutPrefix(string(p), "profile:"); ok {
-		profile := cfg.ProviderProfiles[id]
-		if profile.Backend != models.ProviderLocal {
-			return nil
-		}
-		raw = profile.Provider
-	} else if p != models.ProviderLocal {
+	base, key, ok := config.OllamaConnection(p)
+	if !ok {
 		return nil
 	}
-	if raw.API != "ollama" {
-		return nil
-	}
-	running, err := models.InspectOllama(ctx, raw.BaseURL, raw.APIKey)
+	running, err := models.InspectOllama(ctx, base, key)
 	if err != nil {
 		return nil
 	}
@@ -864,31 +852,7 @@ func (s *Server) setReasoning(w http.ResponseWriter, r *http.Request) {
 // It reads names only, through the same listing the terminal's file picker
 // uses, which honors .gitignore.
 func (s *Server) files(w http.ResponseWriter, r *http.Request) {
-	query := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
-	all := s.workspaceFiles()
-	type scored struct {
-		path  string
-		score int
-	}
-	var hits []scored
-	for _, path := range all {
-		lower := strings.ToLower(path)
-		at := strings.Index(lower, query)
-		if query != "" && at < 0 {
-			continue
-		}
-		score := len(path)
-		if base := strings.ToLower(filepath.Base(path)); strings.HasPrefix(base, query) {
-			score -= 1000 // a file name that starts with the query leads
-		}
-		hits = append(hits, scored{path, score + at})
-	}
-	slices.SortFunc(hits, func(a, b scored) int { return a.score - b.score })
-	out := []string{}
-	for _, hit := range hits[:min(len(hits), 20)] {
-		out = append(out, hit.path)
-	}
-	reply(w, http.StatusOK, out)
+	reply(w, http.StatusOK, fileutil.MatchFiles(s.workspaceFiles(), r.URL.Query().Get("q"), 20))
 }
 
 // workspaceFiles keeps the listing for a few seconds; @ asks on every key.
@@ -898,35 +862,7 @@ func (s *Server) workspaceFiles() []string {
 	if time.Since(s.filesAt) < 10*time.Second {
 		return s.filesCache
 	}
-	root := config.WorkingDirectory()
-	var list []string
-	if cmd := fileutil.GetRgCmd(""); cmd != nil {
-		cmd.Dir = root
-		if raw, err := cmd.Output(); err == nil {
-			for _, path := range strings.Split(string(raw), "\x00") {
-				if path = strings.TrimPrefix(path, "./"); path != "" {
-					list = append(list, path)
-				}
-			}
-		}
-	}
-	if list == nil {
-		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || len(list) >= 20000 {
-				return filepath.SkipDir
-			}
-			name := entry.Name()
-			if entry.IsDir() && path != root && (strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor") {
-				return filepath.SkipDir
-			}
-			if !entry.IsDir() {
-				if rel, err := filepath.Rel(root, path); err == nil {
-					list = append(list, rel)
-				}
-			}
-			return nil
-		})
-	}
+	list := fileutil.WorkspaceFiles(config.WorkingDirectory())
 	s.filesCache, s.filesAt = list, time.Now()
 	return list
 }

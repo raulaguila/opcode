@@ -72,32 +72,35 @@ escolha o modelo com `Ctrl+O`.
 | `Ctrl+N` | nova conversa | nova conversa |
 | `Esc` | cancela a execução | cancela a execução |
 | `1` `2` `3` | responde a aprovação | responde a aprovação |
-| `T` | — | mostra o diff inteiro na aprovação |
-| `@` | — | lista os arquivos do projeto para citar |
+| `T` | mostra o diff inteiro na aprovação | mostra o diff inteiro na aprovação |
+| `@` | lista os arquivos do projeto para citar | lista os arquivos do projeto para citar |
+| `C` `R` nos detalhes do modelo em uso | contexto · raciocínio | seletores |
 | `PgUp` `PgDn` / `Alt+↑↓` | rolam a conversa | rolam a conversa |
 | `Ctrl+R` `Ctrl+E` no card Parado | retomar · detalhes | botões do card |
 
-Nas janelas, `↑↓` andam pelos itens e `Enter` escolhe. No app as setas vão além:
-em Configurações, `↑↓` escolhem a seção, `→` entra nela e `←` volta ao menu;
-dentro, `→` ou `Espaço` mudam o valor. Em Conversas e nos detalhes do modelo,
-`→` vai da lista para as ações e `←` volta. Botões lado a lado aceitam `←→` e
-`Enter`.
+Nas janelas, `↑↓` andam pelos itens e `Enter` escolhe. Em Configurações, `↑↓`
+escolhem a seção, `→` entra nela e `←` volta ao menu; dentro, `→` ou `Espaço`
+mudam o valor. Em Conversas, `→` vai da lista para as ações e `←` volta. No
+app, botões lado a lado aceitam `←→` e `Enter`.
 
 Na pergunta do agente, os números marcam, `Espaço` alterna numa pergunta de
-várias respostas e `Enter` responde. No app, `Esc` guarda a pergunta para
-depois: o agente continua esperando e o rodapé mostra *Pergunta pendente*, que
-`Enter` reabre.
+várias respostas e `Enter` responde. `Esc` guarda a pergunta para depois: o
+agente continua esperando e o rodapé mostra *Pergunta pendente*, que `Enter`
+com o campo vazio reabre.
+
+Nas duas:
+
+- **@ arquivos**: digite `@` e parte do nome; a lista respeita o `.gitignore`.
+- **Contexto e Raciocínio** nos detalhes do modelo em uso. Contexto é salvo com
+  o modelo (ou *automático*); Raciocínio aparece quando o provedor aceita o
+  ajuste. Com Ollama, os detalhes mostram se o modelo está carregado e onde.
+- **Largura de leitura** limita a largura das mensagens e **Mostrar processo**
+  lista cada ferramenta numa linha.
 
 ## Só no app
 
 - **Tema** claro, escuro (o da proposta) ou o do sistema, em Configurações ›
   Interface. A escolha fica só no navegador desta janela.
-- **@ arquivos**: digite `@` e parte do nome; a lista respeita o `.gitignore`.
-- **Contexto e Raciocínio** nos detalhes do modelo em uso. Contexto é salvo com
-  o modelo (ou *automático*); Raciocínio aparece quando o provedor aceita o
-  ajuste.
-- **Largura de leitura** limita a largura das mensagens e **Mostrar processo**
-  lista cada ferramenta numa linha.
 
 ## Janela nativa ou do navegador
 

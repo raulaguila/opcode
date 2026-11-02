@@ -391,13 +391,15 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 		} else if deleting {
 			body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
 		}
-		rows = append(rows, ThinBox(body, width, edge, bg, P.Surface, c.raw.Disabled)...)
+		card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface, Dashed: c.raw.Disabled}
+		rows = append(rows, strings.Split(card.Render(strings.Join(body, "\n")), "\n")...)
 	}
 	if p.status != "" && p.failed {
 		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(p.status, width, "…")))
 	}
 	offer := on(P.Surface, P.Ask).Render(" " + textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…"))
-	return append(rows, ThinBox([]string{offer}, width, P.CardSelectedEdge, P.Surface, P.Surface, true)...)
+	add := Box{Width: width, Accent: P.CardSelectedEdge, Background: P.Surface, Outer: P.Surface, Dashed: true}
+	return append(rows, strings.Split(add.Render(offer), "\n")...)
 }
 
 // integrationWarnings counts integrations that fail validation or were

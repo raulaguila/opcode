@@ -22,7 +22,7 @@ func TestQuestionCardNumbersChoicesAndMarksSelection(t *testing.T) {
 	m.questionKey(tea.KeyPressMsg{Code: '1', Text: "1"})
 	m.questionKey(tea.KeyPressMsg{Code: '3', Text: "3"})
 	view := ansi.Strip(m.questionView())
-	require.True(t, strings.HasPrefix(strings.TrimSpace(view), "╭─ Pergunta do agente") || strings.Contains(view, "Agent question"))
+	require.True(t, strings.HasPrefix(strings.TrimSpace(view), "▁ Pergunta do agente") || strings.Contains(view, "Agent question"))
 	require.Contains(t, view, "1 of 2")
 	require.Contains(t, view, "1 ☑ Testes")
 	require.Contains(t, view, "2 ☐ IDs")

@@ -41,7 +41,7 @@ func TestEmptyScreenAndComposerFollowTheMode(t *testing.T) {
 	for _, mode := range []string{"ask", "plan", "execute"} {
 		m.mode = mode
 		top := strings.Split(ansi.Strip(m.composerView()), "\n")[0]
-		require.True(t, strings.HasPrefix(top, "╭─ "+modeLabel(mode)), top)
+		require.True(t, strings.HasPrefix(top, " ▁ "+modeLabel(mode)), top)
 	}
 	m.cycleMode()
 	require.Equal(t, "ask", m.mode, "Shift+Tab wraps from Execute to Ask")

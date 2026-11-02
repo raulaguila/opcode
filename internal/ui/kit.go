@@ -8,12 +8,17 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Box is the proposal's panel: a rounded border whose top edge carries the
+// Box is the proposal's panel: a framed fill whose top edge carries the
 // title on the left and a short note on the right, and whose bottom edge
-// carries the key legend. Every dialog and card is a Box.
+// can carry a legend. Every dialog and card is a Box.
+//
+// The frame is drawn with eighth-block lines (▁ ▔ ▕ ▏) that sit on the cell
+// edge next to the fill, the nearest a terminal gets to a thin border: a
+// box-drawing line (│) sits mid-cell and leaves half a cell of the wrong
+// color on one side. The corner cells stay empty, which reads as rounded.
 type Box struct {
 	Title, Meta, Legend string
-	Width               int // outer width, borders included
+	Width               int // outer width, edges included
 	PadX, PadY          int
 	Accent, Background  color.Color
 	TitleColor          color.Color // defaults to Strong
@@ -39,20 +44,27 @@ func (b Box) Render(body string) string {
 	if outer == nil {
 		outer = P.Ground
 	}
-	// The edge sits on the ground around the box, so a tinted card stays
-	// inside its rounded corners.
 	edge := on(outer, accent)
-	h, v := "─", "│"
-	if b.Dashed {
-		h, v = "┄", "┆"
-	}
 	inner := max(1, b.Width-2)
 	content := max(1, inner-2*b.PadX)
 	label := func(text string, c color.Color, bold bool) string {
 		return on(outer, c).Bold(bold).Render(text)
 	}
-	border := func(left, right, title, meta string, titleStyle func(string) string) string {
-		// "╭─ title ──── meta ─╮": labels sit two cells in from the corners.
+	// line draws a top or bottom edge, labels sitting on it two cells in.
+	line := func(mark, title, meta string, titleStyle func(string) string) string {
+		at := 0 // cell position, so dashes keep one rhythm across labels
+		run := func(n int) string {
+			var out strings.Builder
+			for range max(0, n) {
+				if b.Dashed && at%2 == 1 {
+					out.WriteString(" ")
+				} else {
+					out.WriteString(mark)
+				}
+				at++
+			}
+			return out.String()
+		}
 		meta = ansi.Truncate(meta, max(0, (inner-7)/2), "…")
 		if ansi.StringWidth(meta) < 2 {
 			meta = ""
@@ -62,38 +74,42 @@ func (b Box) Render(body string) string {
 			reserved = ansi.StringWidth(meta) + 3
 		}
 		title = ansi.Truncate(title, max(0, inner-4-reserved), "…")
-		used := 0
+		used := 1
 		var out strings.Builder
-		out.WriteString(edge.Render(left + h))
+		out.WriteString(edge.Render(" " + run(1)))
 		if title != "" {
 			out.WriteString(edge.Render(" ") + titleStyle(title) + edge.Render(" "))
 			used += ansi.StringWidth(title) + 2
+			at += ansi.StringWidth(title) + 2
 		}
-		tail := ""
+		tail, tailWidth := "", 0
 		if meta != "" {
 			tail = edge.Render(" ") + label(meta, P.Muted, false) + edge.Render(" ")
-			used += ansi.StringWidth(meta) + 2
+			tailWidth = ansi.StringWidth(meta) + 2
+			used += tailWidth
 		}
-		out.WriteString(edge.Render(strings.Repeat(h, max(0, inner-2-used))))
-		out.WriteString(tail + edge.Render(h+right))
+		out.WriteString(edge.Render(run(inner - 1 - used)))
+		at += tailWidth
+		out.WriteString(tail + edge.Render(run(1)+" "))
 		return out.String()
 	}
+	left, right := edge.Render("▕"), edge.Render("▏")
 	fill := lipgloss.NewStyle().Background(bg)
 	pad := fill.Render(strings.Repeat(" ", b.PadX))
-	blank := edge.Render(v) + fill.Render(strings.Repeat(" ", inner)) + edge.Render(v)
-	rows := []string{border("╭", "╮", b.Title, b.Meta, func(s string) string { return label(s, titleColor, true) })}
+	blank := left + fill.Render(strings.Repeat(" ", inner)) + right
+	rows := []string{line("▁", b.Title, b.Meta, func(s string) string { return label(s, titleColor, true) })}
 	for range b.PadY {
 		rows = append(rows, blank)
 	}
-	for _, line := range strings.Split(body, "\n") {
-		line = ansi.Truncate(line, content, "…")
-		gap := fill.Render(strings.Repeat(" ", max(0, content-ansi.StringWidth(line))))
-		rows = append(rows, edge.Render(v)+pad+line+gap+pad+edge.Render(v))
+	for _, row := range strings.Split(body, "\n") {
+		row = ansi.Truncate(row, content, "…")
+		gap := fill.Render(strings.Repeat(" ", max(0, content-ansi.StringWidth(row))))
+		rows = append(rows, left+pad+row+gap+pad+right)
 	}
 	for range b.PadY {
 		rows = append(rows, blank)
 	}
-	rows = append(rows, border("╰", "╯", b.Legend, "", func(s string) string { return label(s, P.Muted, false) }))
+	rows = append(rows, line("▔", b.Legend, "", func(s string) string { return label(s, P.Muted, false) }))
 	return strings.Join(rows, "\n")
 }
 
@@ -152,26 +168,6 @@ func KeyRow(legend string, width int, bg color.Color) []string {
 // Chip is a short tag on a raised tint: "ferramentas", "Ctrl+O".
 func Chip(text string, fg, bg color.Color) string {
 	return on(P.Raised, fg).Render(" "+text+" ") + on(bg, bg).Render(" ")
-}
-
-// ThinBox frames rows with eighth-block lines, the nearest a terminal gets
-// to a one-pixel border: the edges hug the fill instead of taking a cell
-// of their own. Corners stay open, which reads as slightly rounded. A
-// dashed frame breaks its top and bottom lines.
-func ThinBox(body []string, width int, edge, fill, outer color.Color, dashed bool) []string {
-	inner := max(1, width-2)
-	line := func(mark string) string {
-		run := strings.Repeat(mark, inner)
-		if dashed {
-			run = strings.Repeat(mark+" ", inner/2) + strings.Repeat(mark, inner%2)
-		}
-		return on(outer, edge).Render(" " + run + " ")
-	}
-	rows := []string{line("▁")}
-	for _, row := range body {
-		rows = append(rows, on(outer, edge).Render("▕")+Line(row, inner, fill)+on(outer, edge).Render("▏"))
-	}
-	return append(rows, line("▔"))
 }
 
 // OutlineButtons draws buttons with thin outlines over three rows: a line

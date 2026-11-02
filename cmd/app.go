@@ -70,11 +70,18 @@ func runApp(c *cobra.Command, cwd string, noOpen bool) error {
 }
 
 // openWindow prefers a Chromium app window (no tabs or address bar) and
-// falls back to the default browser.
+// falls back to the default browser. The window gets a profile of its own:
+// a browser's main profile remembers its last window size and would ignore
+// the one asked for here, and the app's page shares no cookies with it.
 func openWindow(url string) {
+	profile := filepath.Join(os.TempDir(), "opcode-app-window")
+	if dir, err := os.UserConfigDir(); err == nil {
+		profile = filepath.Join(dir, "opcode", "app-window")
+	}
+	args := []string{"--app=" + url, "--user-data-dir=" + profile, "--window-size=1120,760", "--no-first-run", "--no-default-browser-check"}
 	for _, browser := range []string{"google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "microsoft-edge", "brave-browser"} {
 		if path, err := exec.LookPath(browser); err == nil {
-			if exec.Command(path, "--app="+url, "--window-size=1180,780").Start() == nil {
+			if exec.Command(path, args...).Start() == nil {
 				return
 			}
 		}

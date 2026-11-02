@@ -6,7 +6,7 @@
 
 let dialog = null; // { close, key(event) → handled }
 
-function openDialog({ title, meta = "", size = "", body, keys = [], onKey }) {
+function openDialog({ title, meta = "", size = "", body, keys = [], onKey, list = null }) {
   closeDialog();
   const metaNode = el("span", { class: "edge right" }, meta);
   const keysNode = el("div", { class: "keys" });
@@ -24,6 +24,7 @@ function openDialog({ title, meta = "", size = "", body, keys = [], onKey }) {
       keysNode.replaceChildren(...pairs.map(([k, d, end, cls]) => el("span", { class: [end ? "end" : "", cls || ""].join(" ") }, el("b", {}, k), d ? " " + d : "")));
     },
     key: onKey,
+    list,
     close: () => veil.remove(),
   };
   dialog.keys(keys);
@@ -102,9 +103,6 @@ function makeList({ items, grouped = true, onPick, onMove, cursor = "", chips = 
 function searchField(placeholder, list, prompt = "⌕") {
   const input = el("input", { type: "text", placeholder, "aria-label": placeholder, autocomplete: "off", spellcheck: "false" });
   input.addEventListener("input", () => list.setQuery(input.value));
-  input.addEventListener("keydown", (event) => {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); list.move(event.key === "ArrowDown" ? 1 : -1); }
-  });
   return { node: el("label", { class: "search" }, el("span", {}, prompt), input), input };
 }
 
@@ -132,7 +130,7 @@ function openPalette(query = "") {
   search.input.value = query;
   list.setQuery(query);
   const d = openDialog({
-    title: t("Comandos", "Commands"), meta: String(list.visible().length), size: "",
+    title: t("Comandos", "Commands"), meta: String(list.visible().length), size: "", list,
     body: el("div", {}, search.node, list.node),
     keys: [["↑↓", t("escolher", "choose")], ["Enter", t("abrir", "open")], ["Esc", t("fechar", "close"), true]],
     onKey: (event) => {
@@ -168,13 +166,14 @@ async function openModels(provider = "") {
   const search = searchField(t("Buscar por nome ou ID", "Search by name or ID"), list);
   const wrap = el("div", {});
   const d = openDialog({
-    title: t("Escolher modelo", "Choose model"), body: wrap,
+    title: t("Escolher modelo", "Choose model"), body: wrap, list,
     onKey: (event) => {
+      // With nothing typed, ←→ walk the provider tabs.
+      if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !search.input.value) { event.preventDefault(); switchProvider(event.key === "ArrowLeft" ? -1 : 1); return true; }
       if (event.key === "Enter") { const item = list.current(); if (item) use(item.model); return true; }
       if (event.key === "Tab") { event.preventDefault(); switchProvider(event.shiftKey ? -1 : 1); return true; }
       if (event.ctrlKey && event.key.toLowerCase() === "d") { event.preventDefault(); details = !details; layout(); return true; }
       if (event.ctrlKey && event.key.toLowerCase() === "p") { event.preventDefault(); openSettings(0); return true; }
-      if (details && (event.key === "ArrowDown" || event.key === "ArrowUp")) { event.preventDefault(); list.move(event.key === "ArrowDown" ? 1 : -1); return true; }
       return false;
     },
   });
@@ -296,7 +295,7 @@ async function openSessions() {
   const list = makeList({ items: [], onPick: (item) => open(item.session), onMove: () => drawPane() });
   const search = searchField(t("Buscar conversa", "Search conversations"), list);
   const d = openDialog({
-    title: t("Conversas", "Conversations"), size: "wide",
+    title: t("Conversas", "Conversations"), size: "wide", list,
     body: el("div", { class: "split sessions" }, el("div", { class: "col" }, search.node, list.node), pane),
     keys: [["Enter", t("abrir", "open")], ["Ctrl+R", t("renomear", "rename")], ["Ctrl+E", t("exportar", "export")], ["Ctrl+A", t("arquivar", "archive")], ["Ctrl+H", t("arquivadas", "archived")], ["Esc", t("fechar", "close"), true]],
     onKey: (event) => {
@@ -520,10 +519,13 @@ async function openSettings(section = 0) {
     body: el("div", { class: "split settings" }, el("div", { class: "col", style: "padding-top:0" }, nav), content),
     onKey: (event) => {
       // A value being typed keeps its keys; the search field only lends them.
-      const typing = ["INPUT", "SELECT"].includes(document.activeElement?.tagName) && !document.activeElement.closest(".search");
+      const active = document.activeElement;
+      const typing = ["INPUT", "SELECT"].includes(active?.tagName) && !(active.closest(".search") && !(active.value && (event.key === "ArrowLeft" || event.key === "ArrowRight")));
       if (typing && event.key !== "Escape" && event.key !== "Tab") return false;
       if (event.key === "Tab") { event.preventDefault(); go((section + (event.shiftKey ? -1 : 1) + 7) % 7); return true; }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); const n = count(); if (n) { selected = (selected + (event.key === "ArrowDown" ? 1 : -1) + n) % n; draw(); } return true; }
+      // Sections without values take ←→ to move between sections.
+      if ((section === 0 || section === 5) && (event.key === "ArrowLeft" || event.key === "ArrowRight")) { event.preventDefault(); go((section + (event.key === "ArrowLeft" ? -1 : 1) + 7) % 7); return true; }
       if (section === 0) return connectionKey(event);
       if (section === 5 && event.key === "Enter") return true;
       if (section === 3 && ["ArrowLeft", "ArrowRight", " ", "Enter"].includes(event.key)) { event.preventDefault(); view.policy = view.policy === "prompt" ? "project_edits" : "prompt"; renderFrame(); draw(); return true; }
@@ -697,9 +699,8 @@ async function editConnection(existing) {
     openDialog({
       title: t("Nova conexão", "New connection"),
       body: el("div", {}, el("div", { class: "nothing", style: "padding-bottom:10px" }, t("Escolha um ponto de partida; revise antes de salvar.", "Choose a starting point; review before saving.")), list.node),
-      keys: [["↑↓", t("escolher", "choose")], ["Enter", t("configurar", "configure")], ["Esc", t("voltar", "back"), true]],
+      keys: [["↑↓", t("escolher", "choose")], ["Enter", t("configurar", "configure")], ["Esc", t("voltar", "back"), true]], list,
       onKey: (event) => {
-        if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); list.move(event.key === "ArrowDown" ? 1 : -1); return true; }
         if (event.key === "Enter") { event.preventDefault(); const item = list.current(); if (item) form(fromPreset(item.preset, conns)); return true; }
         if (event.key === "Escape") { openSettings(0); return true; }
         return false;
@@ -728,10 +729,23 @@ function form(f) {
       if (event.ctrlKey && event.key.toLowerCase() === "t") { event.preventDefault(); test(); return true; }
       if (event.ctrlKey && event.key.toLowerCase() === "a" && document.activeElement?.tagName !== "INPUT") { event.preventDefault(); advanced = !advanced; draw(); return true; }
       if (event.key === "Escape") { openSettings(0); return true; }
-      if (event.key === "Tab") return false;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); stepField(event.key === "ArrowDown" ? 1 : -1); return true; }
+      const active = document.activeElement;
+      if (active?.tagName === "SELECT" && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+        event.preventDefault();
+        active.selectedIndex = Math.max(0, Math.min(active.options.length - 1, active.selectedIndex + (event.key === "ArrowLeft" ? -1 : 1)));
+        active.dispatchEvent(new Event("change"));
+        return true;
+      }
       return false;
     },
   });
+  // stepField moves between fields: a text box, a list, the chosen radio of a group, then the buttons.
+  const stepField = (step) => {
+    const stops = [...body.querySelectorAll(".field input[type=text], .field input[type=password], .field select, .field input[type=radio]:checked, .more, .form-actions button:not([disabled])")];
+    const at = stops.indexOf(document.activeElement);
+    stops[Math.max(0, Math.min(stops.length - 1, at < 0 ? 0 : at + step))]?.focus();
+  };
   d.panel.style.width = "min(760px, 100%)";
   const text = (label, key, opts = {}) => {
     const input = el("input", { type: opts.secret ? "password" : "text", id: `cf-${key}`, value: f[key] ?? "", placeholder: opts.placeholder || "", autocomplete: "off", spellcheck: "false" });
@@ -740,7 +754,7 @@ function form(f) {
   };
   const radios = (label, key, choices) => el("div", { class: "field", role: "radiogroup", "aria-label": label }, el("span", { class: "name" }, label),
     el("div", { class: "radios" }, choices.map(([value, name]) => {
-      const input = el("input", { type: "radio", name: `cf-${key}`, value: String(value) });
+      const input = el("input", { type: "radio", name: `cf-${key}`, value: String(value), id: `cf-${key}-${value}` });
       if (String(f[key]) === String(value)) input.checked = true;
       input.addEventListener("change", () => { f[key] = value; status = null; draw(); });
       return el("label", {}, input, " " + name);
@@ -804,16 +818,37 @@ function form(f) {
 
 // handleShortcut runs before the conversation's own keys; true means taken.
 function handleShortcut(event) {
+  if (buttonArrows(event)) return true;
   if (dialog) {
+    if (event.key === "Enter" && document.activeElement?.tagName === "BUTTON") return false; // the button presses itself
     if (dialog.key && dialog.key(event)) return true;
+    if (dialog.list && (event.key === "ArrowDown" || event.key === "ArrowUp")) { event.preventDefault(); dialog.list.move(event.key === "ArrowDown" ? 1 : -1); return true; }
     if (event.key === "Escape") { event.preventDefault(); closeDialog(); return true; }
     return true; // a dialog keeps the keyboard
   }
   if (questionKey(event)) return true;
+  // From an empty composer, ←→ reach the buttons of the card above it.
+  if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && document.activeElement === $("input") && !$("input").value) {
+    const buttons = [...$("work").querySelectorAll("button")];
+    if (buttons.length) { event.preventDefault(); (event.key === "ArrowLeft" ? buttons[buttons.length - 1] : buttons[0]).focus(); return true; }
+  }
   const k = event.key.toLowerCase();
   if (event.ctrlKey && !event.shiftKey && !event.altKey) {
     const run = { k: () => openPalette(), o: () => openModels(), s: () => openSessions(), n: newConversation, ",": () => openSettings(1) }[k];
     if (run) { event.preventDefault(); run(); return true; }
   }
   return false;
+}
+
+// buttonArrows moves focus between buttons that sit side by side; Enter
+// then presses the focused one.
+function buttonArrows(event) {
+  const active = document.activeElement;
+  if (active?.tagName !== "BUTTON" || !["ArrowLeft", "ArrowRight"].includes(event.key)) return false;
+  const row = [...active.parentElement.querySelectorAll(":scope > button:not([disabled])")];
+  if (row.length < 2) return false;
+  event.preventDefault();
+  const at = row.indexOf(active) + (event.key === "ArrowLeft" ? -1 : 1);
+  row[(at + row.length) % row.length].focus();
+  return true;
 }

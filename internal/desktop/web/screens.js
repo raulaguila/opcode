@@ -390,24 +390,39 @@ function questionCard(q) {
   const item = items[asking.index];
   const multi = item.type === "multi_choice";
   const choices = item.choices || [];
-  const options = choices.map((choice, i) => el("div", { class: `opt${asking.cursor === i ? " sel" : ""}`, onclick: () => { asking.cursor = i; pick(i, multi); renderWork(); } },
+  if (!choices.length) asking.cursor = 0;
+  const rows = [];
+  // highlight moves the selection bar without redrawing, so typing keeps its focus.
+  const highlight = (index) => { asking.cursor = index; rows.forEach((row, i) => row.classList.toggle("sel", i === index)); };
+  choices.forEach((choice, i) => rows.push(el("div", { class: `opt${asking.cursor === i ? " sel" : ""}`, onclick: () => { asking.cursor = i; pick(i, multi); renderWork(); } },
     el("span", { class: "num" }, String(i + 1)),
     el("span", { style: `color:${asking.checked.has(i) ? "var(--ok)" : "var(--muted)"}` }, multi ? (asking.checked.has(i) ? "☑" : "☐") : (asking.checked.has(i) ? "●" : "○")),
-    el("span", { style: asking.cursor === i ? "color:var(--strong)" : "" }, choice)));
-  const free = el("input", { type: "text", placeholder: t("Outra resposta…", "Other answer…"), value: asking.text, "aria-label": t("Outra resposta", "Other answer") });
-  free.addEventListener("input", () => { asking.text = free.value; asking.cursor = choices.length; });
-  free.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); submitAnswer(q); } });
-  options.push(el("div", { class: `opt${asking.cursor === choices.length ? " sel" : ""}` }, el("span", { class: "num" }, choices.length ? String(choices.length + 1) : ""), el("span", { style: "color:var(--muted)" }, "✎"), free));
-  const keys = multi
-    ? [[`1–${choices.length + 1}`, t("marcar", "check")], [t("Espaço", "Space"), t("alternar", "toggle")], ["Enter", `${t("responder", "answer")} (${asking.checked.size})`]]
-    : [[`1–${choices.length + 1}`, t("escolher", "choose")], ["Enter", t("responder", "answer")]];
+    el("span", { style: asking.cursor === i ? "color:var(--strong)" : "" }, choice))));
+  // Your own answer is the last option: same row, same number, written in place.
+  const free = el("input", { type: "text", placeholder: t("Outra resposta…", "Other answer…"), value: asking.text, "aria-label": t("Outra resposta", "Other answer"), id: "free-answer" });
+  free.addEventListener("input", () => { asking.text = free.value; highlight(choices.length); });
+  free.addEventListener("focus", () => highlight(choices.length));
+  free.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); submitAnswer(q); }
+    if ((event.key === "ArrowUp" || event.key === "Escape") && choices.length) { event.preventDefault(); event.stopPropagation(); free.blur(); highlight(choices.length - 1); }
+  });
+  rows.push(el("div", { class: `opt free${asking.cursor === choices.length ? " sel" : ""}`, onclick: () => free.focus() },
+    el("span", { class: "num" }, String(choices.length + 1)), el("span", { style: "color:var(--muted)" }, "✎"), free));
+  const count = choices.length + 1;
+  const keys = !choices.length
+    ? [[t("Escreva", "Type"), t("sua resposta", "your answer")], ["Enter", t("responder", "answer")]]
+    : multi
+      ? [[`1–${count}`, t("marcar", "check")], [t("Espaço", "Space"), t("alternar", "toggle")], ["Enter", `${t("responder", "answer")} (${asking.checked.size})`]]
+      : [[`1–${count}`, t("escolher", "choose")], ["Enter", t("responder", "answer")]];
   if (items.length > 1 && asking.index + 1 < items.length) keys.push(["→", t("próxima pergunta", "next question")]);
+  // A question with no choices is answered by writing: the answer row takes the keyboard.
+  if (!choices.length) requestAnimationFrame(() => { if (!dialog && !$("input").value) free.focus(); });
   return el("div", { class: "card-wrap" }, el("div", { class: "card ask" },
     el("span", { class: "edge left" }, t("Pergunta do agente", "Agent question")),
     items.length > 1 ? el("span", { class: "edge right" }, `${asking.index + 1} ${t("de", "of")} ${items.length}`) : null,
     el("div", { class: "qtext" }, item.question),
     item.explanation ? el("div", { class: "qexp" }, item.explanation) : null,
-    el("div", { style: "display:flex;flex-direction:column;gap:2px" }, options),
+    el("div", { style: "display:flex;flex-direction:column;gap:2px" }, rows),
     el("div", { class: "inkeys" }, keys.map(([k, d]) => el("span", {}, el("b", {}, k), " " + d)), el("span", { class: "end" }, el("b", {}, "Esc"), " " + t("cancelar", "cancel")))));
 }
 
@@ -448,17 +463,29 @@ async function submitAnswer(q) {
 function questionKey(event) {
   const q = view.conversation?.question;
   if (!q) return false;
-  const typing = document.activeElement?.tagName === "INPUT" || ($("input") === document.activeElement && $("input").value);
-  if (typing) return false;
-  const item = questionItems(q)[asking.index];
+  const active = document.activeElement;
+  if (active?.id === "free-answer" || (active?.tagName === "INPUT" && active !== $("input")) || ($("input") === active && $("input").value)) return false;
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  const items = questionItems(q);
+  const item = items[asking.index];
   const choices = item.choices || [];
   const multi = item.type === "multi_choice";
+  const freeRow = () => document.getElementById("free-answer");
   const n = Number(event.key);
   if (n >= 1 && n <= choices.length) { event.preventDefault(); asking.cursor = n - 1; pick(n - 1, multi); renderWork(); return true; }
-  if (n === choices.length + 1) { event.preventDefault(); asking.cursor = choices.length; renderWork(); document.querySelector(".card.ask input")?.focus(); return true; }
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); asking.cursor = Math.max(0, Math.min(choices.length, asking.cursor + (event.key === "ArrowDown" ? 1 : -1))); renderWork(); return true; }
+  if (n === choices.length + 1) { event.preventDefault(); freeRow()?.focus(); return true; }
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    asking.cursor = Math.max(0, Math.min(choices.length, asking.cursor + (event.key === "ArrowDown" ? 1 : -1)));
+    renderWork();
+    if (asking.cursor === choices.length) freeRow()?.focus();
+    return true;
+  }
   if (event.key === " " && asking.cursor < choices.length) { event.preventDefault(); pick(asking.cursor, multi); renderWork(); return true; }
   if (event.key === "Enter") { event.preventDefault(); submitAnswer(q); return true; }
+  if (event.key === "ArrowRight" && asking.index + 1 < items.length) { event.preventDefault(); submitAnswer(q); return true; }
+  // Any other letter starts your own answer, in its row rather than the composer.
+  if (event.key.length === 1) { freeRow()?.focus(); return false; }
   return false;
 }
 

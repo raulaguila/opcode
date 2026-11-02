@@ -204,6 +204,8 @@ function renderFrame() {
   $("title").textContent = view.conversation?.session?.title || "";
   document.documentElement.style.setProperty("--mode", `var(--${view.mode})`);
   $("mode").textContent = modeLabel(view.mode);
+  // While the agent asks, its card is where you answer, as in the proposal.
+  document.querySelector(".composer-wrap").hidden = !!view.conversation?.question;
   const busy = view.conversation?.busy;
   $("hint").innerHTML = "";
   if (busy) $("hint").append(t("Mensagens entram na fila · ", "Messages queue up · "), el("b", {}, "Esc"), t(" cancela", " cancels"));

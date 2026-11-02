@@ -393,6 +393,9 @@ func newPTYUIHarnessAtSize(t *testing.T, binary, home, workspace string, cols, r
 func newPTYUIHarnessWithArgs(t *testing.T, binary, home, workspace string, cols, rows int, args []string, extraEnv ...string) *ptyUIHarness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Minute)
+	if !slices.Contains(args, "--ui") {
+		args = append([]string{"--ui", "classico"}, args...) // these tests drive the earlier interface
+	}
 	command := exec.CommandContext(ctx, binary, append([]string{"--cwd", workspace}, args...)...)
 	command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "SHELL=/bin/bash", "LANG=C.UTF-8", "TERM=xterm-256color"}
 	command.Env = append(command.Env, extraEnv...)

@@ -145,6 +145,10 @@ func (m *Model) renderTranscript(width int) string {
 func (m *Model) emptyState(inner int, indent string) string {
 	title := on(P.Ground, P.Strong).Bold(true).Render(config.Text("O que vamos fazer neste projeto?", "What shall we do in this project?"))
 	hint := on(P.Ground, P.Muted).Render(ansi.Truncate(config.Text("Shift+Tab alterna Perguntar, Planejar e Executar · / comandos", "Shift+Tab cycles Ask, Plan and Execute · / commands"), inner, "…"))
+	if m.app != nil && !m.hasModel() {
+		title = on(P.Ground, P.Strong).Bold(true).Render(config.Text("Configure uma conexão para começar", "Set up a connection to begin"))
+		hint = on(P.Ground, P.Muted).Render(ansi.Truncate(config.Text("Ctrl+K › Configurações › Conexões · depois escolha o modelo com Ctrl+O", "Ctrl+K › Settings › Connections · then pick the model with Ctrl+O"), inner, "…"))
+	}
 	return "\n" + indent + title + "\n" + indent + hint + "\n"
 }
 

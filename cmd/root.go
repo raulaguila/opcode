@@ -210,10 +210,16 @@ to assist developers in writing, debugging, and understanding code directly from
 		// Interactive mode
 		// Set up the TUI
 		output := tui.NewTerminalWriter(os.Stdout)
-		var model tea.Model = tui.New(app, initialSessions...)
-		if choice, _ := cmd.Flags().GetString("ui"); choice == "novo" || choice == "new" {
-			// The interface rebuilt from the visual proposal, screen by screen.
+		// The terminal interface drawn from the visual proposal; the earlier
+		// one stays behind --ui classico for a while.
+		var model tea.Model
+		switch choice, _ := cmd.Flags().GetString("ui"); choice {
+		case "", "novo", "new":
 			model = ui.New(app, initialSessions...)
+		case "classico", "clássico", "classic":
+			model = tui.New(app, initialSessions...)
+		default:
+			return fmt.Errorf("--ui: use classico for the earlier interface, or leave it out")
 		}
 		program := tea.NewProgram(
 			tui.WithTerminalOutput(model, output),
@@ -411,7 +417,7 @@ func init() {
 	// Add quiet flag to hide spinner in non-interactive mode
 	rootCmd.Flags().BoolP("quiet", "q", false, "Hide spinner in non-interactive mode")
 	rootCmd.Flags().String("mode", "", "Initial mode: ask, plan or execute")
-	rootCmd.Flags().String("ui", "", "Interface: empty for the current one, \"novo\" for the rebuilt one (in progress)")
+	rootCmd.Flags().String("ui", "", "Terminal interface: leave out for the current one, \"classico\" for the earlier one (opcode app opens the graphical one)")
 	addResumeFlag(rootCmd)
 	rootCmd.Flags().Int("max-steps", 0, "Maximum model requests per turn (1–200)")
 	rootCmd.Flags().Int("max-seconds", 0, "Maximum turn duration including user waits (seconds, 1–7200)")

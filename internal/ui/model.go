@@ -112,10 +112,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		first := m.width == 0
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
 		if h, ok := m.dialog.(*hosted); ok {
 			return m, h.forward(msg)
+		}
+		// With no model yet, the first screen is setting up a connection.
+		if first && m.dialog == nil && !m.hasModel() {
+			return m, m.openProviderForm("")
 		}
 		return m, nil
 	case tea.MouseMsg:
@@ -380,4 +385,9 @@ func (m *Model) click(x, y int) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// hasModel says whether a model is chosen for the coder.
+func (m *Model) hasModel() bool {
+	return m.app != nil && m.app.CoderAgent != nil && m.app.CoderAgent.Model().ID != ""
 }

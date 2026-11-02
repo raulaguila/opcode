@@ -65,7 +65,7 @@ func testBinaryFirstRun(t *testing.T, reset bool) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, binary, args...)
+	command := exec.CommandContext(ctx, binary, append([]string{"--ui", "classico"}, args...)...) // the earlier interface's setup flow
 	command.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "SHELL=/bin/bash", "LANG=C.UTF-8", "TERM=xterm-256color"}
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
 	require.NoError(t, err)

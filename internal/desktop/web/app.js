@@ -113,8 +113,8 @@ function renderTranscript() {
   const conversation = view.conversation;
   if (!conversation || conversation.messages.length === 0) {
     box.append(el("div", { class: "empty" },
-      el("b", {}, t("O que vamos fazer neste projeto?", "What shall we do in this project?")),
-      el("span", {}, t("Shift+Tab alterna Perguntar, Planejar e Executar", "Shift+Tab cycles Ask, Plan and Execute"))));
+      el("b", {}, view.state && !view.state.model ? t("Configure uma conexão para começar", "Set up a connection to begin") : t("O que vamos fazer neste projeto?", "What shall we do in this project?")),
+      el("span", {}, view.state && !view.state.model ? t("Ctrl+K › Configurações › Conexões · depois escolha o modelo com Ctrl+O", "Ctrl+K › Settings › Connections · then pick the model with Ctrl+O") : t("Shift+Tab alterna Perguntar, Planejar e Executar", "Shift+Tab cycles Ask, Plan and Execute"))));
     return;
   }
   let steps = [];
@@ -442,6 +442,8 @@ setInterval(() => {
     await loadState();
     render();
     listen();
+    // With no model yet, the first screen is setting up a connection.
+    if (!view.state.model) openSettings(0).then(() => editConnection(null));
   } catch (error) {
     $("transcript").replaceChildren(el("div", { class: "empty" }, el("b", {}, "opcode"), el("span", {}, error.message)));
   }

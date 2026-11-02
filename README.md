@@ -56,6 +56,24 @@ editar arquivos do shell. Builds de release e checksums são publicados pelo wor
 a aprovação dos testes e do vet. Veja [releases](https://github.com/raulaguila/opcode/releases). Não há distribuição Homebrew
 ou AUR configurada para este fork.
 
+### Terminal ou app
+
+O opcode tem duas interfaces sobre o mesmo agente, as mesmas conversas e a mesma
+configuração. Escolha a que preferir; dá para alternar a qualquer momento.
+
+```sh
+opcode       # no terminal; funciona também via SSH
+opcode app   # numa janela própria, fora do terminal
+```
+
+`opcode app` abre uma janela de app do Chrome, Chromium, Edge ou Brave, quando
+houver um instalado, e senão o navegador padrão. A janela só fala com o
+processo local, que escuta apenas em `127.0.0.1` com uma chave nova a cada
+abertura. Use `opcode app --no-open` para só mostrar o endereço.
+
+A interface anterior do terminal continua disponível por um tempo com
+`opcode --ui classico`.
+
 ## Primeiro acesso e modelos
 
 Na inicialização normal, se `~/.opcode/config.json` não existir, o Opcode cria esse

@@ -15,6 +15,8 @@ por resultado, campo de mensagem com a cor do modo (Perguntar azul, Planejar
 âmbar, Executar laranja) e um rodapé com a política de aprovação, a atividade,
 o uso do contexto e o modelo.
 
+Os protótipos das duas estão em [docs/prototipos](prototipos/README.md).
+
 A interface anterior do terminal continua disponível por um tempo com
 `opcode --ui classico`; o guia dela é [Trabalhar pela interface](workspace-ui.md).
 

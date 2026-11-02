@@ -1,5 +1,28 @@
 # Histórico de versões
 
+## Em desenvolvimento — 2026-11-02
+
+- **Duas interfaces, a mesma proposta visual.** `opcode` abre a nova interface
+  de terminal; `opcode app` abre o app numa janela própria. As duas
+  compartilham agente, conversas e configuração. A interface anterior fica por
+  um tempo em `opcode --ui classico`. Guia em [Terminal e app](docs/interfaces.md).
+- App: janela nativa com Wails quando compilado com `-tags desktop`
+  (`make build-desktop`, `sh ./install --desktop`); sem a tag, abre a janela de
+  um navegador. Releases trazem também `opcode-desktop-*` para Linux, macOS e
+  Windows.
+- App: tema claro, escuro ou do sistema; `@` para citar arquivos; contexto e
+  raciocínio ajustáveis nos detalhes do modelo; setas em todas as janelas, com
+  menu e seção em dois níveis nas configurações; JetBrains Mono embutida.
+- Perguntas do agente podem trazer uma nota curta por opção; a resposta própria
+  é a última opção numerada; no app, `Esc` guarda a pergunta para depois.
+- Conexões: uma variável de chave não definida não impede mais o início; a
+  conexão aparece como **chave ausente** e pode ser editada ou desativada.
+- Conversas mostram estado (em execução, plano pendente, falha), modo, modelo e
+  progresso do plano; passos de edição mostram `+N −M`; respostas citam a
+  primeira fonte; o rodapé mostra a etapa em curso e a velocidade.
+- Na primeira execução sem modelo, as duas interfaces novas abrem em **Nova
+  conexão**.
+
 ## Em desenvolvimento — 2026-11-01
 
 - Novo visual da TUI: molduras arredondadas com título, posição e teclas na

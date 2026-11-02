@@ -2,19 +2,33 @@
 # Install Opcode from source; no release assets or shell profiles are assumed.
 set -eu
 
+tags=
 case ${1:-} in
   --help|-h)
-    printf '%s\n' 'Usage: sh ./install' 'Builds github.com/raulaguila/opcode@develop with Go 1.26+.' 'VERSION may select another published Go module version.'
+    printf '%s\n' 'Usage: sh ./install [--desktop]' \
+      'Builds github.com/raulaguila/opcode@develop with Go 1.27+.' \
+      '--desktop also builds the native app window (opcode app); on Linux it needs' \
+      '  libgtk-3-dev and libwebkit2gtk-4.1-dev. DESKTOP_TAGS overrides the tags.' \
+      'VERSION may select another published Go module version.'
     exit 0 ;;
+  --desktop)
+    case $(uname -s) in
+      Linux) tags=${DESKTOP_TAGS:-desktop,production,webkit2_41} ;;
+      *) tags=${DESKTOP_TAGS:-desktop,production} ;;
+    esac ;;
   '') ;;
   *) printf '%s\n' 'Unknown option. Use --help.' >&2; exit 2 ;;
 esac
 
 if ! command -v go >/dev/null 2>&1; then
-  printf '%s\n' 'Go 1.26 or newer is required. Install Go, then run: go install github.com/raulaguila/opcode@develop' >&2
+  printf '%s\n' 'Go 1.27 or newer is required. Install Go, then run: go install github.com/raulaguila/opcode@develop' >&2
   exit 1
 fi
 
 opcode_version=${VERSION:-develop}
 printf '%s\n' "Building Opcode from source at $opcode_version. The binary uses your GOBIN or GOPATH/bin."
+if [ -n "$tags" ]; then
+  printf '%s\n' "Including the native app window (tags: $tags)."
+  exec go install -tags "$tags" "github.com/raulaguila/opcode@${opcode_version}"
+fi
 exec go install "github.com/raulaguila/opcode@${opcode_version}"

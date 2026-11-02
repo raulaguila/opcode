@@ -61,6 +61,18 @@ Na matriz final, após as correções, as alocações caíram 47,1% no Markdown,
 37,1% no chat atualizado e 35,6% durante streaming. Ganhos, regressões de tempo
 e condições completas estão em [Desempenho](performance.md).
 
+## App gráfico
+
+| Componente | Versão | Uso |
+| --- | --- | --- |
+| Wails | 2.17.0 | janela nativa de `opcode app`, só com a tag `desktop` |
+| Goldmark | 1.8.7 | Markdown das respostas no app, sem HTML cru (já vinha pelo Glamour) |
+| JetBrains Mono | 5.0.20 (@fontsource) | fonte embutida no app, latin e latin-ext; licença SIL OFL em `internal/desktop/web/fonts/OFL.txt` |
+
+O Wails só é compilado com `-tags desktop,production` (mais `webkit2_41` com a
+WebKitGTK 4.1). Sem a tag, nenhum código dele entra no binário, que continua
+sem cgo e sem bibliotecas gráficas.
+
 ## Outras atualizações e compatibilidade
 
 SQLite, Goose, Tree-sitter, tokenizer, Chroma, Cobra/Viper, fsnotify,

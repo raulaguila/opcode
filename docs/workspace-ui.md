@@ -1,5 +1,9 @@
 # Trabalhar pela interface
 
+> Este guia descreve a **interface clássica** do terminal, aberta com
+> `opcode --ui classico`. A interface atual (`opcode`) e o app (`opcode app`)
+> estão em [Terminal e app](interfaces.md).
+
 Os menus compartilham a apresentação do painel de pergunta: bordas retas,
 superfície distinta, títulos de destaque, seleção discreta e uma divisória
 antes dos controles quando há espaço. Permissões continuam começando em

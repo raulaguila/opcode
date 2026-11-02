@@ -1,8 +1,10 @@
 <!-- bridge:product-schema 1 -->
 # Opcode — evolução do fork
 
-Agente de desenvolvimento em Go, usado no terminal para perguntar, planejar e
-executar trabalho em repositórios locais. O usuário utiliza Ollama com
+Agente de desenvolvimento em Go para perguntar, planejar e executar trabalho em
+repositórios locais, no terminal (`opcode`) ou numa janela própria
+(`opcode app`); as duas interfaces seguem a mesma proposta visual e compartilham
+agente, conversas e configuração. O usuário utiliza Ollama com
 `llama3.1:8b`; provedores remotos também são suportados.
 
 O pedido aceito é implementar as oito frentes da comparação com Codaro/Crush:

@@ -1,4 +1,4 @@
-.PHONY: test test-integration vet build release-local complexity staticcheck quality bench-performance bench-compile bench-compare
+.PHONY: test test-integration vet vet-desktop build build-desktop app release-local complexity staticcheck quality bench-performance bench-compile bench-compare
 
 test:
 	go test ./...
@@ -34,6 +34,21 @@ bench-compare:
 
 build:
 	go build -trimpath -o bin/opcode .
+
+# The native app window (Wails). Linux needs GTK 3 and WebKitGTK 4.1:
+#   sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
+# With WebKitGTK 4.0 drop webkit2_41; on macOS and Windows use DESKTOP_TAGS=desktop,production.
+DESKTOP_TAGS ?= desktop,production,webkit2_41
+
+build-desktop:
+	go build -trimpath -tags '$(DESKTOP_TAGS)' -o bin/opcode-desktop .
+
+vet-desktop:
+	go vet -tags '$(DESKTOP_TAGS)' ./cmd/...
+
+# Opens the app in its native window, on the current workspace.
+app: build-desktop
+	./bin/opcode-desktop app
 
 # Archives/checksums only; no tags, pushes or publication.
 VERSION ?= dev

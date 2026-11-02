@@ -1,5 +1,9 @@
 # Editor de tema
 
+> O editor de tema é da **interface clássica** (`opcode --ui classico`). A
+> interface atual usa a paleta da proposta visual; o app oferece tema claro,
+> escuro ou do sistema em Configurações › Interface ([Terminal e app](interfaces.md)).
+
 Abra o seletor com `Ctrl+T`, escolha um tema e pressione `Ctrl+E`.
 O editor usa a paleta desse tema como base. Não altera o tema original.
 

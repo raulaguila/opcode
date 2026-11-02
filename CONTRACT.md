@@ -252,3 +252,24 @@ Acceptance: focused regressions for each item; full race/vet/build checks; real
 Ollama/PTY user flow and controlled UI coverage; updated docs/evidence; clean
 commit pushed without force to raulaguila/opcode develop. The final comparison
 identifies observed, untested and unavailable capabilities separately.
+
+## Evolução de 01–02/11 — duas interfaces da proposta visual
+
+Escopo: uma interface de terminal reconstruída a partir da proposta visual
+aprovada (`internal/ui`) e um app gráfico com as mesmas telas (`opcode app`,
+`internal/desktop`), com janela nativa opcional por Wails. `opcode` abre a nova
+interface de terminal; a anterior fica atrás de `--ui classico` por um tempo.
+
+Invariantes preservados: nenhuma interface concede aprovação, altera escopos de
+permissão ou contorna o sandbox; o app escuta só em loopback com chave por
+abertura, recusa outro host e outra origem, não carrega recursos externos e não
+expõe chaves de API; mudanças de configuração esperam a execução em andamento.
+
+Decisões com o usuário: notas opcionais nas opções das perguntas; `Esc` no app
+guarda a pergunta para depois; `@` cita arquivos do projeto; contexto e
+raciocínio ajustáveis no app; tema claro, escuro ou do sistema no app; conexão
+sem a variável da chave carrega desligada e marcada em vez de impedir o início.
+
+Fora do escopo: assinatura dos binários do app, empacotamento `.app`/instalador,
+compilação cruzada da janela nativa e o editor de integrações dentro do app.
+

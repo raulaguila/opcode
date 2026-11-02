@@ -57,6 +57,22 @@ jobs:
       - name: Verify generated language inventory
         run: go run ./scripts/language-docs -check
 
+  # The native app window (Wails) links GTK and WebKitGTK, so it builds in a
+  # job of its own; the plain binary above needs neither.
+  desktop:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - name: Install GTK and WebKitGTK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: make vet-desktop build-desktop
+
   # Native smoke is deliberately scoped. Unix process fixtures and Windows PTY
   # are not silently marked supported by a cross-compilation or blanket skip.
   native-smoke:

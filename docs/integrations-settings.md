@@ -1,5 +1,9 @@
 # Integrações na interface
 
+> O editor de integrações abre também a partir de Configurações › Integrações
+> na interface de terminal atual. O app lista as integrações, mas cadastrar ou
+> editar é feito no terminal ([Terminal e app](interfaces.md)).
+
 Abra **Settings** e pressione `I` para ver servidores MCP e de linguagem. `N`
 adiciona MCP, `L` adiciona LSP e `Enter` edita a seleção. Os campos de argumentos
 usam um array JSON, por exemplo `["--stdio"]`; não é necessário escapar um

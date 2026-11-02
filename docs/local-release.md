@@ -31,6 +31,22 @@ plataforma) no diretório dos arquivos. Execute `./opcode --version` e
 altera a exigência de sandbox. O binário Windows oferece CLI/configuração e
 renderização testadas pelo smoke nativo do CI; PTY Windows continua indisponível.
 
+## App com janela nativa
+
+Os arquivos acima são o binário comum: `opcode app` neles abre a janela de um
+navegador. A janela nativa (Wails) usa a web view de cada sistema e, no Linux e
+no macOS, cgo; não há compilação cruzada. Compile em cada plataforma:
+
+```sh
+make build-desktop                                   # Linux: libgtk-3-dev, libwebkit2gtk-4.1-dev
+make build-desktop DESKTOP_TAGS=desktop,production   # macOS, Windows
+```
+
+Na release, o job `desktop` de `release.yml` compila no Linux (amd64), no macOS
+(arm64) e no Windows (amd64) e anexa `opcode-desktop-<versão>-<alvo>` à mesma
+release. Esses arquivos não são assinados e não entram no `checksums.txt` do
+goreleaser.
+
 ## Versão consolidada
 
 A versão 0.2.0 reúne configuração guiada, contratos de tarefa, diagnóstico do

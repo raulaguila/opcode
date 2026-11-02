@@ -229,6 +229,37 @@ continuam em SQLite; exportações Markdown são dados históricos redigidos, se
 autoridade sobre ferramentas ou permissões. `internal/localstate` centraliza
 limites, validação de arquivos, locks e gravação atômica dos documentos locais.
 
+## Interfaces: terminal e app
+
+Há três interfaces sobre os mesmos serviços de `internal/app` (agente,
+sessões, mensagens, permissões, perguntas, workflows). Nenhuma delas guarda
+regra de agente, permissão ou armazenamento; todas leem e chamam esses serviços.
+
+- `internal/ui` é a interface de terminal atual (Bubble Tea v2), o padrão de
+  `opcode`. Recebe os eventos pelo mesmo `setupSubscriptions` e consulta
+  perguntas e plano enquanto uma execução está viva. Os editores de conexão e de
+  integrações da interface clássica são reaproveitados (`hosted`), e o editor
+  de conexão expõe seu estado (`FormState`) para ser desenhado no estilo novo;
+  chaves, validação e cofre continuam nele.
+- `internal/desktop` é o backend de `opcode app`: uma API HTTP local e a página
+  (`web/`, embutida). Escuta só em `127.0.0.1`, exige uma chave por abertura num
+  cabeçalho, recusa `Host` diferente do endereço aberto e outras origens, e
+  serve a página com uma política de conteúdo que só admite os próprios
+  arquivos. Eventos dos serviços chegam à página como IDs de sessão por um
+  stream; a página relê a conversa. Respostas viram HTML pelo Goldmark sem
+  HTML cru; chaves de API nunca são enviadas à página.
+- `cmd/app.go` sobe o backend e abre a janela: com a tag `desktop`,
+  `cmd/app_native.go` abre uma janela Wails que carrega a mesma página local;
+  sem ela, `cmd/app_browser.go` faz o comando abrir a janela de app de um
+  navegador. O binário sem a tag não usa cgo nem bibliotecas gráficas.
+- `internal/tui` é a interface clássica, mantida por um tempo atrás de
+  `--ui classico`; seus testes de PTY a pedem explicitamente.
+
+Uma conexão cuja variável de chave não está definida carrega desligada e
+marcada (`config.KeyMissing`), em vez de impedir o carregamento; a chave literal
+do arquivo nunca a substitui. As perguntas do agente podem trazer uma nota curta
+por opção (`notes`), validada como as opções.
+
 ## Revisão e undo/redo de arquivos
 
 Commits bem-sucedidos das ferramentas notificam um observador com conteúdo

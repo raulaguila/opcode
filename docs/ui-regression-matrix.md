@@ -1,5 +1,12 @@
 # Matriz de regressão da interface
 
+> A matriz abaixo e os testes de PTY de `internal/tui` exercitam a **interface
+> clássica**; o arnês de PTY passa `--ui classico` quando o teste não escolhe
+> outra. A interface atual tem testes em `internal/ui` (molduras, listas,
+> passos, cards de pergunta, plano, falha e aprovação, conexões) e o app em
+> `internal/desktop` (proteção por host, origem e chave; projeção da conversa;
+> validação do formulário de conexão).
+
 A matriz `TestRoutedModalRegressionMatrix`, em
 `internal/tui/ui_regression_matrix_test.go`, exercita o roteamento real do
 `appModel`. Não é apenas uma coleção de renders de componentes isolados.

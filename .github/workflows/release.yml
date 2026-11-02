@@ -35,3 +35,58 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The app's native window (Wails) needs each system's web view and, on Linux
+  # and macOS, cgo, so it is built on each platform and added to the release
+  # that goreleaser published. Binaries are not signed.
+  desktop:
+    needs: goreleaser
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-amd64
+            tags: desktop,production,webkit2_41
+          - os: macos-14
+            target: darwin-arm64
+            tags: desktop,production
+          - os: windows-latest
+            target: windows-amd64
+            tags: desktop,production
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+          cache: true
+      - name: Install GTK and WebKitGTK
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Build
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          exe=opcode; [ "$RUNNER_OS" = Windows ] && exe=opcode.exe
+          mkdir -p dist/desktop
+          go build -trimpath -buildvcs=false -tags '${{ matrix.tags }}' \
+            -ldflags "-s -w -buildid= -X github.com/raulaguila/opcode/internal/version.Version=${version}" \
+            -o "dist/desktop/$exe" .
+          cp LICENSE README.md dist/desktop/
+          name="opcode-desktop-${version}-${{ matrix.target }}"
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd dist/desktop && 7z a "../$name.zip" . >/dev/null)
+            echo "ASSET=dist/$name.zip" >> "$GITHUB_ENV"
+          else
+            tar -C dist/desktop -czf "dist/$name.tar.gz" .
+            echo "ASSET=dist/$name.tar.gz" >> "$GITHUB_ENV"
+          fi
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber

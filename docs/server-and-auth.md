@@ -1,5 +1,9 @@
 # Servidor local, reconexão e OAuth MCP
 
+> `opcode serve` é a API para clientes como `opcode attach`. O app gráfico
+> (`opcode app`) tem um servidor próprio, só para a sua janela, descrito em
+> [Terminal e app](interfaces.md#segurança-do-app).
+
 ## Manter uma execução enquanto o cliente desconecta
 
 Compile o binário e configure um segredo de servidor no ambiente dos dois

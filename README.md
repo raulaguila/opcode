@@ -118,14 +118,13 @@ do projeto e variáveis de ambiente continuam valendo; conversas e dados não s�
 apagados. Sem modelo configurado nessas outras fontes, a configuração guiada
 será aberta.
 
-Sem modelo configurado, a abertura interativa inicia a configuração guiada. `N` cadastra
-uma conexão com um preset; `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha então o modelo
-pelo seletor. A autenticação aceita chave direta em campo mascarado, variável de
-ambiente ou nenhuma chave; [veja como configurar](docs/model-selection.md#informar-a-api-key-diretamente).
-A última etapa oferece começar a conversar; detalhes da configuração
-e testes opcionais com confirmação ficam em uma ação secundária. `/setup` reabre
-o fluxo. A barra inferior reúne modo, comandos, contexto, velocidade da última resposta e modelo; processo e lateral
-começam recolhidos. `~/.opcode/config.json` é reutilizado entre projetos;
+Sem modelo configurado, `opcode` e `opcode app` abrem em **Nova conexão**:
+escolha um ponto de partida, `Ctrl+T` testa o catálogo e `Ctrl+S` salva. Escolha
+então o modelo com `Ctrl+O`. A autenticação aceita chave direta em campo
+mascarado, variável de ambiente, o cofre do sistema ou nenhuma chave;
+[veja como configurar](docs/model-selection.md#informar-a-api-key-diretamente).
+O rodapé reúne a política de aprovação, a atividade, o uso do contexto, a
+velocidade da última resposta e o modelo. `~/.opcode/config.json` é reutilizado entre projetos;
 `./.opcode/config.json` pode acrescentar ou sobrescrever configurações do projeto.
 Os formatos anteriores `.opcode.json` e `.opencode.json` continuam reconhecidos
 e os arquivos do projeto permanecem no próprio caminho. Veja [precedência e compatibilidade](docs/migration.md).
@@ -153,11 +152,12 @@ e mostra suporte a ferramentas informado pelo provedor (ou desconhecido).
 A configuração básica inclui o estado ativo da conexão; salvar um perfil
 desativado não o ativa silenciosamente.
 Consultar o catálogo não baixa
-pesos nem gera respostas. Clique no modelo do rodapé, pressione `Ctrl+O` ou use
-`/models` para buscar, trocar de perfil e escolher. `Ctrl+F` marca favoritos,
-`Ctrl+A` alterna a função principal/auxiliar e `Ctrl+R` atualiza o catálogo.
-`✓` identifica o modelo ativo; `›` marca o destaque. `PgUp`/`PgDn` navegam na
-lista e `Alt+←`/`Alt+→` trocam o provedor; as setas simples editam a busca.
+pesos nem gera respostas. Clique no modelo do rodapé ou pressione `Ctrl+O` para
+buscar e escolher: `Tab` troca de conexão, `Ctrl+D` mostra os detalhes (onde o
+modelo está carregado, velocidade, e no app os ajustes de contexto e
+raciocínio) e `Ctrl+P` abre as conexões. `✓` identifica o modelo ativo. Na
+interface clássica, `Ctrl+F` marca favoritos, `Ctrl+A` alterna a função
+principal/auxiliar e `Ctrl+R` atualiza o catálogo.
 A escolha é salva; o contexto descoberto fica em memória, sem serializar chaves
 resolvidas do ambiente.
 
@@ -170,6 +170,9 @@ válida deve existir antes da execução.
 Veja [configuração de provedores/modelos](docs/model-selection.md),
 [o schema JSON](opcode-schema.json) e
 [integrações MCP/LSP](docs/integrations-settings.md).
+
+As duas interfaces, suas telas, teclas e a segurança do app estão em
+[Terminal e app](docs/interfaces.md).
 
 Veja o [guia de uso diário](docs/daily-workflow.md) para configurar, definir o
 resultado esperado de tarefas e trabalhar com Git/worktrees.
@@ -248,7 +251,23 @@ ou pelo cadastro da integração. Não concede permissão de executar ferramenta
 Arquivos e checksums locais são gerados por `make release-local`, conforme
 [builds reproduzíveis](docs/local-release.md). Isso não publica uma release.
 
-Comece pelo [guia da interface](docs/workspace-ui.md). Os principais controles:
+Comece por [Terminal e app](docs/interfaces.md). Os principais controles das
+duas interfaces:
+
+| Controle | Ação |
+| --- | --- |
+| `Ctrl+K`, `/` com o campo vazio | Comandos |
+| `Shift+Tab` | Alterna Perguntar, Planejar e Executar |
+| `Enter` / `Alt+Enter` | Envia / nova linha |
+| `Ctrl+O` | Escolher modelo |
+| `Ctrl+S` | Conversas: abrir, renomear, exportar, arquivar |
+| `Ctrl+N` | Nova conversa |
+| `Esc` | Cancela a execução |
+| `1` `2` `3` | Responde a uma aprovação |
+| `@` (app) | Cita um arquivo do projeto |
+
+A interface clássica (`opcode --ui classico`) tem outros controles, descritos no
+[guia dela](docs/workspace-ui.md):
 
 | Controle | Ação |
 | --- | --- |
@@ -370,7 +389,7 @@ O [guia de perguntas e evidências](docs/question-and-evidence-recovery.md)
 explica a recuperação de opções malformadas, a busca por assunto, as citações
 em todos os modos e o reaproveitamento de fontes revalidadas.
 
-A [navegação da conversa](docs/workspace-ui.md) inclui busca local e seleção por
+Na interface clássica, a [navegação da conversa](docs/workspace-ui.md) inclui busca local e seleção por
 teclado, mantendo o rascunho. [Cofre nativo opcional](docs/native-vault.md) guarda
 credenciais por referência; chave direta e ambiente continuam disponíveis.
 A [busca web opcional](docs/tools.md#busca-web-opcional) começa desativada e

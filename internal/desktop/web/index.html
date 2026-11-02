@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>opcode</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="term" id="app">
+  <header class="top">
+    <span><b>opcode</b> · <span id="workspace"></span><span id="branch-wrap"> · <span id="branch" class="ok"></span></span></span>
+    <span id="title"></span>
+  </header>
+
+  <main id="transcript" class="transcript" aria-live="polite"></main>
+
+  <div id="work"></div>
+
+  <div class="composer-wrap">
+    <div class="composer" id="composer">
+      <button type="button" class="lbl" id="mode" title="Shift+Tab"></button>
+      <div class="input-row">
+        <span class="prompt" aria-hidden="true">❯</span>
+        <textarea id="input" rows="1" aria-label="Mensagem" autofocus></textarea>
+      </div>
+      <span class="hint" id="hint"></span>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <button type="button" class="plain" id="policy"></button>
+    <span id="activity"></span>
+    <span class="right"><span id="meter"></span><button type="button" class="plain" id="model"></button></span>
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

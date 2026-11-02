@@ -16,6 +16,7 @@ type QuestionItem struct {
 	Explanation string   `json:"explanation,omitempty"`
 	Type        string   `json:"type"`
 	Choices     []string `json:"choices,omitempty"`
+	Notes       []string `json:"notes,omitempty"` // a short note per choice, same order; optional
 }
 type AnswerItem struct {
 	QuestionID string   `json:"question_id"`
@@ -27,10 +28,11 @@ type AnswerBatch struct {
 }
 
 func cloneQuestion(q Question) Question {
-	q.Choices = slices.Clone(q.Choices)
+	q.Choices, q.Notes = slices.Clone(q.Choices), slices.Clone(q.Notes)
 	q.Questions = slices.Clone(q.Questions)
 	for i := range q.Questions {
 		q.Questions[i].Choices = slices.Clone(q.Questions[i].Choices)
+		q.Questions[i].Notes = slices.Clone(q.Questions[i].Notes)
 	}
 	return q
 }

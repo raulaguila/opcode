@@ -53,6 +53,9 @@ type Server struct {
 	mu       sync.Mutex
 	feeds    map[chan string]struct{}
 	failures map[string]string // a session's last run error, until its next prompt
+
+	filesCache []string // the workspace's file names, for @ mentions
+	filesAt    time.Time
 }
 
 // New creates the backend and its per-run key.
@@ -160,6 +163,10 @@ type State struct {
 	Mode      string         `json:"mode"`
 	Language  string         `json:"language"`
 	Sessions  []SessionBrief `json:"sessions"`
+	// Preferences the window honors: the reading width and whether tool steps
+	// show one by one.
+	ProseWidth  int  `json:"prose_width"`
+	ShowProcess bool `json:"show_process"`
 }
 
 type SessionBrief struct {
@@ -180,7 +187,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = string(model.ID)
 	}
-	state := State{Workspace: homeRelative(config.WorkingDirectory()), Branch: gitBranch(config.WorkingDirectory()), Model: name, Context: model.ContextWindow, Mode: config.Get().Runtime.Defaults().Mode, Language: config.Get().TUI.Language, Sessions: []SessionBrief{}}
+	state := State{Workspace: homeRelative(config.WorkingDirectory()), Branch: gitBranch(config.WorkingDirectory()), Model: name, Context: model.ContextWindow, Mode: config.Get().Runtime.Defaults().Mode, Language: config.Get().TUI.Language, Sessions: []SessionBrief{}, ProseWidth: config.Get().TUI.ProseWidth, ShowProcess: config.Get().Preferences.ProcessVisible()}
 	list, err := s.app.Sessions.List(r.Context())
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err)

@@ -22,6 +22,9 @@ func DecodeQuestion(raw string) (Question, error) {
 	if err := normalizeQuestionChoices(object); err != nil {
 		return q, err
 	}
+	if err := normalizeQuestionNotes(object); err != nil {
+		return q, err
+	}
 	if err := normalizeQuestionBatch(object); err != nil {
 		return q, err
 	}
@@ -30,6 +33,25 @@ func DecodeQuestion(raw string) (Question, error) {
 		return q, fmt.Errorf("invalid question: question/explanation must be strings; choices must be an array of strings")
 	}
 	return q, nil
+}
+
+// normalizeQuestionNotes accepts at most one short note per choice.
+func normalizeQuestionNotes(object map[string]json.RawMessage) error {
+	value, ok := object["notes"]
+	if !ok {
+		return nil
+	}
+	var notes, choices []string
+	_ = json.Unmarshal(object["choices"], &choices)
+	if json.Unmarshal(value, &notes) != nil || len(notes) > len(choices) {
+		return fmt.Errorf("invalid question: notes must be an array of strings, at most one per choice")
+	}
+	for _, note := range notes {
+		if len(note) > 160 {
+			return fmt.Errorf("invalid question: each note must contain at most 160 bytes")
+		}
+	}
+	return nil
 }
 
 func normalizeQuestionChoices(object map[string]json.RawMessage) error {
@@ -72,6 +94,9 @@ func normalizeQuestionBatch(object map[string]json.RawMessage) error {
 				return fmt.Errorf("invalid question: each question must be an object")
 			}
 			if err := normalizeQuestionChoices(item); err != nil {
+				return err
+			}
+			if err := normalizeQuestionNotes(item); err != nil {
 				return err
 			}
 		}

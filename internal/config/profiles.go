@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -147,10 +148,12 @@ func PreviewProviderProfile(id string, profile ProviderProfile) (ProviderProfile
 		return ProviderProfile{}, fmt.Errorf("local profile requires baseURL")
 	}
 	p, err := resolveProvider(profile.Backend, profile.Provider)
+	// A connection saved switched off may name a key variable that is not set yet.
+	p, err = offWithoutKey(profile.Provider, p, err)
 	if err != nil {
 		return ProviderProfile{}, err
 	}
-	if p.APIKey == "" && profile.Backend != models.ProviderLocal && profile.Backend != models.ProviderBedrock && profile.Backend != models.ProviderVertexAI && profile.Backend != models.ProviderAzure {
+	if p.APIKey == "" && !(profile.Disabled && profile.APIKeyEnv != "") && profile.Backend != models.ProviderLocal && profile.Backend != models.ProviderBedrock && profile.Backend != models.ProviderVertexAI && profile.Backend != models.ProviderAzure {
 		return ProviderProfile{}, fmt.Errorf("set an API key or API key environment variable for this backend")
 	}
 	profile.Provider = p
@@ -262,6 +265,7 @@ func SaveProvider(backend models.ModelProvider, raw Provider) error {
 		return fmt.Errorf("config not loaded")
 	}
 	resolved, err := resolveProvider(backend, raw)
+	resolved, err = offWithoutKey(raw, resolved, err)
 	if err != nil {
 		return err
 	}
@@ -363,4 +367,15 @@ func storedProvider(file Config, id string, legacy bool) (Provider, bool) {
 	}
 	p, ok := file.ProviderProfiles[id]
 	return p.Provider, ok
+}
+
+// offWithoutKey lets a switched-off connection keep a key variable that is
+// not set; any other error, or a connection that is on, still fails.
+func offWithoutKey(raw, resolved Provider, err error) (Provider, error) {
+	var missing missingKeyError
+	if err != nil && raw.Disabled && errors.As(err, &missing) {
+		raw.APIKey = ""
+		return raw, nil
+	}
+	return resolved, err
 }

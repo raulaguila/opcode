@@ -121,6 +121,7 @@ function commands() {
     { title: t("Executar", "Execute"), desc: t("altera arquivos com aprovação", "changes files with approval"), right: "/execute", group: work, run: () => setMode("execute") },
     { title: t("Tarefa", "Task"), desc: t("mostrar ou recolher o plano", "show or fold the plan"), right: "/task", group: work, run: togglePlan },
     { title: t("Retomar tarefa", "Resume task"), desc: t("abre a última conversa e o plano salvo", "opens the last conversation and its saved plan"), right: "/resume", group: work, run: resumeLast },
+    { title: t("Responder pergunta", "Answer question"), desc: t("reabre a pergunta pendente do agente", "reopens the agent's pending question"), right: "Enter", group: work, run: () => { view.laterQuestion = ""; render(); } },
     { title: t("Cancelar execução", "Cancel run"), desc: t("para a tarefa em andamento", "stops the running task"), right: "Esc", group: work, run: () => view.session && api(`/api/sessions/${view.session}/cancel`, {}).catch(() => {}) },
     { title: t("Exportar conversa", "Export conversation"), desc: t("salva em Markdown", "saves as Markdown"), right: "/export", group: t("Conversa", "Conversation"), run: exportCurrent },
     { title: t("Conexões", "Connections"), desc: t("provedores e chaves", "providers and keys"), right: "/connections", group: settings, run: () => openSettings(0) },
@@ -260,7 +261,25 @@ async function openModels(provider = "") {
     if (m.api) pair("API", m.api);
     pane.append(el("div", {}, el("h3", {}, m.label), el("div", { style: "margin-top:6px" }, tags)), kv);
     if (m.embedding) pane.append(el("div", { class: "tip" }, t("Gera embeddings; não serve para conversar.", "Makes embeddings; not for chat.")));
-    else pane.append(el("div", { class: "row" }, el("button", { type: "button", class: "act primary", onclick: () => use(m) }, t("Usar este modelo", "Use this model"))));
+    else {
+      const actions = el("div", { class: "row" }, el("button", { type: "button", class: "act primary", onclick: () => use(m) }, t("Usar este modelo", "Use this model")));
+      // The knobs belong to the model in use.
+      if (m.id === data.active) {
+        const windows = [0, 8192, 16384, 32768, 65536, 131072];
+        const ctx = data.context || {};
+        const ctxSelect = el("select", { class: "act knob", "aria-label": t("Contexto", "Context"), onchange: (e) => knob("/api/model/context", { window: Number(e.target.value) }) },
+          windows.map((w) => { const o = el("option", { value: String(w) }, `${t("Contexto", "Context")}: ${w ? compact(w) : t("automático", "automatic")}`); if ((ctx.auto ? 0 : ctx.window) === w) o.selected = true; return o; }));
+        if (!ctx.auto && !windows.includes(ctx.window)) ctxSelect.prepend(el("option", { value: String(ctx.window), selected: "" }, `${t("Contexto", "Context")}: ${compact(ctx.window)}`));
+        const reasoning = data.reasoning || { choices: [] };
+        const effortName = (e) => ({ low: t("baixo", "low"), medium: t("médio", "medium"), high: t("alto", "high"), minimal: t("mínimo", "minimal"), none: t("nenhum", "none") })[e] || e;
+        const reasonSelect = el("select", { class: "act knob", "aria-label": t("Raciocínio", "Reasoning"), disabled: reasoning.choices?.length ? null : "", onchange: (e) => knob("/api/model/reasoning", { effort: e.target.value }) },
+          reasoning.choices?.length
+            ? reasoning.choices.map((c) => { const o = el("option", { value: c }, `${t("Raciocínio", "Reasoning")}: ${effortName(c)}`); if (c === reasoning.current) o.selected = true; return o; })
+            : [el("option", {}, `${t("Raciocínio", "Reasoning")}: ${t("não suportado", "not supported")}`)]);
+        actions.append(ctxSelect, reasonSelect);
+      }
+      pane.append(actions);
+    }
   };
   const layout = () => {
     fill();
@@ -289,6 +308,11 @@ async function openModels(provider = "") {
     search.input.value = "";
     list.setQuery("");
     layout();
+  };
+  // knob changes the model in use, then reads the picker again.
+  const knob = async (path, body) => {
+    try { await api(path, body); await loadState(); renderFrame(); await load(data.provider); details = true; layout(); }
+    catch (error) { pane.append(el("div", { class: "desc bad-t" }, error.message)); }
   };
   const switchProvider = (step) => {
     const ids = data.providers.map((p) => p.id);
@@ -431,7 +455,7 @@ async function openSessions() {
 const asking = { id: "", index: 0, cursor: 0, checked: new Set(), text: "", answers: [] };
 
 function questionItems(q) {
-  return q.questions?.length ? q.questions : [{ id: "", question: q.question, explanation: q.explanation, type: q.choices?.length ? "single_choice" : "text", choices: q.choices || [] }];
+  return q.questions?.length ? q.questions : [{ id: "", question: q.question, explanation: q.explanation, type: q.choices?.length ? "single_choice" : "text", choices: q.choices || [], notes: q.notes || [] }];
 }
 
 function questionCard(q) {
@@ -447,14 +471,16 @@ function questionCard(q) {
   choices.forEach((choice, i) => rows.push(el("div", { class: `opt${asking.cursor === i ? " sel" : ""}`, onclick: () => { asking.cursor = i; pick(i, multi); renderWork(); } },
     el("span", { class: "num" }, String(i + 1)),
     el("span", { style: `color:${asking.checked.has(i) ? "var(--ok)" : "var(--muted)"}` }, multi ? (asking.checked.has(i) ? "☑" : "☐") : (asking.checked.has(i) ? "●" : "○")),
-    el("span", { style: asking.cursor === i ? "color:var(--strong)" : "" }, choice))));
+    el("span", { style: asking.cursor === i ? "color:var(--strong)" : "" }, choice),
+    item.notes?.[i] ? el("span", { class: "d" }, item.notes[i]) : null)));
   // Your own answer is the last option: same row, same number, written in place.
   const free = el("input", { type: "text", placeholder: t("Outra resposta…", "Other answer…"), value: asking.text, "aria-label": t("Outra resposta", "Other answer"), id: "free-answer" });
   free.addEventListener("input", () => { asking.text = free.value; highlight(choices.length); });
   free.addEventListener("focus", () => highlight(choices.length));
   free.addEventListener("keydown", (event) => {
     if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); submitAnswer(q); }
-    if ((event.key === "ArrowUp" || event.key === "Escape") && choices.length) { event.preventDefault(); event.stopPropagation(); free.blur(); highlight(choices.length - 1); }
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); answerLater(q); return; }
+    if (event.key === "ArrowUp" && choices.length) { event.preventDefault(); event.stopPropagation(); free.blur(); highlight(choices.length - 1); }
   });
   rows.push(el("div", { class: `opt free${asking.cursor === choices.length ? " sel" : ""}`, onclick: () => free.focus() },
     el("span", { class: "num" }, String(choices.length + 1)), el("span", { style: "color:var(--muted)" }, "✎"), free));
@@ -473,7 +499,16 @@ function questionCard(q) {
     el("div", { class: "qtext" }, item.question),
     item.explanation ? el("div", { class: "qexp" }, item.explanation) : null,
     el("div", { style: "display:flex;flex-direction:column;gap:2px" }, rows),
-    el("div", { class: "inkeys" }, keys.map(([k, d]) => el("span", {}, el("b", {}, k), " " + d)), el("span", { class: "end" }, el("b", {}, "Esc"), " " + t("cancelar", "cancel")))));
+    el("div", { class: "inkeys" }, keys.map(([k, d]) => el("span", {}, el("b", {}, k), " " + d)), el("span", { class: "end" }, el("b", {}, "Esc"), " " + t("responder depois", "answer later")))));
+}
+
+// answerLater puts the card away; the agent keeps waiting, and the footer
+// or an Enter in the empty composer brings the card back.
+function answerLater(q) {
+  view.laterQuestion = q.id;
+  renderFrame();
+  renderWork();
+  $("input").focus();
 }
 
 function pick(i, multi) {
@@ -513,6 +548,11 @@ async function submitAnswer(q) {
 function questionKey(event) {
   const q = view.conversation?.question;
   if (!q) return false;
+  if (view.laterQuestion === q.id) {
+    if (event.key === "Enter" && document.activeElement === $("input") && !$("input").value) { event.preventDefault(); view.laterQuestion = ""; render(); return true; }
+    return false;
+  }
+  if (event.key === "Escape") { event.preventDefault(); answerLater(q); return true; }
   const active = document.activeElement;
   if (active?.id === "free-answer" || (active?.tagName === "INPUT" && active !== $("input")) || ($("input") === active && $("input").value)) return false;
   if (event.ctrlKey || event.altKey || event.metaKey) return false;
@@ -570,14 +610,15 @@ function options(setting) {
   return list;
 }
 function optionLabel(v) {
-  return ({ true: t("Sim", "Yes"), false: t("Não", "No"), pt: "Português", en: "English", auto: "Auto", shown: t("Sempre", "Always"), hidden: t("Nunca", "Never"), off: t("Desligado", "Off"), bell: t("sino", "bell"), ask: modeLabel("ask"), plan: modeLabel("plan"), execute: modeLabel("execute") })[v] || v;
+  return ({ dark: t("Escuro", "Dark"), light: t("Claro", "Light"), system: t("Sistema", "System"), true: t("Sim", "Yes"), false: t("Não", "No"), pt: "Português", en: "English", auto: "Auto", shown: t("Sempre", "Always"), hidden: t("Nunca", "Never"), off: t("Desligado", "Off"), bell: t("sino", "bell"), ask: modeLabel("ask"), plan: modeLabel("plan"), execute: modeLabel("execute") })[v] || v;
 }
 const helpText = {
+  "app.theme": ["Escuro é o do protótipo; Sistema segue o seu computador", "Dark is the proposal's; System follows your computer"],
   "tui.language": ["Textos da interface e respostas", "Interface copy and replies"],
-  "tui.proseWidth": ["0 usa a largura toda", "0 uses the full width"],
+  "tui.proseWidth": ["Largura máxima das mensagens, em colunas · 0 usa a largura toda", "Widest a message runs, in columns · 0 uses the full width"],
   "tui.sidebar": ["Auto aparece a partir de 140 colunas", "Auto appears from 140 columns"],
   "tui.notifications": ["Ao terminar uma tarefa longa ou pedir aprovação", "When a long task ends or asks for approval"],
-  "preferences.showProcess": ["Abre as ferramentas enquanto o modelo trabalha", "Opens the tools while the model works"],
+  "preferences.showProcess": ["Mostra cada ferramenta numa linha, sem agrupar", "Shows each tool on its own line, ungrouped"],
   "preferences.resumeLast": ["Abre a última conversa ao iniciar", "Opens the last conversation at start"],
   "runtime.mode": ["Modo das novas conversas", "Mode for new conversations"],
   "runtime.maxSteps": ["Etapas por resposta · 1–200", "Steps per reply · 1–200"],
@@ -620,7 +661,8 @@ async function openSettings(section = 0) {
       return false;
     },
   });
-  const rows = () => prefs.settings.filter((s) => sectionOf(s) === section && (!query || (s.label + " " + s.path).toLowerCase().includes(query.toLowerCase())));
+  const theme = () => ({ path: "app.theme", label: t("Tema", "Theme"), category: "interface", help: "dark, light, system", value: themeChoice(), origin: "" });
+  const rows = () => [theme(), ...prefs.settings].filter((s) => s.path !== "tui.sidebar" && sectionOf(s) === section && (!query || (s.label + " " + s.path).toLowerCase().includes(query.toLowerCase())));
   const count = () => section === 0 ? conns.items.length : section === 3 ? 1 : section === 5 ? 0 : rows().length;
   const go = (n) => { section = n; selected = 0; query = ""; saved = ""; problem = ""; draw(); };
   const legend = () => {
@@ -683,12 +725,20 @@ async function openSettings(section = 0) {
     return false;
   };
   const save = async (s, value) => {
+    if (s.path === "app.theme") {
+      try { localStorage.setItem("opcode-theme", value); } catch {}
+      applyTheme(value);
+      saved = "1";
+      draw();
+      return;
+    }
     try {
       await api("/api/settings", { path: s.path, value });
       saved = "1"; problem = "";
       prefs = await api("/api/settings");
       if (s.path === "tui.language") { view.lang = value === "en" ? "en" : "pt"; render(); }
       if (s.path === "runtime.mode" && !view.session) { view.mode = value; renderFrame(); }
+      if (s.path === "tui.proseWidth" || s.path === "preferences.showProcess") { await loadState(); render(); }
     } catch (error) { problem = error.message; saved = ""; }
     draw();
   };

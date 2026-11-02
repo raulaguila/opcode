@@ -4,15 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -26,6 +29,9 @@ import (
 func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/models", s.models)
 	mux.HandleFunc("POST /api/model", s.selectModel)
+	mux.HandleFunc("POST /api/model/context", s.setContext)
+	mux.HandleFunc("POST /api/model/reasoning", s.setReasoning)
+	mux.HandleFunc("GET /api/files", s.files)
 	mux.HandleFunc("GET /api/conversations", s.conversations)
 	mux.HandleFunc("GET /api/sessions/{id}/preview", s.preview)
 	mux.HandleFunc("POST /api/sessions/{id}/rename", s.rename)
@@ -210,6 +216,14 @@ func (s *Server) models(w http.ResponseWriter, r *http.Request) {
 		result["error"] = tools.RedactCredentials(err.Error())
 	}
 	result["loaded"] = loaded(r.Context(), chosen)
+	// The active model's knobs: its reasoning effort and the context it asks for.
+	current := config.ModelWithProviderDefaults(active)
+	effort := ""
+	if agentConfig, ok := config.Get().Agents[config.AgentCoder]; ok {
+		effort = agentConfig.ReasoningEffort
+	}
+	result["reasoning"] = map[string]any{"choices": current.ReasoningChoices(), "current": effort}
+	result["context"] = map[string]any{"window": current.ContextWindow, "auto": current.UsesAutomaticContext()}
 	list := []ModelInfo{}
 	for _, m := range found {
 		list = append(list, info(m))
@@ -518,7 +532,9 @@ func connection(id string, legacy bool, name string, backend models.ModelProvide
 		c.Auth = "vault"
 	case raw.APIKeyEnv != "":
 		c.Auth = "environment"
-		c.KeyMissing = os.Getenv(raw.APIKeyEnv) == "" && raw.APIKey == ""
+		// Loaded off because its variable is unset, or on with the variable since removed.
+		c.KeyMissing = config.KeyMissing(c.Provider) || (!raw.Disabled && os.Getenv(raw.APIKeyEnv) == "" && raw.APIKey == "")
+		c.Disabled = raw.Disabled && !c.KeyMissing
 	case config.StoredProviderKey(id, legacy) != "":
 		c.Auth = "api_key"
 	}
@@ -789,4 +805,128 @@ func (s *Server) enableConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(w, http.StatusOK, map[string]bool{"enabled": request.Enabled})
+}
+
+// setContext asks the active model for a context window, or for discovery
+// with 0. The choice is saved with the model, as the terminal saves it.
+func (s *Server) setContext(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Window int64 `json:"window"`
+	}
+	if err := decode(r, &request); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	if request.Window < 0 || request.Window > 2<<20 {
+		fail(w, http.StatusBadRequest, errors.New(config.Text("janela de contexto fora do intervalo", "context window out of range")))
+		return
+	}
+	if err := s.guard(); err != nil {
+		fail(w, http.StatusConflict, err)
+		return
+	}
+	model := s.app.CoderAgent.Model()
+	model.ContextWindow, model.ContextAuto, model.ContextEstimated = request.Window, request.Window == 0, false
+	model.ContextSource = ""
+	selected, err := s.app.CoderAgent.SelectModel(config.AgentCoder, model)
+	if err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	reply(w, http.StatusOK, info(selected))
+}
+
+// setReasoning sets the active model's reasoning effort, where its provider
+// accepts one.
+func (s *Server) setReasoning(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Effort string `json:"effort"`
+	}
+	if err := decode(r, &request); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	coder, ok := s.app.CoderAgent.(interface {
+		SetReasoning(config.AgentName, models.ModelID, string) error
+	})
+	if !ok {
+		fail(w, http.StatusNotImplemented, errors.New(config.Text("este agente não ajusta raciocínio", "this agent does not adjust reasoning")))
+		return
+	}
+	if err := coder.SetReasoning(config.AgentCoder, s.app.CoderAgent.Model().ID, request.Effort); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	reply(w, http.StatusOK, map[string]string{"effort": request.Effort})
+}
+
+// files lists the workspace's files for an @ mention, best matches first.
+// It reads names only, through the same listing the terminal's file picker
+// uses, which honors .gitignore.
+func (s *Server) files(w http.ResponseWriter, r *http.Request) {
+	query := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
+	all := s.workspaceFiles()
+	type scored struct {
+		path  string
+		score int
+	}
+	var hits []scored
+	for _, path := range all {
+		lower := strings.ToLower(path)
+		at := strings.Index(lower, query)
+		if query != "" && at < 0 {
+			continue
+		}
+		score := len(path)
+		if base := strings.ToLower(filepath.Base(path)); strings.HasPrefix(base, query) {
+			score -= 1000 // a file name that starts with the query leads
+		}
+		hits = append(hits, scored{path, score + at})
+	}
+	slices.SortFunc(hits, func(a, b scored) int { return a.score - b.score })
+	out := []string{}
+	for _, hit := range hits[:min(len(hits), 20)] {
+		out = append(out, hit.path)
+	}
+	reply(w, http.StatusOK, out)
+}
+
+// workspaceFiles keeps the listing for a few seconds; @ asks on every key.
+func (s *Server) workspaceFiles() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if time.Since(s.filesAt) < 10*time.Second {
+		return s.filesCache
+	}
+	root := config.WorkingDirectory()
+	var list []string
+	if cmd := fileutil.GetRgCmd(""); cmd != nil {
+		cmd.Dir = root
+		if raw, err := cmd.Output(); err == nil {
+			for _, path := range strings.Split(string(raw), "\x00") {
+				if path = strings.TrimPrefix(path, "./"); path != "" {
+					list = append(list, path)
+				}
+			}
+		}
+	}
+	if list == nil {
+		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || len(list) >= 20000 {
+				return filepath.SkipDir
+			}
+			name := entry.Name()
+			if entry.IsDir() && path != root && (strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor") {
+				return filepath.SkipDir
+			}
+			if !entry.IsDir() {
+				if rel, err := filepath.Rel(root, path); err == nil {
+					list = append(list, rel)
+				}
+			}
+			return nil
+		})
+	}
+	s.filesCache, s.filesAt = list, time.Now()
+	return list
 }

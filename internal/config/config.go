@@ -1018,7 +1018,7 @@ func fallbackAgentDefinition(name AgentName, model, title models.ModelID, effort
 
 func fallbackValidatedAgent(cfg *Config, name AgentName) error {
 	if !setDefaultModelForAgent(name) {
-		return fmt.Errorf("no valid provider available for agent %s", name)
+		return fmt.Errorf("no valid provider available for agent %s%s", name, missingKeyHint())
 	}
 	logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
 	return nil

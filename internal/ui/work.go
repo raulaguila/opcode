@@ -26,7 +26,7 @@ func (q *question) item() interaction.QuestionItem {
 	if len(q.q.Questions) > 0 {
 		return q.q.Questions[q.index]
 	}
-	return interaction.QuestionItem{Question: q.q.Question, Explanation: q.q.Explanation, Choices: q.q.Choices, Type: "single_choice"}
+	return interaction.QuestionItem{Question: q.q.Question, Explanation: q.q.Explanation, Choices: q.q.Choices, Notes: q.q.Notes, Type: "single_choice"}
 }
 
 // poll reads the pending question and the saved plan; neither is published
@@ -186,6 +186,9 @@ func (m *Model) questionView() string {
 			bar = on(bg0, P.Ask).Render("▌")
 		}
 		row := bar + on(bg, P.Muted).Render(" "+number) + on(bg, markColor).Render(mark) + on(bg, fg).Render(" "+choice)
+		if i < len(item.Notes) && item.Notes[i] != "" {
+			row += on(bg, P.Muted).Render("  " + item.Notes[i])
+		}
 		rows = append(rows, Line(row, inner, bg))
 	}
 	if len(item.Choices) > 0 || item.Type == "text" || len(item.Choices) == 0 {

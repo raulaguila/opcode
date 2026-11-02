@@ -15,6 +15,7 @@ type Question struct {
 	Question    string         `json:"question"`
 	Explanation string         `json:"explanation,omitempty"`
 	Choices     []string       `json:"choices,omitempty"`
+	Notes       []string       `json:"notes,omitempty"` // a short note per choice, same order; optional
 	Questions   []QuestionItem `json:"questions,omitempty"`
 }
 type pending struct {
@@ -129,5 +130,26 @@ func normalizeQuestion(q Question) (Question, error) {
 			return q, fmt.Errorf("invalid question choice")
 		}
 	}
+	if err := validNotes(q.Choices, q.Notes); err != nil {
+		return q, err
+	}
+	for _, item := range q.Questions {
+		if err := validNotes(item.Choices, item.Notes); err != nil {
+			return q, err
+		}
+	}
 	return q, nil
+}
+
+// validNotes allows at most one short note per choice.
+func validNotes(choices, notes []string) error {
+	if len(notes) > len(choices) {
+		return fmt.Errorf("question notes must not outnumber its choices")
+	}
+	for _, note := range notes {
+		if len(note) > 160 {
+			return fmt.Errorf("each question note must contain at most 160 bytes")
+		}
+	}
+	return nil
 }

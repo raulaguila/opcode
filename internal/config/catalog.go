@@ -2,18 +2,81 @@ package config
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/raulaguila/opcode/internal/httpclient"
 	"github.com/raulaguila/opcode/internal/llm/models"
 )
 
+// keyMissing holds the connections whose key variable was unset at load.
+var keyMissing = map[models.ModelProvider]bool{}
+
+// missingNames keeps each marked connection's message, "environment variable X is not set".
+var missingNames = map[string]string{}
+
+// KeyMissing reports a connection that loaded switched off because the
+// environment variable naming its key is not set.
+func KeyMissing(p models.ModelProvider) bool {
+	credentialMu.Lock()
+	defer credentialMu.Unlock()
+	return keyMissing[p]
+}
+
+// missingKeyHint names the unset key variables, so a configuration left with
+// no usable connection still says which variable to set.
+func missingKeyHint() string {
+	credentialMu.Lock()
+	defer credentialMu.Unlock()
+	var names []string
+	for id := range keyMissing {
+		names = append(names, string(id))
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	slices.Sort(names)
+	return fmt.Sprintf(" (key variable not set for %s; %s)", strings.Join(names, ", "), missingNames[names[0]])
+}
+
+// missingKeyError is a key variable that is not set. A connection with one
+// loads switched off instead of failing the whole configuration.
+type missingKeyError struct{ name string }
+
+func (e missingKeyError) Error() string {
+	return fmt.Sprintf("environment variable %s is not set", e.name)
+}
+
+// withoutKey resolves a connection whose key variable is unset: it stays off
+// in memory only, and is marked unless the file already turned it off.
+func withoutKey(id models.ModelProvider, p Provider, err error) (Provider, error) {
+	var missing missingKeyError
+	if !errors.As(err, &missing) {
+		return p, err
+	}
+	if !p.Disabled {
+		keyMissing[id] = true
+		missingNames[string(id)] = missing.Error()
+	}
+	p.Disabled, p.APIKey = true, ""
+	return p, nil
+}
+
 func configureProviders() error {
+	credentialMu.Lock()
+	keyMissing, missingNames = map[models.ModelProvider]bool{}, map[string]string{}
+	credentialMu.Unlock()
 	for id, p := range cfg.Providers {
 		resolved, err := resolveProviderWithVault(id, p, false)
+		if err != nil {
+			credentialMu.Lock()
+			resolved, err = withoutKey(id, p, err)
+			credentialMu.Unlock()
+		}
 		if err != nil {
 			return fmt.Errorf("provider %s: %w", id, err)
 		}
@@ -24,6 +87,11 @@ func configureProviders() error {
 			return err
 		}
 		resolved, err := resolveProviderWithVault(profile.Backend, profile.Provider, false)
+		if err != nil {
+			credentialMu.Lock()
+			resolved, err = withoutKey(models.ModelProvider("profile:"+id), profile.Provider, err)
+			credentialMu.Unlock()
+		}
 		if err != nil {
 			return fmt.Errorf("provider profile %s: %w", id, err)
 		}
@@ -197,7 +265,7 @@ func resolveProviderCredential(p Provider, resolveVault bool) (Provider, error) 
 		}
 		p.APIKey = Environment(p.APIKeyEnv)
 		if p.APIKey == "" {
-			return Provider{}, fmt.Errorf("environment variable %s is not set", p.APIKeyEnv)
+			return Provider{}, missingKeyError{p.APIKeyEnv}
 		}
 	}
 	return p, nil

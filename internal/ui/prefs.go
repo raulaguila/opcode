@@ -96,7 +96,7 @@ func (m *Model) openSettingsAt(section int) tea.Cmd {
 
 // keyMissing is a connection that names a key variable that is not set.
 func keyMissing(c connection) bool {
-	return c.raw.APIKeyEnv != "" && os.Getenv(c.raw.APIKeyEnv) == "" && c.raw.APIKey == "" && c.raw.APIKeyRef == ""
+	return config.KeyMissing(c.provider) || (!c.raw.Disabled && c.raw.APIKeyEnv != "" && os.Getenv(c.raw.APIKeyEnv) == "" && c.raw.APIKey == "" && c.raw.APIKeyRef == "")
 }
 
 func (m *Model) openSettings() tea.Cmd { return m.openSettingsAt(sectionConnections) }
@@ -349,25 +349,26 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 		if i == p.selected {
 			edge, bg = P.CardSelectedEdge, P.CardSelected
 		}
-		inner := width - 4 // thin edges and a cell of air on each side
+		inner := width - 4                      // thin edges and a cell of air on each side
+		off := c.raw.Disabled && !keyMissing(c) // a missing key loads off but keeps its full card
 		icon, iconColor, state, stateColor := "●", P.Success, "", P.Muted
 		switch {
-		case c.raw.Disabled:
-			icon, iconColor, state = "○", P.Faint, textFor("desativada", "disabled")
 		case keyMissing(c):
 			icon, iconColor, state, stateColor = "▲", P.Plan, textFor("chave ausente", "key missing"), P.Plan
+		case c.raw.Disabled:
+			icon, iconColor, state = "○", P.Faint, textFor("desativada", "disabled")
 		case c.provider == active:
 			state = textFor("em uso", "in use")
 		}
 		name := on(bg, P.Strong).Bold(true).Render(c.name)
-		if c.raw.Disabled {
+		if off {
 			name = on(bg, P.Muted).Render(c.name)
 		}
 		pad := on(bg, bg).Render(" ")
 		indent := on(bg, bg).Render("    ")
 		body := []string{pad + Spread(on(bg, iconColor).Render(icon)+on(bg, bg).Render("   ")+name, on(bg, stateColor).Render(state), inner, bg)}
 		deleting := i == p.selected && p.deleting
-		if !c.raw.Disabled {
+		if !off {
 			detail := on(bg, P.Muted).Render(connectionDetail(c))
 			if probe, ok := p.probes[c.provider]; ok {
 				color := P.Muted
@@ -391,7 +392,7 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 		} else if deleting {
 			body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
 		}
-		card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface, Dashed: c.raw.Disabled}
+		card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface, Dashed: off}
 		rows = append(rows, strings.Split(card.Render(strings.Join(body, "\n")), "\n")...)
 	}
 	if p.status != "" && p.failed {

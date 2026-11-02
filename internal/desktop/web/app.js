@@ -13,6 +13,16 @@ const key = (() => {
 })();
 
 const $ = (id) => document.getElementById(id);
+
+// Theme: dark is the proposal's; light and system are this window's choice,
+// kept only in its browser.
+function themeChoice() { try { return localStorage.getItem("opcode-theme") || "dark"; } catch { return "dark"; } }
+function applyTheme(choice = themeChoice()) {
+  const light = choice === "light" || (choice === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+  document.documentElement.dataset.theme = light ? "light" : "dark";
+}
+applyTheme();
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => applyTheme());
 const modes = ["ask", "plan", "execute"];
 const view = { state: null, session: "", conversation: null, mode: "execute", policy: "prompt", started: 0, error: "", lang: "pt" };
 const t = (pt, en) => (view.lang === "pt" ? pt : en);
@@ -50,7 +60,7 @@ function stepRows(steps) {
   const runs = [];
   for (const step of steps) {
     const last = runs[runs.length - 1];
-    if (last && last.name === step.name && last.state === step.state) { last.targets.push(step.target); last.added += step.added || 0; last.removed += step.removed || 0; }
+    if (last && !view.state?.show_process && last.name === step.name && last.state === step.state) { last.targets.push(step.target); last.added += step.added || 0; last.removed += step.removed || 0; }
     else runs.push({ name: step.name, state: step.state, targets: [step.target], added: step.added || 0, removed: step.removed || 0 });
   }
   return runs.map((run) => {
@@ -154,7 +164,7 @@ function renderWork() {
   const request = conversation?.permissions?.[0];
   if (!request) view.fullDiff = false;
   if (request) { work.append(approvalCard(request)); return; }
-  if (conversation?.question) { work.append(questionCard(conversation.question)); return; }
+  if (conversation?.question && view.laterQuestion !== conversation.question.id) { work.append(questionCard(conversation.question)); return; }
   const steps = conversation?.task?.steps || [];
   if (steps.length && view.showPlan) { work.append(planCard(conversation.task)); return; }
   if (steps.length) {
@@ -235,14 +245,15 @@ function renderFrame() {
   document.documentElement.style.setProperty("--mode", `var(--${view.mode})`);
   $("mode").textContent = modeLabel(view.mode);
   // While the agent asks, its card is where you answer, as in the proposal.
-  document.querySelector(".composer-wrap").hidden = !!view.conversation?.question;
+  const asking = view.conversation?.question && view.laterQuestion !== view.conversation.question.id;
+  document.querySelector(".composer-wrap").hidden = !!asking;
   // While you decide on an approval, the composer only keeps your draft.
   const deciding = !!view.conversation?.permissions?.length;
   $("composer").classList.toggle("deciding", deciding);
   const busy = view.conversation?.busy;
   $("hint").innerHTML = "";
   if (busy) $("hint").append(t("Mensagens entram na fila · ", "Messages queue up · "), el("b", {}, "Esc"), t(" cancela", " cancels"));
-  else $("hint").append(el("b", {}, "Shift+Tab"), t(" modo · ", " mode · "), el("b", {}, "Alt+Enter"), t(" nova linha", " new line"));
+  else $("hint").append(el("b", {}, "Shift+Tab"), t(" modo · ", " mode · "), el("b", {}, "/"), t(" comandos · ", " commands · "), el("b", {}, "@"), t(" arquivos · ", " files · "), el("b", {}, "Alt+Enter"), t(" nova linha", " new line"));
   $("input").placeholder = deciding ? t("Rascunho preservado enquanto você decide", "Draft kept while you decide") : busy ? t("Mensagem entra na fila", "Message joins the queue") : "";
   const narrow = window.innerWidth < 760; // the proposal's compact screen abbreviates
   $("policy").textContent = narrow
@@ -252,7 +263,11 @@ function renderFrame() {
   activity.className = "";
   activity.style.color = "";
   if (view.conversation?.permissions?.length) { activity.textContent = t("Aguardando sua aprovação", "Waiting for your approval"); activity.className = "busy"; }
-  else if (view.conversation?.question) { activity.textContent = t("Aguardando sua resposta", "Waiting for your answer"); activity.className = ""; activity.style.color = "var(--ask)"; }
+  else if (view.conversation?.question) {
+    activity.textContent = asking ? t("Aguardando sua resposta", "Waiting for your answer") : t("Pergunta pendente · Enter responde", "Question pending · Enter answers");
+    activity.className = asking ? "" : "link";
+    activity.style.color = "var(--ask)";
+  }
   else if (busy) {
     const seconds = Math.max(0, Math.round((Date.now() - view.started) / 1000));
     const now = doing();
@@ -283,6 +298,7 @@ async function loadState() {
   view.state = await api("/api/state");
   view.lang = view.state.language === "en" ? "en" : "pt";
   document.documentElement.lang = view.lang === "pt" ? "pt-BR" : "en";
+  document.documentElement.style.setProperty("--prose", view.state.prose_width > 0 ? `${view.state.prose_width}ch` : "none");
   if (modes.includes(view.state.mode)) view.mode = view.state.mode;
 }
 
@@ -395,6 +411,7 @@ document.addEventListener("keydown", (event) => {
 
 $("input").addEventListener("keydown", (event) => {
   if (dialog) return; // an open dialog owns the keyboard
+  if (mentionKey(event)) return;
   const request = view.conversation?.permissions?.[0];
   if (request && $("input").value === "" && ["1", "2", "3"].includes(event.key)) {
     event.preventDefault();
@@ -405,6 +422,9 @@ $("input").addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.isComposing) { event.preventDefault(); send(); }
 });
 $("input").addEventListener("input", grow);
+$("input").addEventListener("input", mentionUpdate);
+$("input").addEventListener("blur", () => setTimeout(mentionClose, 150));
+$("activity").addEventListener("click", () => { if (view.conversation?.question && view.laterQuestion) { view.laterQuestion = ""; render(); } });
 window.addEventListener("resize", renderFrame);
 $("mode").addEventListener("click", cycleMode);
 $("policy").addEventListener("click", () => openSettings(3));
@@ -426,3 +446,68 @@ setInterval(() => {
     $("transcript").replaceChildren(el("div", { class: "empty" }, el("b", {}, "opcode"), el("span", {}, error.message)));
   }
 })();
+
+// @ mentions: typing @ and part of a path lists the workspace's files; Enter
+// or Tab puts the chosen path in the message.
+const mention = { node: null, items: [], selected: 0, start: -1, asked: "" };
+
+function mentionToken() {
+  const input = $("input");
+  const before = input.value.slice(0, input.selectionStart);
+  const match = before.match(/(^|\s)@([^\s@]*)$/);
+  return match ? { start: before.length - match[2].length - 1, query: match[2] } : null;
+}
+
+async function mentionUpdate() {
+  const token = mentionToken();
+  if (!token) { mentionClose(); return; }
+  mention.start = token.start;
+  if (mention.asked === token.query && mention.node) return;
+  mention.asked = token.query;
+  const found = await api(`/api/files?q=${encodeURIComponent(token.query)}`).catch(() => []);
+  if (mention.asked !== token.query) return; // a newer key already asked
+  mention.items = found;
+  mention.selected = 0;
+  mentionDraw();
+}
+
+function mentionDraw() {
+  if (!mention.items.length) { mentionClose(); return; }
+  if (!mention.node) {
+    mention.node = el("div", { class: "mention", role: "listbox", "aria-label": t("Arquivos", "Files") });
+    $("composer").append(mention.node);
+  }
+  mention.node.replaceChildren(el("div", { class: "grp" }, t("Arquivos", "Files")), ...mention.items.map((path, i) =>
+    el("div", { class: `item${i === mention.selected ? " sel" : ""}`, role: "option", onmousedown: (e) => { e.preventDefault(); mention.selected = i; mentionPick(); } },
+      el("span", { class: "t" }, path))));
+}
+
+function mentionPick() {
+  const path = mention.items[mention.selected];
+  const input = $("input");
+  if (!path || mention.start < 0) return;
+  const after = input.value.slice(input.selectionStart);
+  input.value = `${input.value.slice(0, mention.start)}@${path} ${after}`;
+  const caret = mention.start + path.length + 2;
+  input.setSelectionRange(caret, caret);
+  mentionClose();
+  grow();
+}
+
+function mentionClose() {
+  mention.node?.remove();
+  Object.assign(mention, { node: null, items: [], selected: 0, start: -1, asked: "" });
+}
+
+function mentionKey(event) {
+  if (!mention.node) return false;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    mention.selected = (mention.selected + (event.key === "ArrowDown" ? 1 : -1) + mention.items.length) % mention.items.length;
+    mentionDraw();
+    return true;
+  }
+  if (event.key === "Enter" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); mentionPick(); return true; }
+  if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); mentionClose(); return true; }
+  return false;
+}

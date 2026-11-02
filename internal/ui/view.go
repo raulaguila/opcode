@@ -108,6 +108,9 @@ func (m *Model) renderTranscript(width int) string {
 			latest[turn] = msg.ID
 		}
 	}
+	// Replies render once; only the one still streaming renders again.
+	fresh := map[string]renderedReply{}
+	defer func() { m.replies = fresh }()
 	turn = 0
 	var blocks []string
 	var steps []message.ToolCall
@@ -136,7 +139,7 @@ func (m *Model) renderTranscript(width int) string {
 		}
 		if text != "" && latest[turn] == msg.ID {
 			flush()
-			body := strings.TrimSuffix(styles.RenderMarkdownBlocks(text, inner, inner), "\n")
+			body := m.markdown(msg, text, inner, fresh)
 			if finish := msg.FinishPart(); finish != nil && msg.IsFinished() {
 				meta := " " + modelName(msg.Model) + " · " + duration(msg.CreatedAt, finish.Time)
 				if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
@@ -159,6 +162,30 @@ func (m *Model) renderTranscript(width int) string {
 		return m.emptyState(inner, indent)
 	}
 	return "\n" + strings.Join(blocks, "\n\n") + "\n"
+}
+
+// renderedReply is a reply's Markdown as drawn at one width.
+type renderedReply struct {
+	text  string
+	width int
+	body  string
+}
+
+func (m *Model) markdown(msg message.Message, text string, width int, fresh map[string]renderedReply) string {
+	if cached, ok := m.replies[msg.ID]; ok && cached.text == text && cached.width == width {
+		fresh[msg.ID] = cached
+		return cached.body
+	}
+	var body string
+	if msg.IsFinished() {
+		body = styles.RenderMarkdownBlocks(text, width, width)
+	} else {
+		// Settled paragraphs of the live reply come from its block cache.
+		body = m.live.RenderStreaming(text, width, width)
+	}
+	body = strings.TrimSuffix(body, "\n")
+	fresh[msg.ID] = renderedReply{text, width, body}
+	return body
 }
 
 func (m *Model) emptyState(inner int, indent string) string {
@@ -386,10 +413,19 @@ func (m *Model) footer() string {
 		activity = on(P.Ground, P.Plan).Render("  " + config.Text("Aguardando sua aprovação", "Waiting for your approval"))
 	case m.busy:
 		now := m.doing()
-		activity = on(P.Ground, P.Plan).Render(fmt.Sprintf(config.Text("  %s · %s · Esc cancela", "  %s · %s · Esc cancels"), now, time.Since(m.started).Round(time.Second)))
+		if now == config.Text("Trabalhando", "Working") {
+			switch _, live, waiting := m.rate(); {
+			case waiting:
+				now = config.Text("Aguardando modelo", "Awaiting model")
+			case live:
+				now = config.Text("Gerando resposta", "Generating response")
+			}
+		}
+		elapsed := time.Since(m.started).Truncate(time.Second)
+		activity = on(P.Ground, P.Plan).Render(fmt.Sprintf(config.Text("  %s · %s · Esc cancela", "  %s · %s · Esc cancels"), now, elapsed))
 		if compact {
 			verb, _, _ := strings.Cut(now, " ")
-			activity = on(P.Ground, P.Plan).Render(fmt.Sprintf("  %s %s", verb, time.Since(m.started).Round(time.Second)))
+			activity = on(P.Ground, P.Plan).Render(fmt.Sprintf("  %s %s", verb, elapsed))
 		}
 	case m.notice != "":
 		activity = on(P.Ground, P.Danger).Render("  " + strings.Join(strings.Fields(m.notice), " "))
@@ -404,9 +440,20 @@ func (m *Model) footer() string {
 	if window := model.ContextWindow; window > 0 && m.session.PromptTokens > 0 {
 		used := float64(m.session.PromptTokens) / float64(window)
 		right += Meter(used, P.Info, P.Ground) + muted.Render(fmt.Sprintf(" %d%%", int(used*100)))
-		if speed := m.speed(); speed > 0 && !compact {
-			right += muted.Render(fmt.Sprintf(" · %d t/s", int(speed+0.5)))
+	}
+	// As in the classic footer: ~N while the reply streams, the last reply's
+	// rate when idle.
+	if speed, live, _ := m.rate(); speed > 0 && !compact {
+		label := fmt.Sprintf("%d t/s", int(speed+0.5))
+		if live {
+			label = "~" + label
 		}
+		if right != "" {
+			label = " · " + label
+		}
+		right += muted.Render(label)
+	}
+	if right != "" {
 		right += muted.Render("   ")
 	}
 	name := modelName(model.ID)
@@ -483,22 +530,33 @@ func (m *Model) doing() string {
 	return config.Text("Trabalhando", "Working")
 }
 
-// speed is the last reply's tokens per second, when the agent measured it.
-func (m *Model) speed() float64 {
-	if m.app == nil || m.session.ID == "" {
-		return 0
+// rate is the model's output speed in tokens per second. While a reply
+// streams it is measured live; waiting means the model has not answered yet.
+// Idle, it is the last reply's.
+func (m *Model) rate() (speed float64, live, waiting bool) {
+	if m.app == nil || m.app.CoderAgent == nil || m.session.ID == "" {
+		return 0, false, false
 	}
-	usage, ok := m.app.CoderAgent.(interface {
-		Usage(context.Context, string) (agent.UsageMetrics, error)
-	})
+	usage, ok := m.app.CoderAgent.(agent.UsageControl)
 	if !ok {
-		return 0
+		return 0, false, false
 	}
 	metrics, err := usage.Usage(context.Background(), m.session.ID)
-	if err != nil || metrics.LastOutputTokens <= 0 || metrics.LastOutputDurationNS <= 0 {
-		return 0
+	if err != nil {
+		return 0, false, false
 	}
-	return float64(metrics.LastOutputTokens) / (float64(metrics.LastOutputDurationNS) / float64(time.Second))
+	if m.busy && metrics.StreamActive {
+		waiting = metrics.StreamOutputBytes == 0
+		// The first burst can hold buffered output; measure after it.
+		if metrics.StreamSamples >= 2 && metrics.StreamSampleDurationNS >= int64(250*time.Millisecond) {
+			speed = metrics.StreamSampleTokens * 1e9 / float64(metrics.StreamSampleDurationNS)
+		}
+		return speed, !waiting, waiting
+	}
+	if !m.busy && metrics.LastOutputTokens > 0 && metrics.LastOutputDurationNS > 0 {
+		speed = float64(metrics.LastOutputTokens) * 1e9 / float64(metrics.LastOutputDurationNS)
+	}
+	return speed, false, false
 }
 
 // sessionNumber is the conversation's place, oldest first, among this

@@ -448,7 +448,7 @@ func (p *modelPicker) detailColumn(m *Model, item Item, width int) []string {
 	}
 	pair(textFor("Execução", "Runs"), where)
 	if model.ID == p.active {
-		if speed := m.speed(); speed > 0 {
+		if speed, live, _ := m.rate(); speed > 0 && !live {
 			pair(textFor("Velocidade", "Speed"), fmt.Sprintf(textFor("≈ %d t/s na última resposta", "≈ %d t/s on the last reply"), int(speed+0.5)))
 		}
 	}

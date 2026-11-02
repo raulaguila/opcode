@@ -19,6 +19,7 @@ import (
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
+	"github.com/raulaguila/opcode/internal/tui/styles"
 	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
@@ -57,6 +58,12 @@ type Model struct {
 	fullDiff      bool            // the approval shows its whole diff (T)
 	laterQuestion string          // a question put away to answer later (Esc)
 	recent        []string        // palette commands used last, this run
+
+	replies      map[string]renderedReply // replies already rendered, by message
+	live         styles.MarkdownCache     // the streaming reply's settled blocks
+	ticking      bool                     // a clock tick is scheduled
+	painted      map[string]string        // transcript rows padded to the width, by row
+	paintedWidth int
 
 	mention     []string  // files matching the @ being typed
 	mentionPick int       // the one Tab or Enter inserts
@@ -163,14 +170,14 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 	case tickMsg:
+		m.ticking = false
 		m.poll()
 		// The final event can arrive before the agent marks the session free.
 		if m.app != nil && m.app.CoderAgent != nil {
 			m.busy = m.app.CoderAgent.IsSessionBusy(m.session.ID)
 		}
-		m.refresh()
 		if m.busy {
-			return m, tick()
+			return m, m.tick()
 		}
 		return m, nil
 	case catalogMsg:
@@ -213,7 +220,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.poll()
 			if !m.busy {
-				return m, tick() // confirm the session settled
+				return m, m.tick() // confirm the session settled
 			}
 		}
 	}
@@ -359,11 +366,18 @@ func (m *Model) submit() tea.Cmd {
 	delete(m.failed, m.session.ID)
 	m.busy, m.started, m.notice, m.follow = true, time.Now(), "", true
 	m.layout()
-	return tick()
+	return m.tick()
 }
 
-func tick() tea.Cmd {
-	return tea.Tick(time.Second, func(time.Time) tea.Msg { return tickMsg{} })
+// tick schedules the next clock update, one at a time, on the second the
+// run's elapsed time turns, so the footer counts every second.
+func (m *Model) tick() tea.Cmd {
+	if m.ticking {
+		return nil
+	}
+	m.ticking = true
+	delay := time.Second - time.Since(m.started)%time.Second
+	return tea.Tick(delay, func(time.Time) tea.Msg { return tickMsg{} })
 }
 
 // upsert keeps this conversation's messages in order as they stream.
@@ -405,10 +419,21 @@ func (m *Model) refresh() {
 	if m.width == 0 {
 		return
 	}
-	// Every row is painted to the edge so no terminal background shows through.
+	// Every row is painted to the edge so no terminal background shows
+	// through; rows painted last time are reused.
 	rows := strings.Split(m.renderTranscript(m.width), "\n")
-	for i := range rows {
-		rows[i] = Line(rows[i], m.width, P.Ground)
+	painted := make(map[string]string, len(rows))
+	for i, row := range rows {
+		line, ok := m.painted[row]
+		if !ok {
+			line = Line(row, m.width, P.Ground)
+		}
+		painted[row], rows[i] = line, line
+	}
+	if m.paintedWidth == m.width {
+		m.painted = painted
+	} else {
+		m.painted, m.paintedWidth = nil, m.width
 	}
 	m.transcript.SetContent(strings.Join(rows, "\n"))
 	if m.follow {

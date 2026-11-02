@@ -20,6 +20,7 @@ func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgH
 	if requestErr != nil {
 		return nil, nil, requestErr
 	}
+	requestHistory = withMentionedFiles(requestHistory)
 	if controller, ok := runProvider(a, run).(provider.SystemPromptController); ok {
 		names := make([]string, 0)
 		for _, tool := range a.exposedTools(run) {

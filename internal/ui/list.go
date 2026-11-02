@@ -3,6 +3,8 @@ package ui
 import (
 	"image/color"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Item is one row of a List. Group heads a run of rows; Right sits at the
@@ -68,17 +70,22 @@ func (l *List) SetQuery(query string) {
 	l.Query, l.Selected, l.Offset = query, 0, 0
 }
 
-// layout maps rows to items: -1 is a group heading.
+// layout maps rows to items: -1 is a group heading, -2 the blank row
+// that separates one group from the one above.
 func (l *List) layout(rows int) []int {
 	items := l.Visible()
 	grouped := l.Grouped && strings.TrimSpace(l.Query) == ""
 	var out []int
 	for i := l.Offset; i < len(items) && len(out) < rows; i++ {
 		if grouped && items[i].Group != "" && (i == l.Offset || items[i-1].Group != items[i].Group) {
-			out = append(out, -1)
-			if len(out) >= rows {
+			head := []int{-1}
+			if len(out) > 0 {
+				head = []int{-2, -1}
+			}
+			if len(out)+len(head) >= rows { // a heading never ends the list
 				break
 			}
+			out = append(out, head...)
 		}
 		out = append(out, i)
 	}
@@ -123,18 +130,29 @@ func (l *List) Render(width, rows int) []string {
 	for _, item := range items {
 		marks = marks || item.Mark != ""
 	}
+	// Titles share one column, so the descriptions line up after them.
+	column := 0
+	for _, i := range layout {
+		if i >= 0 && items[i].Desc != "" {
+			column = max(column, ansi.StringWidth(items[i].Title))
+		}
+	}
+	column = min(column, width/2)
 	out := make([]string, 0, len(layout))
 	for k, i := range layout {
-		if i < 0 {
+		switch {
+		case i == -2:
+			out = append(out, "")
+		case i == -1:
 			out = append(out, on(P.Surface, P.Muted).Render("  "+strings.ToUpper(items[layout[k+1]].Group)))
-			continue
+		default:
+			out = append(out, l.row(items[i], i == l.Selected, marks, width, column))
 		}
-		out = append(out, l.row(items[i], i == l.Selected, marks, width))
 	}
 	return out
 }
 
-func (l *List) row(item Item, selected, marks bool, width int) string {
+func (l *List) row(item Item, selected, marks bool, width, column int) string {
 	bg, fg := P.Surface, P.Text
 	if item.Faint {
 		fg = P.Faint
@@ -166,7 +184,8 @@ func (l *List) row(item Item, selected, marks bool, width int) string {
 	}
 	left := bar + mark + title
 	if item.Desc != "" {
-		left += on(bg, P.Muted).Render("  " + item.Desc)
+		gap := max(0, column-ansi.StringWidth(item.Title))
+		left += on(bg, P.Muted).Render(strings.Repeat(" ", gap+3) + item.Desc)
 	}
 	right := ""
 	switch {

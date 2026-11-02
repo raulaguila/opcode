@@ -321,13 +321,13 @@ func duration(from, to int64) string {
 	return (time.Duration(to-from) * time.Second).String()
 }
 
-// composerRows: the frame's two edges around the text.
+// composerRows: the frame's two edges and a blank row on each side of the text.
 // composerRows is 0 while the agent asks: its card is where you answer.
 func (m *Model) composerRows() int {
 	if m.question != nil && !m.answeringLater() {
 		return 0
 	}
-	return m.composer.Height() + 2
+	return m.composer.Height() + 4 // the frame's edges and a blank row inside each
 }
 
 // composerView is the input framed in the mode's color, its name on the top
@@ -358,7 +358,7 @@ func (m *Model) composerView() string {
 	if len(m.mention) > 0 {
 		legend = config.Text("↑↓ escolher · Tab inserir · Esc fechar", "↑↓ choose · Tab insert · Esc close")
 	}
-	return Box{Title: title, Legend: legend, Width: m.width, PadX: 1, Accent: accent, Background: P.Ground, TitleColor: accent}.Render(strings.Join(lines, "\n"))
+	return Box{Title: title, Legend: legend, Width: m.width, PadX: 2, PadY: 1, Accent: accent, Background: P.Ground, TitleColor: accent}.Render(strings.Join(lines, "\n"))
 }
 
 // footer: approval on the left, the run's activity, then context and model.

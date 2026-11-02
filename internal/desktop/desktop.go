@@ -22,7 +22,6 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
@@ -187,7 +187,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = string(model.ID)
 	}
-	state := State{Workspace: homeRelative(config.WorkingDirectory()), Branch: gitBranch(config.WorkingDirectory()), Model: name, Context: model.ContextWindow, Mode: config.Get().Runtime.Defaults().Mode, Language: config.Get().TUI.Language, Sessions: []SessionBrief{}, ProseWidth: config.Get().TUI.ProseWidth, ShowProcess: config.Get().Preferences.ProcessVisible()}
+	state := State{Workspace: fileutil.HomeRelative(config.WorkingDirectory()), Branch: fileutil.GitBranch(config.WorkingDirectory()), Model: name, Context: model.ContextWindow, Mode: config.Get().Runtime.Defaults().Mode, Language: config.Get().TUI.Language, Sessions: []SessionBrief{}, ProseWidth: config.Get().TUI.ProseWidth, ShowProcess: config.Get().Preferences.ProcessVisible()}
 	list, err := s.app.Sessions.List(r.Context())
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err)
@@ -357,7 +357,6 @@ func project(messages []message.Message) []Message {
 			results[result.ToolCallID] = result
 		}
 	}
-	renderer := goldmark.New()
 	out := []Message{}
 	for _, msg := range messages {
 		if msg.IsApplication() || msg.Role == message.Tool {
@@ -369,13 +368,7 @@ func project(messages []message.Message) []Message {
 		case message.User:
 			entry.Text = text
 		case message.Assistant:
-			if text != "" {
-				var html bytes.Buffer
-				// Goldmark leaves raw HTML out unless asked, so model text cannot inject markup.
-				if renderer.Convert([]byte(text), &html) == nil {
-					entry.HTML = html.String()
-				}
-			}
+			entry.HTML = renderMarkdown(text)
 			entry.Model = string(msg.Model)
 			if finish := msg.FinishPart(); finish != nil && msg.IsFinished() && finish.Time > msg.CreatedAt {
 				entry.Seconds = finish.Time - msg.CreatedAt
@@ -407,6 +400,37 @@ func project(messages []message.Message) []Message {
 		}
 	}
 	return out
+}
+
+// rendered keeps replies already turned into HTML: the page asks for the
+// whole conversation on every streamed update, and only the live reply
+// changes between asks.
+var rendered = struct {
+	sync.Mutex
+	html map[string]string
+}{html: map[string]string{}}
+
+var markdown = goldmark.New()
+
+func renderMarkdown(text string) string {
+	if text == "" {
+		return ""
+	}
+	rendered.Lock()
+	defer rendered.Unlock()
+	if html, ok := rendered.html[text]; ok {
+		return html
+	}
+	var html bytes.Buffer
+	// Goldmark leaves raw HTML out unless asked, so model text cannot inject markup.
+	if markdown.Convert([]byte(text), &html) != nil {
+		return ""
+	}
+	if len(rendered.html) >= 512 { // shortcut: drops everything when full; a long-lived app rarely shows 512 replies
+		clear(rendered.html)
+	}
+	rendered.html[text] = html.String()
+	return html.String()
 }
 
 // target is a call's main argument: a file name, a command, a pattern.
@@ -582,34 +606,6 @@ func relative(path string) string {
 		return rel
 	}
 	return path
-}
-
-func homeRelative(path string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home+string(os.PathSeparator)) {
-		return "~" + strings.TrimPrefix(path, home)
-	}
-	return path
-}
-
-// gitBranch reads .git/HEAD, following a worktree's gitdir file.
-func gitBranch(dir string) string {
-	git := filepath.Join(dir, ".git")
-	if raw, err := os.ReadFile(git); err == nil {
-		target, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir: ")
-		if !ok {
-			return ""
-		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(dir, target)
-		}
-		git = target
-	}
-	head, err := os.ReadFile(filepath.Join(git, "HEAD"))
-	if err != nil {
-		return ""
-	}
-	branch, _ := strings.CutPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
-	return branch
 }
 
 // number is a conversation's place, oldest first, among the workspace's

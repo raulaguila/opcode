@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
@@ -228,7 +229,7 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		if err == nil {
 			var path string
 			if path, err = transcript.Save(cfg.Data.Directory, cfg.WorkingDir, s, messages, tools.RedactCredentials); err == nil {
-				m.info = textFor("Conversa exportada: ", "Conversation exported: ") + homeRelative(path)
+				m.info = textFor("Conversa exportada: ", "Conversation exported: ") + fileutil.HomeRelative(path)
 			}
 		}
 		if err != nil {

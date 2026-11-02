@@ -59,9 +59,14 @@ type Model struct {
 	laterQuestion string          // a question put away to answer later (Esc)
 	recent        []string        // palette commands used last, this run
 
-	replies      map[string]renderedReply // replies already rendered, by message
+	blocks       map[string]renderedBlock // messages already drawn, by ID
 	live         styles.MarkdownCache     // the streaming reply's settled blocks
 	ticking      bool                     // a clock tick is scheduled
+	content      string                   // the transcript last painted
+	rows         []string                 // its rows, painted to the width
+	activity     string                   // what the run is doing, for the footer
+	behind       string                   // the screen under the open panel
+	dimmed       string                   // and the same, receded
 	painted      map[string]string        // transcript rows padded to the width, by row
 	paintedWidth int
 
@@ -421,7 +426,16 @@ func (m *Model) refresh() {
 	}
 	// Every row is painted to the edge so no terminal background shows
 	// through; rows painted last time are reused.
-	rows := strings.Split(m.renderTranscript(m.width), "\n")
+	m.activity = m.doing() // read by every frame's footer; messages change only here
+	content := m.renderTranscript(m.width)
+	if content == m.content && m.transcript.Width() == m.width {
+		if m.follow {
+			m.transcript.GotoBottom()
+		}
+		return // nothing new to paint: typing and resizing the composer stay cheap
+	}
+	m.content = content
+	rows := strings.Split(content, "\n")
 	painted := make(map[string]string, len(rows))
 	for i, row := range rows {
 		line, ok := m.painted[row]
@@ -435,6 +449,7 @@ func (m *Model) refresh() {
 	} else {
 		m.painted, m.paintedWidth = nil, m.width
 	}
+	m.rows = rows
 	m.transcript.SetContent(strings.Join(rows, "\n"))
 	if m.follow {
 		m.transcript.GotoBottom()

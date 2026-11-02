@@ -5,16 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/color"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/message"
@@ -31,18 +30,18 @@ const (
 func (m *Model) View() tea.View {
 	body := ""
 	if m.width > 0 && m.height > 0 {
-		parts := []string{m.header(), m.transcript.View()}
+		var below []string
 		if work := m.workView(); work != "" {
-			parts = append(parts, work)
+			below = append(below, work)
 		}
 		if composer := m.composerView(); composer != "" {
 			if len(m.mention) > 0 {
-				parts = append(parts, m.mentionView())
+				below = append(below, m.mentionView())
 			}
-			parts = append(parts, composer)
+			below = append(below, composer)
 		}
-		parts = append(parts, m.footer())
-		body = lipgloss.NewStyle().Background(P.Ground).Width(m.width).Height(m.height).MaxHeight(m.height).Render(strings.Join(parts, "\n"))
+		below = append(below, m.footer())
+		body = m.screen(m.header(), m.transcriptRows(), below)
 		body = m.overlay(body)
 	}
 	view := tea.NewView(styles.TerminalOutput(body))
@@ -50,6 +49,40 @@ func (m *Model) View() tea.View {
 	view.MouseMode = tea.MouseModeCellMotion
 	view.ReportFocus = true
 	return view
+}
+
+// transcriptRows cuts the visible rows out of the painted transcript; the
+// viewport keeps only the scroll position, since restyling every visible
+// row each frame was most of the cost of drawing the screen.
+func (m *Model) transcriptRows() []string {
+	from := min(max(0, m.transcript.YOffset()), len(m.rows))
+	return m.rows[from:min(len(m.rows), from+m.transcript.Height())]
+}
+
+// screen stacks the header, the transcript's visible rows (already painted
+// to the width) and the parts below into exactly the window's rows; a short
+// row of the other parts is filled with the ground.
+func (m *Model) screen(header string, transcript, below []string) string {
+	blank := Line("", m.width, P.Ground)
+	fit := func(rows []string) []string {
+		for i, row := range rows {
+			if ansi.StringWidth(row) != m.width {
+				rows[i] = Line(row, m.width, P.Ground)
+			}
+		}
+		return rows
+	}
+	rows := fit(strings.Split(header, "\n"))
+	rows = append(rows, transcript...)
+	for range m.transcript.Height() - len(transcript) {
+		rows = append(rows, blank)
+	}
+	rows = append(rows, fit(strings.Split(strings.Join(below, "\n"), "\n"))...)
+	rows = rows[:min(len(rows), m.height)]
+	for len(rows) < m.height {
+		rows = append(rows, blank)
+	}
+	return strings.Join(rows, "\n")
 }
 
 func modeLabel(mode string) string {
@@ -68,8 +101,8 @@ func (m *Model) header() string {
 	muted := on(P.Ground, P.Muted)
 	left := on(P.Ground, P.Strong).Bold(true).Render(" opcode")
 	if config.Get() != nil {
-		left += muted.Render(" · " + homeRelative(config.WorkingDirectory()))
-		if branch := gitBranch(config.WorkingDirectory()); branch != "" {
+		left += muted.Render(" · " + fileutil.HomeRelative(config.WorkingDirectory()))
+		if branch := fileutil.GitBranch(config.WorkingDirectory()); branch != "" {
 			left += muted.Render(" · ") + on(P.Ground, P.Success).Render(branch)
 		}
 	}
@@ -108,9 +141,9 @@ func (m *Model) renderTranscript(width int) string {
 			latest[turn] = msg.ID
 		}
 	}
-	// Replies render once; only the one still streaming renders again.
-	fresh := map[string]renderedReply{}
-	defer func() { m.replies = fresh }()
+	// Messages render once; only the reply still streaming renders again.
+	fresh := map[string]renderedBlock{}
+	defer func() { m.blocks = fresh }()
 	turn = 0
 	var blocks []string
 	var steps []message.ToolCall
@@ -134,20 +167,35 @@ func (m *Model) renderTranscript(width int) string {
 		if msg.Role == message.User {
 			turn++
 			flush()
-			blocks = append(blocks, barred(text, "┃", P.User, P.Strong, inner, indent))
+			blocks = append(blocks, m.cached(msg.ID, text, inner, fresh, func() string {
+				return barred(text, "┃", P.User, P.Strong, inner, indent)
+			}))
 			continue
 		}
 		if text != "" && latest[turn] == msg.ID {
 			flush()
-			body := m.markdown(msg, text, inner, fresh)
-			if finish := msg.FinishPart(); finish != nil && msg.IsFinished() {
-				meta := " " + modelName(msg.Model) + " · " + duration(msg.CreatedAt, finish.Time)
-				if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
-					meta += fmt.Sprintf(" · %s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
-				}
-				body += "\n" + on(P.Ground, P.Faint).Render(meta)
+			key := text
+			if msg.IsFinished() {
+				key += "\x00" + string(msg.Model) // the meta line appears when it finishes
 			}
-			blocks = append(blocks, barredRendered(body, "│", P.Ask, indent))
+			blocks = append(blocks, m.cached(msg.ID, key, inner, fresh, func() string {
+				var body string
+				if msg.IsFinished() {
+					body = styles.RenderMarkdownBlocks(text, inner, inner)
+				} else {
+					// Settled paragraphs of the live reply come from its block cache.
+					body = m.live.RenderStreaming(text, inner, inner)
+				}
+				body = strings.TrimSuffix(body, "\n")
+				if finish := msg.FinishPart(); finish != nil && msg.IsFinished() {
+					meta := " " + modelName(msg.Model) + " · " + duration(msg.CreatedAt, finish.Time)
+					if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
+						meta += fmt.Sprintf(" · %s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
+					}
+					body += "\n" + on(P.Ground, P.Faint).Render(meta)
+				}
+				return barredRendered(body, "│", P.Ask, indent)
+			}))
 		}
 		steps = append(steps, msg.ToolCalls()...)
 	}
@@ -164,28 +212,22 @@ func (m *Model) renderTranscript(width int) string {
 	return "\n" + strings.Join(blocks, "\n\n") + "\n"
 }
 
-// renderedReply is a reply's Markdown as drawn at one width.
-type renderedReply struct {
-	text  string
+// renderedBlock is a message as drawn at one width, kept while its key
+// (its text, and for a reply whether it finished) stays the same.
+type renderedBlock struct {
+	key   string
 	width int
-	body  string
+	block string
 }
 
-func (m *Model) markdown(msg message.Message, text string, width int, fresh map[string]renderedReply) string {
-	if cached, ok := m.replies[msg.ID]; ok && cached.text == text && cached.width == width {
-		fresh[msg.ID] = cached
-		return cached.body
+func (m *Model) cached(id, key string, width int, fresh map[string]renderedBlock, draw func() string) string {
+	if cached, ok := m.blocks[id]; ok && cached.key == key && cached.width == width {
+		fresh[id] = cached
+		return cached.block
 	}
-	var body string
-	if msg.IsFinished() {
-		body = styles.RenderMarkdownBlocks(text, width, width)
-	} else {
-		// Settled paragraphs of the live reply come from its block cache.
-		body = m.live.RenderStreaming(text, width, width)
-	}
-	body = strings.TrimSuffix(body, "\n")
-	fresh[msg.ID] = renderedReply{text, width, body}
-	return body
+	block := draw()
+	fresh[id] = renderedBlock{key, width, block}
+	return block
 }
 
 func (m *Model) emptyState(inner int, indent string) string {
@@ -412,7 +454,7 @@ func (m *Model) footer() string {
 	case m.approval != nil:
 		activity = on(P.Ground, P.Plan).Render("  " + config.Text("Aguardando sua aprovação", "Waiting for your approval"))
 	case m.busy:
-		now := m.doing()
+		now := m.activity
 		if now == config.Text("Trabalhando", "Working") {
 			switch _, live, waiting := m.rate(); {
 			case waiting:
@@ -462,37 +504,6 @@ func (m *Model) footer() string {
 	}
 	right += on(P.Ground, P.Text).Render(name+" ▾") + " "
 	return Spread(approval+activity, right, m.width, P.Ground)
-}
-
-func homeRelative(path string) string {
-	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home+string(os.PathSeparator)) {
-		return "~" + strings.TrimPrefix(path, home)
-	}
-	return path
-}
-
-// gitBranch reads .git/HEAD (following a worktree's gitdir file).
-func gitBranch(dir string) string {
-	git := filepath.Join(dir, ".git")
-	if raw, err := os.ReadFile(git); err == nil {
-		target, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir: ")
-		if !ok {
-			return ""
-		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(dir, target)
-		}
-		git = target
-	}
-	raw, err := os.ReadFile(filepath.Join(git, "HEAD"))
-	if err != nil {
-		return ""
-	}
-	head := strings.TrimSpace(string(raw))
-	if ref, ok := strings.CutPrefix(head, "ref: refs/heads/"); ok {
-		return ref
-	}
-	return ansi.Truncate(head, 7, "")
 }
 
 // doing names the step in progress, as the proposal's footer does:

@@ -3,9 +3,11 @@ package ui
 import (
 	"context"
 	"fmt"
+	"slices"
+
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/transcript"
-	"slices"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/config"
@@ -169,7 +171,7 @@ func (m *Model) exportCurrent() tea.Cmd {
 		cfg := config.Get()
 		var path string
 		if path, err = transcript.Save(cfg.Data.Directory, cfg.WorkingDir, m.session, messages, tools.RedactCredentials); err == nil {
-			m.info = textFor("Conversa exportada: ", "Conversation exported: ") + homeRelative(path)
+			m.info = textFor("Conversa exportada: ", "Conversation exported: ") + fileutil.HomeRelative(path)
 		}
 	}
 	if err != nil {

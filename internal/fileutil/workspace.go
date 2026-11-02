@@ -2,9 +2,12 @@ package fileutil
 
 import (
 	"io/fs"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+	"time"
 )
 
 // WorkspaceFiles lists the files under root by name, through ripgrep when it
@@ -68,4 +71,54 @@ func MatchFiles(all []string, query string, limit int) []string {
 		out = append(out, hit.path)
 	}
 	return out
+}
+
+// HomeRelative writes a path under the home directory as ~/….
+func HomeRelative(path string) string {
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home+string(filepath.Separator)) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
+}
+
+var branches struct {
+	sync.Mutex
+	dir, name string
+	at        time.Time
+}
+
+// GitBranch is the branch checked out in dir (a short commit when detached),
+// read from .git/HEAD and following a worktree's gitdir file. Screens ask on
+// every frame, so the answer is kept for two seconds.
+func GitBranch(dir string) string {
+	branches.Lock()
+	defer branches.Unlock()
+	if branches.dir == dir && time.Since(branches.at) < 2*time.Second {
+		return branches.name
+	}
+	branches.dir, branches.name, branches.at = dir, readBranch(dir), time.Now()
+	return branches.name
+}
+
+func readBranch(dir string) string {
+	git := filepath.Join(dir, ".git")
+	if raw, err := os.ReadFile(git); err == nil {
+		target, ok := strings.CutPrefix(strings.TrimSpace(string(raw)), "gitdir: ")
+		if !ok {
+			return ""
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(dir, target)
+		}
+		git = target
+	}
+	raw, err := os.ReadFile(filepath.Join(git, "HEAD"))
+	if err != nil {
+		return ""
+	}
+	head := strings.TrimSpace(string(raw))
+	if ref, ok := strings.CutPrefix(head, "ref: refs/heads/"); ok {
+		return ref
+	}
+	return head[:min(len(head), 7)]
 }

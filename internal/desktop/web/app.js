@@ -110,54 +110,68 @@ function failureCard(reason) {
     ));
 }
 
+// The transcript is a list of blocks, each with a key that says what it
+// shows. A redraw keeps the blocks that did not change and rebuilds from the
+// first that did, so a streaming reply leaves the rest of the page (and any
+// text selected in it) alone.
 function renderTranscript() {
   const box = $("transcript");
   const follow = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
-  box.replaceChildren();
+  const blocks = [];
   const conversation = view.conversation;
   if (!conversation || conversation.messages.length === 0) {
-    box.append(el("div", { class: "empty" },
-      el("b", {}, view.state && !view.state.model ? t("Configure uma conexão para começar", "Set up a connection to begin") : t("O que vamos fazer neste projeto?", "What shall we do in this project?")),
-      el("span", {}, view.state && !view.state.model ? t("Ctrl+K › Configurações › Conexões · depois escolha o modelo com Ctrl+O", "Ctrl+K › Settings › Connections · then pick the model with Ctrl+O") : t("Shift+Tab alterna Perguntar, Planejar e Executar", "Shift+Tab cycles Ask, Plan and Execute"))));
-    return;
-  }
-  let steps = [];
-  let lastSteps = null;
-  const flush = () => {
-    if (steps.length) {
-      lastSteps = el("div", { class: "steps" }, stepRows(steps));
-      box.append(lastSteps);
-      steps = [];
+    const bare = view.state && !view.state.model;
+    blocks.push({ key: `empty:${bare}:${view.lang}`, make: () => el("div", { class: "empty" },
+      el("b", {}, bare ? t("Configure uma conexão para começar", "Set up a connection to begin") : t("O que vamos fazer neste projeto?", "What shall we do in this project?")),
+      el("span", {}, bare ? t("Ctrl+K › Configurações › Conexões · depois escolha o modelo com Ctrl+O", "Ctrl+K › Settings › Connections · then pick the model with Ctrl+O") : t("Shift+Tab alterna Perguntar, Planejar e Executar", "Shift+Tab cycles Ask, Plan and Execute"))) });
+  } else {
+    let steps = [];
+    let afterSteps = -1;
+    const flush = () => {
+      if (steps.length) {
+        const run = steps;
+        blocks.push({ key: `steps:${view.lang}:${JSON.stringify(run)}`, make: () => el("div", { class: "steps" }, stepRows(run)) });
+        afterSteps = blocks.length;
+        steps = [];
+      }
+    };
+    // One reply per turn: a revised answer replaces the draft before it.
+    const latest = new Map();
+    let turn = 0;
+    for (const m of conversation.messages) {
+      if (m.role === "user") turn++;
+      if (m.role === "assistant" && m.html) latest.set(turn, m.id);
     }
-  };
-  // One reply per turn: a revised answer replaces the draft before it.
-  const latest = new Map();
-  let turn = 0;
-  for (const m of conversation.messages) {
-    if (m.role === "user") turn++;
-    if (m.role === "assistant" && m.html) latest.set(turn, m.id);
-  }
-  turn = 0;
-  for (const m of conversation.messages) {
-    if (m.role === "user") {
-      turn++;
-      flush();
-      box.append(el("div", { class: "you" }, m.text));
-      continue;
+    turn = 0;
+    for (const m of conversation.messages) {
+      if (m.role === "user") {
+        turn++;
+        flush();
+        blocks.push({ key: `you:${m.id}:${m.text}`, make: () => el("div", { class: "you" }, m.text) });
+        continue;
+      }
+      if (m.html && latest.get(turn) === m.id) {
+        flush();
+        const meta = m.finished && m.model ? [m.model.replace(/^[^.]*\./, ""), `${m.seconds || "<1"}s`, m.cites].filter(Boolean).join(" · ") : "";
+        blocks.push({ key: `reply:${m.id}:${meta}:${m.html}`, make: () => {
+          const reply = el("div", { class: "reply" }, el("div", { html: m.html }));
+          if (meta) reply.append(el("div", { class: "meta" }, meta));
+          return reply;
+        } });
+      }
+      steps.push(...(m.steps || []));
     }
-    if (m.html && latest.get(turn) === m.id) {
-      flush();
-      const reply = el("div", { class: "reply" }, el("div", { html: m.html }));
-      if (m.finished && m.model) reply.append(el("div", { class: "meta" }, [m.model.replace(/^[^.]*\./, ""), `${m.seconds || "<1"}s`, m.cites].filter(Boolean).join(" · ")));
-      box.append(reply);
+    flush();
+    if (conversation.failure) {
+      blocks.splice(afterSteps >= 0 ? afterSteps : blocks.length, 0, { key: `failure:${view.lang}:${conversation.failure}`, make: () => failureCard(conversation.failure) });
     }
-    steps.push(...(m.steps || []));
   }
-  flush();
-  if (conversation.failure) {
-    const card = failureCard(conversation.failure);
-    if (lastSteps) lastSteps.after(card); else box.append(card);
-  }
+  const kept = box.keys || [];
+  let same = 0;
+  while (same < blocks.length && same < kept.length && same < box.children.length && kept[same] === blocks[same].key) same++;
+  while (box.children.length > same) box.lastChild.remove();
+  for (const block of blocks.slice(same)) box.append(block.make());
+  box.keys = blocks.map((block) => block.key);
   if (follow) box.scrollTop = box.scrollHeight;
 }
 

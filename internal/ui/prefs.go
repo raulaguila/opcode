@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/permission"
 )
@@ -260,7 +261,7 @@ func settingHelp(s config.Setting) string {
 func (p *settingsPanel) view(m *Model) string {
 	width := min(112, m.width-4)
 	global, _ := config.Paths(config.WorkingDirectory())
-	box := Box{Title: textFor("Configurações", "Settings"), Meta: homeRelative(global), Width: width, PadX: 0, PadY: 1}
+	box := Box{Title: textFor("Configurações", "Settings"), Meta: fileutil.HomeRelative(global), Width: width, PadX: 0, PadY: 1}
 	inner := box.Inner()
 	navWidth := 22
 	content := inner - navWidth - 5 // two columns of air before the frame

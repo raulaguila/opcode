@@ -414,7 +414,7 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	reply(w, http.StatusOK, map[string]string{"path": homeRelative(path)})
+	reply(w, http.StatusOK, map[string]string{"path": fileutil.HomeRelative(path)})
 }
 
 // answer replies to the agent's pending question: one text, or one item
@@ -469,7 +469,7 @@ func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
 		out = append(out, Setting{item.Path, label, item.Category, item.Advanced, item.Help, values[item.Path], origins[item.Path]})
 	}
 	global, _ := config.Paths(config.WorkingDirectory())
-	reply(w, http.StatusOK, map[string]any{"path": homeRelative(global), "settings": out})
+	reply(w, http.StatusOK, map[string]any{"path": fileutil.HomeRelative(global), "settings": out})
 }
 
 func (s *Server) saveSetting(w http.ResponseWriter, r *http.Request) {

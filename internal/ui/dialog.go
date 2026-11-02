@@ -134,12 +134,16 @@ func (m *Model) overlay(base string) string {
 	if m.dialog == nil {
 		return base
 	}
-	// The screen behind recedes, as in the proposal: plain text in a faint tone.
-	var dimmed []string
-	for _, line := range strings.Split(ansi.Strip(base), "\n") {
-		dimmed = append(dimmed, on(P.Ground, P.Dim).Render(line))
+	// The screen behind recedes, as in the proposal: plain text in a faint
+	// tone. It changes rarely while a panel is open, so it is kept.
+	if base != m.behind {
+		var dimmed []string
+		for _, line := range strings.Split(ansi.Strip(base), "\n") {
+			dimmed = append(dimmed, on(P.Ground, P.Dim).Render(line))
+		}
+		m.behind, m.dimmed = base, strings.Join(dimmed, "\n")
 	}
-	base = strings.Join(dimmed, "\n")
+	base = m.dimmed
 	panel := m.dialog.view(m)
 	x := max(0, (m.width-ansi.StringWidth(strings.SplitN(panel, "\n", 2)[0]))/2)
 	y := max(1, (m.height-strings.Count(panel, "\n")-1)/3)

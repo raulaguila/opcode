@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 )
 
@@ -61,7 +62,7 @@ func (m *Model) approvalView() string {
 	}
 	lines := []string{head}
 	if diff == "" && request.Path != "" {
-		lines = append(lines, on(bg, P.Muted).Render(config.Text("Escopo: ", "Scope: ")+homeRelative(request.Path)))
+		lines = append(lines, on(bg, P.Muted).Render(config.Text("Escopo: ", "Scope: ")+fileutil.HomeRelative(request.Path)))
 	}
 	if command != "" {
 		lines = append(lines, "", Line(on(P.Field, P.Faint).Render(" $ ")+on(P.Field, P.Strong).Render(strings.Join(strings.Fields(command), " ")), inner, P.Field))

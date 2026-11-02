@@ -239,9 +239,11 @@ func (s *Server) configure(ctx context.Context, id, mode, policy string) error {
 
 // Step is one tool call as the transcript shows it.
 type Step struct {
-	Name   string `json:"name"`
-	Target string `json:"target"`
-	State  string `json:"state"` // ok, failed, running
+	Name    string `json:"name"`
+	Target  string `json:"target"`
+	State   string `json:"state"`             // ok, failed, running
+	Added   int    `json:"added,omitempty"`   // lines an edit added
+	Removed int    `json:"removed,omitempty"` // and removed
 }
 
 // Message is one transcript entry; assistant text arrives as rendered HTML.
@@ -253,6 +255,7 @@ type Message struct {
 	Steps    []Step `json:"steps,omitempty"`
 	Model    string `json:"model,omitempty"`
 	Seconds  int64  `json:"seconds,omitempty"`
+	Cites    string `json:"cites,omitempty"` // the first source the reply cites, "store.go:45"
 	Finished bool   `json:"finished"`
 }
 
@@ -265,6 +268,8 @@ type Conversation struct {
 	Task        workflow.Task `json:"task"`
 	Failure     string        `json:"failure,omitempty"`
 	Question    any           `json:"question,omitempty"`
+	Number      int           `json:"number"`          // the session's place among this workspace's conversations
+	Speed       float64       `json:"speed,omitempty"` // tokens per second of the last reply
 }
 
 // Approval is a pending permission with its diff or command, if any.
@@ -299,6 +304,14 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	for _, request := range s.pending(id) {
 		view.Permissions = append(view.Permissions, approval(request))
+	}
+	view.Number = s.number(r.Context(), current)
+	if usage, ok := s.app.CoderAgent.(interface {
+		Usage(context.Context, string) (agent.UsageMetrics, error)
+	}); ok {
+		if metrics, err := usage.Usage(r.Context(), id); err == nil && metrics.LastOutputTokens > 0 && metrics.LastOutputDurationNS > 0 {
+			view.Speed = float64(metrics.LastOutputTokens) / (float64(metrics.LastOutputDurationNS) / float64(time.Second))
+		}
 	}
 	reply(w, http.StatusOK, view)
 }
@@ -360,14 +373,26 @@ func project(messages []message.Message) []Message {
 			if finish := msg.FinishPart(); finish != nil && msg.IsFinished() && finish.Time > msg.CreatedAt {
 				entry.Seconds = finish.Time - msg.CreatedAt
 			}
+			if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
+				entry.Cites = fmt.Sprintf("%s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
+			}
 			for _, call := range msg.ToolCalls() {
-				state := "ok"
+				step := Step{Name: call.Name, Target: target(call.Input), State: "ok"}
 				if result, done := results[call.ID]; !done {
-					state = "running"
+					step.State = "running"
 				} else if result.IsError {
-					state = "failed"
+					step.State = "failed"
+				} else {
+					// Edits report their line counts in the result's metadata.
+					var lines struct {
+						Additions int `json:"additions"`
+						Removals  int `json:"removals"`
+					}
+					if json.Unmarshal([]byte(result.Metadata), &lines) == nil {
+						step.Added, step.Removed = lines.Additions, lines.Removals
+					}
 				}
-				entry.Steps = append(entry.Steps, Step{Name: call.Name, Target: target(call.Input), State: state})
+				entry.Steps = append(entry.Steps, step)
 			}
 		}
 		if entry.Text != "" || entry.HTML != "" || len(entry.Steps) > 0 {
@@ -578,4 +603,20 @@ func gitBranch(dir string) string {
 	}
 	branch, _ := strings.CutPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
 	return branch
+}
+
+// number is a conversation's place, oldest first, among the workspace's
+// conversations: "sessão 3".
+func (s *Server) number(ctx context.Context, current session.Session) int {
+	list, err := s.app.Sessions.List(ctx)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, item := range list {
+		if item.ParentSessionID == "" && (item.CreatedAt < current.CreatedAt || item.ID == current.ID) {
+			n++
+		}
+	}
+	return n
 }

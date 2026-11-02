@@ -120,12 +120,47 @@ function commands() {
     { title: t("Planejar", "Plan"), desc: t("prepara um plano, sem editar", "prepares a plan, no edits"), right: "/plan", group: work, run: () => setMode("plan") },
     { title: t("Executar", "Execute"), desc: t("altera arquivos com aprovação", "changes files with approval"), right: "/execute", group: work, run: () => setMode("execute") },
     { title: t("Tarefa", "Task"), desc: t("mostrar ou recolher o plano", "show or fold the plan"), right: "/task", group: work, run: togglePlan },
+    { title: t("Retomar tarefa", "Resume task"), desc: t("abre a última conversa e o plano salvo", "opens the last conversation and its saved plan"), right: "/resume", group: work, run: resumeLast },
+    { title: t("Cancelar execução", "Cancel run"), desc: t("para a tarefa em andamento", "stops the running task"), right: "Esc", group: work, run: () => view.session && api(`/api/sessions/${view.session}/cancel`, {}).catch(() => {}) },
+    { title: t("Exportar conversa", "Export conversation"), desc: t("salva em Markdown", "saves as Markdown"), right: "/export", group: t("Conversa", "Conversation"), run: exportCurrent },
+    { title: t("Conexões", "Connections"), desc: t("provedores e chaves", "providers and keys"), right: "/connections", group: settings, run: () => openSettings(0) },
+    { title: t("Preferências", "Preferences"), desc: t("idioma, notificações, modo inicial", "language, notifications, initial mode"), right: "/preferences", group: settings, run: () => openSettings(1) },
     { title: t("Aprovação", "Approval"), desc: t("pedir · editar no projeto", "ask · project edits"), right: "/approval", group: settings, run: () => openSettings(3) },
+    { title: t("Atalhos", "Shortcuts"), desc: t("teclas dos comandos", "command keys"), right: "/keys", group: settings, run: () => openSettings(4) },
   ];
 }
 
+// Recent commands lead the palette; the list lives only in this window's browser.
+function recent() {
+  try { return JSON.parse(localStorage.getItem("opcode-recent") || "[]"); } catch { return []; }
+}
+function remember(title) {
+  try { localStorage.setItem("opcode-recent", JSON.stringify([title, ...recent().filter((r) => r !== title)].slice(0, 3))); } catch {}
+}
+async function resumeLast() {
+  const list = await api("/api/conversations").catch(() => []);
+  const last = list.find((s) => !s.archived && s.id !== view.session) || list[0];
+  if (!last) return;
+  view.session = last.id; view.raw = ""; view.showPlan = (await api(`/api/sessions/${last.id}`)).task?.steps?.length > 0;
+  await loadConversation();
+}
+async function exportCurrent() {
+  if (!view.session) { view.error = t("Nada para exportar ainda", "Nothing to export yet"); renderFrame(); return; }
+  try { const r = await api(`/api/sessions/${view.session}/export`, {}); view.error = ""; view.info = r.path; flash(`${t("Exportada", "Exported")}: ${r.path}`); }
+  catch (error) { view.error = error.message; renderFrame(); }
+}
+function flash(text) {
+  const a = $("activity");
+  a.textContent = text; a.className = ""; a.style.color = "var(--ok)";
+  setTimeout(() => renderFrame(), 4000);
+}
+
 function openPalette(query = "") {
-  const list = makeList({ items: commands(), cursor: "◆", chips: true, onPick: (item) => { closeDialog(); item.run(); } });
+  const all = commands();
+  const recents = recent().map((title) => all.find((c) => c.title === title)).filter(Boolean);
+  const items = [...recents.map((c) => ({ ...c, group: t("Recentes", "Recent") })), ...all.filter((c) => !recents.includes(c))];
+  const run = (item) => { closeDialog(); remember(item.title); item.run(); };
+  const list = makeList({ items, cursor: "◆", chips: true, onPick: run });
   const search = searchField(t("Buscar comando", "Search commands"), list, "/");
   search.input.value = query;
   list.setQuery(query);
@@ -134,7 +169,7 @@ function openPalette(query = "") {
     body: el("div", {}, search.node, list.node),
     keys: [["↑↓", t("escolher", "choose")], ["Enter", t("abrir", "open")], ["Esc", t("fechar", "close"), true]],
     onKey: (event) => {
-      if (event.key === "Enter") { const item = list.current(); if (item) { closeDialog(); item.run(); } return true; }
+      if (event.key === "Enter") { const item = list.current(); if (item) run(item); return true; }
       return false;
     },
   });
@@ -211,9 +246,17 @@ async function openModels(provider = "") {
     tags.push(m.images ? el("span", { class: "tag", style: "color:var(--user)" }, t("imagens", "images")) : el("span", { class: "tag", style: "color:var(--faint)" }, t("sem imagens", "no images")));
     const kv = el("dl", { class: "kv" });
     const pair = (k, v) => kv.append(el("dt", {}, k), el("dd", {}, v));
-    pair(t("Contexto", "Context"), m.context ? `${m.estimated ? "~" : ""}${compact(m.context)}${m.id === data.active ? t(" · em uso", " · in use") : ""}` : t("não informado", "not reported"));
+    const inUse = data.loaded?.[m.label]?.context;
+    pair(t("Contexto", "Context"), inUse && m.context && inUse !== m.context
+      ? `${compact(inUse)} ${t("em uso", "in use")} · ${compact(m.context)} ${t("suportado", "supported")}`
+      : m.context ? `${m.estimated ? "~" : ""}${compact(m.context)}${m.id === data.active ? t(" · em uso", " · in use") : ""}` : t("não informado", "not reported"));
     if (m.output) pair(t("Saída", "Output"), `${m.output} ${t("tokens por resposta", "tokens per reply")}`);
+    const held = data.loaded?.[m.label];
+    if (data.loaded && !m.cloud) {
+      pair(t("Carregado", "Loaded"), held ? `● ${t("sim", "yes")} · ${held.placement} · ${(held.bytes / 1e9).toFixed(1)} GB` : t("não", "no"));
+    }
     pair(t("Execução", "Runs"), m.cloud ? t("nuvem", "cloud") : t("local", "local"));
+    if (m.id === data.active && view.conversation?.speed) pair(t("Velocidade", "Speed"), `≈ ${Math.round(view.conversation.speed)} t/s ${t("na última resposta", "on the last reply")}`);
     if (m.api) pair("API", m.api);
     pane.append(el("div", {}, el("h3", {}, m.label), el("div", { style: "margin-top:6px" }, tags)), kv);
     if (m.embedding) pane.append(el("div", { class: "tip" }, t("Gera embeddings; não serve para conversar.", "Makes embeddings; not for chat.")));
@@ -317,7 +360,8 @@ async function openSessions() {
   const fill = () => {
     const shown = all.filter((s) => s.archived === archived);
     list.items = shown.map((s) => ({ id: s.id, title: s.title, right: ago(s.updated_at), group: day(s.updated_at), session: s,
-      mark: s.archived ? "○" : s.busy ? "●" : "✓", markColor: s.archived ? "var(--faint)" : s.busy ? "var(--execute)" : "var(--ok)" }));
+      mark: s.archived ? "○" : s.busy ? "●" : s.failed ? "■" : s.planning ? "◐" : "✓",
+      markColor: s.archived ? "var(--faint)" : s.busy ? "var(--execute)" : s.failed ? "var(--danger)" : s.planning ? "var(--plan)" : "var(--ok)" }));
     list.select((item) => item.id === view.session);
     const hidden = all.filter((s) => s.archived).length;
     d.meta(archived ? `${shown.length} ${t("arquivadas", "archived")}` : hidden ? `${shown.length} · ${hidden} ${t("arquivadas", "archived")}` : String(shown.length));
@@ -336,14 +380,20 @@ async function openSessions() {
       });
       requestAnimationFrame(() => { title.focus(); title.select(); });
     }
-    const facts = [`${s.message_count} ${t("mensagens", "messages")}`];
-    if (s.cost > 0) facts.push(`$${s.cost.toFixed(2)}`);
-    if (s.archived) facts.push(t("arquivada", "archived"));
-    pane.append(el("div", {}, title, el("div", { class: "desc" }, facts.join(" · "))));
     if (!previews.has(s.id)) previews.set(s.id, api(`/api/sessions/${s.id}/preview`).catch(() => ({})));
     const preview = await previews.get(s.id);
     if (list.current()?.id !== s.id) return;
+    // "Executar · nemotron · 14 mensagens · plano 2/5"
+    const facts = [];
+    if (preview.mode) facts.push(modeLabel(preview.mode));
+    if (preview.model) facts.push(preview.model);
+    facts.push(`${s.message_count} ${t("mensagens", "messages")}`);
+    if (preview.plan_total) facts.push(`${t("plano", "plan")} ${preview.plan_done}/${preview.plan_total}`);
+    if (s.cost > 0) facts.push(`$${s.cost.toFixed(2)}`);
+    if (s.archived) facts.push(t("arquivada", "archived"));
+    pane.append(el("div", {}, title, el("div", { class: "desc" }, facts.join(" · "))));
     if (preview.prompt) pane.append(el("div", { class: "quote" }, preview.prompt.slice(0, 400)));
+    if (preview.steps?.length) pane.append(el("div", { class: "steps" }, stepRows(preview.steps).slice(-4)));
     if (preview.reply) pane.append(el("div", { class: "quote reply-q" }, preview.reply.replace(/[*#`]/g, "").slice(0, 500)));
     if (info) pane.append(el("div", { class: "desc ok-t" }, info));
     const buttons = renaming
@@ -505,7 +555,7 @@ function planCard(task) {
     }),
     el("div", { class: "inkeys", style: "margin:10px 14px 0" },
       task.objective ? el("span", {}, `${t("Resultado esperado", "Expected result")}: ${task.objective}`) : null,
-      el("span", { class: "end" }, el("b", {}, "/task"), " " + t("recolher", "fold")))));
+      el("span", { class: "end" }, el("b", {}, "Alt+↑↓"), " " + t("rolar", "scroll") + "  ", el("b", {}, "/task"), " " + t("recolher", "fold")))));
 }
 
 // ---- settings ---------------------------------------------------------------
@@ -733,7 +783,8 @@ async function openSettings(section = 0) {
 async function editConnection(existing) {
   const conns = await api("/api/connections");
   if (!existing) {
-    const list = makeList({ items: conns.presets.map((p) => ({ id: p.id, title: p.name, preset: p })), grouped: false, onPick: (item) => form(fromPreset(item.preset, conns)) });
+    const presetName = (name) => name === "OpenAI compatible" ? t("Compatível com OpenAI", "OpenAI compatible") : name;
+    const list = makeList({ items: conns.presets.map((p) => ({ id: p.id, title: presetName(p.name), preset: p })), grouped: false, onPick: (item) => form(fromPreset(item.preset, conns)) });
     openDialog({
       title: t("Nova conexão", "New connection"),
       body: el("div", {}, el("div", { class: "nothing", style: "padding-bottom:10px" }, t("Escolha um ponto de partida; revise antes de salvar.", "Choose a starting point; review before saving.")), list.node),

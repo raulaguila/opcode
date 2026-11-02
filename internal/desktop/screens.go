@@ -134,13 +134,56 @@ func info(m models.Model) ModelInfo {
 }
 
 func catalog(ctx context.Context, p models.ModelProvider) ([]models.Model, error) {
+	return fetchCatalog(ctx, p, false)
+}
+
+// fetchCatalog lists a connection's models; with metadata, each local model
+// also reports its tools, images and context.
+func fetchCatalog(ctx context.Context, p models.ModelProvider, metadata bool) ([]models.Model, error) {
 	fetch := config.ModelCatalog(p)
 	if id, ok := strings.CutPrefix(string(p), "profile:"); ok {
 		fetch = config.ProfileModelCatalog(id)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	return fetch(models.WithoutCatalogMetadata(ctx))
+	if !metadata {
+		ctx = models.WithoutCatalogMetadata(ctx)
+	}
+	return fetch(ctx)
+}
+
+// Loaded is where a local Ollama holds a model now.
+type Loaded struct {
+	Placement string `json:"placement"` // GPU, CPU, CPU/GPU
+	Bytes     int64  `json:"bytes"`
+	Context   int64  `json:"context"`
+}
+
+// loaded asks a local Ollama connection which models it holds in memory.
+func loaded(ctx context.Context, p models.ModelProvider) map[string]Loaded {
+	cfg := config.Get()
+	raw := cfg.Providers[p]
+	if id, ok := strings.CutPrefix(string(p), "profile:"); ok {
+		profile := cfg.ProviderProfiles[id]
+		if profile.Backend != models.ProviderLocal {
+			return nil
+		}
+		raw = profile.Provider
+	} else if p != models.ProviderLocal {
+		return nil
+	}
+	if raw.API != "ollama" {
+		return nil
+	}
+	running, err := models.InspectOllama(ctx, raw.BaseURL, raw.APIKey)
+	if err != nil {
+		return nil
+	}
+	out := map[string]Loaded{}
+	for _, m := range running {
+		out[m.Name] = Loaded{m.Placement(), m.Size, m.Context}
+	}
+	return out
 }
 
 func (s *Server) models(w http.ResponseWriter, r *http.Request) {
@@ -158,10 +201,15 @@ func (s *Server) models(w http.ResponseWriter, r *http.Request) {
 		reply(w, http.StatusOK, result)
 		return
 	}
-	found, err := catalog(r.Context(), chosen)
+	found, err := fetchCatalog(r.Context(), chosen, true)
+	if err != nil {
+		// Metadata is a nicety; the plain list is enough to choose.
+		found, err = catalog(r.Context(), chosen)
+	}
 	if err != nil {
 		result["error"] = tools.RedactCredentials(err.Error())
 	}
+	result["loaded"] = loaded(r.Context(), chosen)
 	list := []ModelInfo{}
 	for _, m := range found {
 		list = append(list, info(m))
@@ -203,6 +251,8 @@ type ConversationItem struct {
 	SessionBrief
 	Archived bool    `json:"archived"`
 	Busy     bool    `json:"busy"`
+	Failed   bool    `json:"failed"`   // its last run stopped on an error
+	Planning bool    `json:"planning"` // its plan has steps left
 	Cost     float64 `json:"cost"`
 }
 
@@ -226,9 +276,19 @@ func (s *Server) conversations(w http.ResponseWriter, r *http.Request) {
 	slices.SortFunc(list, func(a, b session.Session) int { return int(b.UpdatedAt - a.UpdatedAt) })
 	out := []ConversationItem{}
 	for _, item := range list {
-		if item.ParentSessionID == "" {
-			out = append(out, ConversationItem{brief(item), archived[item.ID], s.app.CoderAgent.IsSessionBusy(item.ID), item.Cost})
+		if item.ParentSessionID != "" {
+			continue
 		}
+		entry := ConversationItem{SessionBrief: brief(item), Archived: archived[item.ID], Busy: s.app.CoderAgent.IsSessionBusy(item.ID), Cost: item.Cost}
+		s.mu.Lock()
+		entry.Failed = s.failures[item.ID] != ""
+		s.mu.Unlock()
+		if task, err := s.app.Workflows.Get(r.Context(), item.ID); err == nil {
+			for _, step := range task.Steps {
+				entry.Planning = entry.Planning || step.Status != "completed"
+			}
+		}
+		out = append(out, entry)
 	}
 	reply(w, http.StatusOK, out)
 }
@@ -240,17 +300,42 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, err)
 		return
 	}
-	var prompt, answer string
+	var prompt, answer, model string
+	turn := []message.Message{}
 	for i := len(messages) - 1; i >= 0 && prompt == ""; i-- {
 		text := strings.TrimSpace(messages[i].Content().String())
 		switch {
 		case messages[i].Role == message.User && !messages[i].IsApplication():
 			prompt = text
-		case messages[i].Role == message.Assistant && answer == "" && text != "":
-			answer = text
+		case messages[i].Role == message.Assistant:
+			if answer == "" && text != "" {
+				answer = text
+			}
+			if model == "" && messages[i].Model != "" {
+				model = string(messages[i].Model)
+			}
 		}
+		turn = append([]message.Message{messages[i]}, turn...)
 	}
-	reply(w, http.StatusOK, map[string]string{"prompt": prompt, "reply": answer})
+	var steps []Step
+	for _, entry := range project(turn) {
+		steps = append(steps, entry.Steps...)
+	}
+	result := map[string]any{"prompt": prompt, "reply": answer, "steps": steps}
+	if _, label, ok := strings.Cut(model, "."); ok {
+		model = label
+	}
+	result["model"] = model
+	if task, err := s.app.Workflows.Get(r.Context(), r.PathValue("id")); err == nil {
+		done := 0
+		for _, step := range task.Steps {
+			if step.Status == "completed" {
+				done++
+			}
+		}
+		result["mode"], result["plan_done"], result["plan_total"] = task.Mode, done, len(task.Steps)
+	}
+	reply(w, http.StatusOK, result)
 }
 
 // manageable refuses changes to a conversation that is still running.

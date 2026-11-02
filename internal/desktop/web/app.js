@@ -50,8 +50,8 @@ function stepRows(steps) {
   const runs = [];
   for (const step of steps) {
     const last = runs[runs.length - 1];
-    if (last && last.name === step.name && last.state === step.state) last.targets.push(step.target);
-    else runs.push({ name: step.name, state: step.state, targets: [step.target] });
+    if (last && last.name === step.name && last.state === step.state) { last.targets.push(step.target); last.added += step.added || 0; last.removed += step.removed || 0; }
+    else runs.push({ name: step.name, state: step.state, targets: [step.target], added: step.added || 0, removed: step.removed || 0 });
   }
   return runs.map((run) => {
     const names = [...new Set(run.targets.filter(Boolean))];
@@ -59,6 +59,7 @@ function stepRows(steps) {
     if (names.length === 1 && run.targets.length > 1) label += " ×" + run.targets.length;
     const icon = { ok: el("span", { class: "ok" }, "✓"), failed: el("span", { class: "bad" }, "✗"), running: el("span", { class: "run" }, "●") }[run.state];
     const row = el("div", {}, "› ", icon, " " + label);
+    if (run.added || run.removed) row.append(` · ${run.added ? "+" + run.added : ""}${run.added && run.removed ? " " : ""}${run.removed ? "−" + run.removed : ""}`);
     if (run.state === "failed") row.append(el("span", { class: "bad" }, ` · ${run.targets.length} ${run.targets.length === 1 ? t("falha", "failure") : t("falhas", "failures")}`));
     if (run.state === "running" && view.conversation?.permissions?.length) row.append(t(" · aguardando sua aprovação", " · waiting for your approval"));
     return row;
@@ -75,15 +76,23 @@ function failureTitle(reason) {
   return t("a execução parou com um erro", "the run stopped with an error");
 }
 
+// cause is the error's first sentence, short enough for the card.
+function cause(reason) {
+  const first = reason.split(/(?<=[.!?])\s/)[0].replace(/^[a-z ]*error:\s*/i, "");
+  const text = first.length > 140 ? first.slice(0, 139) + "…" : first;
+  return text.endsWith(".") || text.endsWith("…") ? text : text + ".";
+}
+
 function failureCard(reason) {
   const detail = el("p", { class: "detail", hidden: "" }, reason);
   return el("div", { class: "failure" },
     el("b", {}, "■ " + t("Parado: ", "Stopped: ") + failureTitle(reason)),
-    el("p", {}, t("Rascunho e progresso foram preservados.", "Draft and progress were kept.")),
+    el("p", {}, `${cause(reason)} ${t("Rascunho e progresso foram preservados.", "Draft and progress were kept.")}`),
     detail,
     el("div", { class: "row" },
       el("button", { type: "button", class: "btn primary", onclick: retry }, t("/retry Retomar", "/retry Resume")),
       el("button", { type: "button", class: "btn", onclick: () => { detail.hidden = !detail.hidden; } }, t("/error Detalhes", "/error Details")),
+      el("button", { type: "button", class: "btn", onclick: () => openModels() }, t("/models Trocar modelo", "/models Change model")),
     ));
 }
 
@@ -125,7 +134,7 @@ function renderTranscript() {
     if (m.html && latest.get(turn) === m.id) {
       flush();
       const reply = el("div", { class: "reply" }, el("div", { html: m.html }));
-      if (m.finished && m.model) reply.append(el("div", { class: "meta" }, `${m.model.replace(/^[^.]*\./, "")} · ${m.seconds || "<1"}s`));
+      if (m.finished && m.model) reply.append(el("div", { class: "meta" }, [m.model.replace(/^[^.]*\./, ""), `${m.seconds || "<1"}s`, m.cites].filter(Boolean).join(" · ")));
       box.append(reply);
     }
     steps.push(...(m.steps || []));
@@ -143,6 +152,7 @@ function renderWork() {
   work.replaceChildren();
   const conversation = view.conversation;
   const request = conversation?.permissions?.[0];
+  if (!request) view.fullDiff = false;
   if (request) { work.append(approvalCard(request)); return; }
   if (conversation?.question) { work.append(questionCard(conversation.question)); return; }
   const steps = conversation?.task?.steps || [];
@@ -171,10 +181,10 @@ function diffRows(diff) {
     if (line[0] === "+") { kind = "add"; added++; newLine++; }
     else if (line[0] === "-") { kind = "del"; removed++; number = oldLine; oldLine++; }
     else { newLine++; oldLine++; }
-    if (rows.length >= 6) { hidden++; continue; }
+    if (rows.length >= 6 && !view.fullDiff) { hidden++; continue; }
     rows.push(el("div", { class: kind }, el("span", { class: "n" }, String(number)), el("span", {}, line)));
   }
-  if (hidden) rows.push(el("div", { class: "ctx" }, el("span", { class: "n" }, "…"), el("span", {}, t(`mais ${hidden} linhas`, `${hidden} more lines`))));
+  if (hidden) rows.push(el("div", { class: "ctx" }, el("span", { class: "n" }, "…"), el("span", {}, t(`${hidden} linhas · T mostra tudo`, `${hidden} lines · T shows all`))));
   return { rows, added, removed };
 }
 
@@ -195,22 +205,45 @@ function approvalCard(request) {
   return el("div", { class: "card-wrap" }, card);
 }
 
+// doing names the step in progress, as the proposal's footer does:
+// "Editando main.go", "Testando".
+function doing() {
+  const messages = view.conversation?.messages || [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const step = (messages[i].steps || []).filter((s) => s.state === "running").pop();
+    if (!step) continue;
+    const verb = /^(edit|write|patch|multiedit)/.test(step.name) ? t("Editando", "Editing")
+      : step.name === "bash" ? (/\btest/.test(step.target) ? t("Testando", "Testing") : t("Executando", "Running"))
+      : /^(view|read)/.test(step.name) ? t("Lendo", "Reading")
+      : /^(glob|grep|ls|search|find)/.test(step.name) ? t("Buscando", "Searching")
+      : /fetch|web/.test(step.name) ? t("Consultando a web", "Browsing")
+      : "";
+    if (!verb) break;
+    return step.name === "bash" ? verb : `${verb} ${step.target}`.trim();
+  }
+  return t("Trabalhando", "Working");
+}
+
 function renderFrame() {
   const state = view.state;
   if (!state) return;
   $("workspace").textContent = state.workspace;
   $("branch").textContent = state.branch;
   $("branch-wrap").hidden = !state.branch;
-  $("title").textContent = view.conversation?.session?.title || "";
+  const title = view.conversation?.session?.title || "";
+  $("title").textContent = title && view.conversation.number ? `${title} · ${t("sessão", "session")} ${view.conversation.number}` : title;
   document.documentElement.style.setProperty("--mode", `var(--${view.mode})`);
   $("mode").textContent = modeLabel(view.mode);
   // While the agent asks, its card is where you answer, as in the proposal.
   document.querySelector(".composer-wrap").hidden = !!view.conversation?.question;
+  // While you decide on an approval, the composer only keeps your draft.
+  const deciding = !!view.conversation?.permissions?.length;
+  $("composer").classList.toggle("deciding", deciding);
   const busy = view.conversation?.busy;
   $("hint").innerHTML = "";
   if (busy) $("hint").append(t("Mensagens entram na fila · ", "Messages queue up · "), el("b", {}, "Esc"), t(" cancela", " cancels"));
   else $("hint").append(el("b", {}, "Shift+Tab"), t(" modo · ", " mode · "), el("b", {}, "Alt+Enter"), t(" nova linha", " new line"));
-  $("input").placeholder = busy ? t("Mensagem entra na fila", "Message joins the queue") : "";
+  $("input").placeholder = deciding ? t("Rascunho preservado enquanto você decide", "Draft kept while you decide") : busy ? t("Mensagem entra na fila", "Message joins the queue") : "";
   const narrow = window.innerWidth < 760; // the proposal's compact screen abbreviates
   $("policy").textContent = narrow
     ? (view.policy === "project_edits" ? t("A:editar", "A:edits") : t("A:pedir", "A:ask"))
@@ -222,7 +255,8 @@ function renderFrame() {
   else if (view.conversation?.question) { activity.textContent = t("Aguardando sua resposta", "Waiting for your answer"); activity.className = ""; activity.style.color = "var(--ask)"; }
   else if (busy) {
     const seconds = Math.max(0, Math.round((Date.now() - view.started) / 1000));
-    activity.textContent = narrow ? `${t("Trabalhando", "Working")} ${seconds}s` : `${t("Trabalhando", "Working")} · ${seconds}s · Esc ${t("cancela", "cancels")}`;
+    const now = doing();
+    activity.textContent = narrow ? `${now.split(" ")[0]} ${seconds}s` : `${now} · ${seconds}s · Esc ${t("cancela", "cancels")}`;
     activity.className = "busy";
   }
   else if (view.error) { activity.textContent = view.error; activity.className = "bad"; }
@@ -234,6 +268,8 @@ function renderFrame() {
     const filled = Math.min(5, Math.floor(used * 5));
     $("meter").append(el("span", { class: "meter" }, "█".repeat(filled)), el("span", { style: "color:var(--faint)" }, "░".repeat(5 - filled)), ` ${Math.round(used * 100)}%`);
   }
+  const speed = view.conversation?.speed;
+  if (speed && !narrow) $("meter").append(`${tokens && state.context ? " · " : ""}${Math.round(speed)} t/s`);
   $("model").textContent = (narrow && state.model.length > 10 ? state.model.slice(0, 9) + "…" : state.model) + " ▾";
 }
 
@@ -341,6 +377,8 @@ async function listen() {
 
 document.addEventListener("keydown", (event) => {
   if (handleShortcut(event)) return;
+  if (event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) { event.preventDefault(); $("transcript").scrollBy({ top: event.key === "ArrowUp" ? -120 : 120 }); return; }
+  if ((event.key === "t" || event.key === "T") && view.conversation?.permissions?.length && (document.activeElement !== $("input") || !$("input").value)) { event.preventDefault(); view.fullDiff = !view.fullDiff; renderWork(); return; }
   const request = view.conversation?.permissions?.[0];
   if (request && ["1", "2", "3"].includes(event.key) && document.activeElement !== $("input")) {
     event.preventDefault();

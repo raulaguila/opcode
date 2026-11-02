@@ -44,7 +44,7 @@ func TestProjectFoldsToolResultsAndRendersRepliesWithoutRawHTML(t *testing.T) {
 	}
 	out := project(messages)
 	require.Len(t, out, 3)
-	require.Equal(t, []Step{{"view", "store.go", "ok"}, {"edit", "store.go", "failed"}, {"bash", "go test ./...", "running"}}, out[1].Steps)
+	require.Equal(t, []Step{{Name: "view", Target: "store.go", State: "ok"}, {Name: "edit", Target: "store.go", State: "failed"}, {Name: "bash", Target: "go test ./...", State: "running"}}, out[1].Steps)
 	require.Contains(t, out[2].HTML, "<strong>feito</strong>")
 	require.NotContains(t, out[2].HTML, "<script>")
 }

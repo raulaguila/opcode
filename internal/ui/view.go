@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -95,9 +96,15 @@ func (m *Model) renderTranscript(width int) string {
 	turn = 0
 	var blocks []string
 	var steps []message.ToolCall
+	failureAt := -1 // the recovery card follows the last steps of the conversation
 	flush := func() {
 		if len(steps) > 0 {
-			blocks = append(blocks, indent+stepsRow(steps, results, inner))
+			rows := stepsRows(steps, results, inner, m.approval != nil)
+			for i := range rows {
+				rows[i] = indent + rows[i]
+			}
+			blocks = append(blocks, strings.Join(rows, "\n"))
+			failureAt = len(blocks)
 			steps = nil
 		}
 	}
@@ -123,8 +130,11 @@ func (m *Model) renderTranscript(width int) string {
 		steps = append(steps, msg.ToolCalls()...)
 	}
 	flush()
-	if m.busy {
-		blocks = append(blocks, indent+on(P.Ground, P.Plan).Render("● ")+on(P.Ground, P.Muted).Render(config.Text("Trabalhando…", "Working…")))
+	if m.failure != nil {
+		if failureAt < 0 {
+			failureAt = len(blocks)
+		}
+		blocks = slices.Insert(blocks, failureAt, m.failureView())
 	}
 	if len(blocks) == 0 {
 		return m.emptyState(inner, indent)
@@ -138,36 +148,73 @@ func (m *Model) emptyState(inner int, indent string) string {
 	return "\n" + indent + title + "\n" + indent + hint + "\n"
 }
 
-// stepsRow folds consecutive tool calls into one line: "› ✓ view store.go".
-func stepsRow(calls []message.ToolCall, results map[string]message.ToolResult, width int) string {
-	var briefs []string
-	failed, running := 0, false
+// stepsRows folds tool calls into one line per run of the same tool and
+// outcome: "› ✓ view store.go · main.go", "› ✗ edit store.go ×3 · 3 falhas".
+// Older runs fold into a count so the turn stays short.
+func stepsRows(calls []message.ToolCall, results map[string]message.ToolResult, width int, waiting bool) []string {
+	type run struct {
+		name, state string
+		targets     []string
+	}
+	var runs []run
 	for _, call := range calls {
-		result, done := results[call.ID]
-		running = running || !done
-		if done && result.IsError {
-			failed++
+		state := "ok"
+		if result, done := results[call.ID]; !done {
+			state = "running"
+		} else if result.IsError {
+			state = "failed"
 		}
-		brief := toolBrief(call)
-		if len(briefs) == 0 || briefs[len(briefs)-1] != brief {
-			briefs = append(briefs, brief)
+		target := strings.TrimSpace(strings.TrimPrefix(toolBrief(call), call.Name))
+		if n := len(runs); n > 0 && runs[n-1].name == call.Name && runs[n-1].state == state {
+			runs[n-1].targets = append(runs[n-1].targets, target)
+			continue
 		}
+		runs = append(runs, run{call.Name, state, []string{target}})
 	}
-	icon, color := "✓", P.Success
-	status := ""
-	if running {
-		icon, color = "●", P.Plan
-	}
-	if failed > 0 {
-		icon, color = "✗", P.Danger
-		label := config.Text("falhas", "failures")
-		if failed == 1 {
-			label = config.Text("falha", "failure")
+	var rows []string
+	const keep = 4
+	if len(runs) > keep {
+		earlier := 0
+		for _, r := range runs[:len(runs)-keep+1] {
+			earlier += len(r.targets)
 		}
-		status = on(P.Ground, P.Danger).Render(fmt.Sprintf(" · %d %s", failed, label))
+		rows = append(rows, on(P.Ground, P.Muted).Render("› ")+on(P.Ground, P.Success).Render("✓")+on(P.Ground, P.Muted).Render(fmt.Sprintf(config.Text(" %d passos anteriores", " %d earlier steps"), earlier)))
+		runs = runs[len(runs)-keep+1:]
 	}
-	text := ansi.Truncate(strings.Join(briefs, " · "), max(1, width-6-ansi.StringWidth(ansi.Strip(status))), "…")
-	return on(P.Ground, P.Muted).Render("› ") + on(P.Ground, color).Render(icon) + on(P.Ground, P.Muted).Render(" "+text) + status
+	for _, r := range runs {
+		// The same target repeated reads "×3"; different ones are listed once each.
+		var names []string
+		for _, target := range r.targets {
+			if target != "" && !slices.Contains(names, target) {
+				names = append(names, target)
+			}
+		}
+		label := r.name
+		if len(names) > 0 {
+			label += " " + strings.Join(names, " · ")
+		}
+		if len(names) == 1 && len(r.targets) > 1 {
+			label += fmt.Sprintf(" ×%d", len(r.targets))
+		}
+		icon, color, status := "✓", P.Success, ""
+		switch r.state {
+		case "running":
+			icon, color = "●", P.Plan
+			if waiting {
+				status = on(P.Ground, P.Muted).Render(config.Text(" · aguardando sua aprovação", " · waiting for your approval"))
+			}
+		case "failed":
+			icon, color = "✗", P.Danger
+			unit := config.Text("falhas", "failures")
+			if len(r.targets) == 1 {
+				unit = config.Text("falha", "failure")
+			}
+			status = on(P.Ground, P.Danger).Render(fmt.Sprintf(" · %d %s", len(r.targets), unit))
+		}
+		label = ansi.Truncate(label, max(1, width-4-ansi.StringWidth(ansi.Strip(status))), "…")
+		rows = append(rows, on(P.Ground, P.Muted).Render("› ")+on(P.Ground, color).Render(icon)+on(P.Ground, P.Muted).Render(" "+label)+status)
+	}
+	return rows
 }
 
 // toolBrief names a call by its tool and main argument, e.g. "edit store.go".
@@ -245,6 +292,13 @@ func (m *Model) footer() string {
 	if m.policy == permission.ApprovalProjectEdits {
 		label = config.Text("Aprov.: editar no projeto ▾", "Approval: project edits ▾")
 	}
+	compact := m.width < 80 // the proposal's 64-column screen abbreviates
+	if compact {
+		label = config.Text("A:pedir", "A:ask")
+		if m.policy == permission.ApprovalProjectEdits {
+			label = config.Text("A:editar", "A:edits")
+		}
+	}
 	approval := on(P.Ground, P.Text).Render(" " + label)
 	activity := ""
 	switch {
@@ -254,6 +308,9 @@ func (m *Model) footer() string {
 		activity = on(P.Ground, P.Plan).Render("  " + config.Text("Aguardando sua aprovação", "Waiting for your approval"))
 	case m.busy:
 		activity = on(P.Ground, P.Plan).Render(fmt.Sprintf(config.Text("  Trabalhando · %s · Esc cancela", "  Working · %s · Esc cancels"), time.Since(m.started).Round(time.Second)))
+		if compact {
+			activity = on(P.Ground, P.Plan).Render(fmt.Sprintf(config.Text("  Trabalhando %s", "  Working %s"), time.Since(m.started).Round(time.Second)))
+		}
 	case m.notice != "":
 		activity = on(P.Ground, P.Danger).Render("  " + strings.Join(strings.Fields(m.notice), " "))
 	case m.info != "":
@@ -268,7 +325,11 @@ func (m *Model) footer() string {
 		used := float64(m.session.PromptTokens) / float64(window)
 		right += Meter(used, P.Info, P.Ground) + muted.Render(fmt.Sprintf(" %d%%   ", int(used*100)))
 	}
-	right += on(P.Ground, P.Text).Render(modelName(model.ID)+" ▾") + " "
+	name := modelName(model.ID)
+	if compact {
+		name = ansi.Truncate(name, 9, "…")
+	}
+	right += on(P.Ground, P.Text).Render(name+" ▾") + " "
 	return Spread(approval+activity, right, m.width, P.Ground)
 }
 

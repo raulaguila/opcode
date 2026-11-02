@@ -22,11 +22,15 @@ func TestTranscriptShowsTurnStepsAndOnlyTheLatestReply(t *testing.T) {
 	}
 	view := ansi.Strip(m.renderTranscript(100))
 	require.Contains(t, view, "┃ O que faz?")
-	require.Contains(t, view, "› ● view README.md · edit store.go", "a step without a result is still running")
+	require.Contains(t, view, "› ✓ view README.md\n  › ● edit store.go", "one line per outcome; a step without a result is still running")
 	require.NotContains(t, view, "FIRST_DRAFT", "a revised reply replaces the draft")
 	require.Contains(t, view, "REVISED_REPLY")
 	m.messages = append(m.messages, message.Message{ID: "r2", Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: "c2", Content: "no match", IsError: true}}})
-	require.Contains(t, ansi.Strip(m.renderTranscript(100)), "› ✗ view README.md · edit store.go · 1 failure", "failures show and count")
+	require.Contains(t, ansi.Strip(m.renderTranscript(100)), "› ✗ edit store.go · 1 failure", "failures show and count")
+	m.messages = append(m.messages,
+		message.Message{ID: "a5", Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: "c3", Name: "edit", Input: `{"file_path":"/w/store.go"}`, Finished: true}, message.ToolCall{ID: "c4", Name: "edit", Input: `{"file_path":"/w/store.go"}`, Finished: true}}},
+		message.Message{ID: "r3", Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: "c3", IsError: true}, message.ToolResult{ToolCallID: "c4", IsError: true}}})
+	require.Contains(t, ansi.Strip(m.renderTranscript(100)), "› ✗ edit store.go ×2 · 2 failures", "a repeated target folds into ×N")
 }
 
 func TestEmptyScreenAndComposerFollowTheMode(t *testing.T) {

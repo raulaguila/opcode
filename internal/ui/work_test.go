@@ -60,12 +60,12 @@ func TestFailureCardNamesTheCauseAndHidesTheRawError(t *testing.T) {
 	m := New(nil)
 	m.width, m.height = 100, 30
 	m.failure = errors.New("dial tcp 127.0.0.1:11434: connection refused")
-	view := ansi.Strip(m.workView())
-	require.Contains(t, view, "■ Stopped: Provider unavailable")
+	view := ansi.Strip(m.renderTranscript(100))
+	require.Contains(t, view, "■ Stopped: Provider unavailable", "the card sits in the conversation")
 	require.Contains(t, view, "Resume · Ctrl+R")
 	require.NotContains(t, view, "11434", "the raw reason waits for Ctrl+E")
 	m.failureKey("ctrl+e")
-	require.Contains(t, ansi.Strip(m.workView()), "connection refused")
+	require.Contains(t, ansi.Strip(m.failureView()), "connection refused")
 	m.failureKey("esc")
 	require.Nil(t, m.failure)
 }

@@ -299,8 +299,6 @@ func (m *Model) workView() string {
 		return m.approvalView()
 	case m.question != nil:
 		return m.questionView()
-	case m.failure != nil:
-		return m.failureView()
 	case len(m.task.Steps) > 0 && m.showPlan:
 		return m.planView()
 	case len(m.task.Steps) > 0 && m.width >= 40:

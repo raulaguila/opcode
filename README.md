@@ -66,10 +66,25 @@ opcode       # no terminal; funciona também via SSH
 opcode app   # numa janela própria, fora do terminal
 ```
 
-`opcode app` abre uma janela de app do Chrome, Chromium, Edge ou Brave, quando
-houver um instalado, e senão o navegador padrão. A janela só fala com o
-processo local, que escuta apenas em `127.0.0.1` com uma chave nova a cada
-abertura. Use `opcode app --no-open` para só mostrar o endereço.
+O binário comum não depende de bibliotecas gráficas, para rodar também em
+servidores. Nele, `opcode app` abre uma janela de app do Chrome, Chromium, Edge
+ou Brave, quando houver um instalado, e senão o navegador padrão.
+
+Para a janela nativa (Wails), compile com a tag `desktop`. No Linux ela usa a
+WebKitGTK do sistema:
+
+```sh
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev   # Ubuntu 24.04 ou posterior
+go build -tags desktop,production,webkit2_41 -o opcode .
+```
+
+Em distribuições com a WebKitGTK 4.0, instale `libwebkit2gtk-4.0-dev` e tire
+`webkit2_41` das tags. No macOS e no Windows basta `-tags desktop,production`;
+o Windows precisa do WebView2, que já vem no Windows 10 e 11 atualizados.
+
+Em qualquer janela, a página só fala com o processo local, que escuta apenas em
+`127.0.0.1` com uma chave nova a cada abertura. Use `opcode app --no-open` para
+só mostrar o endereço.
 
 A interface anterior do terminal continua disponível por um tempo com
 `opcode --ui classico`.

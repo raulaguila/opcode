@@ -63,10 +63,21 @@ func runApp(c *cobra.Command, cwd string, noOpen bool) error {
 	defer listener.Close()
 	// The address carries this run's key; it opens the app and nothing else.
 	fmt.Fprintf(c.OutOrStdout(), "opcode app em %s\nCtrl+C encerra.\n", url)
-	if !noOpen {
-		openWindow(url)
+	if noOpen || !nativeWindowAvailable {
+		if !noOpen {
+			openWindow(url)
+		}
+		return service.Serve(ctx, listener)
 	}
-	return service.Serve(ctx, listener)
+	// The native window runs on this thread; the server answers it from another.
+	served := make(chan error, 1)
+	go func() { served <- service.Serve(ctx, listener) }()
+	windowErr := nativeWindow(ctx, url)
+	cancel() // closing the window ends the app
+	if err := <-served; err != nil {
+		return err
+	}
+	return windowErr
 }
 
 // openWindow prefers a Chromium app window (no tabs or address bar) and

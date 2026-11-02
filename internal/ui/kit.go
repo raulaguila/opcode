@@ -18,7 +18,7 @@ type Box struct {
 	Accent, Background  color.Color
 	TitleColor          color.Color // defaults to Strong
 	Dashed              bool        // a dashed edge, for what is off or only offered
-	Outer               color.Color // the ground the edge sits on; Background when nil
+	Outer               color.Color // the ground the edge sits on; the screen's Ground when nil
 }
 
 // Render draws the box around body; body lines are clipped and padded.
@@ -37,7 +37,7 @@ func (b Box) Render(body string) string {
 	}
 	outer := b.Outer
 	if outer == nil {
-		outer = bg
+		outer = P.Ground
 	}
 	// The edge sits on the ground around the box, so a tinted card stays
 	// inside its rounded corners.

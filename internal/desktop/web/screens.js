@@ -169,7 +169,8 @@ async function openModels(provider = "") {
     title: t("Escolher modelo", "Choose model"), body: wrap, list,
     onKey: (event) => {
       // With nothing typed, ←→ walk the provider tabs.
-      if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !search.input.value) { event.preventDefault(); switchProvider(event.key === "ArrowLeft" ? -1 : 1); return true; }
+      if (details && event.key === "ArrowRight") { event.preventDefault(); pane.querySelector("button")?.focus(); return true; }
+      if (!details && (event.key === "ArrowLeft" || event.key === "ArrowRight") && !search.input.value) { event.preventDefault(); switchProvider(event.key === "ArrowLeft" ? -1 : 1); return true; }
       if (event.key === "Enter") { const item = list.current(); if (item) use(item.model); return true; }
       if (event.key === "Tab") { event.preventDefault(); switchProvider(event.shiftKey ? -1 : 1); return true; }
       if (event.ctrlKey && event.key.toLowerCase() === "d") { event.preventDefault(); details = !details; layout(); return true; }
@@ -301,6 +302,8 @@ async function openSessions() {
     onKey: (event) => {
       const item = list.current();
       if (renaming) return false;
+      // → steps from the list into the conversation's actions; ← steps back.
+      if (event.key === "ArrowRight" && document.activeElement?.tagName !== "INPUT") { event.preventDefault(); pane.querySelector("button")?.focus(); return true; }
       if (event.key === "Enter" && item) { open(item.session); return true; }
       if (!event.ctrlKey) return false;
       const k = event.key.toLowerCase();
@@ -511,6 +514,9 @@ const helpText = {
 async function openSettings(section = 0) {
   let prefs = { settings: [], path: "" }, conns = { items: [], presets: [], integrations: [] };
   let selected = 0, query = "", saved = "", problem = "";
+  // Two levels: the section menu, then the section's items. ↑↓ move within a
+  // level, → or Enter goes in, ← comes back out.
+  let pane = "nav";
   const probes = new Map();
   const nav = el("nav", { "aria-label": t("Seções", "Sections") });
   const content = el("div", { style: "min-width:0;overflow-y:auto" });
@@ -523,12 +529,16 @@ async function openSettings(section = 0) {
       const typing = ["INPUT", "SELECT"].includes(active?.tagName) && !(active.closest(".search") && !(active.value && (event.key === "ArrowLeft" || event.key === "ArrowRight")));
       if (typing && event.key !== "Escape" && event.key !== "Tab") return false;
       if (event.key === "Tab") { event.preventDefault(); go((section + (event.shiftKey ? -1 : 1) + 7) % 7); return true; }
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); const n = count(); if (n) { selected = (selected + (event.key === "ArrowDown" ? 1 : -1) + n) % n; draw(); } return true; }
-      // Sections without values take ←→ to move between sections.
-      if ((section === 0 || section === 5) && (event.key === "ArrowLeft" || event.key === "ArrowRight")) { event.preventDefault(); go((section + (event.key === "ArrowLeft" ? -1 : 1) + 7) % 7); return true; }
+      const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+      if (pane === "nav") {
+        if (step) { event.preventDefault(); go((section + step + 7) % 7); return true; }
+        if (event.key === "ArrowRight" || event.key === "Enter") { event.preventDefault(); if (count()) { pane = "content"; selected = 0; draw(); } return true; }
+        return false;
+      }
+      if (step) { event.preventDefault(); const n = count(); if (n) { selected = (selected + step + n) % n; draw(); } return true; }
+      if (event.key === "ArrowLeft") { event.preventDefault(); pane = "nav"; draw(); return true; }
       if (section === 0) return connectionKey(event);
-      if (section === 5 && event.key === "Enter") return true;
-      if (section === 3 && ["ArrowLeft", "ArrowRight", " ", "Enter"].includes(event.key)) { event.preventDefault(); view.policy = view.policy === "prompt" ? "project_edits" : "prompt"; renderFrame(); draw(); return true; }
+      if (section === 3 && ["ArrowRight", " ", "Enter"].includes(event.key)) { event.preventDefault(); view.policy = view.policy === "prompt" ? "project_edits" : "prompt"; renderFrame(); draw(); return true; }
       if ([1, 2, 4, 6].includes(section)) return prefKey(event);
       return false;
     },
@@ -537,17 +547,18 @@ async function openSettings(section = 0) {
   const count = () => section === 0 ? conns.items.length : section === 3 ? 1 : section === 5 ? 0 : rows().length;
   const go = (n) => { section = n; selected = 0; query = ""; saved = ""; problem = ""; draw(); };
   const legend = () => {
-    if (section === 0) return [["N", t("nova", "new")], ["Enter", t("editar", "edit")], ["T", t("testar", "test")], ["D", t("excluir", "delete")], ["Tab", t("seção", "section")], ["Esc", t("fechar", "close"), true]];
-    if (section === 3) return [["←→", t("política", "policy")], ["Tab", t("seção", "section")], ["Esc", t("fechar", "close"), true]];
-    if (section === 5) return [["Tab", t("seção", "section")], ["Esc", t("fechar", "close"), true]];
-    const out = [["↑↓", t("preferência", "preference")], ["←→", t("valor", "value")], ["Tab", t("seção", "section")]];
+    if (pane === "nav") return [["↑↓", t("seção", "section")], ["→", t("abrir", "open")], ["Esc", t("fechar", "close"), true]];
+    if (section === 0) return [["↑↓", t("conexão", "connection")], ["Enter", t("editar", "edit")], ["N", t("nova", "new")], ["T", t("testar", "test")], ["D", t("excluir", "delete")], ["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]];
+    if (section === 3) return [["→", t("trocar", "switch")], ["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]];
+    if (section === 5) return [["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]];
+    const out = [["↑↓", t("preferência", "preference")], ["→", t("valor", "value")], ["←", t("menu", "menu")]];
     out.push([t("Salva ao mudar", "Saves on change"), saved ? "· ✓ " + t("salvo", "saved") : "", false, saved ? "saved" : ""]);
     out.push(["Esc", t("fechar", "close"), true]);
     return out;
   };
   const draw = () => {
     const warn = 0;
-    nav.replaceChildren(...sections().map((name, i) => el("div", { class: `nav${i === section ? " on" : ""}`, onclick: () => go(i) },
+    nav.replaceChildren(...sections().map((name, i) => el("div", { class: `nav${i === section ? " on" : ""}${i === section && pane === "content" ? " away" : ""}`, onclick: () => { pane = "content"; go(i); } },
       el("span", {}, name), i === 0 && conns.items.length ? el("span", { style: "color:var(--muted)" }, String(conns.items.length)) : i === 5 && warn ? el("span", { class: "warn" }, `${warn} ${t("aviso", "warning")}`) : null)));
     d.meta(prefs.path);
     d.keys(legend());
@@ -577,7 +588,7 @@ async function openSettings(section = 0) {
         control.addEventListener("change", () => save(s, control.value.trim()));
       }
       const help = helpText[s.path] ? t(...helpText[s.path]) : s.category === "shortcuts" ? t("Ctrl ou Alt com uma letra", "Ctrl or Alt with a letter") : s.help;
-      content.append(el("div", { class: `pref${i === selected ? " sel" : ""}`, onclick: () => { selected = i; content.querySelectorAll(".pref").forEach((p, j) => p.classList.toggle("sel", j === i)); } },
+      content.append(el("div", { class: `pref${pane === "content" && i === selected ? " sel" : ""}`, onclick: () => { pane = "content"; selected = i; d.keys(legend()); nav.querySelector(".on")?.classList.add("away"); content.querySelectorAll(".pref").forEach((p, j) => p.classList.toggle("sel", j === i)); } },
         el("span", { class: "name" }, s.label), control, el("span", { class: "desc" }, help), el("span", {})));
     });
   };
@@ -585,10 +596,10 @@ async function openSettings(section = 0) {
     const s = rows()[selected];
     if (!s) return false;
     const opts = options(s);
-    if (opts.length && ["ArrowLeft", "ArrowRight", " "].includes(event.key)) {
+    if (opts.length && ["ArrowRight", " ", "Enter"].includes(event.key)) {
       event.preventDefault();
       const i = opts.indexOf(s.value);
-      save(s, opts[(i + (event.key === "ArrowLeft" ? -1 : 1) + opts.length) % opts.length]);
+      save(s, opts[(i + 1) % opts.length]);
       return true;
     }
     if (event.key === "Enter" && !opts.length) { event.preventDefault(); content.querySelectorAll(".pref")[selected]?.querySelector("input")?.focus(); return true; }
@@ -608,7 +619,7 @@ async function openSettings(section = 0) {
     const seg = el("span", { class: "seg" },
       el("button", { type: "button", class: view.policy === "prompt" ? "on" : "", onclick: () => { view.policy = "prompt"; renderFrame(); draw(); } }, t("Pedir", "Ask")),
       el("button", { type: "button", class: view.policy === "project_edits" ? "on" : "", onclick: () => { view.policy = "project_edits"; renderFrame(); draw(); } }, t("Editar no projeto", "Project edits")));
-    content.append(el("div", { class: "pref sel" }, el("span", { class: "name" }, t("Política desta conversa", "This conversation's policy")), seg,
+    content.append(el("div", { class: `pref${pane === "content" ? " sel" : ""}` }, el("span", { class: "name" }, t("Política desta conversa", "This conversation's policy")), seg,
       el("span", { class: "desc" }, t("Editar no projeto aprova edições de arquivos do projeto sem perguntar", "Project edits approves edits to project files without asking")), el("span", {})),
       el("div", { class: "nothing", style: "padding-top:12px" }, t("Comandos, rede, exclusões e caminhos fora do projeto continuam pedindo aprovação.", "Commands, network, deletions and outside paths still ask for approval.")));
   };
@@ -623,7 +634,7 @@ async function openSettings(section = 0) {
       const inUse = c.provider === conns.active;
       const icon = c.disabled ? el("span", { style: "color:var(--faint)" }, "○") : c.key_missing ? el("span", { class: "warn-t" }, "▲") : el("span", { class: "ok-t" }, "●");
       const state = c.disabled ? el("span", { class: "desc" }, t("desativada", "disabled")) : c.key_missing ? el("span", { class: "desc warn-t" }, t("chave ausente", "key missing")) : inUse ? el("span", { class: "desc" }, t("em uso", "in use")) : el("span", {});
-      const card = el("div", { class: `card2${i === selected ? " sel" : ""}${c.disabled ? " off" : ""}`, onclick: () => { selected = i; draw(); } },
+      const card = el("div", { class: `card2${pane === "content" && i === selected ? " sel" : ""}${c.disabled ? " off" : ""}`, onclick: () => { pane = "content"; selected = i; draw(); } },
         icon, el("span", { class: "nm" }, c.name), state);
       if (!c.disabled) {
         const auth = { none: t("sem autenticação", "no authentication"), api_key: t("chave no arquivo de configuração", "key in config file"), vault: t("chave no cofre do sistema", "key in system vault"), environment: c.env + (c.key_missing ? t(" não definida", " not set") : "") }[c.auth];
@@ -846,9 +857,11 @@ function buttonArrows(event) {
   const active = document.activeElement;
   if (active?.tagName !== "BUTTON" || !["ArrowLeft", "ArrowRight"].includes(event.key)) return false;
   const row = [...active.parentElement.querySelectorAll(":scope > button:not([disabled])")];
-  if (row.length < 2) return false;
+  if (row.length < 2 && !(row.length === 1 && event.key === "ArrowLeft" && active.closest(".pane"))) return false;
   event.preventDefault();
   const at = row.indexOf(active) + (event.key === "ArrowLeft" ? -1 : 1);
+  // Past the first action of a side pane, ← returns to the list beside it.
+  if (at < 0 && active.closest(".pane")) { active.blur(); return true; }
   row[(at + row.length) % row.length].focus();
   return true;
 }

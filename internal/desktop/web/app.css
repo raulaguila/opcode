@@ -164,6 +164,7 @@ textarea::placeholder { color: var(--faint); }
 .nav { display: flex; justify-content: space-between; padding: 5px 16px 5px 19px; color: #b4b8cf; cursor: pointer; border-left: 3px solid transparent; }
 .nav.on { background: var(--selected); border-left-color: var(--ask); padding-left: 16px; color: var(--strong); }
 .nav .warn { color: var(--plan); }
+.nav.on.away { border-left-color: var(--dim); background: var(--raised); }
 .pref { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 9px 20px; border-bottom: 1px solid var(--rule); align-items: center; }
 .pref:last-child { border-bottom: 0; }
 .pref.sel { background: #212336; }

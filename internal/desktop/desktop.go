@@ -61,6 +61,8 @@ func New(application *app.App) (*Server, error) {
 	if _, err := rand.Read(raw); err != nil {
 		return nil, err
 	}
+	// The window can answer the agent's questions, so the agent may ask them.
+	application.Questions.SetInteractive(true)
 	return &Server{app: application, key: hex.EncodeToString(raw), feeds: map[chan string]struct{}{}, failures: map[string]string{}}, nil
 }
 
@@ -99,6 +101,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/sessions/{id}/cancel", s.cancel)
 	mux.HandleFunc("POST /api/sessions/{id}/permissions/{request}", s.decide)
 	mux.HandleFunc("GET /api/events", s.events)
+	s.routes(mux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Host != s.host {
 			http.Error(w, "unknown host", http.StatusMisdirectedRequest)
@@ -261,6 +264,7 @@ type Conversation struct {
 	Permissions []Approval    `json:"permissions"`
 	Task        workflow.Task `json:"task"`
 	Failure     string        `json:"failure,omitempty"`
+	Question    any           `json:"question,omitempty"`
 }
 
 // Approval is a pending permission with its diff or command, if any.
@@ -287,6 +291,9 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 	}
 	view := Conversation{Session: brief(current), Busy: s.app.CoderAgent.IsSessionBusy(id), Messages: project(messages), Permissions: []Approval{}}
 	view.Task, _ = s.app.Workflows.Get(r.Context(), id)
+	if q, ok := s.app.Questions.Pending(id); ok {
+		view.Question = q
+	}
 	s.mu.Lock()
 	view.Failure = s.failures[id]
 	s.mu.Unlock()

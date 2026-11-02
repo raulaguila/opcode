@@ -48,3 +48,20 @@ func TestProjectFoldsToolResultsAndRendersRepliesWithoutRawHTML(t *testing.T) {
 	require.Contains(t, out[2].HTML, "<strong>feito</strong>")
 	require.NotContains(t, out[2].HTML, "<script>")
 }
+
+func TestConnectionFormRefusesAChangedIDBadNumbersAndMissingVariable(t *testing.T) {
+	_, _, err := form{OriginalID: "ollama", ID: "other", Auth: "none"}.profile()
+	require.Error(t, err, "an existing connection keeps its ID")
+	_, _, err = form{ID: "", Auth: "none"}.profile()
+	require.Error(t, err)
+	_, _, err = form{ID: "x", Auth: "none", Context: "-1"}.profile()
+	require.Error(t, err)
+	_, _, err = form{ID: "x", Auth: "environment", Enabled: true}.profile()
+	require.Error(t, err, "an active connection needs its key variable")
+	id, p, err := form{ID: "x", Name: "X", Backend: "openai", Auth: "environment", Env: "OPENAI_API_KEY", Enabled: true, Output: "2048"}.profile()
+	require.NoError(t, err)
+	require.Equal(t, "x", id)
+	require.Equal(t, "OPENAI_API_KEY", p.APIKeyEnv)
+	require.Equal(t, int64(2048), p.DefaultMaxTokens)
+	require.Empty(t, p.APIKey)
+}

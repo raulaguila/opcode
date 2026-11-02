@@ -54,6 +54,10 @@ type tickMsg struct{}
 
 // New builds the screen; an initial session resumes that conversation.
 func New(a *app.App, initial ...session.Session) *Model {
+	if a != nil && a.Questions != nil {
+		// This interface answers the agent's questions, so the agent may ask them.
+		a.Questions.SetInteractive(true)
+	}
 	composer := textarea.New()
 	composer.Prompt = ""
 	composer.ShowLineNumbers = false

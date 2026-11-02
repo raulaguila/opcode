@@ -36,7 +36,7 @@ function el(tag, attrs = {}, ...children) {
     if (name === "class") node.className = value;
     else if (name === "html") node.innerHTML = value; // backend-rendered Markdown, raw HTML disabled
     else if (name.startsWith("on")) node.addEventListener(name.slice(2), value);
-    else node.setAttribute(name, value);
+    else if (value != null && value !== false) node.setAttribute(name, value);
   }
   for (const child of children.flat()) if (child != null) node.append(child);
   return node;
@@ -144,12 +144,14 @@ function renderWork() {
   const conversation = view.conversation;
   const request = conversation?.permissions?.[0];
   if (request) { work.append(approvalCard(request)); return; }
-  const steps = conversation?.task?.Steps || conversation?.task?.steps || [];
+  if (conversation?.question) { work.append(questionCard(conversation.question)); return; }
+  const steps = conversation?.task?.steps || [];
+  if (steps.length && view.showPlan) { work.append(planCard(conversation.task)); return; }
   if (steps.length) {
-    const done = steps.filter((s) => (s.Status || s.status) === "completed").length;
-    const index = steps.findIndex((s) => (s.Status || s.status) !== "completed");
-    const current = index >= 0 ? `→ ${index + 1}. ${steps[index].Title || steps[index].title}` : t("concluído", "done");
-    work.append(el("div", { class: "strip-wrap" }, el("div", { class: "strip" },
+    const done = steps.filter((s) => s.status === "completed").length;
+    const index = steps.findIndex((s) => s.status !== "completed");
+    const current = index >= 0 ? `→ ${index + 1}. ${steps[index].title}` : t("concluído", "done");
+    work.append(el("div", { class: "strip-wrap" }, el("div", { class: "strip", onclick: togglePlan, title: "/task" },
       el("span", { class: "plan" }, `${t("Plano", "Plan")} ${done}/${steps.length}`), el("span", {}, current), el("span", { class: "end" }, "/task"))));
   }
 }
@@ -207,11 +209,20 @@ function renderFrame() {
   if (busy) $("hint").append(t("Mensagens entram na fila · ", "Messages queue up · "), el("b", {}, "Esc"), t(" cancela", " cancels"));
   else $("hint").append(el("b", {}, "Shift+Tab"), t(" modo · ", " mode · "), el("b", {}, "Alt+Enter"), t(" nova linha", " new line"));
   $("input").placeholder = busy ? t("Mensagem entra na fila", "Message joins the queue") : "";
-  $("policy").textContent = (view.policy === "project_edits" ? t("Aprov.: editar no projeto", "Approval: project edits") : t("Aprov.: pedir", "Approval: ask")) + " ▾";
+  const narrow = window.innerWidth < 760; // the proposal's compact screen abbreviates
+  $("policy").textContent = narrow
+    ? (view.policy === "project_edits" ? t("A:editar", "A:edits") : t("A:pedir", "A:ask"))
+    : (view.policy === "project_edits" ? t("Aprov.: editar no projeto", "Approval: project edits") : t("Aprov.: pedir", "Approval: ask")) + " ▾";
   const activity = $("activity");
   activity.className = "";
+  activity.style.color = "";
   if (view.conversation?.permissions?.length) { activity.textContent = t("Aguardando sua aprovação", "Waiting for your approval"); activity.className = "busy"; }
-  else if (busy) { activity.textContent = `${t("Trabalhando", "Working")} · ${Math.max(0, Math.round((Date.now() - view.started) / 1000))}s · Esc ${t("cancela", "cancels")}`; activity.className = "busy"; }
+  else if (view.conversation?.question) { activity.textContent = t("Aguardando sua resposta", "Waiting for your answer"); activity.className = ""; activity.style.color = "var(--ask)"; }
+  else if (busy) {
+    const seconds = Math.max(0, Math.round((Date.now() - view.started) / 1000));
+    activity.textContent = narrow ? `${t("Trabalhando", "Working")} ${seconds}s` : `${t("Trabalhando", "Working")} · ${seconds}s · Esc ${t("cancela", "cancels")}`;
+    activity.className = "busy";
+  }
   else if (view.error) { activity.textContent = view.error; activity.className = "bad"; }
   else activity.textContent = "";
   const tokens = view.conversation?.session?.prompt_tokens || 0;
@@ -221,7 +232,7 @@ function renderFrame() {
     const filled = Math.min(5, Math.floor(used * 5));
     $("meter").append(el("span", { class: "meter" }, "█".repeat(filled)), el("span", { style: "color:var(--faint)" }, "░".repeat(5 - filled)), ` ${Math.round(used * 100)}%`);
   }
-  $("model").textContent = state.model + " ▾";
+  $("model").textContent = (narrow && state.model.length > 10 ? state.model.slice(0, 9) + "…" : state.model) + " ▾";
 }
 
 function render() {
@@ -327,6 +338,7 @@ async function listen() {
 }
 
 document.addEventListener("keydown", (event) => {
+  if (handleShortcut(event)) return;
   const request = view.conversation?.permissions?.[0];
   if (request && ["1", "2", "3"].includes(event.key) && document.activeElement !== $("input")) {
     event.preventDefault();
@@ -342,17 +354,21 @@ document.addEventListener("keydown", (event) => {
 });
 
 $("input").addEventListener("keydown", (event) => {
+  if (dialog) return; // an open dialog owns the keyboard
   const request = view.conversation?.permissions?.[0];
   if (request && $("input").value === "" && ["1", "2", "3"].includes(event.key)) {
     event.preventDefault();
     decide({ 1: "once", 2: "session", 3: "deny" }[event.key]);
     return;
   }
+  if (event.key === "/" && $("input").value === "") { event.preventDefault(); openPalette(); return; }
   if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.isComposing) { event.preventDefault(); send(); }
 });
 $("input").addEventListener("input", grow);
+window.addEventListener("resize", renderFrame);
 $("mode").addEventListener("click", cycleMode);
-$("policy").addEventListener("click", () => { view.policy = view.policy === "prompt" ? "project_edits" : "prompt"; renderFrame(); });
+$("policy").addEventListener("click", () => openSettings(3));
+$("model").addEventListener("click", () => openModels());
 // The last event of a run can arrive before the run lets go of the session,
 // so a busy conversation is read again until it settles.
 setInterval(() => {

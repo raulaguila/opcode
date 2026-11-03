@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/interaction"
+	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -80,4 +81,39 @@ func TestEscPutsTheQuestionAwayAndAnEmptyEnterBringsItBack(t *testing.T) {
 	require.NotZero(t, m.composerRows())
 	m.key(tea.KeyPressMsg{Code: tea.KeyEnter})
 	require.False(t, m.answeringLater())
+}
+
+func TestUpAndDownWalkTheMessagesYouSent(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 100, 30
+	m.messages = []message.Message{
+		{ID: "1", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "primeira"}}},
+		{ID: "2", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "resposta"}}},
+		{ID: "3", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "segunda\ncom duas linhas"}}},
+	}
+	up, down := tea.KeyPressMsg{Code: tea.KeyUp}, tea.KeyPressMsg{Code: tea.KeyDown}
+	m.composer.SetValue("rascunho")
+	m.key(up)
+	require.Equal(t, "segunda\ncom duas linhas", m.composer.Value())
+	m.key(up) // the cursor climbs to the first line before going further back
+	require.Equal(t, "segunda\ncom duas linhas", m.composer.Value())
+	m.key(up)
+	require.Equal(t, "primeira", m.composer.Value())
+	m.key(up)
+	require.Equal(t, "primeira", m.composer.Value(), "the oldest stays")
+	m.key(down)
+	require.Equal(t, "segunda\ncom duas linhas", m.composer.Value())
+	m.key(down)
+	require.Equal(t, "rascunho", m.composer.Value(), "past the newest, the draft comes back")
+}
+
+func TestRecallSurvivesAConversationWithFewerMessages(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 100, 30
+	m.recall = 5
+	m.messages = []message.Message{{ID: "1", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "só uma"}}}}
+	m.key(tea.KeyPressMsg{Code: tea.KeyDown})
+	require.Equal(t, "", m.composer.Value())
+	m.key(tea.KeyPressMsg{Code: tea.KeyUp})
+	require.Equal(t, "só uma", m.composer.Value())
 }

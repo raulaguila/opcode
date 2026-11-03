@@ -50,6 +50,8 @@ type Model struct {
 	failure     error  // why the last run stopped, until dismissed
 	showFailure bool   // the raw reason, on request
 	lastText    string // the last message sent, for resuming
+	recall      int    // how many sent messages back ↑ has gone; 0 is the draft
+	draft       string // what was typed before ↑ recalled a message
 
 	numbered string // the session whose number is counted
 	number   int
@@ -289,6 +291,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	if len(m.mention) > 0 && m.mentionKey(msg.String()) {
 		return nil
 	}
+	if m.recallKey(msg.String()) {
+		return nil
+	}
 	switch msg.String() {
 	case "ctrl+c":
 		return tea.Quit
@@ -333,7 +338,11 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 		return cmd
 	}
 	var cmd tea.Cmd
+	before := m.composer.Value()
 	m.composer, cmd = m.composer.Update(msg)
+	if m.composer.Value() != before {
+		m.recall = 0 // an edited message is a new draft
+	}
 	listing := m.findMention()
 	m.layout()
 	return tea.Batch(cmd, listing)
@@ -402,6 +411,7 @@ func (m *Model) submit() tea.Cmd {
 		return nil
 	}
 	m.composer.Reset()
+	m.recall, m.draft = 0, ""
 	m.lastText, m.failure, m.info = text, nil, ""
 	delete(m.failed, m.session.ID)
 	m.busy, m.started, m.notice, m.follow = true, time.Now(), "", true
@@ -539,4 +549,46 @@ func (m *Model) click(x, y int) tea.Cmd {
 // hasModel says whether a model is chosen for the coder.
 func (m *Model) hasModel() bool {
 	return m.app != nil && m.app.CoderAgent != nil && m.app.CoderAgent.Model().ID != ""
+}
+
+// sent is what you wrote in this conversation, oldest first, without repeats
+// in a row.
+func (m *Model) sent() []string {
+	var out []string
+	for _, msg := range m.messages {
+		if msg.Role != message.User || msg.IsApplication() {
+			continue
+		}
+		if text := strings.TrimSpace(msg.Content().Text); text != "" && (len(out) == 0 || out[len(out)-1] != text) {
+			out = append(out, text)
+		}
+	}
+	return out
+}
+
+// recallKey walks your sent messages as a shell walks its history: ↑ on the
+// composer's first line brings the one before, ↓ on its last line the one
+// after, and past the newest the draft comes back.
+func (m *Model) recallKey(key string) bool {
+	sent := m.sent()
+	m.recall = min(m.recall, len(sent)) // another conversation may have fewer
+	switch {
+	case key == "up" && m.composer.Line() == 0 && m.recall < len(sent):
+		if m.recall == 0 {
+			m.draft = m.composer.Value()
+		}
+		m.recall++
+		m.composer.SetValue(sent[len(sent)-m.recall])
+	case key == "down" && m.recall > 0 && m.composer.Line() == m.composer.LineCount()-1:
+		m.recall--
+		if m.recall == 0 {
+			m.composer.SetValue(m.draft)
+		} else {
+			m.composer.SetValue(sent[len(sent)-m.recall])
+		}
+	default:
+		return false
+	}
+	m.layout()
+	return true
 }

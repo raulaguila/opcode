@@ -336,6 +336,30 @@ async function loadConversation() {
   else renderFrame();
 }
 
+// ↑ on the composer's first line brings back the message you sent before,
+// ↓ on its last line the one after; past the newest, your draft returns.
+const recall = { at: 0, draft: "" };
+function recallKey(event) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+  const input = $("input");
+  const sent = (view.conversation?.messages || []).filter((m) => m.role === "user" && m.text).map((m) => m.text)
+    .filter((text, i, all) => i === 0 || all[i - 1] !== text);
+  recall.at = Math.min(recall.at, sent.length); // another conversation may have fewer
+  const firstLine = !input.value.slice(0, input.selectionStart).includes("\n");
+  const lastLine = !input.value.slice(input.selectionEnd).includes("\n");
+  if (event.key === "ArrowUp" && firstLine && recall.at < sent.length) {
+    if (recall.at === 0) recall.draft = input.value;
+    recall.at++;
+  } else if (event.key === "ArrowDown" && lastLine && recall.at > 0) {
+    recall.at--;
+  } else return false;
+  event.preventDefault();
+  input.value = recall.at ? sent[sent.length - recall.at] : recall.draft;
+  input.setSelectionRange(input.value.length, input.value.length);
+  grow();
+  return true;
+}
+
 async function send() {
   const input = $("input");
   const text = input.value.trim();
@@ -349,6 +373,7 @@ async function send() {
     await api(`/api/sessions/${view.session}/prompt`, { text, mode: view.mode, policy: view.policy });
     view.lastText = text;
     input.value = "";
+    recall.at = 0;
     grow();
     view.started = Date.now();
     await loadConversation();
@@ -437,8 +462,10 @@ $("input").addEventListener("keydown", (event) => {
     return;
   }
   if (event.key === "/" && $("input").value === "") { event.preventDefault(); openPalette(); return; }
+  if (recallKey(event)) return;
   if (event.key === "Enter" && !event.shiftKey && !event.altKey && !event.isComposing) { event.preventDefault(); send(); }
 });
+$("input").addEventListener("input", () => { recall.at = 0; }); // an edited message is a new draft
 $("input").addEventListener("input", grow);
 $("input").addEventListener("input", mentionUpdate);
 $("input").addEventListener("blur", () => setTimeout(mentionClose, 150));

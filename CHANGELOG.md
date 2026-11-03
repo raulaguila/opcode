@@ -43,6 +43,8 @@
 - Respostas mostram os arquivos lidos no turno (`lido: main.go, cmd/root.go`),
   no lugar da primeira citação. `Ctrl+A` no seletor de modelos, nas duas
   interfaces, escolhe o modelo de tarefas, títulos ou resumos.
+- `↑` na primeira linha do campo traz a mensagem enviada anterior, como num
+  shell; `↓` na última volta, até o rascunho. Terminal e app.
 
 ## Em desenvolvimento — 2026-11-01
 

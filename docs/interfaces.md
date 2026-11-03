@@ -68,6 +68,8 @@ escolha o modelo com `Ctrl+O`.
 | `Enter` | envia | envia |
 | `Alt+Enter`, `Shift+Enter` | nova linha (`Ctrl+J` também) | nova linha |
 | `Shift+Tab` | alterna o modo | alterna o modo |
+| `↑` `↓` no campo | mensagens que você enviou nesta conversa; depois da mais recente, volta o rascunho | idem |
+| `Ctrl+A` no seletor de modelos | modelo de tarefas, títulos ou resumos | idem |
 | `Ctrl+K`, `/` com o campo vazio | comandos | comandos |
 | `Ctrl+O` | escolher modelo | escolher modelo |
 | `Ctrl+S` | conversas | conversas |

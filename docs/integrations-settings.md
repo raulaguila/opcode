@@ -4,6 +4,19 @@
 > na interface de terminal atual. O app lista as integrações, mas cadastrar ou
 > editar é feito no terminal ([Terminal e app](interfaces.md)).
 
+## Servidores encontrados
+
+Configurações › Integrações lista em **Encontrados neste computador** os
+servidores de linguagem conhecidos (gopls, pyright, rust-analyzer, clangd,
+typescript-language-server e outros) que estão instalados no `PATH`, cujo
+arquivo de projeto (`go.mod`, `pyproject.toml`, `Cargo.toml`…) existe na raiz e
+cuja linguagem nenhum servidor configurado já atende. `Enter` (ou **Ativar** no
+app) salva o servidor com o comando e os argumentos do preset; ele liga ao
+abrir o primeiro arquivo da linguagem, sem reiniciar. Projetos com o arquivo de
+projeto só em subpastas continuam pelo formulário.
+
+## Formulário
+
 Abra **Settings** e pressione `I` para ver servidores MCP e de linguagem. `N`
 adiciona MCP, `L` adiciona LSP e `Enter` edita a seleção. Os campos de argumentos
 usam um array JSON, por exemplo `["--stdio"]`; não é necessário escapar um

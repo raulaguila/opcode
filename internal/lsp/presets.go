@@ -1,7 +1,9 @@
 package lsp
 
 import (
+	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -41,6 +43,67 @@ var Presets = map[string]ServerPreset{
 	"vscode-json-language-server": {[]string{"json", "jsonc"}, []string{"package.json", "tsconfig.json"}},
 	"vscode-html-language-server": {[]string{"html"}, []string{"package.json"}},
 	"vscode-css-language-server":  {[]string{"css", "scss", "less"}, []string{"package.json"}},
+}
+
+// PresetArgs are the arguments each preset server needs to speak LSP on stdio.
+var PresetArgs = map[string][]string{
+	"pyright-langserver": {"--stdio"}, "typescript-language-server": {"--stdio"},
+	"intelephense": {"--stdio"}, "phpactor": {"language-server"},
+	"bash-language-server": {"start"}, "dart": {"language-server", "--protocol=lsp"},
+	"vue-language-server": {"--stdio"}, "svelteserver": {"--stdio"},
+	"terraform-ls": {"serve"}, "yaml-language-server": {"--stdio"}, "taplo": {"lsp", "stdio"},
+	"vscode-json-language-server": {"--stdio"}, "vscode-html-language-server": {"--stdio"}, "vscode-css-language-server": {"--stdio"},
+}
+
+// Detection is a preset server installed on this machine whose project marker
+// is in the workspace, and that no configured server already covers.
+type Detection struct {
+	Name, Command string
+	Args          []string
+	Languages     []string
+}
+
+// Detect lists the preset servers worth turning on for root, one per
+// language: a language a configured server covers is left out, and where two
+// presets serve the same language the first by name wins.
+func Detect(root string, configured map[string]config.LSPConfig) []Detection {
+	covered := map[string]bool{}
+	for _, c := range configured {
+		languages := c.FileTypes
+		if len(languages) == 0 {
+			languages = Presets[filepath.Base(c.Command)].Languages
+		}
+		for _, language := range languages {
+			covered[language] = true
+		}
+	}
+	names := slices.Sorted(maps.Keys(Presets))
+	var out []Detection
+	for _, name := range names {
+		preset := Presets[name]
+		if slices.ContainsFunc(preset.Languages, func(l string) bool { return covered[l] }) || !hasMarker(root, preset.RootMarkers) {
+			continue
+		}
+		if _, err := exec.LookPath(name); err != nil {
+			continue
+		}
+		for _, language := range preset.Languages {
+			covered[language] = true
+		}
+		out = append(out, Detection{Name: name, Command: name, Args: slices.Clone(PresetArgs[name]), Languages: preset.Languages})
+	}
+	return out
+}
+
+// shortcut: looks at the workspace root only; a monorepo whose projects sit in
+// subfolders is not detected and keeps the manual form.
+func hasMarker(root string, markers []string) bool {
+	for _, marker := range markers {
+		if info, err := os.Lstat(filepath.Join(root, marker)); err == nil && info.Mode().IsRegular() {
+			return true
+		}
+	}
+	return false
 }
 
 func ServerMatches(c config.LSPConfig, path string) bool {

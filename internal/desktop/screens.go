@@ -17,6 +17,7 @@ import (
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/transcript"
@@ -43,6 +44,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/connections/save", s.saveConnection)
 	mux.HandleFunc("POST /api/connections/delete", s.deleteConnection)
 	mux.HandleFunc("POST /api/connections/enabled", s.enableConnection)
+	mux.HandleFunc("POST /api/integrations/lsp", s.enableLanguageServer)
 }
 
 // guard refuses configuration changes while a run is going.
@@ -582,7 +584,40 @@ func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
 		integrations = append(integrations, name+" · MCP")
 	}
 	slices.Sort(integrations)
-	reply(w, http.StatusOK, map[string]any{"active": active, "items": out, "presets": presets, "integrations": integrations})
+	detected := []map[string]any{}
+	for _, d := range lsp.Detect(cfg.WorkingDir, cfg.LSP) {
+		detected = append(detected, map[string]any{"name": d.Name, "languages": d.Languages})
+	}
+	reply(w, http.StatusOK, map[string]any{"active": active, "items": out, "presets": presets, "integrations": integrations, "detected": detected})
+}
+
+// enableLanguageServer turns on a server the detection found. Only a detected
+// name is accepted: the command and arguments come from its preset, never
+// from the request.
+func (s *Server) enableLanguageServer(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		Name string `json:"name"`
+	}
+	if err := decode(r, &request); err != nil {
+		fail(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.guard(); err != nil {
+		fail(w, http.StatusConflict, err)
+		return
+	}
+	cfg := config.Get()
+	for _, d := range lsp.Detect(cfg.WorkingDir, cfg.LSP) {
+		if d.Name == request.Name {
+			if err := config.SaveIntegration(config.Integration{Kind: "lsp", Name: d.Name, LSP: config.LSPConfig{Command: d.Command, Args: d.Args}}); err != nil {
+				fail(w, http.StatusBadRequest, err)
+				return
+			}
+			reply(w, http.StatusOK, map[string]any{"name": d.Name})
+			return
+		}
+	}
+	fail(w, http.StatusNotFound, errors.New(config.Text("servidor não encontrado neste computador", "server not found on this computer")))
 }
 
 // form is the connection editor's content.

@@ -14,6 +14,7 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/permission"
 )
 
@@ -77,6 +78,7 @@ type settingsPanel struct {
 	origins           map[string]string
 	probes            map[models.ModelProvider]probeMsg
 	active            models.ModelProvider // the connection in use leads the list
+	detected          []lsp.Detection      // installed language servers this project could use
 }
 
 func (m *Model) openSettingsAt(section int) tea.Cmd {
@@ -109,6 +111,10 @@ func (m *Model) openSettings() tea.Cmd {
 }
 
 func (p *settingsPanel) reload() {
+	p.detected = nil
+	if cfg := config.Get(); cfg != nil {
+		p.detected = lsp.Detect(cfg.WorkingDir, cfg.LSP)
+	}
 	p.values, p.origins = map[string]string{}, map[string]string{}
 	for _, v := range config.EffectiveConfiguration() {
 		p.values[v.Path], p.origins[v.Path] = fmt.Sprint(v.Value), v.Origin
@@ -163,7 +169,7 @@ func (p *settingsPanel) count() int {
 	case sectionConnections:
 		return len(connections(p.active))
 	case sectionIntegrations:
-		return 0
+		return len(p.detected) + 1 // the servers found, then the integrations form
 	case sectionApproval:
 		return 1
 	}
@@ -339,6 +345,9 @@ func (p *settingsPanel) legend() string {
 	case p.section == sectionApproval:
 		return textFor("→ política · ← menu · Esc fechar", "→ policy · ← menu · Esc close")
 	case p.section == sectionIntegrations:
+		if len(p.detected) > 0 {
+			return textFor("↑↓ escolher · Enter ativar · ← menu · Esc fechar", "↑↓ choose · Enter turn on · ← menu · Esc close")
+		}
 		return textFor("Enter abrir integrações · ← menu · Esc fechar", "Enter open integrations · ← menu · Esc close")
 	}
 	saved := ""
@@ -496,7 +505,38 @@ func (p *settingsPanel) integrationRows(width int) []string {
 	if len(rows) == 2 {
 		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma integração configurada.", "No integrations configured.")))
 	}
-	return append(rows, "", Button(textFor("Abrir integrações · Enter", "Open integrations · Enter"), true, P.Ask))
+	if len(p.detected) > 0 {
+		rows = append(rows, "", on(P.Surface, P.Strong).Bold(true).Render(textFor("Encontrados neste computador", "Found on this computer")))
+		for i, d := range p.detected {
+			cursor, name := "  ", on(P.Surface, P.Text).Render(d.Name)
+			if p.inside && i == p.selected {
+				cursor, name = on(P.Surface, P.Ask).Render("› "), on(P.Surface, P.Strong).Bold(true).Render(d.Name)
+			}
+			rows = append(rows, cursor+on(P.Surface, P.Faint).Render("○ ")+name+on(P.Surface, P.Muted).Render("  "+strings.Join(d.Languages, ", ")))
+		}
+		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Enter ativa; o servidor liga ao abrir um arquivo da linguagem.", "Enter turns it on; it starts when a file of its language is opened.")))
+	}
+	if p.status != "" {
+		color := P.Success
+		if p.failed {
+			color = P.Danger
+		}
+		rows = append(rows, "", on(P.Surface, color).Render(p.status))
+	}
+	return append(rows, "", Button(textFor("Abrir integrações · Enter", "Open integrations · Enter"), !p.inside || p.selected == len(p.detected), P.Ask))
+}
+
+// enableDetected saves a found server as an LSP integration, as the form
+// would with its preset command and arguments.
+func (p *settingsPanel) enableDetected(d lsp.Detection) {
+	err := config.SaveIntegration(config.Integration{Kind: "lsp", Name: d.Name, LSP: config.LSPConfig{Command: d.Command, Args: d.Args}})
+	if err != nil {
+		p.status, p.failed = err.Error(), true
+		return
+	}
+	p.reload()
+	p.selected = min(p.selected, len(p.detected))
+	p.status, p.failed = fmt.Sprintf(textFor("✓ %s ativo", "✓ %s on"), d.Name), false
 }
 
 // preferenceRows are the search field and two lines per preference: the
@@ -617,7 +657,11 @@ func (p *settingsPanel) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case sectionConnections:
 		return p.connectionKey(m, key), true
 	case sectionIntegrations:
-		if key == "enter" {
+		if key == "enter" || key == "space" {
+			if p.selected < len(p.detected) {
+				p.enableDetected(p.detected[p.selected])
+				return nil, true
+			}
 			return m.openIntegrations(), true
 		}
 		return nil, true

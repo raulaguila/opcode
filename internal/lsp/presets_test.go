@@ -56,3 +56,22 @@ func TestExpandedLanguageServerPresetsRequireProjectMarkers(t *testing.T) {
 		})
 	}
 }
+
+func TestDetectOffersInstalledServersForTheProjectOncePerLanguage(t *testing.T) {
+	bin, root := t.TempDir(), t.TempDir()
+	for _, name := range []string{"gopls", "pylsp", "pyright-langserver", "rust-analyzer"} {
+		require.NoError(t, os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"), 0700))
+	}
+	t.Setenv("PATH", bin)
+	for _, marker := range []string{"go.mod", "pyproject.toml"} {
+		require.NoError(t, os.WriteFile(filepath.Join(root, marker), nil, 0600))
+	}
+	var names []string
+	for _, d := range Detect(root, nil) {
+		names = append(names, d.Name)
+	}
+	require.Equal(t, []string{"gopls", "pylsp"}, names, "no Cargo.toml, no rust-analyzer; one Python server")
+	found := Detect(root, map[string]config.LSPConfig{"go": {Command: "/usr/bin/gopls"}})
+	require.Len(t, found, 1)
+	require.Equal(t, "pylsp", found[0].Name, "a configured server's language is not offered again")
+}

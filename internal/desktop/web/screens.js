@@ -636,7 +636,7 @@ const helpText = {
 };
 
 async function openSettings(section = 0) {
-  let prefs = { settings: [], path: "" }, conns = { items: [], presets: [], integrations: [] };
+  let prefs = { settings: [], path: "" }, conns = { items: [], presets: [], integrations: [], detected: [] };
   let selected = 0, query = "", saved = "", problem = "";
   // Two levels: the section menu, then the section's items. ↑↓ move within a
   // level, → or Enter goes in, ← comes back out.
@@ -664,18 +664,21 @@ async function openSettings(section = 0) {
       if (section === 0) return connectionKey(event);
       if (section === 3 && ["ArrowRight", " ", "Enter"].includes(event.key)) { event.preventDefault(); view.policy = view.policy === "prompt" ? "project_edits" : "prompt"; renderFrame(); draw(); return true; }
       if ([1, 2, 4, 6].includes(section)) return prefKey(event);
+      if (section === 5 && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); const found = conns.detected[selected]; if (found) enableServer(found.name); return true; }
       return false;
     },
   });
   const theme = () => ({ path: "app.theme", label: t("Tema", "Theme"), category: "interface", help: "dark, light, system", value: themeChoice(), origin: "" });
   const rows = () => [theme(), ...prefs.settings].filter((s) => s.path !== "tui.sidebar" && sectionOf(s) === section && (!query || (s.label + " " + s.path).toLowerCase().includes(query.toLowerCase())));
-  const count = () => section === 0 ? conns.items.length : section === 3 ? 1 : section === 5 ? 0 : rows().length;
+  const count = () => section === 0 ? conns.items.length : section === 3 ? 1 : section === 5 ? conns.detected.length : rows().length;
   const go = (n) => { section = n; selected = 0; query = ""; saved = ""; problem = ""; draw(); };
   const legend = () => {
     if (pane === "nav") return [["↑↓", t("seção", "section")], ["→", t("abrir", "open")], ["Esc", t("fechar", "close"), true]];
     if (section === 0) return [["↑↓", t("conexão", "connection")], ["Enter", t("editar", "edit")], ["N", t("nova", "new")], ["T", t("testar", "test")], ["D", t("excluir", "delete")], ["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]];
     if (section === 3) return [["→", t("trocar", "switch")], ["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]];
-    if (section === 5) return [["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]];
+    if (section === 5) return conns.detected.length
+      ? [["↑↓", t("escolher", "choose")], ["Enter", t("ativar", "turn on")], ["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]]
+      : [["←", t("menu", "menu")], ["Esc", t("fechar", "close"), true]];
     const out = [["↑↓", t("preferência", "preference")], ["→", t("valor", "value")], ["←", t("menu", "menu")]];
     out.push([t("Salva ao mudar", "Saves on change"), saved ? "· ✓ " + t("salvo", "saved") : "", false, saved ? "saved" : ""]);
     out.push(["Esc", t("fechar", "close"), true]);
@@ -759,7 +762,23 @@ async function openSettings(section = 0) {
   const drawIntegrations = () => {
     content.append(el("div", { class: "pane" }, el("h3", {}, t("Servidores de linguagem e MCP", "Language servers and MCP")),
       conns.integrations.length ? el("div", {}, conns.integrations.map((name) => el("div", {}, el("span", { class: "ok-t" }, "● "), name))) : el("div", { class: "desc" }, t("Nenhuma integração configurada.", "No integrations configured.")),
+      conns.detected.length ? el("div", { style: "margin-top:16px" }, el("h3", {}, t("Encontrados neste computador", "Found on this computer")),
+        conns.detected.map((found, i) => el("div", { class: `pref${pane === "content" && i === selected ? " sel" : ""}` },
+          el("span", { class: "name" }, found.name),
+          el("button", { type: "button", class: "act", onclick: () => enableServer(found.name) }, t("Ativar", "Turn on")),
+          el("span", { class: "desc" }, found.languages.join(", ")), el("span", {}))),
+        el("div", { class: "desc" }, t("O servidor liga ao abrir um arquivo da linguagem.", "It starts when a file of its language is opened."))) : null,
+      saved ? el("div", { class: "ok-t", style: "margin-top:12px" }, saved) : null,
       el("div", { class: "tip" }, t("Para adicionar ou editar integrações, use opcode no terminal: Configurações › Integrações.", "To add or edit integrations, use opcode in the terminal: Settings › Integrations."))));
+  };
+  const enableServer = async (name) => {
+    try {
+      await api("/api/integrations/lsp", { name });
+      conns = await api("/api/connections");
+      selected = Math.min(selected, Math.max(0, conns.detected.length - 1));
+      saved = `✓ ${name} ${t("ativo", "on")}`; problem = "";
+    } catch (error) { problem = error.message; }
+    draw();
   };
   const drawConnections = () => {
     const cards = el("div", { class: "cards" });

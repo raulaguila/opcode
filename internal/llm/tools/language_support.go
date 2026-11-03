@@ -75,15 +75,6 @@ func languageServerMatches(language string, types []string) bool {
 	return false
 }
 
-var languageServerArgs = map[string][]string{
-	"pyright-langserver": {"--stdio"}, "typescript-language-server": {"--stdio"},
-	"intelephense": {"--stdio"}, "phpactor": {"language-server"},
-	"bash-language-server": {"start"}, "dart": {"language-server", "--protocol=lsp"},
-	"vue-language-server": {"--stdio"}, "svelteserver": {"--stdio"},
-	"terraform-ls": {"serve"}, "yaml-language-server": {"--stdio"}, "taplo": {"lsp", "stdio"},
-	"vscode-json-language-server": {"--stdio"}, "vscode-html-language-server": {"--stdio"}, "vscode-css-language-server": {"--stdio"},
-}
-
 // InspectLanguageSupport only discovers paths and executable availability. It
 // never reads project source bodies, starts LSP, installs tools or invokes checks.
 // The optional project scan uses the same exclusions and hard cap as discovery.
@@ -210,7 +201,7 @@ func suggestedLanguageServers(name string) []LanguageServerSuggestion {
 	suggestions := []LanguageServerSuggestion{}
 	for _, command := range servers[:min(2, len(servers))] {
 		_, err := exec.LookPath(command)
-		args := slices.Clone(languageServerArgs[command])
+		args := slices.Clone(lsp.PresetArgs[command])
 		if args == nil {
 			args = []string{}
 		}

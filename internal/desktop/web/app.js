@@ -302,7 +302,7 @@ function renderFrame() {
     $("meter").append(el("span", { class: "meter" }, "█".repeat(filled)), el("span", { style: "color:var(--faint)" }, "░".repeat(5 - filled)), ` ${Math.round(used * 100)}%`);
   }
   const speed = view.conversation?.speed;
-  if (speed && !narrow) $("meter").append(`${tokens && state.context ? " · " : ""}${Math.round(speed)} t/s`);
+  if (speed && !narrow) $("meter").append(`${tokens && state.context ? " · " : ""}${view.conversation.speed_live ? "~" : ""}${Math.round(speed)} t/s`);
   $("model").textContent = (narrow && state.model.length > 10 ? state.model.slice(0, 9) + "…" : state.model) + " ▾";
 }
 

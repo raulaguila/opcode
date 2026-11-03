@@ -97,11 +97,16 @@ func (m *Model) openPalette() tea.Cmd {
 	return nil
 }
 
+// setMode changes the mode; when the agent refuses it, the screen keeps the
+// mode the agent is in and says why.
 func (m *Model) setMode(mode string) {
-	m.mode = mode
 	if m.session.ID != "" && m.app.CoderAgent != nil {
-		_ = m.app.CoderAgent.SetMode(context.Background(), m.session.ID, workflow.Mode(mode))
+		if err := m.app.CoderAgent.SetMode(context.Background(), m.session.ID, workflow.Mode(mode)); err != nil {
+			m.notice = err.Error()
+			return
+		}
 	}
+	m.mode = mode
 	m.layout()
 }
 
@@ -116,6 +121,7 @@ func (m *Model) setApproval(policy permission.ApprovalPolicy) {
 
 func (m *Model) newConversation() tea.Cmd {
 	m.session, m.messages, m.notice, m.busy = session.Session{}, nil, "", false
+	m.version++
 	m.refresh()
 	return nil
 }

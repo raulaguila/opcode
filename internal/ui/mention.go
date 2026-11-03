@@ -2,6 +2,8 @@ package ui
 
 import (
 	"strings"
+
+	tea "charm.land/bubbletea/v2"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -20,19 +22,26 @@ func (m *Model) mentionToken() (string, bool) {
 	return value[start+1:], true
 }
 
-// findMention lists the files matching the @ being typed, if any.
-func (m *Model) findMention() {
+// filesMsg carries the workspace's files, listed off the interface's loop.
+type filesMsg []string
+
+// findMention lists the files matching the @ being typed, if any. The
+// workspace is listed in the background (a large one takes a while) and
+// kept a few seconds; until it arrives the last listing is used.
+func (m *Model) findMention() tea.Cmd {
 	query, ok := m.mentionToken()
 	if !ok {
 		m.mention = nil
-		return
-	}
-	// The listing is kept a few seconds; every key asks again.
-	if time.Since(m.filesAt) > 10*time.Second {
-		m.files, m.filesAt = fileutil.WorkspaceFiles(config.WorkingDirectory()), time.Now()
+		return nil
 	}
 	m.mention = fileutil.MatchFiles(m.files, query, mentionRows)
 	m.mentionPick = min(m.mentionPick, max(0, len(m.mention)-1))
+	if m.listing || time.Since(m.filesAt) < 10*time.Second {
+		return nil
+	}
+	m.listing = true
+	root := config.WorkingDirectory()
+	return func() tea.Msg { return filesMsg(fileutil.WorkspaceFiles(root)) }
 }
 
 // mentionKey moves through the list, inserts the chosen file or closes it.

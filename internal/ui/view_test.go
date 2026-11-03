@@ -4,8 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/stretchr/testify/require"
 )
 
@@ -69,4 +71,20 @@ func TestFooterNamesWhatTheRunIsDoing(t *testing.T) {
 	require.Equal(t, "+12 −3", sizeLabel(12, 3))
 	require.Equal(t, "+12", sizeLabel(12, 0))
 	require.Empty(t, sizeLabel(0, 0))
+}
+
+func TestTranscriptRepaintsWhenAReplyGrowsButNotWhenTyping(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 80, 24
+	m.session.ID = "s"
+	m.layout()
+	reply := message.Message{ID: "a", SessionID: "s", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "PRIMEIRA"}}}
+	m.Update(pubsub.Event[message.Message]{Type: pubsub.CreatedEvent, Payload: reply})
+	require.Contains(t, ansi.Strip(strings.Join(m.rows, "\n")), "PRIMEIRA")
+	reply.Parts = []message.ContentPart{message.TextContent{Text: "SEGUNDA"}}
+	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: reply})
+	require.Contains(t, ansi.Strip(strings.Join(m.rows, "\n")), "SEGUNDA")
+	painted := m.paintKey
+	m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	require.Equal(t, painted, m.paintKey, "typing must not rebuild the transcript")
 }

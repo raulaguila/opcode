@@ -53,6 +53,7 @@ type Server struct {
 	mu       sync.Mutex
 	feeds    map[chan string]struct{}
 	failures map[string]string // a session's last run error, until its next prompt
+	numbers  map[string]int    // a session's place, counted once: the page asks on every update
 
 	filesCache []string // the workspace's file names, for @ mentions
 	filesAt    time.Time
@@ -66,7 +67,7 @@ func New(application *app.App) (*Server, error) {
 	}
 	// The window can answer the agent's questions, so the agent may ask them.
 	application.Questions.SetInteractive(true)
-	return &Server{app: application, key: hex.EncodeToString(raw), feeds: map[chan string]struct{}{}, failures: map[string]string{}}, nil
+	return &Server{app: application, key: hex.EncodeToString(raw), feeds: map[chan string]struct{}{}, failures: map[string]string{}, numbers: map[string]int{}}, nil
 }
 
 // Listen binds a random loopback port and returns the URL that opens the app;
@@ -275,8 +276,9 @@ type Conversation struct {
 	Task        workflow.Task `json:"task"`
 	Failure     string        `json:"failure,omitempty"`
 	Question    any           `json:"question,omitempty"`
-	Number      int           `json:"number"`          // the session's place among this workspace's conversations
-	Speed       float64       `json:"speed,omitempty"` // tokens per second of the last reply
+	Number      int           `json:"number"`               // the session's place among this workspace's conversations
+	Speed       float64       `json:"speed,omitempty"`      // tokens per second: live while streaming, else the last reply's
+	SpeedLive   bool          `json:"speed_live,omitempty"` // measured on the reply still streaming
 }
 
 // Approval is a pending permission with its diff or command, if any.
@@ -313,11 +315,18 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 		view.Permissions = append(view.Permissions, approval(request))
 	}
 	view.Number = s.number(r.Context(), current)
-	if usage, ok := s.app.CoderAgent.(interface {
-		Usage(context.Context, string) (agent.UsageMetrics, error)
-	}); ok {
-		if metrics, err := usage.Usage(r.Context(), id); err == nil && metrics.LastOutputTokens > 0 && metrics.LastOutputDurationNS > 0 {
-			view.Speed = float64(metrics.LastOutputTokens) / (float64(metrics.LastOutputDurationNS) / float64(time.Second))
+	// As in the terminal: measured live while the reply streams, the last
+	// reply's rate when idle.
+	if usage, ok := s.app.CoderAgent.(agent.UsageControl); ok {
+		if metrics, err := usage.Usage(r.Context(), id); err == nil {
+			switch {
+			case view.Busy && metrics.StreamActive:
+				if metrics.StreamSamples >= 2 && metrics.StreamSampleDurationNS >= int64(250*time.Millisecond) {
+					view.Speed, view.SpeedLive = metrics.StreamSampleTokens*1e9/float64(metrics.StreamSampleDurationNS), true
+				}
+			case !view.Busy && metrics.LastOutputTokens > 0 && metrics.LastOutputDurationNS > 0:
+				view.Speed = float64(metrics.LastOutputTokens) * 1e9 / float64(metrics.LastOutputDurationNS)
+			}
 		}
 	}
 	reply(w, http.StatusOK, view)
@@ -368,13 +377,10 @@ func project(messages []message.Message) []Message {
 		case message.User:
 			entry.Text = text
 		case message.Assistant:
-			entry.HTML = renderMarkdown(text)
+			entry.HTML, entry.Cites = renderReply(text)
 			entry.Model = string(msg.Model)
 			if finish := msg.FinishPart(); finish != nil && msg.IsFinished() && finish.Time > msg.CreatedAt {
 				entry.Seconds = finish.Time - msg.CreatedAt
-			}
-			if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
-				entry.Cites = fmt.Sprintf("%s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
 			}
 			for _, call := range msg.ToolCalls() {
 				step := Step{Name: call.Name, Target: target(call.Input), State: "ok"}
@@ -407,30 +413,35 @@ func project(messages []message.Message) []Message {
 // changes between asks.
 var rendered = struct {
 	sync.Mutex
-	html map[string]string
-}{html: map[string]string{}}
+	replies map[string][2]string // text → its HTML and the first source it cites
+}{replies: map[string][2]string{}}
 
 var markdown = goldmark.New()
 
-func renderMarkdown(text string) string {
+// renderReply is a reply's HTML and its first citation ("store.go:45").
+func renderReply(text string) (string, string) {
 	if text == "" {
-		return ""
+		return "", ""
 	}
 	rendered.Lock()
 	defer rendered.Unlock()
-	if html, ok := rendered.html[text]; ok {
-		return html
+	if reply, ok := rendered.replies[text]; ok {
+		return reply[0], reply[1]
 	}
 	var html bytes.Buffer
 	// Goldmark leaves raw HTML out unless asked, so model text cannot inject markup.
 	if markdown.Convert([]byte(text), &html) != nil {
-		return ""
+		return "", ""
 	}
-	if len(rendered.html) >= 512 { // shortcut: drops everything when full; a long-lived app rarely shows 512 replies
-		clear(rendered.html)
+	cite := ""
+	if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
+		cite = fmt.Sprintf("%s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
 	}
-	rendered.html[text] = html.String()
-	return html.String()
+	if len(rendered.replies) >= 512 { // shortcut: drops everything when full; a long-lived app rarely shows 512 replies
+		clear(rendered.replies)
+	}
+	rendered.replies[text] = [2]string{html.String(), cite}
+	return html.String(), cite
 }
 
 // target is a call's main argument: a file name, a command, a pattern.
@@ -611,15 +622,23 @@ func relative(path string) string {
 // number is a conversation's place, oldest first, among the workspace's
 // conversations: "sessão 3".
 func (s *Server) number(ctx context.Context, current session.Session) int {
+	s.mu.Lock()
+	n, ok := s.numbers[current.ID]
+	s.mu.Unlock()
+	if ok {
+		return n
+	}
 	list, err := s.app.Sessions.List(ctx)
 	if err != nil {
 		return 0
 	}
-	n := 0
 	for _, item := range list {
 		if item.ParentSessionID == "" && (item.CreatedAt < current.CreatedAt || item.ID == current.ID) {
 			n++
 		}
 	}
+	s.mu.Lock()
+	s.numbers[current.ID] = n
+	s.mu.Unlock()
 	return n
 }

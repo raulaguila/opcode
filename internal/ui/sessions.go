@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -62,6 +63,7 @@ type sessionsDialog struct {
 	acting       bool // → moved from the list to the preview's buttons
 	action       int  // the button Enter presses while acting
 	previews     map[string]preview
+	asked        map[string]bool // previews being read
 }
 
 // preview is what the side column shows of a conversation.
@@ -94,7 +96,7 @@ func (m *Model) openSessions() tea.Cmd {
 	}
 	m.dialog = d
 	d.reload(m, m.session.ID)
-	return nil
+	return d.wanted(m)
 }
 
 func (d *sessionsDialog) catalog() *session.Catalog {
@@ -271,9 +273,6 @@ func (d *sessionsDialog) rename(m *Model, item Item) {
 // preview is the right column: title, facts, the last exchange and actions.
 func (d *sessionsDialog) preview(m *Model, item Item, width int) []string {
 	s := item.Value.(session.Session)
-	if _, ok := d.previews[s.ID]; !ok {
-		d.previews[s.ID] = m.lookInto(s.ID)
-	}
 	title := on(P.Surface, P.Strong).Bold(true).Render(ansi.Truncate(s.Title, width, "…"))
 	if d.renaming {
 		draft := ansi.TruncateLeft(d.draft, max(0, ansi.StringWidth(d.draft)-width+5), "…")
@@ -336,11 +335,36 @@ func (d *sessionsDialog) preview(m *Model, item Item, width int) []string {
 	return append(rows, strings.Join(buttons, gap))
 }
 
+// previewMsg brings a conversation's preview, read off the interface's loop.
+type previewMsg struct {
+	id   string
+	look preview
+}
+
+// wanted reads the selected conversation's preview in the background the
+// first time it is selected; until then the column shows what the list knows.
+func (d *sessionsDialog) wanted(m *Model) tea.Cmd {
+	item, ok := d.list.Current()
+	if !ok || m.app == nil {
+		return nil
+	}
+	id := item.Value.(session.Session).ID
+	if _, seen := d.previews[id]; seen || d.asked[id] {
+		return nil
+	}
+	if d.asked == nil {
+		d.asked = map[string]bool{}
+	}
+	d.asked[id] = true
+	a := m.app
+	return func() tea.Msg { return previewMsg{id, lookInto(a, id)} }
+}
+
 // lookInto reads a conversation's last exchange, its steps, the model that
 // answered and its plan.
-func (m *Model) lookInto(id string) preview {
+func lookInto(a *app.App, id string) preview {
 	var out preview
-	messages, err := m.app.Messages.List(context.Background(), id)
+	messages, err := a.Messages.List(context.Background(), id)
 	if err != nil {
 		return out
 	}
@@ -364,7 +388,7 @@ func (m *Model) lookInto(id string) preview {
 			out.calls = append(msg.ToolCalls(), out.calls...)
 		}
 	}
-	if task, err := m.app.Workflows.Get(context.Background(), id); err == nil {
+	if task, err := a.Workflows.Get(context.Background(), id); err == nil {
 		out.mode, out.planTotal = string(task.Mode), len(task.Steps)
 		for _, step := range task.Steps {
 			if step.Status == "completed" {
@@ -395,7 +419,13 @@ func planning(m *Model, id string) bool {
 func (m *Model) openSession(s session.Session) {
 	m.dialog = nil
 	m.session, m.notice, m.info = s, "", ""
-	m.messages, _ = m.app.Messages.List(context.Background(), s.ID)
+	m.messages, m.version = nil, m.version+1
+	if messages, err := m.app.Messages.List(context.Background(), s.ID); err != nil {
+		// An empty screen would look like a lost conversation.
+		m.notice = textFor("Não foi possível ler a conversa: ", "Could not read the conversation: ") + err.Error()
+	} else {
+		m.messages = messages
+	}
 	m.busy = m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(s.ID)
 	m.follow = true
 	m.refresh()

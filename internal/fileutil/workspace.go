@@ -1,6 +1,8 @@
 package fileutil
 
 import (
+	"bufio"
+	"bytes"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -10,23 +12,40 @@ import (
 	"time"
 )
 
-// WorkspaceFiles lists the files under root by name, through ripgrep when it
-// is installed (which honors .gitignore), else by walking the tree.
+// workspaceLimit bounds the listing: a workspace opened at a home folder can
+// hold millions of files.
+const workspaceLimit = 20000
+
+// WorkspaceFiles lists up to workspaceLimit files under root by name, through
+// ripgrep when it is installed (which honors .gitignore), else by walking
+// the tree.
 func WorkspaceFiles(root string) []string {
 	var list []string
 	if cmd := GetRgCmd(""); cmd != nil {
 		cmd.Dir = root
-		if raw, err := cmd.Output(); err == nil {
-			for _, path := range strings.Split(string(raw), "\x00") {
-				if path = strings.TrimPrefix(path, "./"); path != "" {
+		if out, err := cmd.StdoutPipe(); err == nil && cmd.Start() == nil {
+			scanner := bufio.NewScanner(out)
+			scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+				if i := bytes.IndexByte(data, 0); i >= 0 {
+					return i + 1, data[:i], nil
+				}
+				if atEOF && len(data) > 0 {
+					return len(data), data, nil
+				}
+				return 0, nil, nil
+			})
+			for len(list) < workspaceLimit && scanner.Scan() {
+				if path := strings.TrimPrefix(scanner.Text(), "./"); path != "" {
 					list = append(list, path)
 				}
 			}
+			_ = cmd.Process.Kill() // stops a listing past the limit; harmless after it ends
+			_ = cmd.Wait()
 		}
 	}
 	if list == nil {
 		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || len(list) >= 20000 {
+			if err != nil || len(list) >= workspaceLimit {
 				return filepath.SkipDir
 			}
 			name := entry.Name()

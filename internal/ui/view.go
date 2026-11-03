@@ -150,11 +150,21 @@ func (m *Model) renderTranscript(width int) string {
 	failureAt := -1 // the recovery card follows the last steps of the conversation
 	flush := func() {
 		if len(steps) > 0 {
-			rows := stepsRows(steps, results, inner, m.approval != nil, P.Ground)
-			for i := range rows {
-				rows[i] = indent + rows[i]
+			// A run of steps is redrawn only when a call starts or ends.
+			var key strings.Builder
+			fmt.Fprintf(&key, "%t:%t", m.approval != nil, config.Get() != nil && config.Get().Preferences.ProcessVisible())
+			for _, call := range steps {
+				result, done := results[call.ID]
+				fmt.Fprintf(&key, "|%s:%d:%t:%t:%t", call.ID, len(call.Input), call.Finished, done, result.IsError)
 			}
-			blocks = append(blocks, strings.Join(rows, "\n"))
+			run := steps
+			blocks = append(blocks, m.cached("steps:"+run[0].ID, key.String(), inner, fresh, func() string {
+				rows := stepsRows(run, results, inner, m.approval != nil, P.Ground)
+				for i := range rows {
+					rows[i] = indent + rows[i]
+				}
+				return strings.Join(rows, "\n")
+			}))
 			failureAt = len(blocks)
 			steps = nil
 		}

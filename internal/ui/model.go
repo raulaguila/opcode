@@ -62,8 +62,10 @@ type Model struct {
 	blocks       map[string]renderedBlock // messages already drawn, by ID
 	live         styles.MarkdownCache     // the streaming reply's settled blocks
 	ticking      bool                     // a clock tick is scheduled
-	content      string                   // the transcript last painted
+	version      int                      // bumped whenever messages change
+	paintKey     paintKey                 // what the painted transcript was drawn from
 	rows         []string                 // its rows, painted to the width
+	blank        []string                 // empty lines, as many as rows, for the viewport
 	activity     string                   // what the run is doing, for the footer
 	behind       string                   // the screen under the open panel
 	dimmed       string                   // and the same, receded
@@ -74,6 +76,7 @@ type Model struct {
 	mentionPick int       // the one Tab or Enter inserts
 	files       []string  // the workspace's files, for @
 	filesAt     time.Time // when files was listed
+	listing     bool      // a listing is on its way
 }
 
 type tickMsg struct{}
@@ -110,7 +113,10 @@ func New(a *app.App, initial ...session.Session) *Model {
 	if len(initial) > 0 {
 		m.session = initial[0]
 		if a != nil && a.Messages != nil {
-			m.messages, _ = a.Messages.List(context.Background(), m.session.ID)
+			var err error
+			if m.messages, err = a.Messages.List(context.Background(), m.session.ID); err != nil {
+				m.notice = textFor("Não foi possível ler a conversa: ", "Could not read the conversation: ") + err.Error()
+			}
 		}
 	}
 	return m
@@ -164,7 +170,16 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyPressMsg:
-		return m, m.key(msg)
+		cmd := m.key(msg)
+		if d, ok := m.dialog.(*sessionsDialog); ok {
+			cmd = tea.Batch(cmd, d.wanted(m))
+		}
+		return m, cmd
+	case previewMsg:
+		if d, ok := m.dialog.(*sessionsDialog); ok {
+			d.previews[msg.id] = msg.look
+		}
+		return m, nil
 	case tea.PasteMsg:
 		// Pasted text, newlines included, lands in the draft; it never sends.
 		if d, ok := m.dialog.(interface{ paste(string) }); ok {
@@ -184,6 +199,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.busy {
 			return m, m.tick()
 		}
+		return m, nil
+	case filesMsg:
+		m.files, m.filesAt, m.listing = msg, time.Now(), false
+		m.findMention()
+		m.layout()
 		return m, nil
 	case catalogMsg:
 		if picker, ok := m.dialog.(*modelPicker); ok {
@@ -302,9 +322,9 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	var cmd tea.Cmd
 	m.composer, cmd = m.composer.Update(msg)
-	m.findMention()
+	listing := m.findMention()
 	m.layout()
-	return cmd
+	return tea.Batch(cmd, listing)
 }
 
 // answerApproval maps the numbered buttons (and a/s/d) to the decision.
@@ -357,7 +377,10 @@ func (m *Model) submit() tea.Cmd {
 			return nil
 		}
 		m.session = created
-		_ = m.app.CoderAgent.SetMode(ctx, m.session.ID, workflow.Mode(m.mode))
+		if err := m.app.CoderAgent.SetMode(ctx, m.session.ID, workflow.Mode(m.mode)); err != nil {
+			m.notice = err.Error() // the conversation exists; the message waits in the composer
+			return nil
+		}
 		if m.policy != "" {
 			m.setApproval(m.policy)
 		}
@@ -395,10 +418,13 @@ func (m *Model) upsert(event pubsub.Event[message.Message]) {
 	switch {
 	case event.Type == pubsub.DeletedEvent && index >= 0:
 		m.messages = slices.Delete(m.messages, index, index+1)
+		m.version++
 	case index >= 0:
 		m.messages[index] = msg
+		m.version++
 	case event.Type != pubsub.DeletedEvent:
 		m.messages = append(m.messages, msg)
+		m.version++
 	}
 }
 
@@ -420,21 +446,39 @@ func (m *Model) layout() {
 	m.refresh()
 }
 
+// paintKey is everything the transcript is drawn from besides its width.
+type paintKey struct {
+	version, count, width, prose int
+	head                         *message.Message
+	failure                      error
+	showFailure, waiting, model  bool
+	process                      bool
+}
+
 func (m *Model) refresh() {
 	if m.width == 0 {
 		return
 	}
 	// Every row is painted to the edge so no terminal background shows
 	// through; rows painted last time are reused.
-	m.activity = m.doing() // read by every frame's footer; messages change only here
-	content := m.renderTranscript(m.width)
-	if content == m.content && m.transcript.Width() == m.width {
+	// Typing and resizing the composer change nothing the transcript shows,
+	// so it is built again only when one of those things changed.
+	key := paintKey{version: m.version, count: len(m.messages), width: m.width, failure: m.failure, showFailure: m.showFailure, waiting: m.approval != nil, model: m.hasModel()}
+	if len(m.messages) > 0 {
+		key.head = &m.messages[0] // a list replaced wholesale, even without a version bump
+	}
+	if cfg := config.Get(); cfg != nil {
+		key.prose, key.process = cfg.TUI.ProseWidth, cfg.Preferences.ProcessVisible()
+	}
+	if key == m.paintKey && m.transcript.Width() == m.width {
 		if m.follow {
 			m.transcript.GotoBottom()
 		}
-		return // nothing new to paint: typing and resizing the composer stay cheap
+		return
 	}
-	m.content = content
+	m.paintKey = key
+	m.activity = m.doing() // read by every frame's footer; messages change only here
+	content := m.renderTranscript(m.width)
 	rows := strings.Split(content, "\n")
 	painted := make(map[string]string, len(rows))
 	for i, row := range rows {
@@ -450,7 +494,13 @@ func (m *Model) refresh() {
 		m.painted, m.paintedWidth = nil, m.width
 	}
 	m.rows = rows
-	m.transcript.SetContent(strings.Join(rows, "\n"))
+	// The viewport keeps only the scroll position: transcriptRows cuts the
+	// painted rows itself. Blank lines give it the count without making it
+	// measure every row's width on each update.
+	for len(m.blank) < len(rows) {
+		m.blank = append(m.blank, "")
+	}
+	m.transcript.SetContentLines(m.blank[:len(rows)])
 	if m.follow {
 		m.transcript.GotoBottom()
 	}

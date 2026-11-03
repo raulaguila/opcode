@@ -55,11 +55,18 @@ func TestCatalogFilteringPaginationAndSchemaLease(t *testing.T) {
 	require.NotNil(t, result)
 	_, err = toolCatalog(run, `{"offset":-1}`)
 	require.Error(t, err)
-	run.selected["extra"] = true
-	run.toolLeases["extra"] = 1
+	first := a.exposedTools(run)
+	run.selected["get_runtime_info"] = true
+	run.toolLeases["get_runtime_info"] = 1
 	run.steps = 3
+	run.available = append([]tools.BaseTool{&countedTool{name: "get_runtime_info"}}, run.available...)
+	later := a.exposedTools(run)
+	require.True(t, run.selected["get_runtime_info"], "a large window keeps the reply's schemas")
+	require.Equal(t, "get_runtime_info", later[len(later)-1].Info().Name, "a new schema joins at the end")
+	require.Equal(t, first[0].Info().Name, later[0].Info().Name)
+	run.provider = &auxiliaryPreparedProbe{}
 	a.exposedTools(run)
-	require.False(t, run.selected["extra"])
+	require.False(t, run.selected["get_runtime_info"], "a small window gives the leased schema back")
 }
 func TestRequirementCountsUseOnlyCurrentRunSuccessfulReceipts(t *testing.T) {
 	run := &generationRun{available: []tools.BaseTool{&countedTool{name: "ls"}, &countedTool{name: "view"}}, startMessageID: "current", mode: workflow.Ask}

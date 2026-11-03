@@ -186,3 +186,25 @@ func TestFlowGuidanceDistinguishesContractsFromObservedBehavior(t *testing.T) {
 		}
 	}
 }
+
+func TestPromptCarriesTheReadmeSummaryButNotItsSections(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# Tool\n\nA billing service for shops.\nRuns nightly.\n\n## Install\n\nmake install\n"), 0600))
+	text := projectSummary(root)
+	require.Contains(t, text, "Tool: A billing service for shops. Runs nightly.")
+	require.NotContains(t, text, "make install")
+	require.Empty(t, projectSummary(t.TempDir()))
+}
+
+func TestSmallModelsGetTheShortRules(t *testing.T) {
+	for name, small := range map[string]bool{"nemotron-3.5-bolt:e4b": true, "llama3.1:8b": true, "qwen3:4b": true, "deepseek-r1:1.5b": true, "qwen2.5-coder:32b": false, "mixtral:8x7b": false, "gpt-4o": false, "claude-opus-4": false} {
+		require.Equal(t, small, SmallModel(name), name)
+	}
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	large := RunPrompt("ask", "ollama", "qwen2.5-coder:32b", 131072, []string{"view"})
+	small := RunPrompt("ask", "ollama", "qwen3:4b", 131072, []string{"view"})
+	require.Contains(t, small, "profile=reduced")
+	require.Less(t, len(small), len(large)*2/3)
+	require.Contains(t, small, "Keep sandboxing, approvals and credential protections intact")
+}

@@ -131,7 +131,7 @@ func (e *explorationState) generate() (*provider.ProviderResponse, error) {
 			names = append(names, tool.Info().Name)
 		}
 		model := e.provider.Model()
-		next, err := controller.WithSystemPrompt(prompt.RunPrompt("ask", model.API, model.ContextWindow, names))
+		next, err := controller.WithSystemPrompt(prompt.RunPrompt("ask", model.API, model.APIModel, model.ContextWindow, names))
 		if err != nil {
 			return nil, err
 		}

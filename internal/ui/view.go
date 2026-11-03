@@ -146,7 +146,7 @@ func (m *Model) renderTranscript(width int) string {
 	defer func() { m.blocks = fresh }()
 	turn = 0
 	var blocks []string
-	var steps []message.ToolCall
+	var steps, turnCalls []message.ToolCall
 	failureAt := -1 // the recovery card follows the last steps of the conversation
 	flush := func() {
 		if len(steps) > 0 {
@@ -176,6 +176,7 @@ func (m *Model) renderTranscript(width int) string {
 		text := strings.TrimSpace(msg.Content().String())
 		if msg.Role == message.User {
 			turn++
+			turnCalls = nil
 			flush()
 			blocks = append(blocks, m.cached(msg.ID, text, inner, fresh, func() string {
 				return barred(text, "┃", P.User, P.Strong, inner, indent)
@@ -185,8 +186,9 @@ func (m *Model) renderTranscript(width int) string {
 		if text != "" && latest[turn] == msg.ID {
 			flush()
 			key := text
+			read := agent.SourcesLabel(agent.SourcesRead(turnCalls, results))
 			if msg.IsFinished() {
-				key += "\x00" + string(msg.Model) // the meta line appears when it finishes
+				key += "\x00" + string(msg.Model) + "\x00" + read // the meta line appears when it finishes
 			}
 			blocks = append(blocks, m.cached(msg.ID, key, inner, fresh, func() string {
 				var body string
@@ -199,7 +201,9 @@ func (m *Model) renderTranscript(width int) string {
 				body = strings.TrimSuffix(body, "\n")
 				if finish := msg.FinishPart(); finish != nil && msg.IsFinished() {
 					meta := " " + modelName(msg.Model) + " · " + duration(msg.CreatedAt, finish.Time)
-					if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
+					if read != "" {
+						meta += " · " + textFor("lido: ", "read: ") + read
+					} else if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
 						meta += fmt.Sprintf(" · %s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
 					}
 					body += "\n" + on(P.Ground, P.Faint).Render(meta)
@@ -208,6 +212,7 @@ func (m *Model) renderTranscript(width int) string {
 			}))
 		}
 		steps = append(steps, msg.ToolCalls()...)
+		turnCalls = append(turnCalls, msg.ToolCalls()...)
 	}
 	flush()
 	if m.failure != nil {

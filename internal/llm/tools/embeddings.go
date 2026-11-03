@@ -81,10 +81,11 @@ func cosine(a, b []float64) float64 {
 // embedding cache use this request's DB handle after that lock is released.
 func rankHybridCandidates(ctx context.Context, db *sql.DB, query string, candidates, pool []codeIndexHit, root string) ([]codeIndexHit, string) {
 	cfg := config.Get()
-	if cfg == nil || cfg.Index.Embeddings == nil {
+	embeddings := cfg.Embeddings()
+	if embeddings == nil {
 		return candidates, "lexical (embeddings not configured)"
 	}
-	c := *cfg.Index.Embeddings
+	c := *embeddings
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	texts, eligible := semanticInputs(ctx, query, pool, root)

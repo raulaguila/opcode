@@ -50,6 +50,9 @@ type generationRun struct {
 	requiresProjectEvidence bool
 	primaryEvidence         map[string]bool
 	citationRepair          bool
+	exposed                 []string // tool schemas in the order the reply first offered them
+	route                   []any    // how the request was read, for the route log
+	prepared, searches      int      // sources read before the model; the model's own searches
 	citationRevisionOf      string
 	citationRevision        *citationRevision
 }
@@ -219,6 +222,9 @@ func (a *agent) finishGenerationRun(sessionID string, run *generationRun, events
 
 	if result.Error != nil && !errors.Is(result.Error, ErrRequestCancelled) && !errors.Is(result.Error, context.Canceled) {
 		logging.ErrorPersist(result.Error.Error())
+	}
+	if run.prepared == 0 && run.searches >= 2 {
+		logging.Info("Route missed: the model searched for sources nothing was prepared for", append([]any{"searches", run.searches}, run.route...)...)
 	}
 	result.SessionID = sessionID
 	a.Publish(pubsub.CreatedEvent, *result)

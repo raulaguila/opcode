@@ -157,6 +157,13 @@ exceder um limite aborta a atualização sem substituir o índice anterior. O ba
 tem teto de 32768 páginas SQLite. Credenciais conhecidas são removidas antes da
 persistência. Não há downloads de modelos. Parsers selecionados são embarcados; embeddings exigem configuração local explícita.
 
+A busca semântica é opcional e começa desligada. Em Configurações › Trabalho,
+**Busca semântica** recebe o nome de um modelo de embeddings já instalado no
+Ollama local (por exemplo `nomic-embed-text`); vazio desliga. Ela fala só com
+`http://127.0.0.1:11434/api/embed`, vale apenas na configuração global (um
+`.opcode.json` de projeto não a liga) e, se o Ollama não responder, a busca segue
+léxica. `index.embeddings` com outro endpoint local continua tendo precedência.
+
 `format_project` recebe `preset` e `files` explícitos (1–64 arquivos regulares,
 até 2 MiB cada). Os presets `go`, `python` e `javascript`/`typescript`/`json`
 executam, respectivamente, `gofmt -w`, `ruff format` e `prettier --write`.

@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 )
@@ -93,6 +95,7 @@ func (a *agent) bootstrapCall(ctx context.Context, session string, tool tools.Ba
 	}
 	run.toolBytes += len(response.Metadata)
 	a.observePreparation(session, name, reused, len(response.Content)+len(response.Metadata))
+	run.prepared++
 	a.finishMessage(ctx, &assistant, message.FinishReasonToolUse)
 	result, err := a.messages.Create(ctx, session, message.CreateMessageParams{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Name: name, Content: response.Content, Metadata: response.Metadata, IsError: response.IsError}}})
 	if err != nil {
@@ -300,7 +303,66 @@ func (a *agent) bootstrapBasic(ctx context.Context, session, question string, hi
 			run.primaryEvidence = map[string]bool{normalizedToolPath(path): true}
 		}
 	}
+	return a.bootstrapImporters(ctx, session, question, history, run)
+}
+
+// bootstrapImporters shows who imports the package of the first Go file the
+// question mentions, so the answer can place the file in the project.
+// shortcut: Go only and one package per question; other languages leave it to
+// the model's own search.
+func (a *agent) bootstrapImporters(ctx context.Context, session, question string, history []message.Message, run *generationRun) ([]message.Message, error) {
+	var grep tools.BaseTool
+	for _, tool := range run.available {
+		if tool.Info().Name == tools.GrepToolName && runAllowsTool(run, tool) {
+			grep = tool
+		}
+	}
+	if grep == nil || run.toolBytes >= run.limits.ToolBudget {
+		return history, nil
+	}
+	for _, path := range tools.MentionedPaths(question) {
+		if pkg := goImportPath(config.WorkingDirectory(), path); pkg != "" {
+			input, _ := json.Marshal(tools.GrepParams{Pattern: `"` + pkg + `"`, Include: "*.go", LiteralText: true})
+			history, _, err := a.bootstrapCall(ctx, session, grep, string(input), history, run)
+			return history, err
+		}
+	}
 	return history, nil
+}
+
+// goImportPath is the import path of the package holding a Go file, or "" for
+// non-Go files, commands (package main) and workspaces without go.mod.
+func goImportPath(root, path string) string {
+	if filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+		return ""
+	}
+	mod, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		return ""
+	}
+	module := ""
+	for line := range strings.SplitSeq(string(mod), "\n") {
+		if name, ok := strings.CutPrefix(strings.TrimSpace(line), "module "); ok {
+			module = strings.Trim(strings.TrimSpace(name), `"`)
+			break
+		}
+	}
+	source, err := os.ReadFile(filepath.Join(root, path))
+	if module == "" || err != nil {
+		return ""
+	}
+	for line := range strings.SplitSeq(string(source), "\n") {
+		if name, ok := strings.CutPrefix(strings.TrimSpace(line), "package "); ok {
+			if strings.TrimSpace(name) == "main" {
+				return ""
+			}
+			break
+		}
+	}
+	if dir := filepath.ToSlash(filepath.Dir(path)); dir != "." {
+		return module + "/" + dir
+	}
+	return module
 }
 
 func abbreviateReusedMessage(msg message.Message, index int, latest map[string]int) message.Message {

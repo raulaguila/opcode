@@ -201,3 +201,38 @@ func TestOpcodeLanguageBootstrapUsesCompactInventoryAndParserDefinition(t *testi
 	call.reply <- provider.ProviderResponse{Content: "O inventário do Opcode é separado das linguagens de implementação. A definição está em internal/llm/tools/languages.go:2.", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 }
+
+func TestMentionedFileIsReadWithItsImportersBeforeTheModel(t *testing.T) {
+	a, p, _, root := runtimeAgent(t, workflow.Ask)
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "internal", "store"), 0700))
+	for path, content := range map[string]string{
+		"go.mod":                  "module example.com/app\n",
+		"internal/store/store.go": "package store\n\nfunc Save() {}\n",
+		"main.go":                 "package main\n\nimport \"example.com/app/internal/store\"\n\nfunc main() { store.Save() }\n",
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(root, path), []byte(content), 0600))
+	}
+	a.tools = []tools.BaseTool{tools.NewViewTool(nil), tools.NewGrepTool()}
+	done, err := a.Run(context.Background(), "s", "o que faz @internal/store/store.go?")
+	require.NoError(t, err)
+	call := nextGeneration(t, p)
+	raw, _ := json.Marshal(call.history)
+	require.Contains(t, string(raw), "func Save()", "the mentioned file is read without a project keyword")
+	require.Contains(t, string(raw), "main.go", "its importers come along")
+	call.reply <- provider.ProviderResponse{Content: "Salva dados; main.go a chama (internal/store/store.go:3).", FinishReason: message.FinishReasonEndTurn}
+	require.NoError(t, finishGeneration(t, done).Error)
+}
+
+func TestSourcesReadListsSuccessfulReadsOnce(t *testing.T) {
+	calls := []message.ToolCall{
+		{ID: "1", Name: "view", Input: `{"file_path":"main.go"}`},
+		{ID: "2", Name: "view", Input: `{"file_path":"main.go"}`},
+		{ID: "3", Name: "read_lines", Input: `{"file_path":"cmd/root.go"}`},
+		{ID: "4", Name: "view", Input: `{"file_path":"missing.go"}`},
+		{ID: "5", Name: "grep", Input: `{"pattern":"x"}`},
+	}
+	results := map[string]message.ToolResult{"1": {}, "2": {}, "3": {}, "4": {IsError: true}, "5": {}}
+	read := SourcesRead(calls, results)
+	require.Equal(t, []string{"main.go", "cmd/root.go"}, read)
+	require.Equal(t, "a, b, c +1", SourcesLabel([]string{"a", "b", "c", "d"}))
+}

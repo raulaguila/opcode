@@ -13,6 +13,7 @@ import (
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
@@ -153,17 +154,32 @@ func selectInitialSchemas(run *generationRun) {
 		run.selected["finish_task"] = true
 	}
 }
+
+// exposedTools keeps the schemas of a reply stable: a tool joins at the end
+// of the list and stays, so a local server can reuse the prompt it already
+// processed. Only a small context window gives leased schemas back.
 func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
-	for name, expires := range run.toolLeases {
-		if expires < run.steps && !coreSchema(name) {
-			delete(run.selected, name)
-			delete(run.toolLeases, name)
+	if window := runProvider(a, run).Model().ContextWindow; window > 0 && window < 24000 {
+		for name, expires := range run.toolLeases {
+			if expires < run.steps && !coreSchema(name) {
+				delete(run.selected, name)
+				delete(run.toolLeases, name)
+			}
 		}
 	}
-	var selected []tools.BaseTool
+	byName := map[string]tools.BaseTool{}
 	for _, tool := range run.available {
 		name := tool.Info().Name
 		if runAllowsTool(run, tool) && run.selected[name] {
+			byName[name] = tool
+			if !slices.Contains(run.exposed, name) {
+				run.exposed = append(run.exposed, name)
+			}
+		}
+	}
+	var selected []tools.BaseTool
+	for _, name := range run.exposed {
+		if tool, ok := byName[name]; ok {
 			selected = append(selected, briefTool{tool})
 		}
 	}
@@ -178,6 +194,9 @@ func (a *agent) prefetchTools(run *generationRun, content string) {
 	prefetchWorkflowTools(run, content)
 	prefetchCommandTools(run, content)
 	renewPrefetchedTools(run)
+	// Keyword routing misses phrasings; the log shows which way a request went.
+	run.route = []any{"project", tools.ProjectInquiry(content), "overview", tools.ProjectOverview(content), "topic", tools.ProjectEvidenceQuery(content), "mentions", len(tools.MentionedPaths(content)), "changes", run.selected["edit"], "command", run.selected["bash"], "citation", run.requiresCitation}
+	logging.Debug("Request route", run.route...)
 }
 func checkCommands() map[string]string {
 	commands := map[string]string{}

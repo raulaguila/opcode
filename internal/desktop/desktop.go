@@ -267,7 +267,7 @@ type Message struct {
 	Steps    []Step `json:"steps,omitempty"`
 	Model    string `json:"model,omitempty"`
 	Seconds  int64  `json:"seconds,omitempty"`
-	Cites    string `json:"cites,omitempty"` // the first source the reply cites, "store.go:45"
+	Cites    string `json:"cites,omitempty"` // the files the turn read, else the first source the reply cites
 	Finished bool   `json:"finished"`
 }
 
@@ -371,9 +371,13 @@ func project(messages []message.Message) []Message {
 		}
 	}
 	out := []Message{}
+	var turnCalls []message.ToolCall
 	for _, msg := range messages {
 		if msg.IsApplication() || msg.Role == message.Tool {
 			continue
+		}
+		if msg.Role == message.User {
+			turnCalls = nil
 		}
 		text := strings.TrimSpace(msg.Content().String())
 		entry := Message{ID: msg.ID, Role: string(msg.Role), Finished: msg.IsFinished()}
@@ -382,6 +386,10 @@ func project(messages []message.Message) []Message {
 			entry.Text = text
 		case message.Assistant:
 			entry.HTML, entry.Cites = renderReply(text)
+			if read := agent.SourcesLabel(agent.SourcesRead(turnCalls, results)); read != "" {
+				entry.Cites = config.Text("lido: ", "read: ") + read
+			}
+			turnCalls = append(turnCalls, msg.ToolCalls()...)
 			entry.Model = string(msg.Model)
 			if finish := msg.FinishPart(); finish != nil && msg.IsFinished() && finish.Time > msg.CreatedAt {
 				entry.Seconds = finish.Time - msg.CreatedAt

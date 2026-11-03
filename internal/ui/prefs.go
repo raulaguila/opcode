@@ -249,6 +249,8 @@ func settingHelp(s config.Setting) string {
 		return textFor("Segundos até o primeiro token · 1–1800", "Seconds to the first token · 1–1800")
 	case "runtime.idleTimeout":
 		return textFor("Segundos sem resposta do modelo · 1–600", "Seconds without model output · 1–600")
+	case "runtime.embeddingModel":
+		return textFor("Modelo de embeddings no Ollama local, ex.: nomic-embed-text · vazio desliga", "Embedding model in the local Ollama, e.g. nomic-embed-text · empty turns it off")
 	case "runtime.webSearch":
 		return textFor("Busca externa; cada destino ainda pede aprovação de rede", "External search; each destination still asks for network approval")
 	}

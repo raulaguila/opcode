@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/stretchr/testify/require"
 )
@@ -136,4 +137,19 @@ func TestMentionSearchesTheWorkspaceWhenTheListingStoppedShort(t *testing.T) {
 	if m.findMention() != nil {
 		t.Fatal("a query already searched should not be searched again")
 	}
+}
+
+func TestModelPickerCtrlACyclesTheRoleItChoosesFor(t *testing.T) {
+	m := &Model{}
+	m.openModels()
+	picker := m.dialog.(*modelPicker)
+	require.Equal(t, config.AgentCoder, picker.role)
+	picker.keys(m, tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
+	require.Equal(t, config.AgentTask, picker.role)
+	require.Contains(t, picker.title, roleName(config.AgentTask))
+	for range 3 {
+		picker.keys(m, tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
+	}
+	require.Equal(t, config.AgentCoder, picker.role)
+	require.NotContains(t, picker.title, "·")
 }

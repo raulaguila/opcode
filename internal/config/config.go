@@ -1060,6 +1060,10 @@ type trustedConfigSettings struct {
 	Security   SecurityConfig
 	Extensions ExtensionsConfig
 	Index      IndexConfig
+	// Only the model: a project file cannot turn semantic search on.
+	Runtime struct {
+		EmbeddingModel string `mapstructure:"embeddingModel"`
+	}
 }
 
 func loadTrustedProjectConfiguration(workingDir string) (trustedConfigSettings, error) {
@@ -1109,6 +1113,7 @@ func applyTrustedConfigOptions(trusted trustedConfigSettings) error {
 	cfg.Security = trusted.Security
 	cfg.Extensions = trusted.Extensions
 	cfg.Index.Embeddings = trusted.Index.Embeddings
+	cfg.Runtime.EmbeddingModel = trusted.Runtime.EmbeddingModel
 	if err := cfg.Extensions.Validate(); err != nil {
 		cfg = nil
 		return err

@@ -10,6 +10,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -112,7 +114,34 @@ func (w *workspaceHasher) writeFile(path string, size int64) error {
 	return nil
 }
 
+var mentionedPath = regexp.MustCompile(`(^|\s)@([^\s@]+)`)
+
+// MentionedPaths are the workspace files a question names as @path. They are
+// read before the model's first step whatever the question's wording.
+func MentionedPaths(question string) []string {
+	root, err := os.OpenRoot(config.WorkingDirectory())
+	if err != nil {
+		return nil
+	}
+	defer root.Close()
+	var paths []string
+	for _, match := range mentionedPath.FindAllStringSubmatch(question, 8) {
+		path := filepath.Clean(strings.TrimRight(match[2], ".,;:!?)\"'"))
+		if !filepath.IsLocal(path) || slices.Contains(paths, path) {
+			continue
+		}
+		info, err := root.Lstat(path)
+		if err == nil && info.Mode().IsRegular() && !shell.SensitivePath(filepath.Join(config.WorkingDirectory(), path)) {
+			paths = append(paths, path)
+		}
+	}
+	return paths
+}
+
 func ProjectContextPaths(question string) []string {
+	if mentioned := MentionedPaths(question); len(mentioned) > 0 {
+		return mentioned
+	}
 	lower := strings.ToLower(question)
 	project := false
 	for _, term := range []string{"projeto", "reposit", "codebase", "this project", "current project", "this repo", "estrutura atual", "arquitetura atual"} {

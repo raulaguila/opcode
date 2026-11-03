@@ -76,6 +76,7 @@ var UserSettings = []Setting{
 	{"runtime.toolBudget", "execution", "Saída de ferramentas / Tool output budget", "4096–1048576 bytes", 96000, true},
 	{"runtime.firstTokenTimeout", "execution", "Primeiro token / First token timeout", "1–1800 seconds", 300, true},
 	{"runtime.idleTimeout", "execution", "Inatividade / Idle timeout", "1–600 seconds", 90, true},
+	{"runtime.embeddingModel", "execution", "Busca semântica / Semantic search", "Embedding model in the local Ollama, e.g. nomic-embed-text; empty turns it off", "", false},
 	{"runtime.webSearch", "execution", "Busca web / Web search", "Optional external search; each destination still requires network approval", false, true},
 }
 

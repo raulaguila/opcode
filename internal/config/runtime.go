@@ -11,6 +11,7 @@ type RuntimeConfig struct {
 	ToolBudget        int    `json:"toolBudget,omitempty"`
 	FirstTokenTimeout int    `json:"firstTokenTimeout,omitempty"`
 	IdleTimeout       int    `json:"idleTimeout,omitempty"`
+	EmbeddingModel    string `json:"embeddingModel,omitempty"`
 }
 
 func (r RuntimeConfig) Defaults() RuntimeConfig {
@@ -42,6 +43,9 @@ func (r RuntimeConfig) Validate() error {
 	}
 	if r.MaxSteps < 1 || r.MaxSteps > 200 || r.MaxSeconds < 1 || r.MaxSeconds > 7200 || r.ToolBudget < 4096 || r.ToolBudget > 1048576 || r.FirstTokenTimeout < 1 || r.FirstTokenTimeout > 1800 || r.IdleTimeout < 1 || r.IdleTimeout > 600 {
 		return fmt.Errorf("invalid runtime limits: maxSteps 1–200, maxSeconds 1–7200, toolBudget 4096–1048576, firstTokenTimeout 1–1800 and idleTimeout 1–600 (seconds)")
+	}
+	if r.EmbeddingModel != "" {
+		return EmbeddingConfig{DefaultEmbeddingEndpoint, r.EmbeddingModel}.Validate()
 	}
 	return nil
 }

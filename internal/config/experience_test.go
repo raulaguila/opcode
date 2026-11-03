@@ -112,3 +112,28 @@ func TestEffectiveOriginAttributesEnvironmentAliasesAndRefusesMisleadingEdit(t *
 	cfg.Runtime.MaxSteps = 12
 	require.Equal(t, "environment (OPENCODE_RUNTIME_MAXSTEPS)", EffectiveSetting("runtime.maxSteps").Origin)
 }
+
+func TestSemanticSearchPreferenceTurnsLocalEmbeddingsOnAndOff(t *testing.T) {
+	experienceConfig(t)
+	require.Nil(t, cfg.Embeddings())
+	require.NoError(t, SaveUserSetting("runtime.embeddingModel", "nomic-embed-text", false))
+	require.Equal(t, &EmbeddingConfig{DefaultEmbeddingEndpoint, "nomic-embed-text"}, cfg.Embeddings())
+	require.NoError(t, cfg.Embeddings().Validate())
+	require.NoError(t, SaveUserSetting("runtime.embeddingModel", "", false))
+	require.Nil(t, cfg.Embeddings())
+	require.Error(t, SaveUserSetting("runtime.embeddingModel", strings.Repeat("m", 200), false))
+	cfg.Index.Embeddings = &EmbeddingConfig{"http://127.0.0.1:9000/api/embed", "explicit"}
+	cfg.Runtime.EmbeddingModel = "nomic-embed-text"
+	require.Equal(t, "explicit", cfg.Embeddings().Model, "index.embeddings stays the explicit choice")
+}
+
+func TestProjectFileCannotTurnSemanticSearchOn(t *testing.T) {
+	isolateModelConfig(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(root, ".opcode.json"), []byte(`{"runtime":{"embeddingModel":"nomic-embed-text"}}`), 0600))
+	loaded, err := Load(root, false)
+	require.NoError(t, err)
+	require.Nil(t, loaded.Embeddings())
+}

@@ -191,6 +191,9 @@ func (s *Server) models(w http.ResponseWriter, r *http.Request) {
 		chosen = providers[0].ID
 	}
 	result := map[string]any{"providers": providers, "provider": chosen, "active": active.ID, "models": []ModelInfo{}}
+	if role := config.AgentName(r.URL.Query().Get("role")); role != "" && role != config.AgentCoder {
+		result["active"] = config.Get().Agents[role].Model // the model doing that job
+	}
 	if chosen == "" {
 		reply(w, http.StatusOK, result)
 		return
@@ -224,6 +227,7 @@ func (s *Server) selectModel(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Provider models.ModelProvider `json:"provider"`
 		ID       models.ModelID       `json:"id"`
+		Role     config.AgentName     `json:"role"`
 	}
 	if err := decode(r, &request); err != nil {
 		fail(w, http.StatusBadRequest, err)
@@ -239,7 +243,15 @@ func (s *Server) selectModel(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, errors.New(config.Text("modelo indisponível para conversa", "model not available for chat")))
 		return
 	}
-	selected, err := s.app.CoderAgent.SelectModel(config.AgentCoder, found[index])
+	switch request.Role {
+	case "":
+		request.Role = config.AgentCoder
+	case config.AgentCoder, config.AgentTask, config.AgentTitle, config.AgentSummarizer:
+	default:
+		fail(w, http.StatusBadRequest, errors.New(config.Text("função desconhecida", "unknown role")))
+		return
+	}
+	selected, err := s.app.CoderAgent.SelectModel(request.Role, found[index])
 	if err != nil {
 		fail(w, http.StatusConflict, err)
 		return

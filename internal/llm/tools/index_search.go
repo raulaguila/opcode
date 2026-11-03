@@ -44,7 +44,7 @@ func captureIndexSearch(ctx context.Context, db *sql.DB, root, scope string, inp
 		return s, err
 	}
 	cfg := config.Get()
-	if input.Strategy == "hybrid" || input.Strategy == "" && cfg != nil && cfg.Index.Embeddings != nil {
+	if input.Strategy == "hybrid" || input.Strategy == "" && cfg.Embeddings() != nil {
 		s.captureSemanticPool(ctx, db, scoped, input.Kind)
 	}
 	return s, nil

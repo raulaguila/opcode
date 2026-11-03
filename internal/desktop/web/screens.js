@@ -195,6 +195,10 @@ function newConversation() {
 async function openModels(provider = "") {
   let data = { providers: [], models: [] };
   let details = false;
+  // Which job the chosen model does; Ctrl+A cycles it, as in the terminal.
+  const roles = ["coder", "task", "title", "summarizer"];
+  const roleName = (r) => ({ task: t("tarefas", "tasks"), title: t("títulos", "titles"), summarizer: t("resumos", "summaries") })[r] || "";
+  let role = "coder";
   const tabs = el("div", { class: "tabs" });
   const status = el("div", { class: "nothing" }, t("Carregando…", "Loading…"));
   const pane = el("div", { class: "pane" });
@@ -211,6 +215,7 @@ async function openModels(provider = "") {
       if (event.key === "Tab") { event.preventDefault(); switchProvider(event.shiftKey ? -1 : 1); return true; }
       if (event.ctrlKey && event.key.toLowerCase() === "d") { event.preventDefault(); details = !details; layout(); return true; }
       if (event.ctrlKey && event.key.toLowerCase() === "p") { event.preventDefault(); openSettings(0); return true; }
+      if (event.ctrlKey && event.key.toLowerCase() === "a") { event.preventDefault(); role = roles[(roles.indexOf(role) + 1) % roles.length]; load(data.provider); return true; }
       return false;
     },
   });
@@ -264,7 +269,7 @@ async function openModels(provider = "") {
     else {
       const actions = el("div", { class: "row" }, el("button", { type: "button", class: "act primary", onclick: () => use(m) }, t("Usar este modelo", "Use this model")));
       // The knobs belong to the model in use.
-      if (m.id === data.active) {
+      if (m.id === data.active && role === "coder") {
         const windows = [0, 8192, 16384, 32768, 65536, 131072];
         const ctx = data.context || {};
         const ctxSelect = el("select", { class: "act knob", "aria-label": t("Contexto", "Context"), onchange: (e) => knob("/api/model/context", { window: Number(e.target.value) }) },
@@ -285,12 +290,12 @@ async function openModels(provider = "") {
     fill();
     const p = name();
     d.panel.className = `dlg${details ? " mid" : ""}`;
-    d.panel.querySelector(".edge.left").textContent = details ? t("Escolher modelo · detalhes", "Choose model · details") : t("Escolher modelo", "Choose model");
+    d.panel.querySelector(".edge.left").textContent = [details ? t("Escolher modelo · detalhes", "Choose model · details") : t("Escolher modelo", "Choose model"), roleName(role)].filter(Boolean).join(" · ");
     const chat = data.models.filter((m) => !m.embedding).length;
     d.meta(details ? [p?.name, p?.host].filter(Boolean).join(" · ") : p ? `${p.name} · ${chat} ${t("de", "of")} ${data.models.length}` : "");
     d.keys(details
       ? [["Enter", t("usar", "use")], ["Ctrl+D", t("ocultar detalhes", "hide details")], ["Tab", t("provedor", "provider")], ["Esc", t("fechar", "close"), true]]
-      : [["Enter", t("usar", "use")], ["Tab", t("provedor", "provider")], ["Ctrl+D", t("detalhes", "details")], ["Ctrl+P", t("conexão", "connection")], ["Esc", t("fechar", "close"), true]]);
+      : [["Enter", t("usar", "use")], ["Tab", t("provedor", "provider")], ["Ctrl+A", t("função", "role")], ["Ctrl+D", t("detalhes", "details")], ["Ctrl+P", t("conexão", "connection")], ["Esc", t("fechar", "close"), true]]);
     wrap.replaceChildren();
     if (details) { wrap.append(el("div", { class: "split" }, el("div", { class: "col" }, list.node), pane)); drawPane(); }
     else {
@@ -302,7 +307,7 @@ async function openModels(provider = "") {
   };
   const load = async (id) => {
     wrap.replaceChildren(status);
-    try { data = await api(`/api/models${id ? "?provider=" + encodeURIComponent(id) : ""}`); }
+    try { data = await api(`/api/models?role=${role}${id ? "&provider=" + encodeURIComponent(id) : ""}`); }
     catch (error) { data = { providers: [], models: [], error: error.message }; }
     drawTabs();
     search.input.value = "";
@@ -322,8 +327,8 @@ async function openModels(provider = "") {
   const use = async (m) => {
     if (m.embedding) return;
     try {
-      const chosen = await api("/api/model", { provider: m.provider, id: m.id });
-      view.state.model = chosen.label; view.state.context = chosen.context;
+      const chosen = await api("/api/model", { provider: m.provider, id: m.id, role });
+      if (role === "coder") { view.state.model = chosen.label; view.state.context = chosen.context; }
       closeDialog();
       renderFrame();
     } catch (error) { status.textContent = error.message; wrap.prepend(el("div", { class: "nothing bad-t" }, error.message)); }
@@ -626,6 +631,7 @@ const helpText = {
   "runtime.toolBudget": ["Bytes de saída por ferramenta · 4096–1048576", "Output bytes per tool · 4096–1048576"],
   "runtime.firstTokenTimeout": ["Segundos até o primeiro token · 1–1800", "Seconds to the first token · 1–1800"],
   "runtime.idleTimeout": ["Segundos sem resposta do modelo · 1–600", "Seconds without model output · 1–600"],
+  "runtime.embeddingModel": ["Modelo de embeddings no Ollama local, ex.: nomic-embed-text · vazio desliga", "Embedding model in the local Ollama, e.g. nomic-embed-text · empty turns it off"],
   "runtime.webSearch": ["Busca externa; cada destino ainda pede aprovação de rede", "External search; each destination still asks for network approval"],
 };
 

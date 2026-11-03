@@ -32,6 +32,21 @@ type modelPicker struct {
 	loading   bool
 	details   bool
 	err       error
+	role      config.AgentName // which job the chosen model does; Ctrl+A cycles it
+}
+
+var roles = []config.AgentName{config.AgentCoder, config.AgentTask, config.AgentTitle, config.AgentSummarizer}
+
+func roleName(role config.AgentName) string {
+	switch role {
+	case config.AgentTask:
+		return textFor("tarefas", "tasks")
+	case config.AgentTitle:
+		return textFor("títulos", "titles")
+	case config.AgentSummarizer:
+		return textFor("resumos", "summaries")
+	}
+	return textFor("principal", "main")
 }
 
 func enabledProviders() []models.ModelProvider {
@@ -92,7 +107,7 @@ func providerName(p models.ModelProvider) string {
 }
 
 func (m *Model) openModels() tea.Cmd {
-	picker := &modelPicker{providers: enabledProviders()}
+	picker := &modelPicker{providers: enabledProviders(), role: config.AgentCoder}
 	if m.app != nil && m.app.CoderAgent != nil {
 		picker.provider = m.app.CoderAgent.Model().Provider
 	}
@@ -154,10 +169,20 @@ func (p *modelPicker) accept(m *Model, msg catalogMsg) {
 		return
 	}
 	p.loading, p.err, p.catalog, p.loaded = false, msg.err, msg.models, msg.loaded
-	if m.app != nil && m.app.CoderAgent != nil {
+	p.markActive(m)
+	p.fill()
+}
+
+// markActive checks the model doing the picker's role.
+func (p *modelPicker) markActive(m *Model) {
+	p.active = ""
+	if p.role != config.AgentCoder {
+		if cfg := config.Get(); cfg != nil {
+			p.active = cfg.Agents[p.role].Model
+		}
+	} else if m.app != nil && m.app.CoderAgent != nil {
 		p.active = m.app.CoderAgent.Model().ID
 	}
-	p.fill()
 }
 
 // fill lists the catalog. The details view drops groups and facts, and shows
@@ -327,7 +352,7 @@ func (p *modelPicker) tabs(_ *Model, width int) []string {
 }
 
 func (p *modelPicker) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
-	if p.details && (msg.String() == "c" || msg.String() == "r") && m.app != nil && m.app.CoderAgent != nil {
+	if p.details && p.role == config.AgentCoder && (msg.String() == "c" || msg.String() == "r") && m.app != nil && m.app.CoderAgent != nil {
 		return p.cycleKnob(m, msg.String()), true
 	}
 	switch msg.String() {
@@ -346,6 +371,11 @@ func (p *modelPicker) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "ctrl+d":
 		p.setDetails(!p.details)
 		return nil, true
+	case "ctrl+a":
+		p.role = roles[(slices.Index(roles, p.role)+1)%len(roles)]
+		p.markActive(m)
+		p.setDetails(p.details)
+		return nil, true
 	case "ctrl+p":
 		m.dialog = nil
 		return m.openSettings(), true
@@ -359,11 +389,14 @@ func (p *modelPicker) setDetails(on bool) {
 	current, _ := p.list.Current()
 	p.details, p.noSearch, p.side, p.split, p.width = on, on, nil, 0, 96
 	p.title = textFor("Escolher modelo", "Choose model")
-	p.legend = textFor("Enter usar · Tab provedor · Ctrl+D detalhes · Ctrl+P conexão · Esc fechar", "Enter use · Tab provider · Ctrl+D details · Ctrl+P connection · Esc close")
+	p.legend = textFor("Enter usar · Tab provedor · Ctrl+A função · Ctrl+D detalhes · Ctrl+P conexão · Esc fechar", "Enter use · Tab provider · Ctrl+A role · Ctrl+D details · Ctrl+P connection · Esc close")
 	if on {
 		p.side, p.split, p.width = p.detailColumn, 36, 120
 		p.title = textFor("Escolher modelo · detalhes", "Choose model · details")
 		p.legend = textFor("Enter usar · C contexto · R raciocínio · Ctrl+D ocultar detalhes · Tab provedor · Esc fechar", "Enter use · C context · R reasoning · Ctrl+D hide details · Tab provider · Esc close")
+	}
+	if p.role != config.AgentCoder {
+		p.title += " · " + roleName(p.role)
 	}
 	p.fill()
 	for i, item := range p.list.Visible() {
@@ -380,7 +413,7 @@ func (p *modelPicker) choose(m *Model, item Item) tea.Cmd {
 		return nil
 	}
 	model := item.Value.(models.Model)
-	selected, err := m.app.CoderAgent.SelectModel(config.AgentCoder, model)
+	selected, err := m.app.CoderAgent.SelectModel(p.role, model)
 	if err != nil {
 		m.notice = err.Error()
 		return nil
@@ -388,6 +421,9 @@ func (p *modelPicker) choose(m *Model, item Item) tea.Cmd {
 	m.dialog = nil
 	m.notice = ""
 	m.info = fmt.Sprintf(textFor("Modelo: %s", "Model: %s"), modelLabel(selected))
+	if p.role != config.AgentCoder {
+		m.info = fmt.Sprintf(textFor("Modelo de %s: %s", "Model for %s: %s"), roleName(p.role), modelLabel(selected))
+	}
 	return nil
 }
 

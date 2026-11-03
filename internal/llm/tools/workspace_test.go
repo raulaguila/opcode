@@ -86,3 +86,13 @@ func TestConfiguredChecksRejectCredentialsBeforeApprovalAndReturnValidJSON(t *te
 	require.NotContains(t, response.Content, secret)
 	require.Empty(t, p.requests)
 }
+
+func TestMentionedPathsAreExistingWorkspaceFilesOnly(t *testing.T) {
+	old := config.Get().WorkingDir
+	root := t.TempDir()
+	config.Get().WorkingDir = root
+	t.Cleanup(func() { config.Get().WorkingDir = old })
+	require.NoError(t, os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0600))
+	require.Equal(t, []string{"main.go"}, MentionedPaths("o que faz @main.go? e @missing.go, @../x.go"))
+	require.Equal(t, []string{"main.go"}, ProjectContextPaths("explique @main.go."))
+}

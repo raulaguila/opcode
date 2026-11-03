@@ -51,8 +51,8 @@ func getContextFromPaths() string {
 	return processContextPaths(cfg.WorkingDir, cfg.ContextPaths)
 }
 
-func RunPrompt(mode, protocol string, window int64, definitions []string) string {
-	base := Compose(mode, protocol, window, definitions)
+func RunPrompt(mode, protocol, model string, window int64, definitions []string) string {
+	base := compose(ProfileFor(window, model), mode, protocol, definitions)
 	if guidance := getContextFromPaths(); guidance != "" {
 		limit := 16384
 		if window > 0 && window < 24000 {

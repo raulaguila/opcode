@@ -19,6 +19,25 @@ type IndexConfig struct {
 	UpdateSeconds int              `json:"updateSeconds,omitempty"`
 	Embeddings    *EmbeddingConfig `json:"embeddings,omitempty"`
 }
+
+// DefaultEmbeddingEndpoint is the local Ollama that the semantic search
+// preference (runtime.embeddingModel) asks.
+const DefaultEmbeddingEndpoint = "http://127.0.0.1:11434/api/embed"
+
+// Embeddings is the semantic search in use: index.embeddings when set, else the
+// semantic search preference on the local Ollama, else nil (lexical only).
+func (c *Config) Embeddings() *EmbeddingConfig {
+	switch {
+	case c == nil:
+		return nil
+	case c.Index.Embeddings != nil:
+		return c.Index.Embeddings
+	case c.Runtime.EmbeddingModel != "":
+		return &EmbeddingConfig{DefaultEmbeddingEndpoint, c.Runtime.EmbeddingModel}
+	}
+	return nil
+}
+
 type EmbeddingConfig struct {
 	Endpoint string `json:"endpoint"`
 	Model    string `json:"model"`

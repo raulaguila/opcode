@@ -29,6 +29,20 @@
   rascunho; configurações em dois níveis com as setas; `→` nas ações de
   Conversas; card **Parado** com a causa em uma frase; paleta com Recentes e
   comandos novos; largura de leitura e mostrar processo aplicados.
+- Agente: o prompt traz o resumo do README, para responder sobre um arquivo
+  sabendo o que é o projeto. Um arquivo citado com `@` é lido antes da primeira
+  etapa do modelo, com os arquivos Go que importam o seu pacote. Modelos de até
+  8B (pelo tamanho no nome, como `qwen3:4b`) recebem as regras em versão curta,
+  com cerca de metade do tamanho. As ferramentas de uma resposta ficam estáveis:
+  uma nova entra no fim da lista e só janelas pequenas devolvem as alugadas.
+  O log registra como cada pedido foi lido e quando o modelo buscou sozinho o
+  que nada preparou.
+- Busca semântica opcional em Configurações › Trabalho: o nome de um modelo de
+  embeddings do Ollama local liga a busca híbrida; vazio desliga. Só vale na
+  configuração global.
+- Respostas mostram os arquivos lidos no turno (`lido: main.go, cmd/root.go`),
+  no lugar da primeira citação. `Ctrl+A` no seletor de modelos, nas duas
+  interfaces, escolhe o modelo de tarefas, títulos ou resumos.
 
 ## Em desenvolvimento — 2026-11-01
 

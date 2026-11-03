@@ -27,7 +27,7 @@ func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgH
 			names = append(names, tool.Info().Name)
 		}
 		model := runProvider(a, run).Model()
-		next, err := controller.WithSystemPrompt(prompt.RunPrompt(string(run.mode), model.API, model.ContextWindow, names))
+		next, err := controller.WithSystemPrompt(prompt.RunPrompt(string(run.mode), model.API, model.APIModel, model.ContextWindow, names))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -220,6 +220,10 @@ func (b *toolBatchExecution) findTool(call message.ToolCall) tools.BaseTool {
 	for _, tool := range b.run.available {
 		if tool.Info().Name != call.Name || !runAllowsTool(b.run, tool) || !b.run.selected[call.Name] {
 			continue
+		}
+		switch call.Name {
+		case "ls", "glob", "grep", "search_code_index":
+			b.run.searches++
 		}
 		if !coreSchema(call.Name) {
 			if b.run.toolLeases == nil {

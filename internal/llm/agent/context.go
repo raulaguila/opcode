@@ -220,7 +220,7 @@ func (a *agent) previewContext(ctx context.Context, session string, history []me
 			names = append(names, tool.Info().Name)
 		}
 		model := p.Model()
-		next, e := controller.WithSystemPrompt(prompt.RunPrompt(string(preview.mode), model.API, model.ContextWindow, names))
+		next, e := controller.WithSystemPrompt(prompt.RunPrompt(string(preview.mode), model.API, model.APIModel, model.ContextWindow, names))
 		if e != nil {
 			return ContextStatus{}, e
 		}

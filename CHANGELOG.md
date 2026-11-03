@@ -46,6 +46,9 @@
 - Integrações mostram os servidores de linguagem instalados que servem ao
   projeto (pelo `go.mod`, `pyproject.toml`, `Cargo.toml`…); `Enter` ou
   **Ativar** liga um com o comando do preset. Terminal e app.
+- `ls` de uma árvore maior que uma página mostra as subpastas com a contagem
+  de arquivos e depois os arquivos da pasta, em vez dos 60 primeiros caminhos
+  em ordem alfabética; `recursive: true` mantém a lista plana.
 - `↑` na primeira linha do campo traz a mensagem enviada anterior, como num
   shell; `↓` na última volta, até o rascunho. Terminal e app.
 

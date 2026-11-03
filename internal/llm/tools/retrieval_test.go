@@ -274,3 +274,35 @@ func TestExpandedParserPolicyRebuildsUnchangedLegacyChunks(t *testing.T) {
 	require.Equal(t, "Ledger.needle", page.Results[0].Symbol)
 	require.Equal(t, "method", page.Results[0].Kind)
 }
+
+func TestLsShowsFoldersFirstWhenTheTreeOutgrowsAPage(t *testing.T) {
+	root := productivityV2Workspace(t)
+	for i := range 5 {
+		retrievalFixture(t, root, fmt.Sprintf("internal/pkg%d/a.go", i), "package a\n")
+	}
+	retrievalFixture(t, root, "docs/guide.md", "x")
+	retrievalFixture(t, root, "main.go", "package main\n")
+	tool := SecureTool(NewLsTool(), nil)
+	response, err := tool.Run(toolContext(), toolInput(map[string]any{"path": ".", "limit": 3}))
+	require.NoError(t, err)
+	var page struct {
+		Dirs []struct {
+			Path  string
+			Files int
+		}
+		Files      []string
+		Total      int
+		TotalFiles int `json:"total_files"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(response.Content), &page))
+	require.Len(t, page.Dirs, 2)
+	require.Equal(t, "docs/", page.Dirs[0].Path)
+	require.Equal(t, 5, page.Dirs[1].Files, "internal/ holds five files")
+	require.Equal(t, []string{"main.go"}, page.Files)
+	require.Equal(t, 3, page.Total)
+	require.Equal(t, 7, page.TotalFiles)
+	flat := listPage(t, tool, map[string]any{"path": ".", "limit": 3, "recursive": true})
+	require.Len(t, flat.Files, 3, "recursive keeps the flat listing")
+	small := listPage(t, tool, map[string]any{"path": "internal/pkg1"})
+	require.Equal(t, []string{"a.go"}, small.Files, "a tree that fits a page is listed whole")
+}

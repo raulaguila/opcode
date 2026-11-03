@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/raulaguila/opcode/internal/llm/tools/shell"
@@ -20,6 +21,7 @@ type LSParams struct {
 	Glob      string   `json:"glob"`
 	Language  string   `json:"language"`
 	Extension string   `json:"extension"`
+	Recursive bool     `json:"recursive,omitempty"`
 }
 
 type LSResponseMetadata struct {
@@ -31,7 +33,7 @@ type lsTool struct{}
 
 const (
 	LSToolName    = "ls"
-	lsDescription = `List allowed project file paths in sorted pages. Use offset/limit (default and maximum 60), glob, language, extension and ignore filters. Read next_offset when more=true to continue with the same filters. Each page is bounded to 6000 bytes of paths; directory scan is bounded to 20000 files. Respects ripgrep ignores when available and omits secrets, storage, dependencies and symlinks. Listing is navigation, not proof of file contents.`
+	lsDescription = `List allowed project file paths in sorted pages. When every file fits in one page they are all listed; otherwise the page shows the folder's subfolders first, each with its file count, then its own files: call ls on a subfolder to go deeper, or set recursive=true for every file. Use offset/limit (default and maximum 60), glob, language, extension and ignore filters. Read next_offset when more=true to continue with the same filters. Each page is bounded to 6000 bytes of paths; directory scan is bounded to 20000 files. Respects ripgrep ignores when available and omits secrets, storage, dependencies and symlinks. Listing is navigation, not proof of file contents.`
 )
 
 func NewLsTool() BaseTool {
@@ -44,6 +46,7 @@ func (l *lsTool) Info() ToolInfo {
 	params["ignore"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	params["offset"] = map[string]any{"type": "integer", "minimum": 0, "maximum": 20000}
 	params["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 60}
+	params["recursive"] = map[string]any{"type": "boolean", "description": "List every file below path instead of folders first."}
 	return ToolInfo{Name: LSToolName, Description: lsDescription, Parameters: params, Required: []string{"path"}}
 }
 
@@ -77,6 +80,9 @@ func (l *lsTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	limit := params.Limit
 	if limit == 0 {
 		limit = 60
+	}
+	if !params.Recursive && params.Glob == "" && params.Language == "" && params.Extension == "" && len(files) > limit {
+		return folderPage(root, snapshot, files, params.Offset, limit, truncated)
 	}
 	start := min(params.Offset, len(files))
 	end, err := listingPageEnd(files, start, limit)
@@ -183,4 +189,49 @@ func listingScope(params LSParams) (retrievalScope, error) {
 		}
 	}
 	return scope, nil
+}
+
+// folderPage is one level of a listing too long for a page: the subfolders,
+// each with how many files it holds, then the files of the folder itself. A
+// flat page of a large tree shows a few folders' first files and hides the
+// rest of the structure.
+func folderPage(root, snapshot string, files []string, offset, limit int, truncated bool) (ToolResponse, error) {
+	counts := map[string]int{}
+	var dirs, own []string
+	for _, file := range files {
+		file = filepath.ToSlash(file)
+		if dir, _, nested := strings.Cut(file, "/"); nested {
+			if counts[dir+"/"] == 0 {
+				dirs = append(dirs, dir+"/")
+			}
+			counts[dir+"/"]++
+		} else {
+			own = append(own, file)
+		}
+	}
+	slices.Sort(dirs)
+	entries := append(dirs, own...)
+	start := min(offset, len(entries))
+	end, err := listingPageEnd(entries, start, limit)
+	if err != nil {
+		return NewTextErrorResponse(err.Error()), nil
+	}
+	type folder struct {
+		Path  string `json:"path"`
+		Files int    `json:"files"`
+	}
+	pageDirs, pageFiles := []folder{}, []string{}
+	for _, entry := range entries[start:end] {
+		if strings.HasSuffix(entry, "/") {
+			pageDirs = append(pageDirs, folder{entry, counts[entry]})
+		} else {
+			pageFiles = append(pageFiles, entry)
+		}
+	}
+	var next *int
+	if end < len(entries) {
+		next = &end
+	}
+	response := jsonToolResult(map[string]any{"snapshot": snapshot, "root": root, "dirs": pageDirs, "files": pageFiles, "total": len(entries), "total_files": len(files), "offset": start, "next_offset": next, "more": next != nil, "truncated": truncated, "navigation_only": true})
+	return WithResponseMetadata(response, LSResponseMetadata{NumberOfFiles: len(pageFiles), Truncated: next != nil || truncated}), nil
 }

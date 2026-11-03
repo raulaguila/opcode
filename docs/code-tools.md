@@ -19,6 +19,9 @@ de leitura requer reduzir a workspace ou excluir assets em `.opcodeignore`.
 
 - `ls`: páginas ordenadas, até 60 caminhos/6.000 bytes, com filtros e `snapshot`.
   Reenvie o snapshot com `next_offset`; mudanças exigem reiniciar em zero.
+  Quando a árvore não cabe numa página e não há filtro, a página mostra um
+  nível: as subpastas com a contagem de arquivos (`{"path":"internal/","files":881}`)
+  e depois os arquivos da própria pasta; `recursive: true` volta à lista plana.
 - `get_project_map`: até 60 entradas (padrão 30), orçamento de 7.500 bytes, mesmas
   exclusões da listagem. Classifica manifests, entradas, testes/documentação e
   fontes; lê até 12 arquivos pequenos para declarações, pacotes e dependências

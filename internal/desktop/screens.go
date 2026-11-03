@@ -852,7 +852,27 @@ func (s *Server) setReasoning(w http.ResponseWriter, r *http.Request) {
 // It reads names only, through the same listing the terminal's file picker
 // uses, which honors .gitignore.
 func (s *Server) files(w http.ResponseWriter, r *http.Request) {
-	reply(w, http.StatusOK, fileutil.MatchFiles(s.workspaceFiles(), r.URL.Query().Get("q"), 20))
+	query := r.URL.Query().Get("q")
+	files := s.workspaceFiles()
+	if len(files) >= fileutil.WorkspaceLimit && strings.TrimSpace(query) != "" {
+		files = s.searchFiles(query) // the listing stopped short in a large workspace
+	}
+	reply(w, http.StatusOK, fileutil.MatchFiles(files, query, 20))
+}
+
+// searchFiles searches the whole workspace for query. Searches run one at a
+// time, and the last one's matches answer any longer query that contains
+// it, so fast typing does not start a walk per key.
+func (s *Server) searchFiles(query string) []string {
+	const limit = 2000
+	s.searchMu.Lock()
+	defer s.searchMu.Unlock()
+	lower := strings.ToLower(strings.TrimSpace(query))
+	if s.searched != "" && strings.Contains(lower, s.searched) && len(s.found) < limit && time.Since(s.searchedAt) < 10*time.Second {
+		return s.found
+	}
+	s.found, s.searched, s.searchedAt = fileutil.SearchWorkspace(config.WorkingDirectory(), lower, limit), lower, time.Now()
+	return s.found
 }
 
 // workspaceFiles keeps the listing for a few seconds; @ asks on every key.

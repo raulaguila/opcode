@@ -38,3 +38,23 @@ func TestGitBranchReadsHeadAndWorktrees(t *testing.T) {
 		t.Fatalf("detached worktree = %q", got)
 	}
 }
+
+func TestSearchWorkspaceFindsByPathIgnoringCase(t *testing.T) {
+	root := t.TempDir()
+	for _, path := range []string{"main.go", "cmd/Main_test.go", "README.md"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, path), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := SearchWorkspace(root, "MAIN", 10)
+	slices.Sort(got)
+	if want := []string{"cmd/Main_test.go", "main.go"}; !slices.Equal(got, want) {
+		t.Fatalf("SearchWorkspace = %v, want %v", got, want)
+	}
+	if got := SearchWorkspace(root, "main", 1); len(got) != 1 {
+		t.Fatalf("limit ignored: %v", got)
+	}
+}

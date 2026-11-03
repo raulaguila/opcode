@@ -12,14 +12,25 @@ import (
 	"time"
 )
 
-// workspaceLimit bounds the listing: a workspace opened at a home folder can
-// hold millions of files.
-const workspaceLimit = 20000
+// WorkspaceLimit bounds the listing: a workspace opened at a home folder can
+// hold millions of files. A listing this long is incomplete, and callers
+// search by name (SearchWorkspace) for what it misses.
+const WorkspaceLimit = 20000
 
-// WorkspaceFiles lists up to workspaceLimit files under root by name, through
+// WorkspaceFiles lists up to WorkspaceLimit files under root by name, through
 // ripgrep when it is installed (which honors .gitignore), else by walking
 // the tree.
-func WorkspaceFiles(root string) []string {
+func WorkspaceFiles(root string) []string { return listFiles(root, nil, WorkspaceLimit) }
+
+// SearchWorkspace lists up to limit files under root whose path contains
+// query, ignoring case: the whole tree is walked, not only what fits in a
+// listing.
+func SearchWorkspace(root, query string, limit int) []string {
+	query = strings.ToLower(strings.TrimSpace(query))
+	return listFiles(root, func(path string) bool { return strings.Contains(strings.ToLower(path), query) }, limit)
+}
+
+func listFiles(root string, keep func(string) bool, limit int) []string {
 	var list []string
 	if cmd := GetRgCmd(""); cmd != nil {
 		cmd.Dir = root
@@ -34,8 +45,8 @@ func WorkspaceFiles(root string) []string {
 				}
 				return 0, nil, nil
 			})
-			for len(list) < workspaceLimit && scanner.Scan() {
-				if path := strings.TrimPrefix(scanner.Text(), "./"); path != "" {
+			for len(list) < limit && scanner.Scan() {
+				if path := strings.TrimPrefix(scanner.Text(), "./"); path != "" && (keep == nil || keep(path)) {
 					list = append(list, path)
 				}
 			}
@@ -45,7 +56,7 @@ func WorkspaceFiles(root string) []string {
 	}
 	if list == nil {
 		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || len(list) >= workspaceLimit {
+			if err != nil || len(list) >= limit {
 				return filepath.SkipDir
 			}
 			name := entry.Name()
@@ -53,7 +64,7 @@ func WorkspaceFiles(root string) []string {
 				return filepath.SkipDir
 			}
 			if !entry.IsDir() {
-				if rel, err := filepath.Rel(root, path); err == nil {
+				if rel, err := filepath.Rel(root, path); err == nil && (keep == nil || keep(rel)) {
 					list = append(list, rel)
 				}
 			}

@@ -56,6 +56,10 @@ type Server struct {
 	numbers  map[string]int    // a session's place, counted once: the page asks on every update
 
 	filesCache []string // the workspace's file names, for @ mentions
+	searchMu   sync.Mutex
+	searched   string   // the last query searched past the listing's limit
+	found      []string // and its matches
+	searchedAt time.Time
 	filesAt    time.Time
 }
 

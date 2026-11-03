@@ -77,6 +77,8 @@ type Model struct {
 	files       []string  // the workspace's files, for @
 	filesAt     time.Time // when files was listed
 	listing     bool      // a listing is on its way
+	found       []string  // a search's matches, when the listing stopped short
+	foundFor    string    // the query they match
 }
 
 type tickMsg struct{}
@@ -202,8 +204,18 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case filesMsg:
 		m.files, m.filesAt, m.listing = msg, time.Now(), false
+		m.found, m.foundFor = nil, "" // searched against the older listing
 		m.findMention()
 		m.layout()
+		return m, nil
+	case searchMsg:
+		return m, m.search(string(msg))
+	case foundMsg:
+		if current, ok := m.mentionToken(); ok && strings.Contains(strings.ToLower(current), strings.ToLower(msg.query)) {
+			m.found, m.foundFor = msg.files, msg.query
+			m.findMention()
+			m.layout()
+		}
 		return m, nil
 	case catalogMsg:
 		if picker, ok := m.dialog.(*modelPicker); ok {

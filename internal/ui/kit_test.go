@@ -1,12 +1,14 @@
 package ui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -110,5 +112,28 @@ func TestConversationArrowsWalkThePreviewButtons(t *testing.T) {
 	press(tea.KeyLeft)
 	if d.acting {
 		t.Fatal("← from the first button should return to the list")
+	}
+}
+
+func TestMentionSearchesTheWorkspaceWhenTheListingStoppedShort(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 80, 24
+	m.files, m.filesAt = make([]string, fileutil.WorkspaceLimit), time.Now()
+	for i := range m.files {
+		m.files[i] = fmt.Sprintf("pasta/arquivo%d.go", i)
+	}
+	m.composer.SetValue("veja @alvo")
+	if m.findMention() == nil {
+		t.Fatal("a full listing should schedule a search for the query")
+	}
+	if len(m.mention) != 0 {
+		t.Fatalf("mention = %v before the search", m.mention)
+	}
+	m.Update(foundMsg{"alvo", []string{"fundo/alvo.go"}})
+	if len(m.mention) != 1 || m.mention[0] != "fundo/alvo.go" {
+		t.Fatalf("mention = %v after the search", m.mention)
+	}
+	if m.findMention() != nil {
+		t.Fatal("a query already searched should not be searched again")
 	}
 }

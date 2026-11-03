@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 )
 
@@ -75,7 +78,15 @@ func (t *apiTransport) postBytes(ctx context.Context, path string, body []byte, 
 	for attempt := 0; ; attempt++ {
 		resp, err := t.postOnce(ctx, endpoint, body, stream)
 		if err != nil {
-			return nil, err
+			// A refused dial never reached the server, so it is safe to replay.
+			var dial *net.OpError
+			if attempt >= dialRetries || !errors.As(err, &dial) || dial.Op != "dial" {
+				return nil, err
+			}
+			if err := t.waitVisibly(ctx, "connection refused", attempt, dialRetries, retryDelay(nil, attempt)); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			return resp, nil
@@ -109,7 +120,8 @@ func retryable(status int) bool {
 	return status == 408 || status == 409 || status == 429 || status >= 500 && status <= 599
 }
 func retryDelay(h http.Header, attempt int) time.Duration {
-	delay := time.Second << min(attempt, 5)
+	// Jitter keeps parallel runs from retrying in lockstep.
+	delay := time.Second<<min(attempt, 5) + time.Duration(rand.Int64N(int64(250*time.Millisecond)))
 	if ms, err := strconv.ParseFloat(h.Get("retry-after-ms"), 64); err == nil && ms >= 0 {
 		delay = time.Duration(min(ms, 30000)) * time.Millisecond
 	} else if seconds, err := strconv.ParseFloat(h.Get("Retry-After"), 64); err == nil && seconds >= 0 {
@@ -277,5 +289,11 @@ func (t *apiTransport) retryProviderFailure(ctx context.Context, resp *http.Resp
 	if attempt >= maxRetries || !retryable(resp.StatusCode) {
 		return failure
 	}
-	return waitRetry(ctx, retryDelay(resp.Header, attempt))
+	return t.waitVisibly(ctx, failure.Error(), attempt, maxRetries, retryDelay(resp.Header, attempt))
+}
+
+// waitVisibly tells the screen why the run is waiting, then waits.
+func (t *apiTransport) waitVisibly(ctx context.Context, reason string, attempt, limit int, delay time.Duration) error {
+	logging.WarnPersist(fmt.Sprintf(config.Text("%s · nova tentativa %d/%d em %ds", "%s · retry %d/%d in %ds"), reason, attempt+1, limit, int(delay.Round(time.Second)/time.Second)))
+	return waitRetry(ctx, delay)
 }

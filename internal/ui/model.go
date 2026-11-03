@@ -15,6 +15,7 @@ import (
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
@@ -42,6 +43,7 @@ type Model struct {
 	approval *permission.PermissionRequest
 	policy   permission.ApprovalPolicy
 	notice   string
+	retry    string
 	info     string   // a passing confirmation, shown in the footer
 	dialog   floating // the panel floating over the screen, if any
 	showPlan bool
@@ -236,7 +238,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			panel.probes[msg.provider] = msg
 		}
 		return m, nil
+	case pubsub.Event[logging.LogMessage]:
+		// Persistent warnings say why a run waits, such as a provider retry.
+		if msg.Payload.Persist && msg.Payload.Level == "warn" {
+			m.retry = msg.Payload.Message
+		}
 	case pubsub.Event[message.Message]:
+		m.retry = ""
 		m.upsert(msg)
 	case pubsub.Event[session.Session]:
 		if msg.Payload.ID == m.session.ID {
@@ -251,7 +259,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pubsub.Event[agent.AgentEvent]:
 		event := msg.Payload
 		if event.Type == agent.AgentEventTypeError || event.Done || event.Type == agent.AgentEventTypeResponse {
-			m.busy = m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID)
+			m.retry, m.busy = "", m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID)
 			switch {
 			case errors.Is(event.Error, agent.ErrRequestCancelled):
 				m.info = textFor("Execução cancelada · rascunho preservado", "Run cancelled · draft kept")
@@ -414,7 +422,11 @@ func (m *Model) submit() tea.Cmd {
 			m.setApproval(m.policy)
 		}
 	}
-	if _, _, err := m.app.CoderAgent.Submit(ctx, m.session.ID, text); err != nil {
+	skill, err := m.invokeSkill(ctx, text)
+	if !skill && err == nil {
+		_, _, err = m.app.CoderAgent.Submit(ctx, m.session.ID, text)
+	}
+	if err != nil {
 		m.notice = err.Error()
 		return nil
 	}

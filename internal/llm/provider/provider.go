@@ -23,6 +23,9 @@ var ErrOutputLimit = errors.New("model output token limit reached")
 
 const maxRetries = 8
 
+// dialRetries covers a local server that is still starting.
+const dialRetries = 2
+
 const (
 	EventContentStart  EventType = "content_start"
 	EventToolUseStart  EventType = "tool_use_start"

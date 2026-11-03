@@ -372,6 +372,8 @@ func failureTitle(reason string) string {
 		return textFor("O modelo repetiu a mesma ação sem progresso", "The model repeated the same action without progress")
 	case strings.Contains(lower, "step limit"), strings.Contains(lower, "max steps"):
 		return textFor("Limite de etapas atingido", "Step limit reached")
+	case strings.Contains(lower, "context budget exceeded"):
+		return textFor("A conversa não cabe mais no modelo", "The conversation no longer fits the model")
 	}
 	return textFor("A execução parou com um erro", "The run stopped with an error")
 }
@@ -412,6 +414,8 @@ func cause(reason string) string {
 		return textFor("A mesma ação falhou várias vezes do mesmo jeito.", "The same action failed the same way several times.")
 	case strings.Contains(lower, "step limit"), strings.Contains(lower, "max steps"):
 		return textFor("A tarefa usou todas as etapas permitidas.", "The task used every step it was allowed.")
+	case strings.Contains(lower, "context budget exceeded"):
+		return textFor("Use Compactar conversa (/compact) e retome, ou troque de modelo.", "Use Compact conversation (/compact) and resume, or change model.")
 	}
 	return ""
 }

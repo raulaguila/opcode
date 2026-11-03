@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -27,10 +28,13 @@ import (
 
 type App struct {
 	InitialContract *workflow.Contract
-	Sessions        session.Service
-	Messages        message.Service
-	History         history.Service
-	Permissions     permission.Service
+	// HeadlessApproval and MaxCost bound a non-interactive run.
+	HeadlessApproval permission.ApprovalPolicy
+	MaxCost          float64
+	Sessions         session.Service
+	Messages         message.Service
+	History          history.Service
+	Permissions      permission.Service
 
 	CoderAgent   agent.Service
 	Processes    *tools.ProcessManager
@@ -161,6 +165,12 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 	if autoApprove {
 		a.Permissions.AutoApproveSession(sess.ID)
 	}
+	if policies, ok := a.Permissions.(permission.ApprovalPolicies); ok && a.HeadlessApproval != "" {
+		if err := policies.SetApprovalPolicy(sess.ID, a.HeadlessApproval, config.WorkingDirectory()); err != nil {
+			return err
+		}
+	}
+	overBudget := a.watchCost(ctx, sess.ID)
 
 	done, err := a.CoderAgent.Run(ctx, sess.ID, prompt)
 	if err != nil {
@@ -168,10 +178,13 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 	}
 
 	result := <-done
+	if overBudget.Load() {
+		return &ExitError{Code: 3, Err: fmt.Errorf("cost limit of $%.2f reached; session %s kept", a.MaxCost, sess.ID)}
+	}
 	if result.Error != nil {
 		if errors.Is(result.Error, context.Canceled) || errors.Is(result.Error, agent.ErrRequestCancelled) {
 			logging.Info("Agent processing cancelled", "session_id", sess.ID)
-			return nil
+			return &ExitError{Code: 130, Err: errors.New("cancelled")}
 		}
 		return fmt.Errorf("agent processing failed: %w", result.Error)
 	}
@@ -181,17 +194,59 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 		spinner.Stop()
 	}
 
-	// Get the text content from the response
-	content := "No content available"
-	if result.Message.Content().String() != "" {
-		content = result.Message.Content().String()
+	report := format.Result{Response: result.Message.Content().String(), Outcome: result.Outcome, SessionID: sess.ID}
+	if report.Response == "" {
+		report.Response = "No content available"
 	}
+	if a.Workflows != nil {
+		if task, err := a.Workflows.Get(ctx, sess.ID); err == nil {
+			for _, file := range task.FileChanges {
+				report.FilesChanged = append(report.FilesChanged, file.Path)
+			}
+			for _, receipt := range task.Validation {
+				report.Checks = append(report.Checks, format.Check{Name: receipt.Name, Passed: receipt.Passed})
+			}
+		}
+	}
+	fmt.Println(format.FormatOutput(report, outputFormat))
 
-	fmt.Println(format.FormatOutput(content, outputFormat))
-
-	logging.Info("Non-interactive run completed", "session_id", sess.ID)
-
+	logging.Info("Non-interactive run completed", "session_id", sess.ID, "outcome", report.Outcome)
+	if report.Outcome == "partial" || report.Outcome == "blocked" {
+		return &ExitError{Code: 2} // the reply printed; the task did not finish
+	}
 	return nil
+}
+
+// watchCost cancels the run once the session's estimated cost passes MaxCost.
+func (a *App) watchCost(ctx context.Context, id string) *atomic.Bool {
+	over := &atomic.Bool{}
+	if a.MaxCost <= 0 {
+		return over
+	}
+	events := a.Sessions.Subscribe(ctx)
+	go func() {
+		for event := range events {
+			if event.Payload.ID == id && event.Payload.Cost > a.MaxCost && !over.Swap(true) {
+				a.CoderAgent.Cancel(id)
+			}
+		}
+	}()
+	return over
+}
+
+// ExitError ends the process with Code; Err, when set, is printed first.
+// Non-interactive runs exit 2 for a partial or blocked task and 130 when
+// cancelled, so scripts can tell them from success (0) and failure (1).
+type ExitError struct {
+	Code int
+	Err  error
+}
+
+func (e *ExitError) Error() string {
+	if e.Err == nil {
+		return fmt.Sprintf("exit %d", e.Code)
+	}
+	return e.Err.Error()
 }
 
 // Shutdown performs a clean shutdown of the application

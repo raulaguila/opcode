@@ -56,44 +56,33 @@ func GetHelpText() string {
 		Text, JSON)
 }
 
-// FormatOutput formats the AI response according to the specified format
-func FormatOutput(content string, formatStr string) string {
-	format, err := Parse(formatStr)
-	if err != nil {
-		// Default to text format on error
-		return content
-	}
-
-	switch format {
-	case JSON:
-		return formatAsJSON(content)
-	case Text:
-		fallthrough
-	default:
-		return content
-	}
+// Check is one validation the run recorded, as automation reads it.
+type Check struct {
+	Name   string `json:"name"`
+	Passed bool   `json:"passed"`
 }
 
-// formatAsJSON wraps the content in a simple JSON object
-func formatAsJSON(content string) string {
-	// Use the JSON package to properly escape the content
-	response := struct {
-		Response string `json:"response"`
-	}{
-		Response: content,
+// Result is what a non-interactive run reports: the reply and, for
+// automation, how the task ended and what it changed and verified.
+type Result struct {
+	Response     string   `json:"response"`
+	Outcome      string   `json:"outcome"` // completed, planned, partial, blocked
+	SessionID    string   `json:"session_id"`
+	FilesChanged []string `json:"files_changed"`
+	Checks       []Check  `json:"checks"`
+}
+
+// FormatOutput is the reply alone as text, or the whole result as JSON.
+func FormatOutput(result Result, formatStr string) string {
+	if format, _ := Parse(formatStr); format != JSON {
+		return result.Response
 	}
-
-	jsonBytes, err := json.MarshalIndent(response, "", "  ")
-	if err != nil {
-		// In case of an error, return a manually formatted JSON
-		jsonEscaped := strings.Replace(content, "\\", "\\\\", -1)
-		jsonEscaped = strings.Replace(jsonEscaped, "\"", "\\\"", -1)
-		jsonEscaped = strings.Replace(jsonEscaped, "\n", "\\n", -1)
-		jsonEscaped = strings.Replace(jsonEscaped, "\r", "\\r", -1)
-		jsonEscaped = strings.Replace(jsonEscaped, "\t", "\\t", -1)
-
-		return fmt.Sprintf("{\n  \"response\": \"%s\"\n}", jsonEscaped)
+	if result.FilesChanged == nil {
+		result.FilesChanged = []string{}
 	}
-
-	return string(jsonBytes)
+	if result.Checks == nil {
+		result.Checks = []Check{}
+	}
+	raw, _ := json.MarshalIndent(result, "", "  ") // strings and slices always encode
+	return string(raw)
 }

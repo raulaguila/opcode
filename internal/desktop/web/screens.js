@@ -126,6 +126,8 @@ function commands() {
     { title: t("Alterações", "Changes"), desc: t("arquivos alterados por interação; desfazer ou refazer", "files changed per turn; undo or redo"), right: "/changes", group: work, run: openChanges },
     { title: t("Desfazer interação", "Undo turn"), desc: t("reverte as edições da última resposta", "reverts the last reply's edits"), right: "/undo", group: work, run: () => undoLast(false) },
     { title: t("Refazer interação", "Redo turn"), desc: t("reaplica a interação desfeita", "reapplies the undone turn"), right: "/redo", group: work, run: () => undoLast(true) },
+    { title: t("Contexto", "Context"), desc: t("quanto da janela do modelo a conversa usa", "how much of the model window the conversation uses"), right: "/context", group: t("Conversa", "Conversation"), run: () => showContext(false) },
+    { title: t("Compactar conversa", "Compact conversation"), desc: t("resume saídas antigas para liberar contexto", "folds old output to free context"), right: "/compact", group: t("Conversa", "Conversation"), run: () => showContext(true) },
     { title: t("Exportar conversa", "Export conversation"), desc: t("salva em Markdown", "saves as Markdown"), right: "/export", group: t("Conversa", "Conversation"), run: exportCurrent },
     { title: t("Conexões", "Connections"), desc: t("provedores e chaves", "providers and keys"), right: "/connections", group: settings, run: () => openSettings(0) },
     { title: t("Preferências", "Preferences"), desc: t("idioma, notificações, modo inicial", "language, notifications, initial mode"), right: "/preferences", group: settings, run: () => openSettings(1) },
@@ -496,6 +498,21 @@ async function undoLast(redo) {
     const c = redo ? all.filter((c) => c.undone).pop() : all.find((c) => !c.undone);
     if (!c) { flash(redo ? t("Nada para refazer", "Nothing to redo") : t("Nada para desfazer nesta conversa", "Nothing to undo in this conversation")); return; }
     review(c.id, redo, c.version);
+  } catch (error) { view.error = error.message; renderFrame(); }
+}
+
+// showContext tells how much of the window the next request takes; compact
+// first folds old tool output and turns, without asking the model.
+async function showContext(compact) {
+  if (!view.session) { flash(t("Sem conversa para medir", "No conversation to measure")); return; }
+  try {
+    const s = await api(`/api/sessions/${view.session}/context`, compact ? {} : undefined);
+    const used = s.estimated_input_tokens + s.reserved_output_tokens + s.safety_tokens;
+    let line = t(`Contexto: ${used} de ${s.context_window} tokens`, `Context: ${used} of ${s.context_window} tokens`);
+    if (s.context_window > 0) line += ` (${Math.floor(used * 100 / s.context_window)}%)`;
+    if (compact) line += t(` · ${s.compacted_messages} mensagens compactadas`, ` · ${s.compacted_messages} messages compacted`);
+    if (!s.fits) line += t(" · não cabe: compacte ou troque de modelo", " · does not fit: compact or change model");
+    flash(line);
   } catch (error) { view.error = error.message; renderFrame(); }
 }
 

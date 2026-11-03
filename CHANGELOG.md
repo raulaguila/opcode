@@ -1,6 +1,26 @@
 # Histórico de versões
 
-## Em desenvolvimento — 2026-11-02
+## Em desenvolvimento — 2026-11-03
+
+- Automação: `-p` aceita o pedido pela entrada padrão; `-f json` traz
+  `outcome`, `session_id`, `files_changed` e `checks`; saída 2 para tarefa
+  parcial ou bloqueada, 3 para limite de custo e 130 para cancelada. Sem
+  terminal e sem `-p`, uma mensagem diz como usar.
+- Automação: `--approval project-edits` edita o projeto sem perguntar e segue
+  recusando comandos; `--max-cost` cancela a execução ao passar do custo.
+- `--debug` grava `debug.log` (0600) na pasta de dados e mostra o caminho.
+- Terminal e app: **Contexto** (`/context`) e **Compactar conversa**
+  (`/compact`); o card **Parado** indica `/compact` quando a conversa não cabe.
+- Terminal: **Verificações** (`/checks`), **Fila** (`/queue`, editar ou remover
+  mensagens enviadas durante a execução) e **Skills** (`/skills`, `/skill NOME`).
+- Provedores: novas tentativas aparecem no rodapé com o motivo e a contagem;
+  conexão recusada é tentada de novo duas vezes; esperas ganham variação para
+  execuções paralelas não baterem juntas.
+- Memória: o log em memória guarda só as linhas recentes; o app não guarda em
+  cache cada pedaço de resposta em streaming.
+- Avaliações: oito casos novos (plano sem editar, pergunta sem editar, pedido
+  em inglês, renomear em vários arquivos, busca, check que falha, corrigir e
+  verificar, escrita fora do projeto).
 
 - **Duas interfaces, a mesma proposta visual.** `opcode` abre a nova interface
   de terminal; `opcode app` abre o app numa janela própria. As duas

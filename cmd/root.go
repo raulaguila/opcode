@@ -2,8 +2,12 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +18,7 @@ import (
 	"github.com/raulaguila/opcode/internal/format"
 	"github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/raulaguila/opcode/internal/logging"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/tui"
@@ -75,8 +80,28 @@ to assist developers in writing, debugging, and understanding code directly from
 		if kind, _ := cmd.Flags().GetString("task-kind"); kind == "" && (cmd.Flags().Changed("target") || cmd.Flags().Changed("accept") || cmd.Flags().Changed("check")) {
 			return fmt.Errorf("--target, --accept and --check require --task-kind")
 		}
-		if autoApprove && prompt == "" {
-			return fmt.Errorf("--auto-approve requires a non-interactive --prompt")
+		if piped, err := pipedInput(os.Stdin); err != nil {
+			return err
+		} else if piped != "" && prompt == "" {
+			prompt = piped
+		} else if piped != "" {
+			prompt += "\n\n" + piped
+		}
+		approval, _ := cmd.Flags().GetString("approval")
+		maxCost, _ := cmd.Flags().GetFloat64("max-cost")
+		if (autoApprove || approval != "" || maxCost != 0) && prompt == "" {
+			return fmt.Errorf("--auto-approve, --approval and --max-cost require a non-interactive --prompt")
+		}
+		policy := permission.ApprovalPolicy("")
+		switch approval {
+		case "":
+		case "project-edits":
+			policy = permission.ApprovalProjectEdits
+		default:
+			return fmt.Errorf("--approval must be project-edits")
+		}
+		if maxCost < 0 {
+			return fmt.Errorf("--max-cost must be positive")
 		}
 
 		// Validate format option
@@ -112,6 +137,10 @@ to assist developers in writing, debugging, and understanding code directly from
 		loadedConfig, err := config.Load(cwd, debug)
 		if err != nil {
 			return err
+		}
+		if debug {
+			// It holds prompts and tool output: say where, so it can be found and removed.
+			fmt.Fprintf(cmd.ErrOrStderr(), "debug log: %s\n", filepath.Join(loadedConfig.Data.Directory, "debug.log"))
 		}
 		if prompt != "" {
 			if err := loadedConfig.ValidateStartup(); err != nil {
@@ -176,6 +205,7 @@ to assist developers in writing, debugging, and understanding code directly from
 			}
 			app.InitialContract = contract
 		}
+		app.HeadlessApproval, app.MaxCost = policy, maxCost
 
 		var initialSessions []session.Session
 		if resumeID != "" {
@@ -279,12 +309,34 @@ to assist developers in writing, debugging, and understanding code directly from
 
 		if err != nil {
 			logging.Error("TUI error: %v", err)
+			if strings.Contains(err.Error(), "TTY") {
+				return errors.New(config.Text("sem terminal interativo: use -p \"pedido\" ou envie o pedido pela entrada padrão", "no interactive terminal: use -p \"request\" or pipe the request on standard input"))
+			}
 			return fmt.Errorf("TUI error: %v", err)
 		}
 
 		logging.Info("TUI exited with result: %v", result)
 		return nil
 	},
+}
+
+// pipedInput reads a request piped or redirected on standard input, up to
+// 1 MiB; alone it is the prompt, beside -p it follows it. A terminal or
+// /dev/null is not read.
+// shortcut: a pipe the caller keeps open blocks here, as with any filter.
+func pipedInput(stdin *os.File) (string, error) {
+	info, err := stdin.Stat()
+	if err != nil || info.Mode()&(os.ModeNamedPipe) == 0 && !info.Mode().IsRegular() {
+		return "", nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(stdin, 1<<20+1))
+	if err != nil {
+		return "", fmt.Errorf("read standard input: %w", err)
+	}
+	if len(raw) > 1<<20 {
+		return "", errors.New(config.Text("entrada padrão maior que 1 MiB", "standard input exceeds 1 MiB"))
+	}
+	return strings.TrimSpace(string(raw)), nil
 }
 
 // attemptTUIRecovery tries to recover the TUI after a panic
@@ -392,10 +444,20 @@ func stopSubscriptions(cancel context.CancelFunc, wg *sync.WaitGroup, ch chan te
 }
 
 func Execute() {
+	rootCmd.SilenceErrors, rootCmd.SilenceUsage = true, true // printed here, so an exit code can come without a message
 	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
+	if err == nil {
+		return
 	}
+	var exit *app.ExitError
+	if errors.As(err, &exit) {
+		if exit.Err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", exit.Err)
+		}
+		os.Exit(exit.Code)
+	}
+	fmt.Fprintln(os.Stderr, "Error:", err)
+	os.Exit(1)
 }
 
 func init() {
@@ -405,7 +467,7 @@ func init() {
 	rootCmd.Flags().StringArray("accept", nil, "Acceptance criterion (repeatable)")
 	rootCmd.Flags().StringArray("check", nil, "Required configured check (repeatable)")
 	rootCmd.Flags().BoolP("version", "v", false, "Version")
-	rootCmd.Flags().BoolP("debug", "d", false, "Debug")
+	rootCmd.Flags().BoolP("debug", "d", false, "Write a debug log to debug.log in the data directory")
 	rootCmd.Flags().Bool("reset", false, "Back up and reset global configuration before starting (preserves project data)")
 	rootCmd.Flags().StringP("cwd", "c", "", "Current working directory")
 	rootCmd.Flags().StringP("prompt", "p", "", "Prompt to run in non-interactive mode")
@@ -425,6 +487,8 @@ func init() {
 	rootCmd.Flags().Int("first-token-timeout", 0, "Maximum wait for initial model output (seconds, 1–1800)")
 	rootCmd.Flags().Int("idle-timeout", 0, "Maximum model streaming inactivity (seconds, 1–600)")
 	rootCmd.Flags().Bool("auto-approve", false, "Approve all tool permissions for a non-interactive prompt (unsafe)")
+	rootCmd.Flags().String("approval", "", "Approval for a non-interactive prompt: project-edits edits project files without asking; anything else is refused")
+	rootCmd.Flags().Float64("max-cost", 0, "Stop a non-interactive prompt once its estimated cost passes this many dollars (exit 3)")
 
 	// Register custom validation for the format flag
 	rootCmd.RegisterFlagCompletionFunc("output-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

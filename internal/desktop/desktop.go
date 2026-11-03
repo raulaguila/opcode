@@ -389,7 +389,7 @@ func project(messages []message.Message) []Message {
 		case message.User:
 			entry.Text = text
 		case message.Assistant:
-			entry.HTML, entry.Cites = renderReply(text)
+			entry.HTML, entry.Cites = renderReply(text, msg.IsFinished())
 			if read := agent.SourcesLabel(agent.SourcesRead(turnCalls, results)); read != "" {
 				entry.Cites = config.Text("lido: ", "read: ") + read
 			}
@@ -435,7 +435,8 @@ var rendered = struct {
 var markdown = goldmark.New()
 
 // renderReply is a reply's HTML and its first citation ("store.go:45").
-func renderReply(text string) (string, string) {
+// Only finished replies are kept: each streamed prefix would evict them.
+func renderReply(text string, finished bool) (string, string) {
 	if text == "" {
 		return "", ""
 	}
@@ -452,6 +453,9 @@ func renderReply(text string) (string, string) {
 	cite := ""
 	if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
 		cite = fmt.Sprintf("%s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
+	}
+	if !finished {
+		return html.String(), cite
 	}
 	if len(rendered.replies) >= 512 { // shortcut: drops everything when full; a long-lived app rarely shows 512 replies
 		clear(rendered.replies)

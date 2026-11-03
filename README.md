@@ -89,6 +89,29 @@ só mostrar o endereço.
 A interface anterior do terminal continua disponível por um tempo com
 `opcode --ui classico`.
 
+### Automação
+
+`opcode -p "pedido"` roda um pedido sem interface. O pedido também pode vir pela
+entrada padrão (`git diff | opcode -p "revise"` ou `opcode < pedido.txt`, até
+1 MiB). Com `-f json`, a saída traz `response`, `outcome`, `session_id`,
+`files_changed` e `checks`.
+
+| Saída | Significado |
+| --- | --- |
+| `0` | tarefa concluída |
+| `1` | erro |
+| `2` | tarefa parcial ou bloqueada; a resposta foi impressa |
+| `3` | `--max-cost` atingido; a conversa fica salva |
+| `130` | cancelada |
+
+Sem interface ninguém aprova nada, então as alterações são recusadas.
+`--approval project-edits` deixa editar arquivos do projeto sem perguntar e
+continua recusando comandos; `--auto-approve` aprova tudo (inseguro).
+`--max-cost 0.50` cancela a execução quando o custo estimado passa de US$ 0,50,
+verificado após cada resposta do modelo. `--debug` grava `debug.log` (0600) na
+pasta de dados e mostra o caminho; o arquivo contém pedidos e saídas de
+ferramentas.
+
 ## Primeiro acesso e modelos
 
 Na inicialização normal, se `~/.opcode/config.json` não existir, o Opcode cria esse
@@ -297,7 +320,10 @@ Perguntar e Planejar recebem somente capacidades de leitura. Executar mantém
 aprovação por operação, proteção de caminhos e sandbox. Aprovações não são
 restauradas do disco; skills, hooks, recursos externos e texto do modelo não
 podem concedê-las. No Linux, Bubblewrap é o padrão; ausência do isolamento causa
-falha. Execução sem sandbox exige configuração global explícita.
+falha. Execução sem sandbox exige configuração global explícita. No macOS e no
+Windows ainda não há sandbox: comandos falham até você definir
+`security.sandbox=none` na configuração global, e a partir daí rodam com as
+permissões da sua conta, protegidos apenas pela aprovação de cada comando.
 
 Undo/redo reverte edições de arquivos das ferramentas após prévia, aprovação e
 revalidação. Não reverte efeitos de comandos, processos, serviços externos ou

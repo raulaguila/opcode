@@ -17,6 +17,8 @@ const (
 	PersistTimeArg = "$_persist_time"
 )
 
+const maxLogMessages = 1000
+
 type LogData struct {
 	messages []LogMessage
 	*pubsub.Broker[LogMessage]
@@ -26,6 +28,10 @@ type LogData struct {
 func (l *LogData) Add(msg LogMessage) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
+	// The log screen shows recent lines; a long run must not grow without bound.
+	if len(l.messages) >= maxLogMessages {
+		l.messages = append(l.messages[:0:0], l.messages[len(l.messages)-maxLogMessages/2:]...)
+	}
 	l.messages = append(l.messages, msg)
 	l.Publish(pubsub.CreatedEvent, msg)
 }

@@ -506,6 +506,9 @@ func (m *Model) footer() string {
 				now = config.Text("Gerando resposta", "Generating response")
 			}
 		}
+		if m.retry != "" {
+			now = m.retry
+		}
 		elapsed := time.Since(m.started).Truncate(time.Second)
 		activity = on(P.Ground, P.Plan).Render(fmt.Sprintf(config.Text("  %s · %s · Esc cancela", "  %s · %s · Esc cancels"), now, elapsed))
 		if compact {

@@ -50,8 +50,13 @@ func (m *Model) commands() []command {
 			return nil
 		}},
 		{textFor("Alterações", "Changes"), textFor("arquivos alterados por interação; desfazer ou refazer", "files changed per turn; undo or redo"), "/changes", work, (*Model).openChanges},
+		{textFor("Verificações", "Checks"), textFor("resultado das verificações da tarefa", "the task's check results"), "/checks", work, (*Model).openChecks},
+		{textFor("Fila", "Queue"), textFor("mensagens enviadas durante a execução", "messages sent while the agent works"), "/queue", work, (*Model).openQueue},
+		{textFor("Skills", "Skills"), textFor("instruções prontas da configuração global", "ready-made instructions from the global configuration"), "/skills", work, (*Model).openSkills},
 		{textFor("Desfazer interação", "Undo turn"), textFor("reverte as edições da última resposta", "reverts the last reply's edits"), "/undo", work, func(m *Model) tea.Cmd { return m.undoLast(false) }},
 		{textFor("Refazer interação", "Redo turn"), textFor("reaplica a interação desfeita", "reapplies the undone turn"), "/redo", work, func(m *Model) tea.Cmd { return m.undoLast(true) }},
+		{textFor("Contexto", "Context"), textFor("quanto da janela do modelo a conversa usa", "how much of the model window the conversation uses"), "/context", conversation, func(m *Model) tea.Cmd { return m.showContext(false) }},
+		{textFor("Compactar conversa", "Compact conversation"), textFor("resume saídas antigas para liberar contexto", "folds old output to free context"), "/compact", conversation, func(m *Model) tea.Cmd { return m.showContext(true) }},
 		{textFor("Exportar conversa", "Export conversation"), textFor("salva em Markdown", "saves as Markdown"), "/export", conversation, (*Model).exportCurrent},
 		{textFor("Conexões", "Connections"), textFor("provedores e chaves", "providers and keys"), "/connections", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionConnections) }},
 		{textFor("Preferências", "Preferences"), textFor("idioma, notificações, modo inicial", "language, notifications, initial mode"), "/preferences", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionInterface) }},

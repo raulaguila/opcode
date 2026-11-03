@@ -4,6 +4,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -1145,7 +1146,7 @@ func configureLoadedLogging(discoverLocal bool) error {
 	if cfg.Debug {
 		defaultLevel = slog.LevelDebug
 	}
-	if discoverLocal && Environment("OPCODE_DEV_DEBUG") == "true" {
+	if discoverLocal && (cfg.Debug || Environment("OPCODE_DEV_DEBUG") == "true") {
 		loggingFile := fmt.Sprintf("%s/%s", cfg.Data.Directory, "debug.log")
 		// Debug logs hold prompts and tool output: keep them private to the user.
 		if err := os.MkdirAll(cfg.Data.Directory, 0o700); err != nil {
@@ -1162,7 +1163,8 @@ func configureLoadedLogging(discoverLocal bool) error {
 			return fmt.Errorf("failed to secure log file: %w", err)
 		}
 		// Configure logger
-		logger := slog.New(slog.NewTextHandler(sloggingFileWriter, &slog.HandlerOptions{
+		// The screen still gets its notices; the file keeps the whole record.
+		logger := slog.New(slog.NewTextHandler(io.MultiWriter(sloggingFileWriter, logging.NewWriter()), &slog.HandlerOptions{
 			Level: defaultLevel,
 		}))
 		slog.SetDefault(logger)

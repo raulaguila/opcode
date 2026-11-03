@@ -63,6 +63,14 @@ escolha o modelo com `Ctrl+O`.
   depois da interação, nada é escrito. Comandos (`bash`), serviços externos e
   edições suas fora do opcode não são desfeitos: o git continua sendo a rede de
   segurança.
+- **Contexto** (`/context`) e **Compactar conversa** (`/compact`): quanto da
+  janela do modelo o próximo pedido ocupa; compactar resume saídas antigas de
+  ferramentas sem chamar o modelo. O card **Parado** aponta para `/compact`
+  quando a conversa não cabe mais.
+- **Verificações** (`/checks`), **Fila** (`/queue`) e **Skills** (`/skills`) no
+  terminal: recibos de checks da tarefa; mensagens enviadas durante a execução,
+  com `Enter` para editar e `Delete` para remover; e as skills configuradas,
+  com `Enter` iniciando `/skill NOME` no campo.
 - **Configurações**: menu lateral com Conexões, Interface, Trabalho, Aprovação,
   Atalhos, Integrações e Avançado. Conexões aparecem como cards com estado
   (em uso, chave ausente, desativada), endereço, autenticação e o resultado do

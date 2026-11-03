@@ -46,6 +46,11 @@ func InfoPersist(msg string, args ...any) {
 	slog.Info(msg, args...)
 }
 
+func WarnPersist(msg string, args ...any) {
+	args = append(args, persistKeyArg, true)
+	slog.Warn(msg, args...)
+}
+
 func ErrorPersist(msg string, args ...any) {
 	args = append(args, persistKeyArg, true)
 	slog.Error(msg, args...)

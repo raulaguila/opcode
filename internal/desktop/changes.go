@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/review"
 )
@@ -92,4 +93,27 @@ func (s *Server) review(w http.ResponseWriter, r *http.Request) {
 	default:
 		reply(w, http.StatusOK, map[string]any{"redo": request.Redo, "files": len(preview.Changes)})
 	}
+}
+
+// context reports the next request's share of the model window; a POST
+// first folds old tool output and turns, without a model call.
+func (s *Server) context(w http.ResponseWriter, r *http.Request) {
+	control, ok := s.app.CoderAgent.(agent.ContextControl)
+	if !ok {
+		fail(w, http.StatusNotImplemented, errors.New("context unavailable"))
+		return
+	}
+	current, ok := s.manageable(w, r)
+	if !ok {
+		return
+	}
+	status, err := control.ContextStatus(r.Context(), current.ID)
+	if err == nil && r.Method == http.MethodPost {
+		status, err = control.CompactContext(r.Context(), current.ID)
+	}
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	reply(w, http.StatusOK, status)
 }

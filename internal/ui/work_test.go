@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/interaction"
+	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
@@ -126,4 +127,11 @@ func TestTheFooterNamesTheModeWhenTheComposerDoesNot(t *testing.T) {
 	require.Equal(t, 5, m.composerRows(), "the text with a blank row above and below")
 	m.question = &question{q: interaction.Question{ID: "q", Question: "Qual?", Choices: []string{"A"}}, checked: map[int]bool{}}
 	require.Contains(t, ansi.Strip(m.footer()), modeLabel("plan")+"  ")
+}
+
+func TestContextLimitPointsToCompaction(t *testing.T) {
+	require.Equal(t, "The conversation no longer fits the model", failureTitle("context budget exceeded: start a new task"))
+	require.Contains(t, cause("context budget exceeded"), "/compact")
+	line := contextLine(agent.ContextStatus{EstimatedInputTokens: 700, ReservedOutputTokens: 200, SafetyTokens: 100, ContextWindow: 2000, CompactedMessages: 3}, true)
+	require.Equal(t, "Context: 1000 of 2000 tokens (50%) · 3 messages compacted · does not fit: compact or change model", line)
 }

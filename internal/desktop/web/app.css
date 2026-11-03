@@ -73,6 +73,9 @@ select, input, textarea { font-family: inherit; }
 .reply :not(pre) > code { background: var(--raised); border-radius: 4px; padding: 0 4px; }
 .reply a { color: var(--ask); }
 .meta { color: var(--faint); font-size: 12px; }
+.thinking { max-width: var(--prose, none); border-left: 1px dashed var(--faint); padding: 2px 0 2px 14px; color: var(--muted); font-size: 13px; }
+.thinking b { color: var(--faint); font-weight: 500; }
+.thinking div { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 8.5em; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; }
 
 .failure { background: var(--danger-bg); border: 1px solid var(--danger-line); border-radius: 8px; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; }
 .failure b { color: var(--danger); }

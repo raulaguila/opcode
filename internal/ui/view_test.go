@@ -88,3 +88,20 @@ func TestTranscriptRepaintsWhenAReplyGrowsButNotWhenTyping(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
 	require.Equal(t, painted, m.paintKey, "typing must not rebuild the transcript")
 }
+
+func TestThinkingShowsWhileStreamingAndLeavesOnlyTheAnswer(t *testing.T) {
+	m := New(nil)
+	m.width, m.height, m.busy = 100, 30, true
+	m.messages = []message.Message{
+		{ID: "u", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Oi"}}},
+		{ID: "a", Role: message.Assistant, Parts: []message.ContentPart{message.ReasoningContent{Thinking: "step one\n2\n3\n4\n5\n6\n7\nPONDERING"}}},
+	}
+	view := ansi.Strip(m.renderTranscript(100))
+	require.Contains(t, view, "PONDERING")
+	require.NotContains(t, view, "step one", "only the newest lines of the reasoning show")
+	m.messages[1].Parts = append(m.messages[1].Parts, message.TextContent{Text: "ANSWER"}, message.Finish{Reason: message.FinishReasonEndTurn})
+	m.busy = false
+	view = ansi.Strip(m.renderTranscript(100))
+	require.Contains(t, view, "ANSWER")
+	require.NotContains(t, view, "PONDERING", "the finished reply shows alone")
+}

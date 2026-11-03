@@ -212,6 +212,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case searchMsg:
 		return m, m.search(string(msg))
+	case reviewedMsg:
+		m.reviewed(msg)
 	case foundMsg:
 		if current, ok := m.mentionToken(); ok && strings.Contains(strings.ToLower(current), strings.ToLower(msg.query)) {
 			m.found, m.foundFor = msg.files, msg.query
@@ -296,7 +298,8 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	}
 	switch msg.String() {
 	case "ctrl+c":
-		return tea.Quit
+		m.dialog = confirmQuit{}
+		return nil
 	case "ctrl+k":
 		return m.openPalette()
 	case "ctrl+o":
@@ -538,7 +541,7 @@ func (m *Model) click(x, y int) tea.Cmd {
 		if m.app != nil && m.app.CoderAgent != nil && x >= m.width-2-ansi.StringWidth(modelName(m.app.CoderAgent.Model().ID)+" ▾") {
 			return m.openModels()
 		}
-	case m.height - 1 - m.composerRows():
+	case m.height - footerRows - m.composerRows():
 		if x >= 2 && x < 4+ansi.StringWidth(modeLabel(m.mode)) {
 			m.cycleMode()
 		}

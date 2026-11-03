@@ -283,6 +283,7 @@ type Conversation struct {
 	Number      int           `json:"number"`               // the session's place among this workspace's conversations
 	Speed       float64       `json:"speed,omitempty"`      // tokens per second: live while streaming, else the last reply's
 	SpeedLive   bool          `json:"speed_live,omitempty"` // measured on the reply still streaming
+	Thinking    string        `json:"thinking,omitempty"`   // the reasoning streaming before the answer
 }
 
 // Approval is a pending permission with its diff or command, if any.
@@ -308,6 +309,9 @@ func (s *Server) conversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view := Conversation{Session: brief(current), Busy: s.app.CoderAgent.IsSessionBusy(id), Messages: project(messages), Permissions: []Approval{}}
+	if view.Busy {
+		view.Thinking = message.LiveThought(messages, 2000)
+	}
 	view.Task, _ = s.app.Workflows.Get(r.Context(), id)
 	if q, ok := s.app.Questions.Pending(id); ok {
 		view.Question = q

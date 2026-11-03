@@ -162,6 +162,11 @@ function renderTranscript() {
       steps.push(...(m.steps || []));
     }
     flush();
+    // While the model thinks, its reasoning shows live; the answer replaces it.
+    if (conversation.thinking) {
+      blocks.push({ key: `thinking:${view.lang}:${conversation.thinking}`, make: () => el("div", { class: "thinking" },
+        el("b", {}, t("Pensando…", "Thinking…")), el("div", {}, conversation.thinking)) });
+    }
     if (conversation.failure) {
       blocks.splice(afterSteps >= 0 ? afterSteps : blocks.length, 0, { key: `failure:${view.lang}:${conversation.failure}`, make: () => failureCard(conversation.failure) });
     }
@@ -194,7 +199,7 @@ function renderWork() {
   }
 }
 
-function diffRows(diff) {
+function diffRows(diff, limit = 6) {
   const rows = [];
   let added = 0, removed = 0, newLine = 0, oldLine = 0, hidden = 0;
   for (const line of diff.split("\n")) {
@@ -209,7 +214,7 @@ function diffRows(diff) {
     if (line[0] === "+") { kind = "add"; added++; newLine++; }
     else if (line[0] === "-") { kind = "del"; removed++; number = oldLine; oldLine++; }
     else { newLine++; oldLine++; }
-    if (rows.length >= 6 && !view.fullDiff) { hidden++; continue; }
+    if (rows.length >= limit && !view.fullDiff) { hidden++; continue; }
     rows.push(el("div", { class: kind }, el("span", { class: "n" }, String(number)), el("span", {}, line)));
   }
   if (hidden) rows.push(el("div", { class: "ctx" }, el("span", { class: "n" }, "…"), el("span", {}, t(`${hidden} linhas · T mostra tudo`, `${hidden} lines · T shows all`))));

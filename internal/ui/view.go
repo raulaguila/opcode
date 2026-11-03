@@ -23,7 +23,7 @@ import (
 
 const (
 	headerRows = 2 // title bar and its rule
-	footerRows = 1
+	footerRows = 2 // a row of air under the composer's keys, then the footer
 	gutter     = 2 // left margin of the transcript
 )
 
@@ -215,6 +215,12 @@ func (m *Model) renderTranscript(width int) string {
 		turnCalls = append(turnCalls, msg.ToolCalls()...)
 	}
 	flush()
+	// While the model thinks, its reasoning shows live; the answer replaces it.
+	if thought := message.LiveThought(m.messages, 4000); m.busy && thought != "" {
+		rows := strings.Split(ansi.Wrap(thought, inner-1, ""), "\n")
+		rows = append([]string{textFor("Pensando…", "Thinking…")}, rows[max(0, len(rows)-6):]...)
+		blocks = append(blocks, barred(strings.Join(rows, "\n"), "┊", P.Faint, P.Muted, inner, indent))
+	}
 	if m.failure != nil {
 		if failureAt < 0 {
 			failureAt = len(blocks)
@@ -518,7 +524,7 @@ func (m *Model) footer() string {
 		name = ansi.Truncate(name, 9, "…")
 	}
 	right += on(P.Ground, P.Text).Render(name+" ▾") + " "
-	return Spread(approval+activity, right, m.width, P.Ground)
+	return "\n" + Spread(approval+activity, right, m.width, P.Ground)
 }
 
 // doing names the step in progress, as the proposal's footer does:

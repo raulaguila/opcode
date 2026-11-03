@@ -56,6 +56,13 @@ escolha o modelo com `Ctrl+O`.
   velocidade da última resposta).
 - **Conversas** (`Ctrl+S`): por dia, com estado (`● ✓ ◐ ■ ○`) e prévia;
   renomear, exportar em Markdown e arquivar.
+- **Alterações** (`/changes`): as interações que editaram arquivos, a mais
+  recente primeiro, com o diff que `Enter` aplicaria. `Enter` desfaz uma
+  interação aplicada ou refaz uma desfeita; `/undo` e `/redo` agem direto na
+  última. Cada arquivo pede aprovação no card de sempre; se o arquivo mudou
+  depois da interação, nada é escrito. Comandos (`bash`), serviços externos e
+  edições suas fora do opcode não são desfeitos: o git continua sendo a rede de
+  segurança.
 - **Configurações**: menu lateral com Conexões, Interface, Trabalho, Aprovação,
   Atalhos, Integrações e Avançado. Conexões aparecem como cards com estado
   (em uso, chave ausente, desativada), endereço, autenticação e o resultado do
@@ -75,6 +82,7 @@ escolha o modelo com `Ctrl+O`.
 | `Ctrl+S` | conversas | conversas |
 | `Ctrl+N` | nova conversa | nova conversa |
 | `Esc` | cancela a execução | cancela a execução |
+| `Ctrl+C` | pede confirmação para sair; `Enter` ou outro `Ctrl+C` sai | — |
 | `1` `2` `3` | responde a aprovação | responde a aprovação |
 | `T` | mostra o diff inteiro na aprovação | mostra o diff inteiro na aprovação |
 | `@` | lista os arquivos do projeto para citar | lista os arquivos do projeto para citar |

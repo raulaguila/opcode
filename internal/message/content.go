@@ -292,6 +292,16 @@ func (m *Message) IsThinking() bool {
 	return false
 }
 
+// LiveThought is the end of the reasoning the newest message is streaming,
+// up to limit bytes, while it has no answer text yet; else "".
+func LiveThought(messages []Message, limit int) string {
+	if len(messages) == 0 || !messages[len(messages)-1].IsThinking() {
+		return ""
+	}
+	thought := strings.TrimSpace(messages[len(messages)-1].ReasoningContent().Thinking)
+	return strings.ToValidUTF8(thought[max(0, len(thought)-limit):], "")
+}
+
 func (m *Message) AppendContent(delta string) {
 	found := false
 	for i, part := range m.Parts {

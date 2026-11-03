@@ -123,6 +123,9 @@ function commands() {
     { title: t("Retomar tarefa", "Resume task"), desc: t("abre a última conversa e o plano salvo", "opens the last conversation and its saved plan"), right: "/resume", group: work, run: resumeLast },
     { title: t("Responder pergunta", "Answer question"), desc: t("reabre a pergunta pendente do agente", "reopens the agent's pending question"), right: "Enter", group: work, run: () => { view.laterQuestion = ""; render(); } },
     { title: t("Cancelar execução", "Cancel run"), desc: t("para a tarefa em andamento", "stops the running task"), right: "Esc", group: work, run: () => view.session && api(`/api/sessions/${view.session}/cancel`, {}).catch(() => {}) },
+    { title: t("Alterações", "Changes"), desc: t("arquivos alterados por interação; desfazer ou refazer", "files changed per turn; undo or redo"), right: "/changes", group: work, run: openChanges },
+    { title: t("Desfazer interação", "Undo turn"), desc: t("reverte as edições da última resposta", "reverts the last reply's edits"), right: "/undo", group: work, run: () => undoLast(false) },
+    { title: t("Refazer interação", "Redo turn"), desc: t("reaplica a interação desfeita", "reapplies the undone turn"), right: "/redo", group: work, run: () => undoLast(true) },
     { title: t("Exportar conversa", "Export conversation"), desc: t("salva em Markdown", "saves as Markdown"), right: "/export", group: t("Conversa", "Conversation"), run: exportCurrent },
     { title: t("Conexões", "Connections"), desc: t("provedores e chaves", "providers and keys"), right: "/connections", group: settings, run: () => openSettings(0) },
     { title: t("Preferências", "Preferences"), desc: t("idioma, notificações, modo inicial", "language, notifications, initial mode"), right: "/preferences", group: settings, run: () => openSettings(1) },
@@ -453,6 +456,57 @@ async function openSessions() {
     catch (error) { pane.append(el("div", { class: "desc bad-t" }, error.message)); }
   };
   await reload();
+}
+
+// ---- changes: undo and redo a turn's file edits ---------------------------------
+
+async function openChanges() {
+  if (!view.session) { flash(t("Nenhuma alteração nesta conversa", "No changes in this conversation")); return; }
+  let all;
+  try { all = await api(`/api/sessions/${view.session}/changes`); } catch (error) { view.error = error.message; renderFrame(); return; }
+  if (!all.length) { flash(t("Nenhuma alteração de arquivo nesta conversa", "No file changes in this conversation")); return; }
+  const pane = el("div", { class: "pane" });
+  const list = makeList({ items: all.map((c) => ({ id: c.id, title: new Date(c.at * 1000).toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }), desc: c.files.map((f) => f.split("/").pop()).join(", "), right: c.undone ? t("desfeita", "undone") : t("aplicada", "applied"), faint: c.undone, change: c })), grouped: false, cursor: "◆", onPick: (item) => apply(item.change), onMove: () => drawPane() });
+  openDialog({
+    title: t("Alterações", "Changes"), meta: String(all.length), size: "wide", list,
+    body: el("div", { class: "split sessions" }, el("div", { class: "col" }, list.node), pane),
+    keys: [["↑↓", t("escolher", "choose")], ["Enter", t("desfazer ou refazer", "undo or redo")], ["Esc", t("fechar", "close"), true]],
+    onKey: (event) => {
+      if (event.key === "Enter" && list.current()) { apply(list.current().change); return true; }
+      return false;
+    },
+  });
+  const drawPane = () => {
+    const c = list.current()?.change;
+    pane.replaceChildren();
+    if (!c) return;
+    pane.append(el("div", { class: "desc" }, c.undone ? t("Enter refaz:", "Enter redoes:") : t("Enter desfaz:", "Enter undoes:")), el("div", { class: "desc" }, c.files.join(", ")),
+      el("div", { class: "diff" }, diffRows(c.diff, 400).rows),
+      el("div", { class: "row", style: "margin-top:auto" }, el("button", { type: "button", class: "act primary", onclick: () => apply(c) }, c.undone ? t("Refazer", "Redo") : t("Desfazer", "Undo"))));
+  };
+  const apply = (c) => { closeDialog(); review(c.id, c.undone, c.version); };
+  drawPane();
+}
+
+async function undoLast(redo) {
+  if (!view.session) { flash(t("Nada para desfazer nesta conversa", "Nothing to undo in this conversation")); return; }
+  try {
+    const all = await api(`/api/sessions/${view.session}/changes`);
+    // Undo takes the newest applied turn; redo the undone one next in line.
+    const c = redo ? all.filter((c) => c.undone).pop() : all.find((c) => !c.undone);
+    if (!c) { flash(redo ? t("Nada para refazer", "Nothing to redo") : t("Nada para desfazer nesta conversa", "Nothing to undo in this conversation")); return; }
+    review(c.id, redo, c.version);
+  } catch (error) { view.error = error.message; renderFrame(); }
+}
+
+// review waits while each file's approval card is answered in the conversation.
+async function review(turn, redo, version) {
+  flash(t("Aprove cada arquivo para concluir", "Approve each file to finish"));
+  try {
+    await api(`/api/sessions/${view.session}/changes/${turn}`, { redo, version });
+    await loadConversation(); // a reload after the last approval would hide the note
+    flash(redo ? t("Interação refeita · rode as verificações de novo", "Turn redone · rerun your checks") : t("Interação desfeita · comandos executados não são desfeitos", "Turn undone · commands that ran are not undone"));
+  } catch (error) { view.error = error.message; renderFrame(); }
 }
 
 // ---- the agent's question -----------------------------------------------------

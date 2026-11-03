@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -65,6 +66,7 @@ func TestIntegrationsTurnAFoundLanguageServerOnWithEnter(t *testing.T) {
 	t.Cleanup(func() { viper.SetConfigFile(oldPath) })
 	_, err := config.Load(root, false)
 	require.NoError(t, err)
+	useWorkspace(t, root)
 	m := New(nil)
 	m.width, m.height = 120, 40
 	m.openSettingsAt(sectionIntegrations)
@@ -77,4 +79,17 @@ func TestIntegrationsTurnAFoundLanguageServerOnWithEnter(t *testing.T) {
 	saved, err := os.ReadFile(global)
 	require.NoError(t, err)
 	require.Contains(t, string(saved), "gopls")
+}
+
+func TestPreferencesScrollToKeepTheSelectedOneInView(t *testing.T) {
+	p := &settingsPanel{section: sectionShortcuts, values: map[string]string{}, origins: map[string]string{}}
+	all := p.settingRows()
+	require.Greater(t, len(all), 3)
+	p.selected = len(all) - 1
+	view := ansi.Strip(strings.Join(p.preferenceRows(60, 10), "\n"))
+	require.Contains(t, view, all[len(all)-1].Label)
+	require.NotContains(t, view, all[0].Label, "only three preferences fit in ten rows")
+	require.Contains(t, view, "───", "a rule separates the preferences")
+	p.selected = len(all) - 2
+	require.Contains(t, ansi.Strip(strings.Join(p.preferenceRows(60, 10), "\n")), all[len(all)-1].Label, "moving up inside the view does not scroll")
 }

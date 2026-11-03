@@ -150,3 +150,32 @@ func (m *Model) overlay(base string) string {
 	m.placeHosted(x, y)
 	return layout.PlaceOverlay(x, y, panel, base, false)
 }
+
+// confirmQuit asks before closing; Enter, S/Y or a second Ctrl+C quits.
+type confirmQuit struct{}
+
+func (confirmQuit) view(m *Model) string {
+	box := Box{Title: textFor("Sair do opcode?", "Quit opcode?"), Width: min(60, m.width-4), PadX: 2, PadY: 1}
+	inner := box.Inner()
+	text := textFor("A conversa fica salva para retomar depois.", "The conversation is kept to resume later.")
+	if m.busy {
+		text = textFor("Há uma execução em andamento: ela será interrompida.", "A run is in progress: it will be stopped.")
+	}
+	gap := on(P.Surface, P.Surface).Render("  ")
+	rows := []string{
+		Line(on(P.Surface, P.Text).Render(text), inner, P.Surface),
+		Line("", inner, P.Surface),
+		Line(Button(textFor("Sair · Enter", "Quit · Enter"), true, P.Danger)+gap+Button(textFor("Ficar · Esc", "Stay · Esc"), false, P.Ask), inner, P.Surface),
+	}
+	return box.Render(strings.Join(rows, "\n"))
+}
+
+func (confirmQuit) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "enter", "s", "y", "ctrl+c":
+		return tea.Quit, true
+	case "esc", "n":
+		m.dialog = nil
+	}
+	return nil, true
+}

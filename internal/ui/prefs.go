@@ -79,6 +79,7 @@ type settingsPanel struct {
 	probes            map[models.ModelProvider]probeMsg
 	active            models.ModelProvider // the connection in use leads the list
 	detected          []lsp.Detection      // installed language servers this project could use
+	top               int                  // the first preference in view, when they do not all fit
 }
 
 func (m *Model) openSettingsAt(section int) tea.Cmd {
@@ -283,7 +284,7 @@ func (p *settingsPanel) view(m *Model) string {
 	case sectionApproval:
 		body = p.approvalRows(m, content)
 	default:
-		body = p.preferenceRows(content)
+		body = p.preferenceRows(content, max(8, m.height-8))
 	}
 	height := max(len(nav), len(body), min(18, max(8, m.height-12)))
 	rows := make([]string, 0, height+3)
@@ -540,8 +541,9 @@ func (p *settingsPanel) enableDetected(d lsp.Detection) {
 }
 
 // preferenceRows are the search field and two lines per preference: the
-// name with its value, then what it does.
-func (p *settingsPanel) preferenceRows(width int) []string {
+// name with its value, then what it does; a rule separates them, and the
+// list scrolls to keep the selected one within limit rows.
+func (p *settingsPanel) preferenceRows(width, limit int) []string {
 	field := on(P.Field, P.Ask).Render(" ⌕ ") + on(P.Field, P.Strong).Render(p.query) + on(P.Field, P.Ask).Render("▏")
 	if p.query == "" {
 		field = on(P.Field, P.Ask).Render(" ⌕ ") + on(P.Field, P.Faint).Render(textFor("Buscar preferência", "Search preferences"))
@@ -551,7 +553,13 @@ func (p *settingsPanel) preferenceRows(width int) []string {
 	if len(settings) == 0 {
 		return append(rows, on(P.Surface, P.Muted).Render(empty()))
 	}
-	for i, s := range settings {
+	fit := max(1, (limit-1)/3)
+	p.top = max(0, min(max(p.top, p.selected-fit+1), p.selected, len(settings)-fit))
+	for i, s := range settings[p.top:min(len(settings), p.top+fit)] {
+		i += p.top
+		if i > p.top {
+			rows = append(rows, on(P.Surface, P.Rule).Render(strings.Repeat("─", width)))
+		}
 		bg := P.Surface
 		bar := on(P.Surface, P.Surface).Render(" ")
 		if i == p.selected {

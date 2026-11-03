@@ -49,13 +49,16 @@ func (m *Model) commands() []command {
 			}
 			return nil
 		}},
+		{textFor("Alterações", "Changes"), textFor("arquivos alterados por interação; desfazer ou refazer", "files changed per turn; undo or redo"), "/changes", work, (*Model).openChanges},
+		{textFor("Desfazer interação", "Undo turn"), textFor("reverte as edições da última resposta", "reverts the last reply's edits"), "/undo", work, func(m *Model) tea.Cmd { return m.undoLast(false) }},
+		{textFor("Refazer interação", "Redo turn"), textFor("reaplica a interação desfeita", "reapplies the undone turn"), "/redo", work, func(m *Model) tea.Cmd { return m.undoLast(true) }},
 		{textFor("Exportar conversa", "Export conversation"), textFor("salva em Markdown", "saves as Markdown"), "/export", conversation, (*Model).exportCurrent},
 		{textFor("Conexões", "Connections"), textFor("provedores e chaves", "providers and keys"), "/connections", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionConnections) }},
 		{textFor("Preferências", "Preferences"), textFor("idioma, notificações, modo inicial", "language, notifications, initial mode"), "/preferences", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionInterface) }},
 		{textFor("Atalhos", "Shortcuts"), textFor("teclas dos comandos", "command keys"), "/keys", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionShortcuts) }},
 		{textFor("Aprovação: pedir", "Approval: ask"), textFor("pede antes de cada alteração", "asks before every change"), "/approval", settings, approval(permission.ApprovalPrompt)},
 		{textFor("Aprovação: editar no projeto", "Approval: project edits"), textFor("edita arquivos do projeto sem pedir", "edits project files without asking"), "/approval", settings, approval(permission.ApprovalProjectEdits)},
-		{textFor("Sair", "Quit"), textFor("fechar o opcode", "close opcode"), "Ctrl+C", conversation, func(*Model) tea.Cmd { return tea.Quit }},
+		{textFor("Sair", "Quit"), textFor("fechar o opcode", "close opcode"), "Ctrl+C", conversation, func(m *Model) tea.Cmd { m.dialog = confirmQuit{}; return nil }},
 	}
 }
 

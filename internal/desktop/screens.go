@@ -37,6 +37,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/sessions/{id}/archive", s.archive)
 	mux.HandleFunc("POST /api/sessions/{id}/export", s.export)
 	mux.HandleFunc("POST /api/sessions/{id}/answer", s.answer)
+	mux.HandleFunc("GET /api/sessions/{id}/changes", s.changes)
+	mux.HandleFunc("POST /api/sessions/{id}/changes/{turn}", s.review)
 	mux.HandleFunc("GET /api/settings", s.settings)
 	mux.HandleFunc("POST /api/settings", s.saveSetting)
 	mux.HandleFunc("GET /api/connections", s.connections)

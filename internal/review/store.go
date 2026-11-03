@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/localstate"
@@ -224,7 +225,7 @@ func (s *Store) Apply(ctx context.Context, session string, p Preview, permission
 			after = *change.After
 		}
 		preview, _, _ := diff.GenerateDiff(before, after, change.Path)
-		if !permissions.Request(ctx, permission.CreatePermissionRequest{SessionID: session, ToolName: tools.PatchToolName, Action: action + p.Turn.ID, Path: change.Path, Description: "Reverter interação: " + filepath.Base(change.Path), Params: tools.EditPermissionsParams{FilePath: change.Path, Diff: tools.RedactCredentials(preview)}}) {
+		if !permissions.Request(ctx, permission.CreatePermissionRequest{SessionID: session, ToolName: tools.PatchToolName, Action: action + p.Turn.ID, Path: change.Path, Description: describe(p.Redo) + filepath.Base(change.Path), Params: tools.EditPermissionsParams{FilePath: change.Path, Diff: tools.RedactCredentials(preview)}}) {
 			return permission.ErrorPermissionDenied
 		}
 	}
@@ -235,6 +236,13 @@ func (s *Store) Apply(ctx context.Context, session string, p Preview, permission
 	ctx = tools.WithChangeObserver(ctx, func([]tools.FileChange) error { return s.markApplied(session, p) })
 	_, err = tools.SecureTool(&applyTool{p.Changes}, permissions).Run(ctx, tools.ToolCall{Name: tools.PatchToolName, Input: `{}`})
 	return err
+}
+
+func describe(redo bool) string {
+	if redo {
+		return config.Text("Refazer interação: ", "Redo turn: ")
+	}
+	return config.Text("Desfazer interação: ", "Undo turn: ")
 }
 
 type applyTool struct{ changes []tools.FileChange }

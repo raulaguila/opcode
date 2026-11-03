@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/raulaguila/opcode/internal/permission"
 )
 
@@ -15,22 +16,25 @@ type BashParams struct {
 	Command string `json:"command"`
 	Timeout int    `json:"timeout"`
 	PTY     bool   `json:"pty,omitempty"`
+	Network bool   `json:"network,omitempty"`
 }
 
 type BashPermissionsParams struct {
 	Command string `json:"command"`
 	Timeout int    `json:"timeout"`
 	PTY     bool   `json:"pty,omitempty"`
+	Network bool   `json:"network,omitempty"`
 }
 
 type BashResponseMetadata struct {
-	ProcessID string `json:"process_id,omitempty"`
-	StartTime int64  `json:"start_time"`
-	EndTime   int64  `json:"end_time"`
-	ExitCode  int    `json:"exit_code"`
-	TimedOut  bool   `json:"timed_out"`
-	Cancelled bool   `json:"cancelled"`
-	Truncated bool   `json:"truncated"`
+	ProcessID      string `json:"process_id,omitempty"`
+	StartTime      int64  `json:"start_time"`
+	EndTime        int64  `json:"end_time"`
+	ExitCode       int    `json:"exit_code"`
+	TimedOut       bool   `json:"timed_out"`
+	Cancelled      bool   `json:"cancelled"`
+	Truncated      bool   `json:"truncated"`
+	NetworkEnabled bool   `json:"network_enabled"`
 }
 type bashTool struct {
 	permissions permission.Service
@@ -77,7 +81,8 @@ func (b *bashTool) Info() ToolInfo {
 		Name:        BashToolName,
 		Description: bashDescription(),
 		Parameters: map[string]any{
-			"pty": map[string]any{"type": "boolean", "description": "Allocate a PTY for interactive commands. The user can enter input in the terminal panel. Use process_start for work that should return immediately."},
+			"network": commandNetworkParameter(),
+			"pty":     map[string]any{"type": "boolean", "description": "Allocate a PTY for interactive commands. The user can enter input in the terminal panel. Use process_start for work that should return immediately."},
 			"command": map[string]any{
 				"type":        "string",
 				"description": "The command to execute",
@@ -129,7 +134,21 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	if !p {
 		return ToolResponse{}, permission.ErrorPermissionDenied
 	}
+	if params.Network && !shell.NetworkEnabled(ctx) {
+		if !b.permissions.Request(ctx, permission.CreatePermissionRequest{
+			SessionID: sessionID, Path: config.WorkingDirectory(), ToolName: BashToolName, Action: "network",
+			Description: "Allow network for this command only (including access to local services): " + params.Command,
+			Params:      BashPermissionsParams(params),
+		}) {
+			return ToolResponse{}, permission.ErrorPermissionDenied
+		}
+		ctx = shell.WithApprovedNetwork(ctx)
+	}
 	return b.executeApprovedCommand(ctx, sessionID, params)
+}
+
+func commandNetworkParameter() map[string]any {
+	return map[string]any{"type": "boolean", "description": "Request network for this command only, e.g. dependency downloads. Requires separate approval when global command networking is disabled. Default false; never bypass a denial."}
 }
 
 func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string, params BashParams) (ToolResponse, error) {
@@ -161,12 +180,14 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 	stderr = truncateOutput(stderr)
 
 	stdout = commandOutputText(stdout, stderr, exitCode, interrupted)
+	stdout += dependencyNetworkHint(ctx, exitCode, stdout)
 
 	metadata := BashResponseMetadata{
 		ProcessID: record.id,
 		StartTime: startTime.UnixMilli(),
 		EndTime:   time.Now().UnixMilli(),
 		ExitCode:  exitCode, TimedOut: interrupted && ctx.Err() == nil, Cancelled: ctx.Err() != nil, Truncated: truncated,
+		NetworkEnabled: shell.NetworkEnabled(ctx),
 	}
 	if stdout == "" {
 		return WithResponseMetadata(NewTextResponse("no output"), metadata), nil
@@ -177,6 +198,22 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 	response := NewTextResponse(stdout)
 	response.IsError = exitCode != 0 || interrupted
 	return WithResponseMetadata(response, metadata), nil
+}
+
+func dependencyNetworkHint(ctx context.Context, exitCode int, output string) string {
+	if exitCode == 0 || ctx.Err() != nil || shell.NetworkEnabled(ctx) || !hasDependencyNetworkFailure(output) {
+		return ""
+	}
+	return "\nNetwork is disabled for this command. If dependencies are missing, retry with network=true to request separate user approval. Project Go caches persist between calls. Do not repeat an unchanged offline download or disable the sandbox."
+}
+
+func hasDependencyNetworkFailure(output string) bool {
+	for _, marker := range []string{"go: downloading", "proxy.golang.org", "dial tcp", "network is unreachable", "Temporary failure in name resolution", "ENETUNREACH", "EAI_AGAIN"} {
+		if strings.Contains(output, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // Only the creator owns shutdown. App-provided managers also serve the PTY and

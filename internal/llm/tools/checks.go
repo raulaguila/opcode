@@ -27,10 +27,13 @@ func NewChecksTool(permissions permission.Service, managers ...*ProcessManager) 
 	return &checksTool{permissions: permissions, manager: manager, ownsManager: owned}
 }
 func (c *checksTool) Info() ToolInfo {
-	return ToolInfo{Name: "run_checks", Description: "Run named checks from the user's checks configuration. Every command requires the usual execution authorization and sandbox. Results include exit status, cancellation and bounded output.", Parameters: map[string]any{"names": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Names to run; omit to run all configured checks (maximum 16)."}}}
+	return ToolInfo{Name: "run_checks", Description: "Run configured checks with ordinary command approval and sandbox. network=true requests separate network approval for each command when needed. Go caches persist per project. Results include exit status, cancellation and bounded output.", Parameters: map[string]any{"network": commandNetworkParameter(), "names": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Names to run; omit to run all configured checks (maximum 16)."}}}
 }
 func (c *checksTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
-	var input struct{ Names []string }
+	var input struct {
+		Names   []string
+		Network bool
+	}
 	if json.Unmarshal([]byte(call.Input), &input) != nil {
 		return NewTextErrorResponse("invalid checks parameters"), nil
 	}
@@ -55,8 +58,8 @@ func (c *checksTool) Run(ctx context.Context, call ToolCall) (ToolResponse, erro
 			return ToolResponse{}, ctx.Err()
 		}
 		entry := cfg.Checks[name]
-		input, _ := json.Marshal(BashParams{Command: entry.Command, Timeout: entry.Timeout})
-		response, err := SecureTool(NewBashTool(c.permissions, c.manager), c.permissions).Run(ctx, ToolCall{ID: call.ID, Name: BashToolName, Input: string(input)})
+		arguments, _ := json.Marshal(BashParams{Command: entry.Command, Timeout: entry.Timeout, Network: input.Network})
+		response, err := SecureTool(NewBashTool(c.permissions, c.manager), c.permissions).Run(ctx, ToolCall{ID: call.ID, Name: BashToolName, Input: string(arguments)})
 		if err != nil {
 			return ToolResponse{}, err
 		}

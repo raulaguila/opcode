@@ -36,9 +36,9 @@ No Linux, o padrão exige Bubblewrap (`bwrap`). Ele fornece namespaces separados
 
 Se o binário ou o suporte a namespaces estiver indisponível, o comando falha. Não existe fallback automático para execução sem isolamento. Em plataformas sem esse mecanismo, ou quando o usuário optar conscientemente por execução sem isolamento, `security.sandbox: "none"` pode ser definido **na configuração global**. Nesse modo, a filtragem de ambiente continua ativa, mas o processo possui o acesso ao sistema de arquivos e à rede do usuário.
 
-- `allowNetwork: true` libera a rede dos processos isolados. O padrão é `false`; downloads de dependências podem precisar dessa opção ou de caches já preparados.
+- `allowNetwork: true` libera a rede dos processos isolados. O padrão é `false`. `bash` e `run_checks` também aceitam `network: true`: nesse caso há uma aprovação adicional para o comando exato antes de iniciar o processo. A concessão vale para aquele processo e seus filhos; não muda o JSON global nem libera comandos seguintes. Assim como a opção global, ela permite acessar a rede do host, incluindo serviços locais. Aprovar apenas a execução não aprova essa solicitação de rede.
 - `envAllow` acrescenta nomes de variáveis ao ambiente mínimo. Variáveis com chaves de API, tokens, senhas, proxies e opções de inicialização não são herdadas por padrão. `HOME`, `BASH_ENV` e `ENV` permanecem neutralizados; configurações de sessão do usuário não são carregadas implicitamente.
-- `readOnlyPaths` expõe caminhos absolutos adicionais, somente para leitura, no sandbox. Pode ser necessário para toolchains e caches instalados fora dos diretórios de sistema, ou para os metadados externos de um Git worktree. Evite expor diretórios que contenham credenciais. Caches de Go têm padrões temporários; para usar outro cache, configure seu caminho via `envAllow` e exponha o diretório correspondente.
+- `readOnlyPaths` expõe caminhos absolutos adicionais, somente para leitura, no sandbox. Pode ser necessário para toolchains e caches instalados fora dos diretórios de sistema, ou para os metadados externos de um Git worktree. Evite expor diretórios que contenham credenciais. Para substituir os caches gerenciados de Go, configure os caminhos via `envAllow` e exponha os diretórios correspondentes.
 - `denyPaths` acrescenta padrões de caminho/nome às proteções de credenciais. As proteções padrão incluem `.env*`, configurações do Opcode, arquivos de integração, chaves privadas e diretórios usuais de credenciais. Essa classificação não detecta todo segredo que possa estar escrito em código comum.
 - `allowPrivateNetwork` controla destinos privados/loopback de `fetch` e `sourcegraph`. Não libera endereços link-local de metadata. É independente de `allowNetwork`, que trata de subprocessos.
 
@@ -95,6 +95,20 @@ Isso não é uma transação entre filesystem e SQLite, nem uma transação resi
 ## Shell e verificações
 
 `bash` executa um processo independente, com diretório inicial fixo no workspace. `cd`, exports e ativação de ambientes não persistem entre chamadas; agrupe a preparação e o comando na mesma invocação quando necessário.
+
+Os comandos do gerenciador de processos reutilizam caches de Go privados por
+projeto em `.opcode/command-cache/go/`: build, módulos e os dados de verificação
+em `GOPATH`. No sandbox, somente esse cache é montado em um caminho próprio sob
+`/tmp`; os demais dados privados continuam ocultos. O cache do terminal externo
+não é herdado automaticamente. `HOME` e credenciais continuam filtrados. A
+preparação só ocorre após a aprovação do comando, e diretórios de cache por
+symlink são recusados. Pode remover esse diretório com o Opcode encerrado para
+liberar espaço; a próxima execução o recria.
+
+Se faltarem módulos e a rede estiver desativada, o agente pode repetir o comando
+com `network: true` e apresentar a aprovação de rede. Depois do download, os
+comandos seguintes reutilizam o cache com a política padrão. Uma recusa deve
+encerrar essa tentativa, sem desativar o sandbox ou alterar a configuração global.
 
 Os comandos de `bash` e `run_checks` compartilham o gerenciador de processos com
 a interface, que mostra stdout/stderr enquanto a execução ainda está ativa.

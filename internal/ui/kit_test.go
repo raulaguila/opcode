@@ -10,8 +10,19 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/fileutil"
+	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCommandNetworkApprovalHasDistinctTitle(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 120, 40
+	m.approval = &permission.PermissionRequest{ID: "network", ToolName: tools.BashToolName, Action: "network", Params: tools.BashPermissionsParams{Command: "go test ./...", Network: true}}
+	view := ansi.Strip(m.approvalView())
+	require.Contains(t, view, config.Text("Aprovar rede para este comando", "Approve network for this command"))
+	require.Contains(t, view, "go test ./...")
+}
 
 func TestBoxDrawsTitleMetaLegendAndExactWidth(t *testing.T) {
 	view := ansi.Strip(Box{Title: "Escolher modelo", Meta: "Ollama · 7 de 8", Legend: "Enter usar · Esc fechar", Width: 60, PadX: 2, PadY: 1}.Render("linha\numa linha longa demais " + strings.Repeat("x", 80)))

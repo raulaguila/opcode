@@ -40,6 +40,9 @@ func (m *Model) approvalView() string {
 	case tools.FetchToolName:
 		title = config.Text("Aprovar acesso à rede", "Approve network access")
 	}
+	if request.ToolName == tools.BashToolName && request.Action == "network" {
+		title = config.Text("Aprovar rede para este comando", "Approve network for this command")
+	}
 	bg := P.ApprovalCard
 	box := Box{Title: title, Meta: request.ToolName, Width: m.width - 2*gutter + 2, PadX: 2, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg, Outer: P.Ground}
 	inner := box.Inner()

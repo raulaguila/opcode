@@ -67,6 +67,7 @@ func Environment() []string {
 		allowed = append(allowed, cfg.Security.EnvAllow...)
 	}
 	values := map[string]string{"GOFLAGS": "-buildvcs=false", "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.DevNull, "HOME": os.DevNull, "TMPDIR": os.TempDir(), "BASH_ENV": os.DevNull, "ENV": os.DevNull, "GOCACHE": filepath.Join(os.TempDir(), "opcode-command-go-build"), "GOMODCACHE": filepath.Join(os.TempDir(), "opcode-command-go-mod")}
+	values["GOPATH"] = filepath.Join(os.TempDir(), "opcode-command-go-path")
 	for _, name := range allowed {
 		if name != "BASH_ENV" && name != "ENV" && name != "HOME" {
 			if value, ok := os.LookupEnv(name); ok {
@@ -135,18 +136,28 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 		sandbox = cfg.Security.Sandbox
 	}
 	args = append(args, "-c", command)
+	cache, err := processCommandCache(ctx, cwd, readGit || writeGit)
+	if err != nil {
+		return nil, err
+	}
 	var cmd *exec.Cmd
 	if sandbox == "none" {
 		cmd = exec.CommandContext(ctx, path, args...)
 	} else {
 		var err error
-		cmd, err = sandboxCommand(ctx, cwd, path, args, cfg, readGit, interactive, writeGit)
+		cmd, err = sandboxCommand(ctx, cwd, path, args, cfg, readGit, interactive, writeGit, cache)
 		if err != nil {
 			return nil, err
 		}
 	}
 	cmd.Dir = cwd
 	cmd.Env = Environment()
+	if cache != "" {
+		if sandbox != "none" {
+			cache = sandboxCachePath
+		}
+		cmd.Env = commandCacheEnvironment(cmd.Env, cache)
+	}
 	configureProcess(cmd)
 	return cmd, nil
 }
@@ -173,7 +184,7 @@ func SensitivePath(path string) bool {
 	return false
 }
 
-func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *config.Config, readGit, interactive, writeGit bool) (*exec.Cmd, error) {
+func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *config.Config, readGit, interactive, writeGit bool, cache string) (*exec.Cmd, error) {
 	if runtime.GOOS != "linux" {
 		return nil, fmt.Errorf("OS sandbox is unavailable; explicitly configure security.sandbox=none in user-global configuration to run without it")
 	}
@@ -185,7 +196,7 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 	if !interactive {
 		wrapped = append(wrapped, "--new-session")
 	}
-	if cfg != nil && cfg.Security.AllowNetwork {
+	if NetworkEnabled(ctx) {
 		wrapped = append(wrapped, "--share-net")
 	}
 	for _, dir := range []string{"/usr", "/bin", "/lib", "/lib64"} {
@@ -214,6 +225,10 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 		return nil, fmt.Errorf("cannot inspect sandbox credential masks: %w", err)
 	}
 	wrapped = append(wrapped, masks...)
+	wrapped, err = appendCommandCache(wrapped, cache, cfg)
+	if err != nil {
+		return nil, err
+	}
 	wrapped = append(wrapped, "--", path)
 	wrapped = append(wrapped, args...)
 	return exec.CommandContext(ctx, binary, wrapped...), nil
@@ -239,7 +254,11 @@ type cachedMasks struct {
 }
 
 func credentialMasks(cwd string, readGit, writeGit bool, cfg *config.Config) ([]string, error) {
-	key := fmt.Sprint(readGit, writeGit)
+	return credentialMasksAt(cwd, cwd, readGit, writeGit, cfg)
+}
+
+func credentialMasksAt(cwd, destination string, readGit, writeGit bool, cfg *config.Config) ([]string, error) {
+	key := fmt.Sprint(readGit, writeGit) + "\x00" + destination
 	if directory, err := config.AuthDirectory(); err == nil {
 		key += "\x00" + directory
 	}
@@ -253,7 +272,7 @@ func credentialMasks(cwd string, readGit, writeGit bool, cfg *config.Config) ([]
 		return cached.args, nil
 	}
 	started := time.Now()
-	masks := sandboxCredentialMasks{cwd: cwd, readGit: readGit, writeGit: writeGit, dirs: map[string]time.Time{}}
+	masks := sandboxCredentialMasks{cwd: cwd, destination: destination, readGit: readGit, writeGit: writeGit, dirs: map[string]time.Time{}}
 	if err := filepath.WalkDir(cwd, masks.visit); err != nil {
 		return nil, err
 	}
@@ -288,6 +307,7 @@ func (c cachedMasks) unchanged() bool {
 
 type sandboxCredentialMasks struct {
 	cwd               string
+	destination       string
 	readGit, writeGit bool
 	inspected         int
 	args              []string
@@ -321,14 +341,22 @@ func (m *sandboxCredentialMasks) visit(name string, d os.DirEntry, err error) er
 	if strings.EqualFold(d.Name(), ".git") && (m.readGit || m.writeGit) && filepath.Dir(name) == m.cwd {
 		return m.bindGit(name, d)
 	}
-	if !SensitivePath(name) {
+	relative, err := filepath.Rel(m.cwd, name)
+	if err != nil {
+		return err
+	}
+	target := name
+	if m.destination != "" {
+		target = filepath.Join(m.destination, relative)
+	}
+	if !SensitivePath(target) {
 		return m.recordDir(name, d)
 	}
 	if d.IsDir() {
-		m.args = append(m.args, "--tmpfs", name)
+		m.args = append(m.args, "--tmpfs", target)
 		return filepath.SkipDir
 	}
-	m.args = append(m.args, "--ro-bind", os.DevNull, name)
+	m.args = append(m.args, "--ro-bind", os.DevNull, target)
 	return nil
 }
 func (m *sandboxCredentialMasks) bindGit(name string, d os.DirEntry) error {

@@ -101,7 +101,7 @@ func (m *ProcessManager) startProcess(parent context.Context, owner string, para
 	if params.PTY {
 		command = shell.PTYCommand
 	}
-	cmd, err := command(ctx, config.WorkingDirectory(), params.Command)
+	cmd, err := command(shell.WithCommandCache(ctx), config.WorkingDirectory(), params.Command)
 	if err != nil {
 		cancel()
 		return nil, err

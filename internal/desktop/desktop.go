@@ -351,6 +351,9 @@ func (s *Server) pending(id string) []permission.PermissionRequest {
 
 func approval(request permission.PermissionRequest) Approval {
 	a := Approval{ID: request.ID, Tool: request.ToolName, Description: request.Description}
+	if request.ToolName == tools.BashToolName && request.Action == "network" {
+		a.Description = config.Text("Aprovar rede para este comando, incluindo serviços locais; a configuração global não será alterada.", "Approve network for this command, including local services; global settings will not change.")
+	}
 	switch params := request.Params.(type) {
 	case tools.EditPermissionsParams:
 		a.File, a.Diff = relative(params.FilePath), params.Diff

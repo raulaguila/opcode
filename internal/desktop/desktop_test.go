@@ -5,9 +5,19 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/stretchr/testify/require"
 )
+
+func TestCommandNetworkApprovalShowsNetworkScope(t *testing.T) {
+	view := approval(permission.PermissionRequest{ID: "network", ToolName: tools.BashToolName, Action: "network", Params: tools.BashPermissionsParams{Command: "go test ./...", Network: true}})
+	require.Contains(t, view.Description, config.Text("Aprovar rede", "Approve network"))
+	require.Contains(t, view.Description, config.Text("serviços locais", "local services"))
+	require.Equal(t, "go test ./...", view.Command)
+}
 
 func TestHandlerRefusesForeignHostOriginAndMissingKey(t *testing.T) {
 	s := &Server{key: "secret", host: "127.0.0.1:4000", feeds: map[chan string]struct{}{}, failures: map[string]string{}}

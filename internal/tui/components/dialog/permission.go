@@ -182,6 +182,9 @@ func (p *permissionDialogCmp) renderButtons() string {
 func (p *permissionDialogCmp) renderHeader() string {
 	// The changed file and what the change does lead; the scope follows.
 	var lines []string
+	if p.permission.ToolName == tools.BashToolName && p.permission.Action == "network" {
+		lines = append(lines, config.Text("Este comando terá acesso à rede, incluindo serviços locais. A configuração global não será alterada.", "This command will have network access, including local services. Global settings will not change."))
+	}
 	if summary := p.changeSummary(); summary != "" {
 		lines = append(lines, dialogBody().Bold(true).Render(summary))
 	}
@@ -400,6 +403,9 @@ func (p *permissionDialogCmp) render() string {
 
 // approvalTitle names what is being approved, as the frame's title.
 func (p *permissionDialogCmp) approvalTitle() string {
+	if p.permission.ToolName == tools.BashToolName && p.permission.Action == "network" {
+		return config.Text("Aprovar rede para este comando", "Approve network for this command")
+	}
 	switch p.permission.ToolName {
 	case tools.EditToolName, tools.WriteToolName, tools.PatchToolName:
 		return config.Text("Aprovar edição", "Approve edit")

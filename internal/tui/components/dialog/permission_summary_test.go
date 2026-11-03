@@ -20,6 +20,17 @@ func TestSummarizeDiffNamesDeletedDefinitions(t *testing.T) {
 	require.Equal(t, []string{"Done"}, lost, "a definition rewritten in place is not lost")
 }
 
+func TestCommandNetworkApprovalIsDistinctFromCommandApproval(t *testing.T) {
+	m := NewPermissionDialogCmp().(*permissionDialogCmp)
+	m.Update(tea.WindowSizeMsg{Width: 110, Height: 40})
+	m.SetPermissions(permission.PermissionRequest{ID: "network", ToolName: tools.BashToolName, Action: "network", Path: "project", Params: tools.BashPermissionsParams{Command: "go test ./...", Network: true}})
+	view := ansi.Strip(m.View())
+	require.Contains(t, view, config.Text("Aprovar rede para este comando", "Approve network for this command"))
+	require.Contains(t, view, config.Text("serviços locais", "local services"))
+	require.Contains(t, view, "go test")
+	require.Equal(t, 2, m.selectedOption, "network consent must never be preselected")
+}
+
 func TestPermissionDialogSummarizesEditsFitsShortCommandsAndNotesRepeats(t *testing.T) {
 	m := NewPermissionDialogCmp().(*permissionDialogCmp)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})

@@ -32,6 +32,7 @@ func (q *question) item() interaction.QuestionItem {
 // poll reads the pending question and the saved plan; neither is published
 // as an event, so the screen asks while a run is live.
 func (m *Model) poll() {
+	m.pollProcesses()
 	if m.app == nil || m.session.ID == "" {
 		return
 	}

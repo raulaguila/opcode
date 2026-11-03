@@ -15,6 +15,7 @@ import (
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
@@ -31,11 +32,14 @@ type Model struct {
 	session  session.Session
 	messages []message.Message
 
-	width, height int
-	transcript    viewport.Model
-	composer      textarea.Model
-	follow        bool // keep the transcript pinned to its end
-	shiftEnter    bool // the terminal tells Shift+Enter from Enter
+	width, height  int
+	transcript     viewport.Model
+	composer       textarea.Model
+	follow         bool // keep the transcript pinned to its end
+	selection      *chatSelection
+	processes      []tools.ProcessSnapshot
+	processVersion int
+	shiftEnter     bool // the terminal tells Shift+Enter from Enter
 
 	mode     string // ask, plan or execute
 	busy     bool
@@ -154,6 +158,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.shiftEnter = msg.Flags != 0
 		return m, nil
 	case tea.WindowSizeMsg:
+		m.selection = nil
 		first := m.width == 0
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
@@ -166,6 +171,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.MouseMsg:
+		if m.selectionMouse(msg) {
+			return m, nil
+		}
 		if _, ok := m.dialog.(*hosted); ok {
 			return m, m.hostedMouse(msg)
 		}
@@ -185,6 +193,17 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = tea.Batch(cmd, d.wanted(m))
 		}
 		return m, cmd
+	case chatCopyMsg:
+		return m, m.copiedChat(msg)
+	case commandStoppedMsg:
+		if msg.session == m.session.ID {
+			if msg.err != nil {
+				m.notice = msg.err.Error()
+			} else {
+				m.info = textFor("Comando interrompido", "Command stopped")
+			}
+			m.pollProcesses()
+		}
 	case previewMsg:
 		if d, ok := m.dialog.(*sessionsDialog); ok {
 			d.previews[msg.id] = msg.look
@@ -206,7 +225,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.app != nil && m.app.CoderAgent != nil {
 			m.busy = m.app.CoderAgent.IsSessionBusy(m.session.ID)
 		}
-		if m.busy {
+		if m.busy || m.runningProcesses() {
 			m.refresh() // a running step counts its seconds
 			return m, m.tick()
 		}
@@ -283,6 +302,22 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
+	if d, ok := m.dialog.(*commandDialog); ok {
+		cmd, _ := d.key(m, msg)
+		return cmd
+	}
+	if m.dialog == nil && msg.String() == "ctrl+p" {
+		return m.openCommands()
+	}
+	if m.dialog == nil && m.selection != nil {
+		if (msg.String() == "ctrl+c" || msg.String() == "ctrl+shift+c") && m.selection.moved {
+			return copyChatText(m.selectedText())
+		}
+		if msg.String() == "esc" {
+			m.clearSelection()
+			return nil
+		}
+	}
 	if m.approval != nil {
 		return m.answerApproval(msg.String())
 	}
@@ -491,6 +526,8 @@ func (m *Model) layout() {
 // paintKey is everything the transcript is drawn from besides its width.
 type paintKey struct {
 	version, count, width, prose int
+	processVersion               int
+	second                       int64
 	head                         *message.Message
 	failure                      error
 	showFailure, waiting, model  bool
@@ -501,11 +538,21 @@ func (m *Model) refresh() {
 	if m.width == 0 {
 		return
 	}
+	if m.selection != nil {
+		if m.selection.session == m.session.ID {
+			return
+		}
+		m.selection = nil
+	}
 	// Every row is painted to the edge so no terminal background shows
 	// through; rows painted last time are reused.
 	// Typing and resizing the composer change nothing the transcript shows,
 	// so it is built again only when one of those things changed.
 	key := paintKey{version: m.version, count: len(m.messages), width: m.width, failure: m.failure, showFailure: m.showFailure, waiting: m.approval != nil, model: m.hasModel()}
+	key.processVersion = m.processVersion
+	if m.busy || m.runningProcesses() {
+		key.second = time.Now().Unix()
+	}
 	if len(m.messages) > 0 {
 		key.head = &m.messages[0] // a list replaced wholesale, even without a version bump
 	}

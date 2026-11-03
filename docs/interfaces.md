@@ -28,7 +28,7 @@ A interface anterior do terminal continua disponível por um tempo com
 | Memória | ~50 MB | ~50 MB do processo + a web view do sistema |
 | Abrir | instantâneo | cerca de meio segundo |
 | Tema | escuro | escuro, claro ou o do sistema |
-| Mouse | rodapé e campo de mensagem | em todas as telas |
+| Mouse | seleção no chat, rodapé e campo de mensagem | em todas as telas |
 
 O modelo e as ferramentas rodam igual nas duas; o que muda é o custo da janela.
 
@@ -89,8 +89,9 @@ escolha o modelo com `Ctrl+O`.
 | `Ctrl+O` | escolher modelo | escolher modelo |
 | `Ctrl+S` | conversas | conversas |
 | `Ctrl+N` | nova conversa | nova conversa |
-| `Esc` | cancela a execução | cancela a execução |
-| `Ctrl+C` | pede confirmação para sair; `Enter` ou outro `Ctrl+C` sai | — |
+| `Esc` | limpa a seleção; sem seleção, cancela a execução | cancela a execução |
+| `Ctrl+C` | copia a seleção; sem seleção, pede confirmação para sair | — |
+| `Ctrl+P` na conversa | detalhes dos comandos executados | — |
 | `1` `2` `3` | responde a aprovação | responde a aprovação |
 | `T` | mostra o diff inteiro na aprovação | mostra o diff inteiro na aprovação |
 | `@` | lista os arquivos do projeto para citar | lista os arquivos do projeto para citar |
@@ -107,6 +108,23 @@ Na pergunta do agente, os números marcam, `Espaço` alterna numa pergunta de
 várias respostas e `Enter` responde. `Esc` guarda a pergunta para depois: o
 agente continua esperando e o rodapé mostra *Pergunta pendente*, que `Enter`
 com o campo vazio reabre.
+
+No terminal, a pergunta e a resposta enviada continuam na transcrição, também
+ao reabrir a conversa. Para copiar texto, arraste o mouse no chat e pressione
+`Ctrl+C`; `Esc` limpa a seleção. Enquanto houver seleção, a transcrição fica
+estável para copiar; o agente continua trabalhando. A cópia usa o clipboard
+local ou OSC 52 via SSH, conforme o suporte do terminal, com limite de 64 KiB.
+
+Os comandos `bash` e `process_start` mostram o texto completo, com quebra de
+linha, estado e código de saída quando disponível. Durante a execução, as
+últimas seis linhas da saída aparecem no chat, atualizadas a cada segundo.
+`Ctrl+P` abre a saída capturada: `←→` troca de comando, `↑↓` e `PgUp/PgDn`
+rolam, `C` copia o comando preservando espaços e quebras de linha, `O` copia
+a saída e `Ctrl+X` interrompe o processo selecionado, se ainda estiver ativo.
+`Esc` fecha o painel. O limite de captura existente continua valendo; o painel
+avisa quando a saída está parcial. Execuções de checks também aparecem enquanto
+estiverem disponíveis no gerenciador de processos. Comandos `bash` e suas saídas
+persistidas podem ser consultados ao reabrir a conversa.
 
 Nas duas:
 

@@ -51,6 +51,7 @@ func (m *Model) commands() []command {
 		}},
 		{textFor("Alterações", "Changes"), textFor("arquivos alterados por interação; desfazer ou refazer", "files changed per turn; undo or redo"), "/changes", work, (*Model).openChanges},
 		{textFor("Verificações", "Checks"), textFor("resultado das verificações da tarefa", "the task's check results"), "/checks", work, (*Model).openChecks},
+		{textFor("Comandos", "Commands"), textFor("comando completo, saída e cópia", "full command, output and copy"), "Ctrl+P", work, (*Model).openCommands},
 		{textFor("Fila", "Queue"), textFor("mensagens enviadas durante a execução", "messages sent while the agent works"), "/queue", work, (*Model).openQueue},
 		{textFor("Skills", "Skills"), textFor("instruções prontas da configuração global", "ready-made instructions from the global configuration"), "/skills", work, (*Model).openSkills},
 		{textFor("Desfazer interação", "Undo turn"), textFor("reverte as edições da última resposta", "reverts the last reply's edits"), "/undo", work, func(m *Model) tea.Cmd { return m.undoLast(false) }},

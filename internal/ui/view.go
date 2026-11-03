@@ -18,6 +18,7 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
+	"github.com/raulaguila/opcode/internal/transcript"
 	"github.com/raulaguila/opcode/internal/tui/styles"
 )
 
@@ -56,7 +57,7 @@ func (m *Model) View() tea.View {
 // row each frame was most of the cost of drawing the screen.
 func (m *Model) transcriptRows() []string {
 	from := min(max(0, m.transcript.YOffset()), len(m.rows))
-	return m.rows[from:min(len(m.rows), from+m.transcript.Height())]
+	return m.highlightSelection(m.rows[from:min(len(m.rows), from+m.transcript.Height())], from)
 }
 
 // screen stacks the header, the transcript's visible rows (already painted
@@ -154,22 +155,45 @@ func (m *Model) renderTranscript(width int) string {
 	turn = 0
 	var blocks []string
 	var steps, turnCalls []message.ToolCall
+	commands := m.commandEntries()
+	commandByID := map[string]commandEntry{}
+	for _, entry := range commands {
+		commandByID[entry.id] = entry
+	}
 	failureAt := -1 // the recovery card follows the last steps of the conversation
 	flush := func() {
 		if len(steps) > 0 {
 			// A run of steps is redrawn only when a call starts or ends.
 			var key strings.Builder
-			fmt.Fprintf(&key, "%t:%t", m.approval != nil, config.Get() != nil && config.Get().Preferences.ProcessVisible())
+			fmt.Fprintf(&key, "%t:%t:%d", m.approval != nil, config.Get() != nil && config.Get().Preferences.ProcessVisible(), m.processVersion)
 			for _, call := range steps {
 				result, done := results[call.ID]
 				fmt.Fprintf(&key, "|%s:%d:%t:%t:%t", call.ID, len(call.Input), call.Finished, done, result.IsError)
-				if !done {
+				entry, command := commandByID[call.ID]
+				if command {
+					fmt.Fprintf(&key, ":%q:%q:%q", entry.command, result.Content, result.Metadata)
+				}
+				if !done || command && entry.state == "running" {
 					fmt.Fprintf(&key, ":%d", time.Now().Unix()) // its seconds count
 				}
 			}
 			run := steps
 			blocks = append(blocks, m.cached("steps:"+run[0].ID, key.String(), inner, fresh, func() string {
-				rows := stepsRows(run, results, started, inner, m.approval != nil, P.Ground)
+				var rows []string
+				var regular []message.ToolCall
+				flushRegular := func() {
+					rows = append(rows, stepsRows(regular, results, started, inner, m.approval != nil, P.Ground)...)
+					regular = nil
+				}
+				for _, call := range run {
+					if entry, ok := commandByID[call.ID]; ok {
+						flushRegular()
+						rows = append(rows, commandRows(entry, inner, m.approval != nil)...)
+					} else {
+						regular = append(regular, call)
+					}
+				}
+				flushRegular()
 				for i := range rows {
 					rows[i] = indent + rows[i]
 				}
@@ -221,10 +245,30 @@ func (m *Model) renderTranscript(width int) string {
 				return barredRendered(body, "│", P.Ask, indent)
 			}))
 		}
-		steps = append(steps, msg.ToolCalls()...)
+		for _, call := range msg.ToolCalls() {
+			if decisions := transcript.AnsweredQuestions(call, results[call.ID]); len(decisions) > 0 {
+				flush()
+				for _, decision := range decisions {
+					text := textFor("Pergunta: ", "Question: ") + decision.Question + "\n" + textFor("Sua resposta: ", "Your answer: ") + decision.Answer
+					blocks = append(blocks, barred(safeCommandText(text), "│", P.Ask, P.Text, inner, indent))
+				}
+			} else {
+				steps = append(steps, call)
+			}
+		}
 		turnCalls = append(turnCalls, msg.ToolCalls()...)
 	}
 	flush()
+	// Checks and other managed executions may not have a standalone bash call.
+	for _, entry := range commands {
+		if strings.HasPrefix(entry.id, "process:") {
+			rows := commandRows(entry, inner, false)
+			for i := range rows {
+				rows[i] = indent + rows[i]
+			}
+			blocks = append(blocks, strings.Join(rows, "\n"))
+		}
+	}
 	// While the model thinks, its reasoning shows live; the answer replaces it.
 	if thought := message.LiveThought(m.messages, 4000); m.busy && thought != "" {
 		rows := strings.Split(ansi.Wrap(thought, inner-1, ""), "\n")
@@ -490,6 +534,12 @@ func (m *Model) footer() string {
 	}
 	activity := ""
 	switch {
+	case m.selection != nil && m.selection.moved:
+		label := textFor("Ctrl+C copiar · Esc limpar seleção", "Ctrl+C copy · Esc clear selection")
+		if m.selection.notice != "" {
+			label = m.selection.notice + " · Esc"
+		}
+		activity = on(P.Ground, P.Ask).Render("  " + label)
 	case m.answeringLater():
 		activity = on(P.Ground, P.Ask).Render("  " + config.Text("Pergunta pendente · Enter responde", "Question pending · Enter answers"))
 	case m.question != nil:

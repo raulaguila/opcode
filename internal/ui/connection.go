@@ -32,14 +32,21 @@ func connectionView(state dialog.ProviderFormState, screenWidth int) string {
 		rows = append(append(rows, ""), KeyRow(textFor("↑↓ escolher · Enter configurar · Esc voltar", "↑↓ choose · Enter configure · Esc back"), inner, P.Surface)...)
 		return box.Render(strings.Join(rows, "\n"))
 	}
-	const labelWidth = 16
-	valueWidth := inner - labelWidth
+	// Labels sit right-aligned in a column as wide as the longest one.
+	labelWidth := 0
 	for _, field := range state.Fields {
-		label := on(P.Surface, P.Muted).Render(field.Label)
+		labelWidth = max(labelWidth, ansi.StringWidth(field.Label))
+	}
+	labelWidth = min(labelWidth, inner/3)
+	valueWidth := inner - labelWidth - 2
+	for _, field := range state.Fields {
+		name := ansi.Truncate(field.Label, labelWidth, "…")
+		pad := on(P.Surface, P.Surface).Render(strings.Repeat(" ", labelWidth-ansi.StringWidth(name)))
+		label := on(P.Surface, P.Muted).Render(name)
 		if field.Focused {
-			label = on(P.Surface, P.Ask).Bold(true).Render(field.Label)
+			label = on(P.Surface, P.Ask).Bold(true).Render(name)
 		}
-		rows = append(rows, Line(label, labelWidth, P.Surface)+fieldValue(field, valueWidth), "")
+		rows = append(rows, pad+label+on(P.Surface, P.Surface).Render("  ")+fieldValue(field, valueWidth), "")
 	}
 	switch {
 	case state.Tested:

@@ -360,7 +360,7 @@ func (p *settingsPanel) legend() string {
 
 // connectionRows draws each connection as a framed card: state, name and
 // status on top, address and authentication, then the actions that fit its
-// state. A disabled connection is a one-line dashed card.
+// state. A disabled connection is one quiet row, as is the offer to add one.
 func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 	active := p.active
 	var rows []string
@@ -415,16 +415,27 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 			}
 		} else if deleting {
 			body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
+		} else {
+			rows = append(rows, quietRow(body[0], i == p.selected, width, bg), "")
+			continue
 		}
-		card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface, Dashed: off}
+		card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface}
 		rows = append(rows, strings.Split(card.Render(strings.Join(body, "\n")), "\n")...)
 	}
 	if p.status != "" && p.failed {
 		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(p.status, width, "…")))
 	}
 	offer := on(P.Surface, P.Ask).Render(" " + textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…"))
-	add := Box{Width: width, Accent: P.CardSelectedEdge, Background: P.Surface, Outer: P.Surface, Dashed: true}
-	return append(rows, strings.Split(add.Render(offer), "\n")...)
+	return append(rows, quietRow(offer, false, width, P.Surface))
+}
+
+// quietRow is a card reduced to its first line, with the selection bar.
+func quietRow(row string, selected bool, width int, bg color.Color) string {
+	bar := on(P.Surface, P.CardEdge).Render("▏")
+	if selected {
+		bar = on(P.Surface, P.CardSelectedEdge).Render("▌")
+	}
+	return bar + Line(row, width-1, bg)
 }
 
 // integrationWarnings counts integrations that fail validation or were

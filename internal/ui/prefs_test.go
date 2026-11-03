@@ -31,9 +31,9 @@ func TestConnectionViewDrawsFieldsMaskedAndTheCatalogResult(t *testing.T) {
 			{Label: "Auth", Value: "none", Options: []string{"none", "api_key"}, OptionLabels: []string{"Nenhuma", "Chave"}},
 		},
 	}, 100))
-	require.Contains(t, view, "Nome             Ollama▏")
+	require.Contains(t, view, " Nome   Ollama▏", "labels sit right-aligned")
 	require.NotContains(t, view, "sk-secret")
-	require.Contains(t, view, "Auth             ◉ Nenhuma   ○ Chave")
+	require.Contains(t, view, " Auth   ◉ Nenhuma   ○ Chave")
 	require.Contains(t, view, "✓ 8 modelos")
 }
 

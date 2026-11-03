@@ -22,7 +22,6 @@ type Box struct {
 	PadX, PadY          int
 	Accent, Background  color.Color
 	TitleColor          color.Color // defaults to Strong
-	Dashed              bool        // a dashed edge, for what is off or only offered
 	Outer               color.Color // the ground the edge sits on; the screen's Ground when nil
 }
 
@@ -52,19 +51,7 @@ func (b Box) Render(body string) string {
 	}
 	// line draws a top or bottom edge, labels sitting on it two cells in.
 	line := func(mark, title, meta string, titleStyle func(string) string) string {
-		at := 0 // cell position, so dashes keep one rhythm across labels
-		run := func(n int) string {
-			var out strings.Builder
-			for range max(0, n) {
-				if b.Dashed && at%2 == 1 {
-					out.WriteString(" ")
-				} else {
-					out.WriteString(mark)
-				}
-				at++
-			}
-			return out.String()
-		}
+		run := func(n int) string { return strings.Repeat(mark, max(0, n)) }
 		meta = ansi.Truncate(meta, max(0, (inner-7)/2), "…")
 		if ansi.StringWidth(meta) < 2 {
 			meta = ""
@@ -80,7 +67,6 @@ func (b Box) Render(body string) string {
 		if title != "" {
 			out.WriteString(edge.Render(" ") + titleStyle(title) + edge.Render(" "))
 			used += ansi.StringWidth(title) + 2
-			at += ansi.StringWidth(title) + 2
 		}
 		tail, tailWidth := "", 0
 		if meta != "" {
@@ -89,7 +75,6 @@ func (b Box) Render(body string) string {
 			used += tailWidth
 		}
 		out.WriteString(edge.Render(run(inner - 1 - used)))
-		at += tailWidth
 		out.WriteString(tail + edge.Render(run(1)+" "))
 		return out.String()
 	}

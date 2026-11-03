@@ -124,9 +124,16 @@ func (m *Model) renderTranscript(width int) string {
 	}
 	indent := on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter))
 	results := map[string]message.ToolResult{}
+	started := map[string]int64{} // a call runs once the model finishes asking for it
 	for _, msg := range m.messages {
 		for _, result := range msg.ToolResults() {
 			results[result.ToolCallID] = result
+		}
+		for _, call := range msg.ToolCalls() {
+			started[call.ID] = msg.CreatedAt
+			if finish := msg.FinishPart(); finish != nil {
+				started[call.ID] = finish.Time
+			}
 		}
 	}
 	// A turn shows one reply: when the model revises its answer (citation
@@ -156,10 +163,13 @@ func (m *Model) renderTranscript(width int) string {
 			for _, call := range steps {
 				result, done := results[call.ID]
 				fmt.Fprintf(&key, "|%s:%d:%t:%t:%t", call.ID, len(call.Input), call.Finished, done, result.IsError)
+				if !done {
+					fmt.Fprintf(&key, ":%d", time.Now().Unix()) // its seconds count
+				}
 			}
 			run := steps
 			blocks = append(blocks, m.cached("steps:"+run[0].ID, key.String(), inner, fresh, func() string {
-				rows := stepsRows(run, results, inner, m.approval != nil, P.Ground)
+				rows := stepsRows(run, results, started, inner, m.approval != nil, P.Ground)
 				for i := range rows {
 					rows[i] = indent + rows[i]
 				}
@@ -264,11 +274,13 @@ func (m *Model) emptyState(inner int, indent string) string {
 // stepsRows folds tool calls into one line per run of the same tool and
 // outcome: "› ✓ view store.go · main.go", "› ✗ edit store.go ×3 · 3 falhas".
 // Older runs fold into a count so the turn stays short.
-func stepsRows(calls []message.ToolCall, results map[string]message.ToolResult, width int, waiting bool, bg color.Color) []string {
+// A running step counts its seconds from started (unix time per call ID).
+func stepsRows(calls []message.ToolCall, results map[string]message.ToolResult, started map[string]int64, width int, waiting bool, bg color.Color) []string {
 	type run struct {
 		name, state    string
 		targets        []string
 		added, removed int
+		since          int64
 	}
 	unfold := config.Get() != nil && config.Get().Preferences.ProcessVisible() // one line per call
 	var runs []run
@@ -289,7 +301,7 @@ func stepsRows(calls []message.ToolCall, results map[string]message.ToolResult, 
 			runs[n-1].removed += removed
 			continue
 		}
-		runs = append(runs, run{call.Name, state, []string{target}, added, removed})
+		runs = append(runs, run{call.Name, state, []string{target}, added, removed, started[call.ID]})
 	}
 	var rows []string
 	const keep = 4
@@ -322,6 +334,8 @@ func stepsRows(calls []message.ToolCall, results map[string]message.ToolResult, 
 			icon, color = "●", P.Plan
 			if waiting {
 				status = on(bg, P.Muted).Render(config.Text(" · aguardando sua aprovação", " · waiting for your approval"))
+			} else if r.since > 0 {
+				status = on(bg, P.Muted).Render(fmt.Sprintf(" · %ds", max(0, time.Now().Unix()-r.since)))
 			}
 		case "failed":
 			icon, color = "✗", P.Danger
@@ -411,13 +425,14 @@ func duration(from, to int64) string {
 	return (time.Duration(to-from) * time.Second).String()
 }
 
-// composerRows: the frame's two edges and a blank row on each side of the text.
+// composerRows: the frame's two edges and a blank row on each side of the text;
+// the half-block edges leave too little air without them.
 // composerRows is 0 while the agent asks: its card is where you answer.
 func (m *Model) composerRows() int {
 	if m.question != nil && !m.answeringLater() {
 		return 0
 	}
-	return m.composer.Height() + 4 // the frame's edges and a blank row inside each
+	return m.composer.Height() + 4
 }
 
 // composerView is the input framed in the mode's color, its name on the top
@@ -441,7 +456,11 @@ func (m *Model) composerView() string {
 		}
 		lines[i] = mark + lines[i]
 	}
-	legend := config.Text("Shift+Tab modo · / comandos · @ arquivos · Alt+Enter nova linha", "Shift+Tab mode · / commands · @ files · Alt+Enter new line")
+	newline := "Alt+Enter" // Shift+Enter reads as Enter unless the terminal says otherwise
+	if m.shiftEnter {
+		newline = "Shift+Enter"
+	}
+	legend := config.Text("Shift+Tab modo · / comandos · @ arquivos · "+newline+" nova linha", "Shift+Tab mode · / commands · @ files · "+newline+" new line")
 	if m.busy {
 		legend = config.Text("Mensagens entram na fila · Esc cancela", "Messages queue up · Esc cancels")
 	}
@@ -466,6 +485,9 @@ func (m *Model) footer() string {
 		}
 	}
 	approval := on(P.Ground, P.Text).Render(" " + label)
+	if mode := m.footerMode(); mode != "" {
+		approval = on(P.Ground, ModeColor(m.mode)).Bold(true).Render(" "+mode) + approval
+	}
 	activity := ""
 	switch {
 	case m.answeringLater():
@@ -525,6 +547,18 @@ func (m *Model) footer() string {
 	}
 	right += on(P.Ground, P.Text).Render(name+" ▾") + " "
 	return "\n" + Spread(approval+activity, right, m.width, P.Ground)
+}
+
+// footerMode is the mode's name when the composer does not show it: while
+// an approval keeps only your draft, or a question card replaces it.
+func (m *Model) footerMode() string {
+	if m.composerRows() > 0 && m.approval == nil {
+		return ""
+	}
+	if m.width < 80 {
+		return modeLabel(m.mode)[:1] + " "
+	}
+	return modeLabel(m.mode) + " "
 }
 
 // doing names the step in progress, as the proposal's footer does:

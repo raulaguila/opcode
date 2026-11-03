@@ -155,6 +155,9 @@ func (m *Model) questionView() string {
 	if item.Type == "multi_choice" {
 		legend = fmt.Sprintf(textFor("%s marcar · Espaço alternar · Enter responder (%d) · Esc responder depois", "%s check · Space toggle · Enter answer (%d) · Esc answer later"), keys, len(q.checked))
 	}
+	if q.index+1 < len(q.q.Questions) {
+		legend = strings.Replace(legend, " · Esc", textFor(" → próxima pergunta · Esc", " → next question · Esc"), 1)
+	}
 	inner := box.Inner()
 	bg0 := P.AskCard
 	var rows []string
@@ -264,7 +267,11 @@ func (m *Model) planView() string {
 			bar = on(bg, P.Plan).Render("▌")
 			title = on(rowBg, P.Strong).Bold(true).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
 		}
-		rows = append(rows, Line(bar+on(rowBg, markColor).Render(" "+mark+" ")+title, inner, rowBg))
+		row := bar + on(rowBg, markColor).Render(" "+mark+" ") + title
+		if step.Status == "in_progress" {
+			row = Spread(row, on(rowBg, P.Plan).Render(textFor("agora ", "now ")), inner, rowBg)
+		}
+		rows = append(rows, Line(row, inner, rowBg))
 	}
 	keys := KeyRow(textFor("Alt+↑↓ rolar · /plan recolher", "Alt+↑↓ scroll · /plan fold"), inner, bg)
 	if objective := strings.TrimSpace(m.task.Objective); objective != "" {

@@ -54,6 +54,8 @@
 - Sair pelo `Ctrl+C` ou pelo comando **Sair** pede confirmação no terminal.
 - Enquanto o modelo pensa, o raciocínio aparece ao vivo (últimas linhas) no terminal e no app; ao responder, fica só a resposta.
 - Terminal: uma linha de respiro entre a legenda do campo de mensagem e o rodapé; nas Configurações, cada preferência é separada por um traço e a lista rola quando não cabe.
+- Terminal mais fiel ao protótipo: o modo vai para o rodapé durante aprovação e pergunta; etapa em andamento conta os segundos; plano marca a etapa atual com "agora"; pergunta em lote mostra "→ próxima pergunta"; detalhes do modelo avisam quando a janela é pequena; conexões desativadas ocupam uma linha; rótulos do formulário de conexão alinhados à direita, sem cortar "Connection active".
+- Nova linha: o rodapé do campo mostra `Shift+Enter` quando o terminal distingue a tecla (kitty, Ghostty, WezTerm, foot); nos outros continua `Alt+Enter`, e as duas funcionam onde podem. O app passa a indicar `Shift+Enter`.
 - `ls` de uma árvore maior que uma página mostra as subpastas com a contagem
   de arquivos e depois os arquivos da pasta, em vez dos 60 primeiros caminhos
   em ordem alfabética; `recursive: true` mantém a lista plana.

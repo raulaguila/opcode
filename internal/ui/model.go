@@ -34,6 +34,7 @@ type Model struct {
 	transcript    viewport.Model
 	composer      textarea.Model
 	follow        bool // keep the transcript pinned to its end
+	shiftEnter    bool // the terminal tells Shift+Enter from Enter
 
 	mode     string // ask, plan or execute
 	busy     bool
@@ -147,6 +148,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.KeyboardEnhancementsMsg:
+		m.shiftEnter = msg.Flags != 0
+		return m, nil
 	case tea.WindowSizeMsg:
 		first := m.width == 0
 		m.width, m.height = msg.Width, msg.Height
@@ -201,6 +205,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.busy = m.app.CoderAgent.IsSessionBusy(m.session.ID)
 		}
 		if m.busy {
+			m.refresh() // a running step counts its seconds
 			return m, m.tick()
 		}
 		return m, nil
@@ -535,6 +540,7 @@ func (m *Model) refresh() {
 func (m *Model) click(x, y int) tea.Cmd {
 	switch y {
 	case m.height - 1:
+		x -= ansi.StringWidth(m.footerMode())
 		if x < 3+ansi.StringWidth(textFor("Aprov.: editar no projeto ▾", "Approval: project edits ▾")) && x < m.width/3 {
 			return m.openPaletteWith(textFor("Aprovação", "Approval"))
 		}

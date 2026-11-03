@@ -276,7 +276,7 @@ function renderFrame() {
   const busy = view.conversation?.busy;
   $("hint").innerHTML = "";
   if (busy) $("hint").append(t("Mensagens entram na fila · ", "Messages queue up · "), el("b", {}, "Esc"), t(" cancela", " cancels"));
-  else $("hint").append(el("b", {}, "Shift+Tab"), t(" modo · ", " mode · "), el("b", {}, "/"), t(" comandos · ", " commands · "), el("b", {}, "@"), t(" arquivos · ", " files · "), el("b", {}, "Alt+Enter"), t(" nova linha", " new line"));
+  else $("hint").append(el("b", {}, "Shift+Tab"), t(" modo · ", " mode · "), el("b", {}, "/"), t(" comandos · ", " commands · "), el("b", {}, "@"), t(" arquivos · ", " files · "), el("b", {}, "Shift+Enter"), t(" nova linha", " new line"));
   $("input").placeholder = deciding ? t("Rascunho preservado enquanto você decide", "Draft kept while you decide") : busy ? t("Mensagem entra na fila", "Message joins the queue") : "";
   const narrow = window.innerWidth < 760; // the proposal's compact screen abbreviates
   $("policy").textContent = narrow

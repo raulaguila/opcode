@@ -312,7 +312,7 @@ func (d *sessionsDialog) preview(m *Model, item Item, width int) []string {
 		quote(look.prompt, "┃", P.User, P.Text, 3)
 	}
 	if len(look.calls) > 0 {
-		steps := stepsRows(look.calls, look.results, width, false, P.Surface)
+		steps := stepsRows(look.calls, look.results, nil, width, false, P.Surface)
 		rows = append(rows, steps[max(0, len(steps)-3):]...)
 		rows = append(rows, "")
 	}

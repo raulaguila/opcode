@@ -495,6 +495,13 @@ func (p *modelPicker) detailColumn(m *Model, item Item, width int) []string {
 	if model.EmbeddingOnly() {
 		return append(rows, on(P.Surface, P.Muted).Render(textFor("Gera embeddings; não serve para conversar.", "Makes embeddings; not for chat.")))
 	}
+	if window := config.ModelWithProviderDefaults(model).ContextWindow; model.ID == p.active && window > 0 && window < 32768 {
+		advice := fmt.Sprintf(textFor("Janela pequena para o projeto: %s cabe poucos arquivos de contexto. C aumenta.", "Small window for the project: %s holds few context files. C raises it."), compactTokens(window))
+		for _, line := range strings.Split(ansi.Wrap(advice, width-2, ""), "\n") {
+			rows = append(rows, Line(on(P.Raised, P.Muted).Render(" "+line), width, P.Raised))
+		}
+		rows = append(rows, "")
+	}
 	rows = append(rows, Button(textFor("Usar este modelo", "Use this model"), true, P.Ask))
 	if model.ID == p.active {
 		// The knobs of the model in use: C cycles its context, R its reasoning.

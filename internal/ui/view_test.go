@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -104,4 +105,23 @@ func TestThinkingShowsWhileStreamingAndLeavesOnlyTheAnswer(t *testing.T) {
 	view = ansi.Strip(m.renderTranscript(100))
 	require.Contains(t, view, "ANSWER")
 	require.NotContains(t, view, "PONDERING", "the finished reply shows alone")
+}
+
+func TestARunningStepCountsItsSeconds(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 100, 30
+	asked := time.Now().Unix() - 4
+	m.messages = []message.Message{
+		{ID: "u", Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "teste"}}},
+		{ID: "a", Role: message.Assistant, Parts: []message.ContentPart{message.ToolCall{ID: "c", Name: "bash", Input: `{"command":"go test ./..."}`, Finished: true}, message.Finish{Reason: message.FinishReasonToolUse, Time: asked}}},
+	}
+	require.Regexp(t, `● bash .* · [45]s`, ansi.Strip(m.renderTranscript(100)))
+}
+
+func TestTheComposerOffersShiftEnterWhereTheTerminalReportsIt(t *testing.T) {
+	m := New(nil)
+	m.width, m.height = 100, 30
+	require.Contains(t, ansi.Strip(m.composerView()), "Alt+Enter")
+	m.update(tea.KeyboardEnhancementsMsg{Flags: 1})
+	require.Contains(t, ansi.Strip(m.composerView()), "Shift+Enter")
 }

@@ -118,3 +118,12 @@ func TestRecallSurvivesAConversationWithFewerMessages(t *testing.T) {
 	m.key(tea.KeyPressMsg{Code: tea.KeyUp})
 	require.Equal(t, "só uma", m.composer.Value())
 }
+
+func TestTheFooterNamesTheModeWhenTheComposerDoesNot(t *testing.T) {
+	m := New(nil)
+	m.width, m.height, m.mode = 100, 30, "plan"
+	require.Empty(t, m.footerMode(), "the composer's edge names it")
+	require.Equal(t, 5, m.composerRows(), "the text with a blank row above and below")
+	m.question = &question{q: interaction.Question{ID: "q", Question: "Qual?", Choices: []string{"A"}}, checked: map[int]bool{}}
+	require.Contains(t, ansi.Strip(m.footer()), modeLabel("plan")+"  ")
+}

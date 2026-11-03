@@ -14,7 +14,7 @@ import (
 type question struct {
 	q        interaction.Question
 	index    int // current item of a batch
-	cursor   int // focused choice; len(choices) is the free-text row
+	cursor   int // focused choice, the first at start; len(choices) is the free-text row
 	checked  map[int]bool
 	text     string
 	answers  []interaction.AnswerItem
@@ -38,7 +38,7 @@ func (m *Model) poll() {
 	if m.app.Questions != nil {
 		if q, ok := m.app.Questions.Pending(m.session.ID); ok {
 			if m.question == nil || m.question.q.ID != q.ID {
-				m.question = &question{q: q, cursor: -1, checked: map[int]bool{}}
+				m.question = &question{q: q, checked: map[int]bool{}}
 			}
 		} else {
 			m.question = nil
@@ -130,7 +130,7 @@ func (m *Model) answerQuestion() tea.Cmd {
 	}
 	q.answers = append(q.answers, answer)
 	if q.index+1 < len(q.q.Questions) {
-		q.index, q.cursor, q.checked, q.text = q.index+1, -1, map[int]bool{}, ""
+		q.index, q.cursor, q.checked, q.text = q.index+1, 0, map[int]bool{}, ""
 		m.layout()
 		return nil
 	}

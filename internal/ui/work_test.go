@@ -33,6 +33,7 @@ func TestQuestionCardNumbersChoicesAndMarksSelection(t *testing.T) {
 	require.Len(t, m.question.answers, 1)
 	require.Equal(t, []string{"Testes", "JSON atômico"}, m.question.answers[0].Choices)
 	require.Equal(t, 1, m.question.index, "a batch moves to its next question")
+	require.Equal(t, 0, m.question.cursor, "the next question starts on its first choice")
 	m.questionKey(tea.KeyPressMsg{Text: "x"})
 	require.Equal(t, 2, m.question.cursor, "typing focuses the free-text row")
 	require.Equal(t, "x", m.question.text)

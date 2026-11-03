@@ -32,22 +32,26 @@ func TestVerifyContractCannotLoadOrCallWriteTools(t *testing.T) {
 	a, p, _, _ := runtimeAgent(t, workflow.Execute)
 	write := &countedTool{name: "edit"}
 	checks := &countedTool{name: "run_checks"}
-	a.tools = []tools.BaseTool{write, checks}
+	bash := &countedTool{name: "bash"}
+	a.tools = []tools.BaseTool{write, checks, bash}
 	_, err := a.workflow.SetContract(context.Background(), "s", &workflow.Contract{Kind: "verify", Checks: []string{"test"}})
 	require.NoError(t, err)
 	done, err := a.Run(context.Background(), "s", "Corrija o arquivo e teste")
 	require.NoError(t, err)
 	first := nextGeneration(t, p)
 	require.NotContains(t, toolNames(first), "edit")
+	require.NotContains(t, toolNames(first), "bash")
 	require.Contains(t, toolNames(first), "run_checks")
-	replyTools(first, toolCall("request_tools", `{"names":["edit"]}`), toolCall("edit", `{}`), toolCall("finish_task", `{"status":"blocked","summary":"Check unavailable"}`))
+	replyTools(first, toolCall("request_tools", `{"names":["edit","bash"]}`), toolCall("edit", `{}`), toolCall("bash", `{"command":"true"}`), toolCall("finish_task", `{"status":"blocked","summary":"Check unavailable"}`))
 	next := nextGeneration(t, p)
 	results := next.history[len(next.history)-1].ToolResults()
 	require.True(t, results[0].IsError)
 	require.True(t, results[1].IsError)
+	require.True(t, results[2].IsError)
 	next.reply <- provider.ProviderResponse{Content: "Blocked", FinishReason: message.FinishReasonEndTurn}
 	require.Equal(t, "blocked", finishGeneration(t, done).Outcome)
 	require.Zero(t, write.count.Load())
+	require.Zero(t, bash.count.Load())
 }
 func TestExplicitChangeOverridesAmbiguousTextAndKeepsCompletionGuard(t *testing.T) {
 	a, p, _, _ := runtimeAgent(t, workflow.Execute)

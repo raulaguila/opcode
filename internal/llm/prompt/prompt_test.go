@@ -208,3 +208,19 @@ func TestSmallModelsGetTheShortRules(t *testing.T) {
 	require.Less(t, len(small), len(large)*2/3)
 	require.Contains(t, small, "Keep sandboxing, approvals and credential protections intact")
 }
+
+func TestExecutionWorkflowIsModeSpecificAcrossContextProfiles(t *testing.T) {
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	for _, window := range []int64{8192, 16384, 65536} {
+		execute := Compose("execute", "ollama", window, []string{"run_checks", "discover_checks", "bash"})
+		require.Contains(t, execute, executionPolicy)
+		require.NotContains(t, Compose("execute", "ollama", window, []string{"view"}), executionPolicy, "read-only requests must not pay the execution prompt budget")
+		for _, mode := range []string{"ask", "plan"} {
+			readOnly := Compose(mode, "ollama", window, nil)
+			require.NotContains(t, readOnly, executionPolicy)
+			require.Contains(t, readOnly, "commands, tests and file edits are unavailable")
+			require.NotContains(t, readOnly, "Use bash for commands")
+		}
+	}
+}

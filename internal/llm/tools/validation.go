@@ -23,7 +23,7 @@ func NewValidationTools() []BaseTool {
 	return []BaseTool{&validationTool{"discover_checks"}, &validationTool{"get_validation_report"}}
 }
 func (t *validationTool) Info() ToolInfo {
-	return ToolInfo{Name: t.name, Description: "Discover candidate checks from bounded root manifests without running commands or editing configuration; proposals require explicit configuration and ordinary run_checks permission. get_validation_report shows existing receipts and freshness for this session, never treating suggestions as passing checks.", Parameters: map[string]any{}}
+	return ToolInfo{Name: t.name, Description: "Discover candidate checks from bounded root manifests without executing or configuring them. Candidates may run via approved bash when allowed; run_checks needs configured names. get_validation_report shows current receipts and freshness, never treating candidates or file verification as passing tests.", Parameters: map[string]any{}}
 }
 func (t *validationTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error) {
 	if !json.Valid([]byte(call.Input)) {

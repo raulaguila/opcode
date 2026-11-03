@@ -36,7 +36,7 @@ func (c *checksTool) Run(ctx context.Context, call ToolCall) (ToolResponse, erro
 	}
 	cfg := config.Get()
 	if cfg == nil || len(cfg.Checks) == 0 {
-		return NewTextErrorResponse("no checks configured; add named command entries under checks in opcode.json"), nil
+		return NewTextErrorResponse("no checks configured; use discover_checks to find candidates. In execute mode, bash can run a source-confirmed command with ordinary approval unless the task contract forbids it. run_checks requires named entries under checks in project configuration; never configure them silently."), nil
 	}
 	names, err := configuredCheckNames(cfg.Checks, input.Names)
 	if err != nil {

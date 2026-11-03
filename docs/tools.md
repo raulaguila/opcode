@@ -110,6 +110,21 @@ Os metadados incluem `exit_code`, `timed_out`, `cancelled`, `truncated`, início
 {"names":["unit","vet"]}
 ```
 
+Pedidos como “rode os testes” disponibilizam `run_checks`, `discover_checks` e,
+quando permitido pelo modo e contrato, `bash`. Sem checks cadastrados, o agente
+pode descobrir candidatos, conferir o comando no projeto e executá-lo por
+`bash`, com a aprovação normal. A descoberta não configura nem executa comandos.
+O contrato `verify` continua limitado a checks cadastrados e não permite Bash;
+Perguntar e Planejar não executam testes.
+
+O contexto do modelo informa as capacidades permitidas, sandbox, política de
+rede e prazos padrão/máximo, sem valores de ambiente ou credenciais. Esses dados
+descrevem a política, não certificam a disponibilidade de executáveis ou serviços.
+Falhas devem ser diferenciadas entre testes, dependências, ambiente, timeout e
+restrições de execução; o agente não pode desativar o isolamento para prosseguir.
+Sucesso por Bash é evidência do comando executado, mas não cria um recibo formal
+de `run_checks`. A conclusão deve distinguir esses resultados e informar bloqueios.
+
 ## Git e LSP
 
 | Ferramenta | Resultado / parâmetros |

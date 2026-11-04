@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -143,7 +144,7 @@ func ollamaResult(value ollamaResponse) (*ProviderResponse, error) {
 	if len(response.ToolCalls) > 0 {
 		response.FinishReason = message.FinishReasonToolUse
 	} else {
-		response.Content = mergeOllamaFinalContent(response.Content, finalAnswer)
+		response.Content = mergeOllamaFinalContent(ollamaWithoutTextFinal(response.Content), finalAnswer)
 	}
 	return response, nil
 }
@@ -155,7 +156,35 @@ func mergeOllamaFinalContent(content, final string) string {
 	if strings.HasPrefix(final, content) {
 		return final
 	}
+	if strings.Contains(content, strings.TrimSpace(final)) {
+		return content
+	}
+	if strings.TrimSpace(content[len(content)-1:]) != "" {
+		content += "\n\n"
+	}
 	return content + final
+}
+
+// Some models write the final_answer call as text instead of making it.
+var (
+	ollamaTextFinalStart = regexp.MustCompile(`(?m)^[ \t]*final_answer[ \t]*[({]`)
+	ollamaTextFinal      = regexp.MustCompile(`(?ms)^[ \t]*final_answer[ \t]*[({][ \t]*(?:answer[ \t]*[:=][ \t]*)?(".*")[ \t]*[)}][ \t]*\z`)
+)
+
+func ollamaWithoutTextFinal(content string) string {
+	match := ollamaTextFinal.FindStringSubmatchIndex(content)
+	if match == nil {
+		return content
+	}
+	before := strings.TrimRight(content[:match[0]], " \t\r\n")
+	var answer string
+	if json.Unmarshal([]byte(content[match[2]:match[3]]), &answer) != nil {
+		if before == "" {
+			return content
+		}
+		return before
+	}
+	return mergeOllamaFinalContent(before, answer)
 }
 
 func (o *ollamaClient) decodeResponse(raw json.RawMessage) (*ProviderResponse, error) {
@@ -266,8 +295,26 @@ type ollamaStreamState struct {
 	ctx     context.Context
 	events  chan<- ProviderEvent
 	content strings.Builder
+	sent    int // bytes of content already published
 	calls   []ollamaCall
 	total   int
+}
+
+// unsent is the content safe to show now: from a line that may be a written
+// final_answer on, text waits for the end of the reply.
+func (s *ollamaStreamState) unsent() string {
+	text := s.content.String()
+	end := len(text)
+	start := strings.LastIndexByte(text[:s.sent], '\n') + 1
+	line := strings.LastIndexByte(text, '\n') + 1
+	if found := ollamaTextFinalStart.FindStringIndex(text[start:]); found != nil {
+		end = max(start+found[0], s.sent)
+	} else if rest := strings.TrimLeft(text[line:], " \t"); rest != "" && strings.HasPrefix(ollamaFinalAnswer, rest) {
+		end = max(line, s.sent)
+	}
+	unsent := text[s.sent:end]
+	s.sent = end
+	return unsent
 }
 
 func (s *ollamaStreamState) line(raw []byte) (bool, error) {
@@ -299,7 +346,7 @@ func (s *ollamaStreamState) line(raw []byte) (bool, error) {
 	return false, nil
 }
 func (s *ollamaStreamState) publishDeltas(value ollamaResponse) error {
-	for _, event := range []ProviderEvent{{Type: EventContentDelta, Content: value.Message.Content}, {Type: EventThinkingDelta, Content: value.Message.Thinking, Thinking: value.Message.Thinking}} {
+	for _, event := range []ProviderEvent{{Type: EventContentDelta, Content: s.unsent()}, {Type: EventThinkingDelta, Content: value.Message.Thinking, Thinking: value.Message.Thinking}} {
 		if event.Content != "" && !publishEvent(s.ctx, s.events, event) {
 			return s.ctx.Err()
 		}
@@ -313,7 +360,7 @@ func (s *ollamaStreamState) complete(value ollamaResponse) error {
 	if err != nil {
 		return err
 	}
-	if answer := strings.TrimPrefix(response.Content, value.Message.Content); answer != "" {
+	if answer, ok := strings.CutPrefix(response.Content, value.Message.Content[:s.sent]); ok && answer != "" {
 		if !publishEvent(s.ctx, s.events, ProviderEvent{Type: EventContentDelta, Content: answer}) {
 			return s.ctx.Err()
 		}

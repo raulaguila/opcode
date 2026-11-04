@@ -38,8 +38,8 @@ type PermissionRequest struct {
 }
 
 type Service interface {
-	pubsub.Suscriber[PermissionRequest]
-	GrantPersistant(permission PermissionRequest)
+	pubsub.Subscriber[PermissionRequest]
+	GrantPersistent(permission PermissionRequest)
 	Grant(permission PermissionRequest)
 	Deny(permission PermissionRequest)
 	Request(ctx context.Context, opts CreatePermissionRequest) bool
@@ -63,7 +63,7 @@ type pendingRequest struct {
 	response chan bool
 }
 
-func (s *permissionService) GrantPersistant(permission PermissionRequest) {
+func (s *permissionService) GrantPersistent(permission PermissionRequest) {
 	s.respond(permission.ID, true, true)
 }
 

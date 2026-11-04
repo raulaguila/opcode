@@ -2,6 +2,12 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- Ollama: `final_answer` escrito como texto não aparece mais na resposta, e uma
+  resposta final diferente do texto já enviado não se repete nem cola nele.
+- `.config` de um projeto, ou projeto dentro de `~/.config`, deixa de ser
+  mascarado; o `~/.config` da pasta pessoal continua protegido.
+- `maskCache` tem limite, `docs/tools.md` traz o limite real de inspeção e
+  `GrantPersistent` e `Subscriber` têm a grafia corrigida.
 - Sandbox: numa máquina que recusa o Bubblewrap, a busca e a listagem continuam
   dentro do processo, com as mesmas regras de caminho, e cada comando recusado
   explica a causa e a correção, também em `opcode doctor`. O teste roda ao abrir:

@@ -50,7 +50,7 @@ type AgentEvent struct {
 }
 
 type Service interface {
-	pubsub.Suscriber[AgentEvent]
+	pubsub.Subscriber[AgentEvent]
 	Model() models.Model
 	SetMode(context.Context, string, workflow.Mode) error
 	Run(ctx context.Context, sessionID string, content string, attachments ...message.Attachment) (<-chan AgentEvent, error)

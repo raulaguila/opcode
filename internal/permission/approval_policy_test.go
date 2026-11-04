@@ -77,7 +77,7 @@ func TestSwitchToPromptRevokesBroadAndRememberedConsent(t *testing.T) {
 	s, events := testPermissionService(t)
 	opts := testOptions(t)
 	request, result, _ := askPermission(t, s, events, opts)
-	s.GrantPersistant(request)
+	s.GrantPersistent(request)
 	require.True(t, permissionResult(t, result))
 	s.AutoApproveSession(opts.SessionID)
 	require.NoError(t, s.SetApprovalPolicy(opts.SessionID, ApprovalPrompt, ""))
@@ -119,7 +119,7 @@ func TestChangingPolicyDeniesPendingInsteadOfApprovingIt(t *testing.T) {
 	request, result, _ := askPermission(t, s, events, opts)
 	require.NoError(t, s.SetApprovalPolicy(opts.SessionID, ApprovalSandboxed, opts.Path))
 	require.False(t, permissionResult(t, result))
-	s.GrantPersistant(request)
+	s.GrantPersistent(request)
 	require.Empty(t, s.SessionGrants(opts.SessionID), "stale replies must not broaden the selected policy")
 	require.True(t, RequestProjectEdit(context.Background(), s, opts, filepath.Join(opts.Path, "new.go")))
 }

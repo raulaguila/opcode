@@ -14,7 +14,7 @@ func TestRememberedCommandApprovalCoversExactArgumentsOnly(t *testing.T) {
 	opts.Action = "execute"
 	opts.Params = map[string]string{"command": "go test ./..."}
 	request, result, _ := askPermission(t, s, events, opts)
-	s.GrantPersistant(request)
+	s.GrantPersistent(request)
 	require.True(t, permissionResult(t, result))
 	require.True(t, s.Request(context.Background(), opts))
 	opts.Params = map[string]string{"command": "rm -rf ./important"}

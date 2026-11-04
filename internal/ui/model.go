@@ -475,7 +475,7 @@ func (m *Model) answerApproval(key string) tea.Cmd {
 	case "1", "a", "enter":
 		m.app.Permissions.Grant(request)
 	case "2", "s":
-		m.app.Permissions.GrantPersistant(request)
+		m.app.Permissions.GrantPersistent(request)
 	case "3", "d", "esc":
 		m.app.Permissions.Deny(request)
 	default:

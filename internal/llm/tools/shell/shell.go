@@ -264,6 +264,25 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 	configureProcess(cmd)
 	return cmd, nil
 }
+
+// projectConfig says a .config belongs to the project. Only the home's own
+// holds other tools' tokens; one in a repository, or a project kept under
+// ~/.config, is ordinary source.
+func projectConfig(path string) bool {
+	cfg := config.Get()
+	home, err := os.UserHomeDir()
+	if cfg == nil || cfg.WorkingDir == "" || err != nil || !pathWithin(cfg.WorkingDir, path) {
+		return false
+	}
+	shared := filepath.Join(home, ".config")
+	return !pathWithin(shared, path) || pathWithin(shared, cfg.WorkingDir)
+}
+
+func pathWithin(base, path string) bool {
+	relative, err := filepath.Rel(base, path)
+	return err == nil && filepath.IsLocal(relative)
+}
+
 func SensitivePath(path string) bool {
 	if authStorageContains(path) {
 		return true
@@ -273,7 +292,7 @@ func SensitivePath(path string) bool {
 	}
 	for part := range strings.SplitSeq(filepath.ToSlash(path), "/") {
 		lower := strings.ToLower(part)
-		if lower == ".git" || lower == ".ssh" || lower == ".aws" || lower == ".gnupg" || lower == ".azure" || lower == ".kube" || lower == ".config" || lower == ".opcode" {
+		if lower == ".git" || lower == ".ssh" || lower == ".aws" || lower == ".gnupg" || lower == ".azure" || lower == ".kube" || lower == ".opcode" || lower == ".config" && !projectConfig(path) {
 			return true
 		}
 	}
@@ -358,7 +377,10 @@ const (
 
 // maskInspectionLimit bounds the first walk of a workspace; later commands
 // reuse its result while no inspected directory changes.
-const maskInspectionLimit = 1_000_000
+const (
+	maskInspectionLimit = 1_000_000
+	maskCacheLimit      = 64
+)
 
 // Credential masks per workspace. A cached walk is reused only while every
 // directory it entered keeps its mtime: creating, deleting or renaming an entry
@@ -408,6 +430,9 @@ func credentialMasksAt(cwd, destination string, readGit, writeGit bool, cfg *con
 	}
 	maskCacheMu.Lock()
 	if stable {
+		if len(maskCache) >= maskCacheLimit {
+			clear(maskCache) // a walk rebuilds any entry that was still in use
+		}
 		maskCache[cwd] = cachedMasks{key: key, args: masks.args, dirs: masks.dirs}
 	} else {
 		delete(maskCache, cwd)

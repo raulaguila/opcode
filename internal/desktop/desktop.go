@@ -557,7 +557,7 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 	case "once":
 		s.app.Permissions.Grant(pending)
 	case "session":
-		s.app.Permissions.GrantPersistant(pending)
+		s.app.Permissions.GrantPersistent(pending)
 	case "deny":
 		s.app.Permissions.Deny(pending)
 	default:

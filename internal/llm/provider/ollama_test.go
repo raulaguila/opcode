@@ -145,12 +145,51 @@ func TestOllamaFinalAnswerPublishesTextWithoutAnExecutableToolCall(t *testing.T)
 	require.Empty(t, last.Response.ToolCalls)
 }
 
+func TestOllamaHidesAFinalAnswerWrittenAsText(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		chunks []string
+		want   string
+	}{
+		{"repeated", []string{"Resposta.\n\nfinal", `_answer{answer: "Resposta."}`}, "Resposta."},
+		{"parentheses", []string{"Resposta.\n", `final_answer(answer="Resposta.")`}, "Resposta."},
+		{"only the call", []string{`final_answer{answer: "Linha 1\nLinha 2"}`}, "Linha 1\nLinha 2"},
+		{"new text", []string{"Li o arquivo.\n", `final_answer{"Conclusão."}`}, "Li o arquivo.\n\nConclusão."},
+		{"a word in a reply", []string{"final", " answer é o nome da ferramenta."}, "final answer é o nome da ferramenta."},
+		{"a mention inside a line", []string{"chame final_answer{x} no fim"}, "chame final_answer{x} no fim"},
+		{"explained, not called", []string{"Use assim:\nfinal_answer{answer: x}\nE pronto."}, "Use assim:\nfinal_answer{answer: x}\nE pronto."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var body strings.Builder
+			for _, chunk := range tc.chunks {
+				line, err := json.Marshal(map[string]any{"message": map[string]any{"content": chunk}, "done": false})
+				require.NoError(t, err)
+				body.Write(append(line, '\n'))
+			}
+			body.WriteString(`{"message":{"content":""},"done":true,"done_reason":"stop"}`)
+			c := newOllamaClient(testOptions(models.ProviderLocal), "http://local.invalid/v1")
+			c.transport.client = wireHTTP(t, 200, "application/x-ndjson", body.String(), nil)
+			events := collectEvents(t, c.stream(context.Background(), userMessages(), nil))
+			var text strings.Builder
+			for _, event := range events {
+				if event.Type == EventContentDelta {
+					text.WriteString(event.Content)
+				}
+			}
+			require.Equal(t, tc.want, events[len(events)-1].Response.Content)
+			require.Equal(t, tc.want, strings.TrimRight(text.String(), "\n"), "what streamed matches what is kept")
+		})
+	}
+}
+
 func TestOllamaDoesNotRepeatAnAnswerSentAsBothContentAndFinalTool(t *testing.T) {
 	for _, tc := range []struct{ content, final, want string }{
 		{"Resposta (source.go:1).", "Resposta (source.go:1).", "Resposta (source.go:1)."},
 		{"Resposta (source.go:1).\n", "Resposta (source.go:1).", "Resposta (source.go:1).\n"},
 		{"Resposta", "Resposta (source.go:1).", "Resposta (source.go:1)."},
 		{"Introdução (unread.go:9). ", "Conclusão (source.go:1).", "Introdução (unread.go:9). Conclusão (source.go:1)."},
+		{"Introdução.", "Conclusão.", "Introdução.\n\nConclusão."},
+		{"Vou resumir: o resultado é 42. Pronto.", "o resultado é 42.", "Vou resumir: o resultado é 42. Pronto."},
 	} {
 		first, err := json.Marshal(map[string]any{"message": map[string]any{"content": tc.content}, "done": false})
 		require.NoError(t, err)

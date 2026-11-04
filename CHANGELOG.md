@@ -2,6 +2,9 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- Sandbox: numa máquina que recusa o Bubblewrap, a busca e a listagem continuam
+  dentro do processo, com as mesmas regras de caminho, e cada comando recusado
+  explica a causa e a correção, também em `opcode doctor`.
 - `/auditoria` também usa analisadores instalados, três passadas por tipo de
   defeito, chamadores e definições na revisão, testes que provam achados em Go,
   modelo de revisão próprio (`agents.review`), cache por conteúdo, relatório

@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -136,6 +137,75 @@ func SandboxActive() bool {
 	return cfg == nil || cfg.Security.Sandbox != "none" || AlreadySandboxed()
 }
 
+// SearchUsesSandbox says a search through rg can start here. Without it, search
+// runs in this process, under the same path policy; commands stay refused.
+func SearchUsesSandbox() bool {
+	cfg := config.Get()
+	if cfg != nil && cfg.Security.Sandbox == "none" || AlreadySandboxed() {
+		return true
+	}
+	return sandboxStartError() == nil
+}
+
+func sandboxStartError() error {
+	if runtime.GOOS != "linux" {
+		return fmt.Errorf("OS sandbox is unavailable; explicitly configure security.sandbox=none in user-global configuration to run without it")
+	}
+	binary, err := exec.LookPath("bwrap")
+	if err != nil {
+		return fmt.Errorf("bubblewrap is required by the execution policy")
+	}
+	if known, ok := sandboxProbes.Load(binary); ok {
+		err, _ := known.(error)
+		return err
+	}
+	err = probeSandbox(binary)
+	sandboxProbes.Store(binary, err)
+	return err
+}
+
+// sandboxProbes holds one result per bwrap binary for the life of the process.
+var sandboxProbes sync.Map
+
+func probeSandbox(binary string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	args := append([]string{"--die-with-parent", "--unshare-all"}, systemBinds()...)
+	output, err := exec.CommandContext(ctx, binary, append(args, "--", "/bin/sh", "-c", ":")...).CombinedOutput()
+	// A slow machine says nothing about the sandbox; let the real command decide.
+	if err == nil || ctx.Err() != nil {
+		return nil
+	}
+	return fmt.Errorf("command not run: the sandbox cannot start on this machine (%s). Do not retry; file reading and search still work. %s", cmp.Or(strings.TrimSpace(string(output)), err.Error()), sandboxHint("/"))
+}
+
+// sandboxHint names the host setting that blocks user namespaces, read from
+// root so a test can stand in for /proc.
+func sandboxHint(root string) string {
+	setting := func(path string) string {
+		data, _ := os.ReadFile(filepath.Join(root, "proc/sys", path))
+		return strings.TrimSpace(string(data))
+	}
+	const off = " Only if you accept running commands without isolation, set security.sandbox to none in the global configuration. Restart opcode afterwards."
+	exists := func(path string) bool {
+		_, err := os.Stat(filepath.Join(root, path))
+		return err == nil
+	}
+	switch {
+	case exists(".dockerenv"), exists("run/.containerenv"):
+		return "This is a container, and its runtime blocks user namespaces: allow them in the container's security profile." + off
+	case setting("kernel/apparmor_restrict_unprivileged_userns") == "1":
+		return "AppArmor restricts user namespaces and has no profile for this bwrap. An administrator can add one: sudo apt install apparmor-profiles && sudo cp /usr/share/apparmor/extra-profiles/bwrap-userns-restrict /etc/apparmor.d/ && sudo systemctl reload apparmor (it covers /usr/bin/bwrap only)." + off
+	case setting("user/max_user_namespaces") == "0":
+		return "User namespaces are off. An administrator can enable them: sudo sysctl -w user.max_user_namespaces=15000, and keep it in /etc/sysctl.d/." + off
+	case setting("kernel/unprivileged_userns_clone") == "0":
+		return "User namespaces are off. An administrator can enable them: sudo sysctl -w kernel.unprivileged_userns_clone=1, and keep it in /etc/sysctl.d/." + off
+	case exists("sys/fs/selinux/enforce"):
+		return "SELinux may be denying user namespaces: an administrator can check with ausearch -m avc -ts recent." + off
+	}
+	return "A host security policy denies user namespaces: ask an administrator." + off
+}
+
 func commandProcess(ctx context.Context, cwd, command string, readGit, interactive, writeGit bool) (*exec.Cmd, error) {
 	cfg := config.Get()
 	path := "/bin/bash"
@@ -211,12 +281,12 @@ func SensitivePath(path string) bool {
 }
 
 func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *config.Config, readGit, interactive, writeGit bool, cache string) (*exec.Cmd, error) {
-	if runtime.GOOS != "linux" {
-		return nil, fmt.Errorf("OS sandbox is unavailable; explicitly configure security.sandbox=none in user-global configuration to run without it")
+	if err := sandboxStartError(); err != nil {
+		return nil, err
 	}
 	binary, err := exec.LookPath("bwrap")
 	if err != nil {
-		return nil, fmt.Errorf("bubblewrap is required by the execution policy")
+		return nil, err
 	}
 	wrapped := []string{"--die-with-parent", "--unshare-all"}
 	if !interactive {
@@ -225,11 +295,7 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 	if NetworkEnabled(ctx) {
 		wrapped = append(wrapped, "--share-net")
 	}
-	for _, dir := range []string{"/usr", "/bin", "/lib", "/lib64"} {
-		if _, err := os.Stat(dir); err == nil {
-			wrapped = append(wrapped, "--ro-bind", dir, dir)
-		}
-	}
+	wrapped = append(wrapped, systemBinds()...)
 	wrapped = append(wrapped, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", sandboxHome, "--ro-bind", os.DevNull, sandboxMarker, "--dir", "/etc")
 	// Debian's alternatives hold awk, which and others as links under /etc.
 	for _, entry := range []string{"/etc/alternatives", "/etc/ssl/certs", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf"} {
@@ -263,6 +329,16 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 	wrapped = append(wrapped, args...)
 	return exec.CommandContext(ctx, binary, wrapped...), nil
 
+}
+
+func systemBinds() []string {
+	var binds []string
+	for _, dir := range []string{"/usr", "/bin", "/lib", "/lib64"} {
+		if _, err := os.Stat(dir); err == nil {
+			binds = append(binds, "--ro-bind", dir, dir)
+		}
+	}
+	return binds
 }
 
 // sandboxHome is empty and vanishes with the command, so tools that need a

@@ -41,7 +41,7 @@ func TestNativeSmokeSandboxAndCredentialDenial(t *testing.T) {
 		require.Equal(t, "bwrap", filepath.Base(command.Path))
 		require.Contains(t, command.Args, "--unshare-all")
 	} else {
-		require.ErrorContains(t, err, "bubblewrap is required")
+		require.Regexp(t, "bubblewrap is required|sandbox cannot start", err.Error())
 	}
 	for _, value := range Environment() {
 		require.False(t, strings.Contains(value, "fake-never-forward-credential"))

@@ -156,9 +156,14 @@ func (g *grepTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	), nil
 }
 
+func ripgrepUsable() bool {
+	_, err := exec.LookPath("rg")
+	return err == nil && shell.SearchUsesSandbox()
+}
+
 func searchFiles(ctx context.Context, pattern, rootPath, include string, limit int) ([]grepMatch, bool, error) {
 	rootPath = absolutePath(rootPath)
-	if _, err := exec.LookPath("rg"); err != nil {
+	if !ripgrepUsable() {
 		return fallbackSearch(ctx, pattern, rootPath, include, limit)
 	}
 	parent := ctx
@@ -236,7 +241,7 @@ func fallbackSearch(ctx context.Context, pattern, root, include string, limit in
 }
 func findFiles(ctx context.Context, root, pattern string, limit int) ([]string, bool, error) {
 	root = absolutePath(root)
-	if _, err := exec.LookPath("rg"); err == nil {
+	if ripgrepUsable() {
 		return ripgrepFiles(ctx, root, pattern, limit)
 	}
 	collector := discoveryFileCollector{ctx: ctx, root: root, pattern: pattern, limit: limit, policy: newDiscoveryPolicy()}

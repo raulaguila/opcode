@@ -52,7 +52,7 @@ func refreshPlannedIndex(ctx context.Context, db *sql.DB, root string, increment
 		}
 	} else {
 		var truncated bool
-		paths, truncated, err = ripgrepFiles(ctx, root, "", indexLimits().MaxFiles)
+		paths, truncated, err = findFiles(ctx, root, "", indexLimits().MaxFiles)
 		if err != nil {
 			return stats, fmt.Errorf("index file discovery: %w", err)
 		}

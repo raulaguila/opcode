@@ -152,14 +152,17 @@ func (r *doctorReport) inspectBinaries() {
 
 func (r *doctorReport) inspectSandbox(ctx context.Context, cwd string, cfg *config.Config) {
 	sandboxCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	sandbox, err := shell.Command(sandboxCtx, cwd, "true")
-	if err == nil {
+	sandbox, startErr := shell.Command(sandboxCtx, cwd, "true")
+	var err error
+	if startErr == nil {
 		sandbox.Stdout = nil
 		sandbox.Stderr = nil
 		err = sandbox.Run()
 	}
 	cancel()
 	switch {
+	case startErr != nil:
+		r.add("sandbox", "error", startErr.Error())
 	case err != nil:
 		r.add("sandbox", "error", "Execution policy cannot start a command. Check Bubblewrap installation, user namespaces and security settings.")
 	case cfg.Security.Sandbox == "none":

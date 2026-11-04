@@ -171,7 +171,10 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 	startTime := time.Now()
 	record, err := b.manager.startProcess(ctx, sessionID, ProcessParams{Command: params.Command, Timeout: params.Timeout, PTY: params.PTY}, false)
 	if err != nil {
-		return ToolResponse{}, fmt.Errorf("error executing command: %w", err)
+		if ctx.Err() != nil {
+			return ToolResponse{}, fmt.Errorf("error executing command: %w", err)
+		}
+		return NewTextErrorResponse(err.Error()), nil // the model must read why
 	}
 	<-record.done
 	stdout, stdoutDropped := record.stdout.Snapshot()

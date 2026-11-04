@@ -6,22 +6,28 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/provider"
+	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 )
 
 // auditCache keeps the model's replies by what was asked. An audit repeated
-// after a small change asks only about what changed; anything not asked again
-// leaves the cache when it is saved.
+// after a small change asks only about what changed; anything a complete run
+// did not ask again leaves the cache.
 type auditCache struct {
 	path    string
 	replies map[string]string
 	used    map[string]string
+	fresh   int // replies paid for since the last save
 }
+
+// A crash loses at most this many paid replies.
+const auditCacheInterval = 50
 
 func auditDirectory() string {
 	cfg := config.Get()
@@ -39,8 +45,16 @@ func loadAuditCache() *auditCache {
 	return cache
 }
 
-func (c *auditCache) save() error {
-	data, err := json.Marshal(c.used)
+// save prunes only after a complete run: one cut short says nothing about what
+// it never reached.
+func (c *auditCache) save(complete bool) error {
+	kept := c.used
+	if !complete {
+		kept = maps.Clone(c.replies)
+		maps.Copy(kept, c.used)
+	}
+	c.fresh = 0
+	data, err := json.Marshal(kept)
 	if err != nil {
 		return err
 	}
@@ -76,6 +90,11 @@ func (r *auditRun) ask(ctx context.Context, connection provider.Provider, instru
 	_ = r.agent.TrackUsage(ctx, r.session, connection.Model(), response.Usage)
 	if valid(response.Content) {
 		r.cache.used[key] = response.Content
+		if r.cache.fresh++; r.cache.fresh >= auditCacheInterval {
+			if err := r.cache.save(false); err != nil {
+				logging.Warn("audit cache not saved", "error", err)
+			}
+		}
 	}
 	return response.Content, nil
 }

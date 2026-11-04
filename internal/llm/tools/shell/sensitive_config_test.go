@@ -32,6 +32,15 @@ func TestProjectConfigIsSourceAndTheHomesIsNot(t *testing.T) {
 		{"/work/app", "/other/.config/token", true},
 		{"/work/app", "/work/app/.ssh/config", true},
 		{"/work/app", "/work/app/.config/.env", true},
+		{"/work/app", "/work/app/.netrc", true},
+		{"/work/app", "/work/app/.git-credentials", true},
+		{"/work/app", "/work/app/.pgpass", true},
+		{"/work/app", "/work/app/id_ecdsa", true},
+		{"/work/app", "/work/app/id_dsa", true},
+		{"/work/app", "/work/app/deploy/client.p12", true},
+		{"/work/app", "/work/app/deploy/client.pfx", true},
+		{"/work/app", "/work/app/.docker/config.json", true},
+		{"/work/app", "/work/app/docker/compose.yaml", false},
 	} {
 		cfg.WorkingDir = tc.workspace
 		require.Equal(t, tc.sensitive, SensitivePath(tc.path), tc.path)

@@ -36,6 +36,7 @@ var (
 // the code around and what the file cannot show: who calls it and what it uses.
 // A model hunting for bugs reports what a model checking one claim refuses.
 // Only a clear FALSE drops a finding; one without a verdict stays, and is counted.
+// High stays for what a tool found: a model's word, even twice, was mostly noise.
 func (r *auditRun) review(ctx context.Context) {
 	r.report.rank()
 	high := 0
@@ -67,7 +68,7 @@ func (r *auditRun) review(ctx context.Context) {
 	})
 	for i := range r.report.findings {
 		if finding := &r.report.findings[i]; finding.Severity == "high" && finding.Source == "" {
-			finding.State = auditReviewed
+			finding.State, finding.Severity = auditReviewed, "medium"
 		}
 	}
 }

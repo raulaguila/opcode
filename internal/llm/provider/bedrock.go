@@ -19,8 +19,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 )
 
-type bedrockOptions struct{}
-type BedrockOption func(*bedrockOptions)
 type bedrockProtocol struct{ model string }
 
 func (b *bedrockProtocol) request(params object, stream bool) (string, any, error) {

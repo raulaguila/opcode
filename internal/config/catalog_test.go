@@ -77,12 +77,13 @@ func TestSelectedDiscoveredModelPersistsThroughRestartInProject(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, ".opcode.json")
 	old := models.Model{ID: "local.old:8b", Provider: models.ProviderLocal, APIModel: "old:8b", API: "ollama", ContextWindow: 16384, DefaultMaxTokens: 2048}
-	file := map[string]any{"providers": map[string]any{"local": map[string]any{"baseURL": "http://local.invalid/v1", "api": "ollama", "futureProviderField": true}}, "models": map[string]any{string(old.ID): old}, "agents": map[string]any{"coder": map[string]any{"model": old.ID, "futureAgentField": "keep"}}, "futureField": map[string]any{"keep": "yes"}}
+	file := map[string]any{"models": map[string]any{string(old.ID): old}, "agents": map[string]any{"coder": map[string]any{"model": old.ID, "futureAgentField": "keep"}}, "futureField": map[string]any{"keep": "yes"}}
 	data, err := json.Marshal(file)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, data, 0644))
 	global := filepath.Join(t.TempDir(), "global.json")
-	require.NoError(t, os.WriteFile(global, []byte(`{}`), 0600))
+	const provider = `{"providers":{"local":{"baseURL":"http://local.invalid/v1","api":"ollama"}}}`
+	require.NoError(t, os.WriteFile(global, []byte(provider), 0600))
 	viper.SetConfigFile(global)
 	loaded, err := Load(root, false)
 	require.NoError(t, err)
@@ -91,7 +92,7 @@ func TestSelectedDiscoveredModelPersistsThroughRestartInProject(t *testing.T) {
 	require.Equal(t, candidate.ID, loaded.Agents[AgentCoder].Model)
 	saved, err := os.ReadFile(path)
 	require.NoError(t, err)
-	for _, value := range []string{"futureField", "futureProviderField", "futureAgentField"} {
+	for _, value := range []string{"futureField", "futureAgentField"} {
 		require.Contains(t, string(saved), value)
 	}
 	info, err := os.Stat(path)
@@ -99,7 +100,7 @@ func TestSelectedDiscoveredModelPersistsThroughRestartInProject(t *testing.T) {
 	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
 	unchanged, err := os.ReadFile(global)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`, string(unchanged))
+	require.JSONEq(t, provider, string(unchanged))
 	cfg = nil
 	viper.Reset()
 	viper.SetConfigFile(global)

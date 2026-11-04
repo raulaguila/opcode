@@ -54,25 +54,24 @@ func TestMCPEnvironmentValidationDoesNotRevealValues(t *testing.T) {
 		require.NotContains(t, err.Error(), "private")
 	}
 }
-func TestIntegrationProjectSaveAndFailedSavePreserveRuntimeConfiguration(t *testing.T) {
+func TestIntegrationSaveNeverTouchesProjectFileAndFailureKeepsRuntime(t *testing.T) {
 	isolateModelConfig(t)
 	root := t.TempDir()
 	path := filepath.Join(root, ".opcode.json")
-	require.NoError(t, os.WriteFile(path, []byte(`{"lsp":{"go":{"command":"old","future":true}},"future":9007199254740993}`), 0600))
+	const project = `{"lsp":{"go":{"command":"old"}},"future":9007199254740993}`
+	require.NoError(t, os.WriteFile(path, []byte(project), 0600))
 	global := filepath.Join(t.TempDir(), "global.json")
-	require.NoError(t, os.WriteFile(global, []byte(`{}`), 0600))
+	require.NoError(t, os.WriteFile(global, []byte(`{"future":9007199254740993}`), 0600))
 	viper.SetConfigFile(global)
 	cfg = &Config{WorkingDir: root, LSP: map[string]LSPConfig{"go": {Command: "old"}}}
 	require.NoError(t, SaveIntegration(Integration{Kind: "lsp", Name: "go", LSP: LSPConfig{Command: "gopls", Disabled: true}}))
 	data, err := os.ReadFile(path)
 	require.NoError(t, err)
-	require.Contains(t, string(data), "future")
-	require.Contains(t, string(data), "9007199254740993")
-	require.Contains(t, string(data), `"disabled": true`)
+	require.Equal(t, project, string(data))
 	globalData, err := os.ReadFile(global)
 	require.NoError(t, err)
-	require.JSONEq(t, `{}`, string(globalData))
-	cfg.WorkingDir = t.TempDir()
+	require.Contains(t, string(globalData), "9007199254740993")
+	require.Contains(t, string(globalData), `"disabled": true`)
 	viper.SetConfigFile(filepath.Join(t.TempDir(), "missing", "settings.json"))
 	require.Error(t, SaveIntegration(Integration{Kind: "lsp", Name: "go", LSP: LSPConfig{Command: "other"}}))
 	require.Equal(t, "gopls", cfg.LSP["go"].Command)

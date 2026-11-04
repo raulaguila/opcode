@@ -2,6 +2,22 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- Segurança: `.opcode.json` de um repositório não redefine mais `providers`,
+  `providerProfiles`, `data`, `lsp`, `mcpServers` nem `shell`; esses campos valem
+  só na configuração global e o log avisa quando foram ignorados. Salvar provedor
+  ou integração nunca grava no arquivo do projeto. **Quem usava LSP ou MCP por
+  projeto precisa movê-los para a configuração global.**
+- `SensitivePath` cobre `.netrc`, `.git-credentials`, `.pgpass`, `id_ecdsa`,
+  `id_dsa`, `*.p12`, `*.pfx` e a pasta `.docker`.
+- `web_fetch` e afins usam o proxy do ambiente, sem abrir mão de recusar destinos
+  privados ou de metadados; `100.64.0.0/10` conta como rede privada.
+- Projeto aberto por link simbólico não pede aprovação a cada escrita.
+- Escrita de arquivo mantém o original no lugar até a troca, com link físico, e o
+  desfazer restaura em um passo. Histórico de arquivos desempata versões criadas
+  no mesmo segundo: antes a leitura podia devolver a versão mais antiga.
+- `/auditoria`: cancelar não apaga o cache e ele é salvo a cada 50 respostas;
+  achado só do modelo fica em média mesmo depois da revisão; saiu a prova por
+  teste escrito pelo modelo, que não distinguia bug real de teste ruim.
 - Ollama: `final_answer` escrito como texto não aparece mais na resposta, e uma
   resposta final diferente do texto já enviado não se repete nem cola nele.
 - `.config` de um projeto, ou projeto dentro de `~/.config`, deixa de ser
@@ -14,7 +30,7 @@
   a interface avisa, o modelo planeja sem comandos e diz que nada foi executado,
   a auditoria informa o que não rodou e `/sandbox` testa de novo sem reiniciar.
 - `/auditoria` também usa analisadores instalados, três passadas por tipo de
-  defeito, chamadores e definições na revisão, testes que provam achados em Go,
+  defeito, chamadores e definições na revisão,
   modelo de revisão próprio (`agents.review`), cache por conteúdo, relatório
   agrupado em `.opcode/audit/` e achados dispensados. `scripts/audit-bench` mede
   tudo com bugs plantados.

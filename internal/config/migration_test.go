@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"maps"
 	"os"
 	"path/filepath"
@@ -112,7 +111,7 @@ func TestLegacyEnvironmentConfigAndExplicitDataDirectory(t *testing.T) {
 	require.Equal(t, "ask", loaded.Runtime.Mode)
 	require.Equal(t, explicit, loaded.Data.Directory)
 }
-func TestLegacyProjectChangesSaveBackWithoutCreatingNewCredentialFile(t *testing.T) {
+func TestProviderChangesNeverLandInLegacyProjectFile(t *testing.T) {
 	isolateMigrationConfig(t)
 	root := t.TempDir()
 	global := filepath.Join(os.Getenv("HOME"), ".opcode.json")
@@ -124,12 +123,12 @@ func TestLegacyProjectChangesSaveBackWithoutCreatingNewCredentialFile(t *testing
 	require.NoError(t, SaveProvider(models.ProviderOpenAI, Provider{APIKey: "literal-private-fixture", BaseURL: "https://example.invalid/v1"}))
 	raw, err := os.ReadFile(project)
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "9007199254740993")
-	require.Contains(t, string(raw), "example.invalid")
+	require.NotContains(t, string(raw), "example.invalid")
 	_, err = os.Stat(filepath.Join(root, ".opcode.json"))
 	require.True(t, os.IsNotExist(err))
-	var data map[string]any
-	require.NoError(t, json.Unmarshal(raw, &data))
+	raw, err = os.ReadFile(configuredFilePath())
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "example.invalid")
 }
 func TestLegacyGuidanceAndDatabasePathsHaveSafePrecedence(t *testing.T) {
 	root := t.TempDir()

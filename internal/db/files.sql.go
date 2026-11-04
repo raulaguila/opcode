@@ -98,7 +98,7 @@ const getFileByPathAndSession = `-- name: GetFileByPathAndSession :one
 SELECT id, session_id, path, content, version, created_at, updated_at
 FROM files
 WHERE path = ? AND session_id = ?
-ORDER BY created_at DESC
+ORDER BY created_at DESC, rowid DESC
 LIMIT 1
 `
 
@@ -126,7 +126,7 @@ const listFilesByPath = `-- name: ListFilesByPath :many
 SELECT id, session_id, path, content, version, created_at, updated_at
 FROM files
 WHERE path = ?
-ORDER BY created_at DESC
+ORDER BY created_at DESC, rowid DESC
 `
 
 func (q *Queries) ListFilesByPath(ctx context.Context, path string) ([]File, error) {
@@ -164,7 +164,7 @@ const listFilesBySession = `-- name: ListFilesBySession :many
 SELECT id, session_id, path, content, version, created_at, updated_at
 FROM files
 WHERE session_id = ?
-ORDER BY created_at ASC
+ORDER BY created_at ASC, rowid ASC
 `
 
 func (q *Queries) ListFilesBySession(ctx context.Context, sessionID string) ([]File, error) {
@@ -202,10 +202,10 @@ const listLatestSessionFiles = `-- name: ListLatestSessionFiles :many
 SELECT f.id, f.session_id, f.path, f.content, f.version, f.created_at, f.updated_at
 FROM files f
 INNER JOIN (
-    SELECT path, MAX(created_at) as max_created_at
+    SELECT MAX(rowid) as latest_rowid
     FROM files
     GROUP BY path
-) latest ON f.path = latest.path AND f.created_at = latest.max_created_at
+) latest ON f.rowid = latest.latest_rowid
 WHERE f.session_id = ?
 ORDER BY f.path
 `
@@ -245,7 +245,7 @@ const listNewFiles = `-- name: ListNewFiles :many
 SELECT id, session_id, path, content, version, created_at, updated_at
 FROM files
 WHERE is_new = 1
-ORDER BY created_at DESC
+ORDER BY created_at DESC, rowid DESC
 `
 
 func (q *Queries) ListNewFiles(ctx context.Context) ([]File, error) {

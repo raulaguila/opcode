@@ -7,20 +7,20 @@ WHERE id = ? LIMIT 1;
 SELECT *
 FROM files
 WHERE path = ? AND session_id = ?
-ORDER BY created_at DESC
+ORDER BY created_at DESC, rowid DESC
 LIMIT 1;
 
 -- name: ListFilesBySession :many
 SELECT *
 FROM files
 WHERE session_id = ?
-ORDER BY created_at ASC;
+ORDER BY created_at ASC, rowid ASC;
 
 -- name: ListFilesByPath :many
 SELECT *
 FROM files
 WHERE path = ?
-ORDER BY created_at DESC;
+ORDER BY created_at DESC, rowid DESC;
 
 -- name: CreateFile :one
 INSERT INTO files (
@@ -57,10 +57,10 @@ WHERE session_id = ?;
 SELECT f.*
 FROM files f
 INNER JOIN (
-    SELECT path, MAX(created_at) as max_created_at
+    SELECT MAX(rowid) as latest_rowid
     FROM files
     GROUP BY path
-) latest ON f.path = latest.path AND f.created_at = latest.max_created_at
+) latest ON f.rowid = latest.latest_rowid
 WHERE f.session_id = ?
 ORDER BY f.path;
 
@@ -68,4 +68,4 @@ ORDER BY f.path;
 SELECT *
 FROM files
 WHERE is_new = 1
-ORDER BY created_at DESC;
+ORDER BY created_at DESC, rowid DESC;

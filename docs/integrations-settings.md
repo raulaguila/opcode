@@ -78,10 +78,10 @@ são gravados ao editar a integração. URLs com credenciais, query string ou
 fragmento são rejeitadas. Os campos legados `headers` e `env` continuam válidos,
 mas a interface preserva esses valores privados sem mostrá-los nos novos campos.
 
-Editar uma entrada já presente no projeto salva no mesmo `.opcode/config.json`
-(ou no formato anterior que já estava em uso);
-entradas novas são salvas no arquivo global em uso. A escrita é atômica,
-preserva campos desconhecidos e usa permissão `0600`.
+Integrações ficam só no arquivo global: um repositório clonado não inicia
+processos nem troca credenciais. `lsp`, `mcpServers`, `shell`, `providers`,
+`providerProfiles` e `data` em `.opcode/config.json` são ignorados, com aviso no
+log. A escrita é atômica, preserva campos desconhecidos e usa permissão `0600`.
 
 ## OAuth MCP explícito
 

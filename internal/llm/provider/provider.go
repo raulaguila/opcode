@@ -85,7 +85,6 @@ type providerClientOptions struct {
 	anthropicOptions []AnthropicOption
 	openaiOptions    []OpenAIOption
 	geminiOptions    []GeminiOption
-	bedrockOptions   []BedrockOption
 	copilotOptions   []CopilotOption
 }
 

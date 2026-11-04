@@ -124,6 +124,16 @@ func absolutePath(path string) string {
 	}
 	return filepath.Clean(path)
 }
+
+// expectedPath is where path lands when no link below the project redirects it:
+// a project opened through a link is not itself a redirected write.
+func expectedPath(path, root string) string {
+	full := absolutePath(path)
+	if relative, err := filepath.Rel(config.WorkingDirectory(), full); err == nil && filepath.IsLocal(relative) {
+		return filepath.Join(root, relative)
+	}
+	return full
+}
 func canonicalPath(path string) (string, error) {
 	path = absolutePath(path)
 	var suffix []string
@@ -164,7 +174,7 @@ func authorizeFile(ctx context.Context, path, action string) (string, error) {
 		return "", err
 	}
 	sensitive := sensitiveAccessPath(path, resolved)
-	symlinkWrite := action == "write" && resolved != absolutePath(path)
+	symlinkWrite := action == "write" && resolved != expectedPath(path, root)
 	if inside(root, resolved) && !sensitive && !symlinkWrite {
 		return resolved, nil
 	}

@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -201,10 +204,12 @@ func TestSearchLiteralOptionsColonPathsAndLimits(t *testing.T) {
 }
 func regexpQuote(value string) string { return escapeRegexPattern(value) }
 func TestNetworkPolicyAndBoundedBodies(t *testing.T) {
-	for _, address := range []string{"127.0.0.1", "::1", "10.0.0.1", "169.254.169.254", "::", "224.0.0.1"} {
+	for _, address := range []string{"127.0.0.1", "::1", "10.0.0.1", "169.254.169.254", "::", "224.0.0.1", "100.64.0.1", "100.100.100.200"} {
 		require.False(t, networkAddressAllowed(net.ParseIP(address), false), address)
 	}
 	require.True(t, networkAddressAllowed(net.ParseIP("127.0.0.1"), true))
+	require.True(t, networkAddressAllowed(net.ParseIP("100.100.100.200"), true), "Tailscale needs the private switch")
+	require.True(t, networkAddressAllowed(net.ParseIP("100.128.0.1"), false))
 	require.False(t, networkAddressAllowed(net.ParseIP("169.254.169.254"), true))
 	require.True(t, networkAddressAllowed(net.ParseIP("8.8.8.8"), false))
 	_, err := boundedBody(strings.NewReader("1234"), 3)
@@ -216,6 +221,41 @@ func TestNetworkPolicyAndBoundedBodies(t *testing.T) {
 	require.ErrorIs(t, err, permission.ErrorPermissionDenied)
 	require.Equal(t, "network:https://example.test", p.requests[0].Path)
 	require.NotContains(t, p.requests[0].Description, "token")
+}
+func TestProxyCarriesPublicHostsButNeverPrivateOnes(t *testing.T) {
+	var reached atomic.Int32
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached.Add(1)
+		_, _ = io.WriteString(w, r.Host)
+	}))
+	defer proxy.Close()
+	address, err := url.Parse(proxy.URL)
+	require.NoError(t, err)
+	original := environmentProxy
+	environmentProxy = http.ProxyURL(address)
+	t.Cleanup(func() { environmentProxy = original })
+	allow := &denyingPermissions{allow: func(permission.CreatePermissionRequest) bool { return true }}
+	fetch := func(target string) (*http.Response, error) {
+		request, err := http.NewRequest("GET", target, nil)
+		require.NoError(t, err)
+		return networkDo(toolContext(), allow, "fetch", request, 5*time.Second)
+	}
+	for _, target := range []string{"http://169.254.169.254/latest/meta-data", "http://127.0.0.1:8080/admin", "http://10.0.0.1/"} {
+		_, err := fetch(target)
+		require.ErrorContains(t, err, "blocked by policy", target)
+	}
+	require.Zero(t, reached.Load())
+	// The proxy itself sits on loopback, like corporate proxies on private ranges.
+	response, err := fetch("http://8.8.8.8/")
+	require.NoError(t, err)
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	require.NoError(t, err)
+	require.Equal(t, "8.8.8.8", string(body))
+	// A name public DNS cannot answer is left for the proxy to resolve.
+	response, err = fetch("http://intranet.invalid/")
+	require.NoError(t, err)
+	response.Body.Close()
 }
 func TestRedirectNeedsDestinationPermission(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -365,6 +405,51 @@ func TestWriteSymlinkRequiresDestinationApproval(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "before", string(raw))
 	require.Equal(t, "write_symlink", p.requests[len(p.requests)-1].Action)
+}
+func TestProjectOpenedThroughLinkWritesWithoutSymlinkApproval(t *testing.T) {
+	real := workspaceTestDir(t)
+	link := filepath.Join(t.TempDir(), "project")
+	require.NoError(t, os.Symlink(real, link))
+	original := config.Get().WorkingDir
+	config.Get().WorkingDir = link
+	t.Cleanup(func() { config.Get().WorkingDir = original })
+	require.NoError(t, os.WriteFile(filepath.Join(real, "target.txt"), nil, 0600))
+	require.NoError(t, os.Symlink(filepath.Join(real, "target.txt"), filepath.Join(real, "inner.txt")))
+	p := &denyingPermissions{}
+	ctx := context.WithValue(toolContext(), accessKey{}, &accessPolicy{permissions: p, tool: "write", approved: map[string]bool{}})
+
+	resolved, err := authorizeFile(ctx, filepath.Join(link, "new", "a.txt"), "write")
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(real, "new", "a.txt"), resolved)
+	require.Empty(t, p.requests, "the project's own link is not a redirected write")
+
+	_, err = authorizeFile(ctx, filepath.Join(link, "inner.txt"), "write")
+	require.ErrorIs(t, err, permission.ErrorPermissionDenied)
+	require.Equal(t, "write_symlink", p.requests[0].Action, "a link inside the project still asks")
+}
+func TestInstallKeepsTheFileInPlaceAndRollbackRestoresIt(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("old"), 0600))
+	root, err := os.OpenRoot(dir)
+	require.NoError(t, err)
+	stage := &stagedFile{root: root, name: "a.txt", hadOriginal: true}
+	before, after := "old", "new"
+	require.NoError(t, stage.write(after, 0600))
+	require.NoError(t, stage.install(context.Background(), fileChange{old: &before, next: &after}))
+	raw, err := os.ReadFile(filepath.Join(dir, "a.txt"))
+	require.NoError(t, err)
+	require.Equal(t, after, string(raw))
+	raw, err = os.ReadFile(filepath.Join(dir, stage.backup))
+	require.NoError(t, err)
+	require.Equal(t, before, string(raw))
+
+	require.ErrorContains(t, finishStagedFiles([]*stagedFile{stage}, errors.New("later file failed")), "later file failed")
+	raw, err = os.ReadFile(filepath.Join(dir, "a.txt"))
+	require.NoError(t, err)
+	require.Equal(t, before, string(raw))
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "no stage or backup left behind")
 }
 func TestBackgroundStartPermissionAndExpiry(t *testing.T) {
 	testUnisolated(t)

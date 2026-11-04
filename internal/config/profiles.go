@@ -186,7 +186,7 @@ func SaveProviderProfile(id string, profile ProviderProfile) error {
 	return persistProviderProfile(id, raw, resolved)
 }
 func persistProviderProfile(id string, raw, resolved ProviderProfile) error {
-	err := updateProfileFile(id, func(file *Config) {
+	err := updateCfgFile(func(file *Config) {
 		if file.ProviderProfiles == nil {
 			file.ProviderProfiles = map[string]ProviderProfile{}
 		}
@@ -202,23 +202,6 @@ func persistProviderProfile(id string, raw, resolved ProviderProfile) error {
 	cfg.ProviderProfiles[id] = resolved
 	credentialMu.Unlock()
 	return nil
-}
-func updateProfileFile(id string, update func(*Config)) error {
-	path := ProjectConfigPath(cfg.WorkingDir)
-	data, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("cannot read project configuration: %w", err)
-	}
-	if err == nil {
-		var file Config
-		if json.Unmarshal(data, &file) != nil {
-			return fmt.Errorf("invalid project configuration JSON")
-		}
-		if _, exists := file.ProviderProfiles[id]; exists {
-			return patchConfigFile(path, data, update)
-		}
-	}
-	return updateCfgFile(update)
 }
 func SavePreferences(preferences Preferences, runtime RuntimeConfig) error {
 	if cfg == nil {
@@ -272,24 +255,7 @@ func persistProvider(backend models.ModelProvider, raw, resolved Provider) error
 		}
 		file.Providers[backend] = raw
 	}
-	path := ProjectConfigPath(cfg.WorkingDir)
-	data, readErr := os.ReadFile(path)
-	if readErr != nil && !os.IsNotExist(readErr) {
-		return fmt.Errorf("cannot read project configuration: %w", readErr)
-	}
-	project := false
-	if readErr == nil {
-		var file Config
-		if json.Unmarshal(data, &file) != nil {
-			return fmt.Errorf("invalid project configuration JSON")
-		}
-		_, project = file.Providers[backend]
-	}
-	if project {
-		err = patchConfigFile(path, data, update)
-	} else {
-		err = updateCfgFile(update)
-	}
+	err = updateCfgFile(update)
 	if err != nil {
 		return err
 	}
@@ -305,22 +271,18 @@ func persistProvider(backend models.ModelProvider, raw, resolved Provider) error
 // StoredProviderKey reads only literal configuration, never resolved environment
 // values. Used to preserve an existing private-file key while editing metadata.
 func StoredProviderKey(id string, legacy bool) string {
-	paths := []string{ProjectConfigPath(cfg.WorkingDir)}
 	if path := configuredFilePath(); path != "" {
-		paths = append(paths, path)
-	}
-	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return ""
 		}
 		var file Config
 		if json.Unmarshal(data, &file) != nil {
-			continue
+			return ""
 		}
 		provider, exists := storedProvider(file, id, legacy)
 		if !exists {
-			continue
+			return ""
 		}
 		if provider.APIKeyEnv != "" || provider.APIKeyRef != "" {
 			return ""

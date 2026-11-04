@@ -292,12 +292,12 @@ func SensitivePath(path string) bool {
 	}
 	for part := range strings.SplitSeq(filepath.ToSlash(path), "/") {
 		lower := strings.ToLower(part)
-		if lower == ".git" || lower == ".ssh" || lower == ".aws" || lower == ".gnupg" || lower == ".azure" || lower == ".kube" || lower == ".opcode" || lower == ".config" && !projectConfig(path) {
+		if lower == ".git" || lower == ".ssh" || lower == ".aws" || lower == ".gnupg" || lower == ".azure" || lower == ".kube" || lower == ".docker" || lower == ".opcode" || lower == ".config" && !projectConfig(path) {
 			return true
 		}
 	}
 	base := strings.ToLower(filepath.Base(path))
-	if base == ".env" || strings.HasPrefix(base, ".env.") || base == "integration.json" || base == "integration.local.json" || base == ".opcode-integration.json" || base == ".opcode.json" || base == "opcode.json" || base == "credentials" || base == "credentials.json" || base == "application_default_credentials.json" || base == "id_rsa" || base == "id_ed25519" || base == ".npmrc" || base == ".pypirc" || strings.HasSuffix(base, ".pem") || strings.HasSuffix(base, ".key") {
+	if base == ".env" || strings.HasPrefix(base, ".env.") || base == "integration.json" || base == "integration.local.json" || base == ".opcode-integration.json" || base == ".opcode.json" || base == "opcode.json" || base == "credentials" || base == "credentials.json" || base == "application_default_credentials.json" || base == "id_rsa" || base == "id_ed25519" || base == "id_ecdsa" || base == "id_dsa" || base == ".netrc" || base == ".git-credentials" || base == ".pgpass" || base == ".npmrc" || base == ".pypirc" || strings.HasSuffix(base, ".pem") || strings.HasSuffix(base, ".key") || strings.HasSuffix(base, ".p12") || strings.HasSuffix(base, ".pfx") {
 		return true
 	}
 	if cfg := config.Get(); cfg != nil {

@@ -170,11 +170,9 @@ As etapas, em ordem:
    lá, além de alegações de erro de compilação.
 3. **Revisão:** cada achado de severidade alta volta ao modelo sozinho, com
    thinking, com o código em volta, quem chama aquela função e o que ela usa, para
-   ser confirmado ou recusado. Média e baixa não passam por isso.
-4. **Prova:** no modo Executar, até 10 alegações de crash em Go, uma por arquivo,
-   ganham um teste escrito pelo modelo, rodado no sandbox numa cópia do projeto.
-   Só um panic dentro do arquivo acusado marca o achado como provado: uma asserção
-   que falha mostra apenas o que o modelo acreditava.
+   ser confirmado ou recusado. Média e baixa não passam por isso. O que resiste
+   aparece como média, marcado "revisado": severidade alta fica para o que um
+   analisador encontrou.
 
 Para revisar com um modelo mais forte que o da varredura, configure
 `agents.review`.

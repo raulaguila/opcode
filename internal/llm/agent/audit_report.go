@@ -37,7 +37,7 @@ func (r *auditRun) finish(ctx context.Context, events chan AgentEvent) {
 	a.activeRequests.Delete(session + "-summarize")
 	r.report.drop(auditDismissed(filepath.Join(auditDirectory(), "ignored.txt")))
 	r.report.rank()
-	if err := r.cache.save(); err != nil {
+	if err := r.cache.save(ctx.Err() == nil && len(r.report.missed) == 0); err != nil {
 		logging.Warn("audit cache not saved", "error", err)
 	}
 	path := filepath.Join(auditDirectory(), "report.md")
@@ -96,7 +96,7 @@ func (r *auditReport) drop(ignored map[string]bool) {
 	})
 }
 
-// rank sorts by severity, proof first, and leaves one finding per line,
+// rank sorts by severity and leaves one finding per line,
 // an analyzer's when there is one.
 func (r *auditReport) rank() {
 	slices.SortStableFunc(r.findings, func(a, b auditFinding) int {
@@ -130,16 +130,16 @@ func (r *auditReport) groups(severity string) []auditGroup {
 		}
 		groups[index].findings = append(groups[index].findings, finding)
 	}
-	slices.SortStableFunc(groups, func(a, b auditGroup) int { return cmp.Compare(len(b.findings), len(a.findings)) })
+	// What review kept comes first: the conversation cuts the tail of the list.
+	slices.SortStableFunc(groups, func(a, b auditGroup) int {
+		return cmp.Or(cmp.Compare(b.findings[0].State, a.findings[0].State), cmp.Compare(len(b.findings), len(a.findings)))
+	})
 	return groups
 }
 
 func (f auditFinding) mark() string {
 	mark := ""
-	switch f.State {
-	case auditProved:
-		mark = config.Text("✓ provado por teste · ", "✓ proved by a test · ")
-	case auditReviewed:
+	if f.State == auditReviewed {
 		mark = config.Text("revisado · ", "reviewed · ")
 	}
 	if f.Source != "" {
@@ -165,7 +165,7 @@ func (r *auditReport) render(brief bool, file string) string {
 		fmt.Fprintf(&text, config.Text("%d achados dispensados.\n", "%d findings dismissed.\n"), r.ignored)
 	}
 	if r.noSandbox {
-		text.WriteString(config.Text("Sandbox indisponível: verificações, analisadores e provas não rodaram; /sandbox mostra a causa.\n", "Sandbox unavailable: checks, analyzers and proofs did not run; /sandbox shows the cause.\n"))
+		text.WriteString(config.Text("Sandbox indisponível: verificações, e analisadores não rodaram; /sandbox mostra a causa.\n", "Sandbox unavailable: checks, analyzers and proofs did not run; /sandbox shows the cause.\n"))
 	}
 	if len(r.tools) > 0 {
 		fmt.Fprintf(&text, config.Text("Analisadores: %s.\n", "Analyzers: %s.\n"), strings.Join(r.tools, ", "))

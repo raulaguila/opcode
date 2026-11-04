@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"net/url"
@@ -83,28 +82,7 @@ func SaveIntegration(candidate Integration) error {
 		candidate.MCP.EnvVars = maps.Clone(candidate.MCP.EnvVars)
 	}
 	update := func(file *Config) { assignIntegration(file, candidate) }
-	path := ProjectConfigPath(cfg.WorkingDir)
-	data, err := os.ReadFile(path)
-	project := false
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("cannot read project configuration: %w", err)
-	}
-	if err == nil {
-		var local Config
-		if json.Unmarshal(data, &local) != nil {
-			return fmt.Errorf("invalid project configuration JSON")
-		}
-		if candidate.Kind == "mcp" {
-			_, project = local.MCPServers[candidate.Name]
-		} else {
-			_, project = local.LSP[candidate.Name]
-		}
-	}
-	if project {
-		err = patchConfigFile(path, data, update)
-	} else {
-		err = updateCfgFile(update)
-	}
+	err := updateCfgFile(update)
 	if err != nil {
 		return err
 	}

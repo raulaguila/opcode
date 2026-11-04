@@ -189,9 +189,13 @@ func (s *stagedFile) install(ctx context.Context, change fileChange) error {
 	}
 	if s.hadOriginal {
 		s.backup = filepath.Join(filepath.Dir(s.name), randomFileName(".opcode-backup-"))
-		if err := s.root.Rename(s.name, s.backup); err != nil {
-			s.backup = ""
-			return err
+		// A link leaves the file in place, so a crash here cannot lose it. Not
+		// every filesystem has links; those move it aside and accept the gap.
+		if change.next == nil || s.root.Link(s.name, s.backup) != nil {
+			if err := s.root.Rename(s.name, s.backup); err != nil {
+				s.backup = ""
+				return err
+			}
 		}
 	}
 	if change.next != nil {
@@ -223,7 +227,8 @@ func finishStagedFiles(stages []*stagedFile, failure error) error {
 func rollbackFileStages(stages []*stagedFile, failure error) error {
 	for _, s := range slices.Backward(stages) {
 
-		if s.installed {
+		// A backup replaces the new file in one step; removing first opens a gap.
+		if s.installed && s.backup == "" {
 			if err := s.root.Remove(s.name); err != nil && !os.IsNotExist(err) {
 				failure = errors.Join(failure, fmt.Errorf("rollback remove failed: %w", err))
 			}

@@ -52,14 +52,10 @@ type auditFinding struct {
 	Code     string `json:"code"`
 	Problem  string `json:"problem"`
 	Source   string `json:"source,omitempty"` // the analyzer; empty for the model
-	State    string `json:"state,omitempty"`  // what review or a test said
+	State    string `json:"state,omitempty"`  // what review said
 }
 
-// Finding states after the model's first word.
-const (
-	auditReviewed = "reviewed"
-	auditProved   = "proved"
-)
+const auditReviewed = "reviewed"
 
 // A pass looks for one kind of defect. Asked for everything at once, a small
 // model reports what it notices first and misses plain arithmetic.
@@ -97,7 +93,6 @@ type auditRun struct {
 	cache   *auditCache
 	source  map[string][]string
 	report  auditReport
-	prover  provider.Provider
 }
 
 var (
@@ -169,7 +164,6 @@ func (a *agent) Audit(ctx context.Context, session string) (<-chan AgentEvent, e
 			}
 		}
 		run.review(ctx)
-		run.prove(ctx)
 		run.finish(ctx, events)
 	}()
 	return events, nil
@@ -201,24 +195,15 @@ func (r *auditRun) connect(connection provider.Provider) error {
 		}
 		r.passes = append(r.passes, pass)
 	}
-	r.prover = r.checker
 	if controller, ok := r.checker.(provider.SystemPromptController); ok {
-		var err error
-		if r.prover, err = auditThinker(controller, auditProofSystem, auditProofTokens); err != nil {
+		scoped, err := controller.WithSystemPrompt(auditReviewSystem)
+		if err != nil {
 			return err
 		}
-		r.checker, err = auditThinker(controller, auditReviewSystem, auditReviewTokens)
+		r.checker, err = scoped.(provider.SystemPromptController).WithMaxTokens(auditReviewTokens)
 		return err
 	}
 	return nil
-}
-
-func auditThinker(controller provider.SystemPromptController, system string, tokens int64) (provider.Provider, error) {
-	scoped, err := controller.WithSystemPrompt(system)
-	if err != nil {
-		return nil, err
-	}
-	return scoped.(provider.SystemPromptController).WithMaxTokens(tokens)
 }
 
 func auditSource(root string, parts []*auditPart) map[string][]string {

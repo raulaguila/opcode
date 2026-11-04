@@ -518,6 +518,14 @@ func mergeLocalConfig(workingDir string) error {
 		return fmt.Errorf("failed to read project configuration: %w", err)
 	}
 	settings := local.AllSettings()
+	// A cloned repository must not reach the user's keys, start processes or
+	// move stored data, so these keys are honored only in the global file.
+	for _, key := range []string{"providers", "providerprofiles", "data", "lsp", "mcpservers", "shell"} {
+		if _, ignored := settings[key]; ignored {
+			logging.Warn("project configuration ignored; set it in the global file", "key", key)
+			delete(settings, key)
+		}
+	}
 	if local.InConfig("models") {
 		settings["models"] = local.GetStringMap("models")
 	}

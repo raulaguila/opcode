@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -270,10 +272,45 @@ func TestAuditReportJoinsWhatRepeats(t *testing.T) {
 	require.Contains(t, report.render(false, ""), "a.go:8")
 }
 
-func TestAuditProofOutcomeComesFromTheTestRun(t *testing.T) {
-	require.Equal(t, auditProved, auditProofState("panic: runtime error: index out of range\n\t/repo/cart/cart.go:12", "cart.go"))
-	require.Equal(t, auditReviewed, auditProofState("panic: runtime error: nil map\n\t/repo/cart/zz_audit_proof_test.go:9", "cart.go"), "a crash in the test itself proves nothing")
-	require.Equal(t, auditReviewed, auditProofState("--- FAIL: TestAuditProof (0.00s)\nFAIL\tshop/cart", "cart.go"), "the model wrote that assertion")
-	require.Equal(t, auditReviewed, auditProofState("ok  \tshop/cart\t0.002s", "cart.go"), "a model test can pass over a real bug")
-	require.Equal(t, auditReviewed, auditProofState("FAIL\tshop/cart [build failed]", "cart.go"), "a test that does not build proves nothing")
+func TestAuditCacheKeepsOldRepliesUntilARunCompletes(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "audit", "cache.json")
+	stored := func() map[string]string {
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		var replies map[string]string
+		require.NoError(t, json.Unmarshal(data, &replies))
+		return replies
+	}
+	cache := &auditCache{path: path, replies: map[string]string{"old": "1", "changed": "2"}, used: map[string]string{"changed": "3"}}
+	require.NoError(t, cache.save(false))
+	require.Equal(t, map[string]string{"old": "1", "changed": "3"}, stored(), "a cancelled run keeps what it never reached")
+	require.NoError(t, cache.save(true))
+	require.Equal(t, map[string]string{"changed": "3"}, stored(), "a complete run forgets what nobody asked")
+}
+
+func TestReviewedModelFindingsAreNotHigh(t *testing.T) {
+	run := &auditRun{report: auditReport{started: time.Now(), findings: []auditFinding{
+		{Severity: "high", Path: "a.go", Line: 1, Problem: "nil dereference", Code: "a.b"},
+		{Severity: "high", Path: "b.go", Line: 1, Problem: "SA5000: nil map", Code: "m[k] = v", Source: "staticcheck"},
+	}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	run.review(ctx)
+	byPath := map[string]auditFinding{}
+	for _, finding := range run.report.findings {
+		byPath[finding.Path] = finding
+	}
+	require.Equal(t, "medium", byPath["a.go"].Severity)
+	require.Equal(t, auditReviewed, byPath["a.go"].State)
+	require.Equal(t, "high", byPath["b.go"].Severity)
+}
+
+func TestReviewedFindingsSurviveTheConversationCut(t *testing.T) {
+	report := auditReport{started: time.Now()}
+	for i := range auditChatGroups + 3 {
+		problem := fmt.Sprintf("problem %c", 'a'+rune(i))
+		report.findings = append(report.findings, auditFinding{Severity: "medium", Path: "a.go", Line: i*2 + 1, Code: "x", Problem: problem}, auditFinding{Severity: "medium", Path: "a.go", Line: i*2 + 2, Code: "x", Problem: problem})
+	}
+	report.findings = append(report.findings, auditFinding{Severity: "medium", Path: "z.go", Line: 1, Code: "y", Problem: "the reviewed one", State: auditReviewed})
+	require.Contains(t, report.render(true, ""), "the reviewed one")
 }

@@ -124,8 +124,7 @@ func TestNativeVaultFailuresPreservePreviousMetadataAndRollbackFreshEntry(t *tes
 				require.NoError(t, err)
 				switch failure {
 				case "persist":
-					require.NoError(t, os.MkdirAll(filepath.Dir(ProjectConfigPath(cfg.WorkingDir)), 0700))
-					require.NoError(t, os.WriteFile(ProjectConfigPath(cfg.WorkingDir), []byte(`{invalid`), 0600))
+					viper.SetConfigFile(filepath.Join(t.TempDir(), "missing", "settings.json"))
 				case "config missing":
 					cfg = nil
 				case "validation":

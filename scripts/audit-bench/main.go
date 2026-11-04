@@ -122,7 +122,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(work, ".opcode.json"), settings, 0o600); err != nil {
+	// Provider settings count only in the global file, so the run gets its own home.
+	home, err := os.MkdirTemp("", "audit-bench-home-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(home)
+	if err := os.Mkdir(filepath.Join(home, ".opcode"), 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(home, ".opcode", "config.json"), settings, 0o600); err != nil {
 		return err
 	}
 	if output, err := exec.Command("git", "init", "-q", work).CombinedOutput(); err != nil {
@@ -135,6 +144,7 @@ func run() error {
 	started := time.Now()
 	command := exec.Command(absolute, "-p", "/auditoria", "-q", "-f", "json", "--approval", "sandbox", "-c", ".")
 	command.Dir = work
+	command.Env = append(os.Environ(), "HOME="+home, "XDG_CONFIG_HOME="+filepath.Join(home, ".config"))
 	output, err := command.Output()
 	if _, partial := err.(*exec.ExitError); err != nil && !partial {
 		return err

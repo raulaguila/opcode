@@ -28,13 +28,10 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/creack/pty v1.1.24
-	github.com/disintegration/imaging v1.6.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-logfmt/logfmt v0.6.1
 	github.com/google/uuid v1.6.0
 	github.com/hinshun/vt10x v0.0.0-20220301184237-5011da428d02
-	github.com/lithammer/fuzzysearch v1.1.8
-	github.com/lucasb-eyer/go-colorful v1.4.1
 	github.com/mark3labs/mcp-go v1.5.0
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6
 	github.com/muesli/reflow v0.3.0
@@ -45,7 +42,6 @@ require (
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/rivo/uniseg v0.4.7
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
-	github.com/sergi/go-diff v1.4.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
@@ -55,7 +51,6 @@ require (
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/image v0.47.0
 	golang.org/x/sys v0.49.0
-	golang.org/x/text v0.43.0
 )
 
 require (
@@ -108,6 +103,7 @@ require (
 	github.com/leaanthony/gosod v1.0.4 // indirect
 	github.com/leaanthony/slicer v1.6.0 // indirect
 	github.com/leaanthony/u v1.1.1 // indirect
+	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.31 // indirect
@@ -138,4 +134,5 @@ require (
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )

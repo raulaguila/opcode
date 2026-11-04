@@ -80,6 +80,7 @@ type auditReport struct {
 	cached, ignored         int
 	checks                  string
 	tools                   []string
+	noSandbox               bool
 	findings, refused       []auditFinding
 	read, missed            []string
 	started                 time.Time
@@ -153,6 +154,7 @@ func (a *agent) Audit(ctx context.Context, session string) (<-chan AgentEvent, e
 		defer close(events)
 		defer func() { a.activeRequests.Delete(session + "-summarize"); cancel() }()
 		run.progress(ctx, config.Text("Executando verificações e analisadores…", "Running checks and analyzers…"))
+		run.report.noSandbox = run.executeMode(ctx) && a.commandsRefused(session)
 		run.report.checks = run.checks(ctx)
 		run.analyze(ctx)
 		total := len(parts) * len(run.passes)

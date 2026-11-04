@@ -16,6 +16,7 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
@@ -136,7 +137,9 @@ func New(a *app.App, initial ...session.Session) *Model {
 	return m
 }
 
-func (m *Model) Init() tea.Cmd { return textarea.Blink }
+func (m *Model) Init() tea.Cmd {
+	return tea.Batch(textarea.Blink, func() tea.Msg { return sandboxMsg{err: shell.SandboxProblem()} })
+}
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if cmd, ok := m.settingsMessage(msg); ok {
@@ -235,6 +238,9 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 // backgroundResult takes in what the screen's own commands bring back.
 func (m *Model) backgroundResult(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
+	case sandboxMsg:
+		m.sandboxResult(msg)
+		return nil, true
 	case chatCopyMsg:
 		return m.copiedChat(msg), true
 	case previewMsg:

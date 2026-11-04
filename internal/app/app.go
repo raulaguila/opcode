@@ -113,6 +113,7 @@ func (app *App) ConfigureCoderAgent() error {
 	candidate, err := agent.NewAgent(config.AgentCoder, app.Sessions, app.Messages,
 		agent.CoderAgentTools(app.Permissions, app.Sessions, app.Messages, app.History, app.LSPClients, app.Processes),
 		agent.WithWorkflow(app.Workflows, app.Questions),
+		agent.WithPermissions(app.Permissions),
 		agent.WithModeChange(func(id string) { app.Processes.CancelSession(id); app.Permissions.RevokeSession(id) }))
 	if err != nil {
 		return err

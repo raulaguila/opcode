@@ -66,6 +66,7 @@ func (m *Model) commands() []command {
 		{textFor("Conexões", "Connections"), textFor("provedores e chaves", "providers and keys"), "/connections", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionConnections) }},
 		{textFor("Preferências", "Preferences"), textFor("idioma, notificações, modo inicial", "language, notifications, initial mode"), "/preferences", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionInterface) }},
 		{textFor("Atalhos", "Shortcuts"), textFor("teclas dos comandos", "command keys"), "/keys", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionShortcuts) }},
+		{textFor("Sandbox", "Sandbox"), textFor("testa de novo, mostra causa e correção", "tests again, shows the cause and the fix"), "/sandbox", settings, (*Model).checkSandbox},
 		{textFor("Aprovação", "Approval"), textFor("o que o agente faz sem perguntar", "what the agent does without asking"), "/approval", settings, (*Model).openApproval},
 		{textFor("Sair", "Quit"), textFor("fechar o opcode", "close opcode"), "Ctrl+C", conversation, func(m *Model) tea.Cmd { m.dialog = confirmQuit{}; return nil }},
 	}

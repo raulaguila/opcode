@@ -16,6 +16,7 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/workflow"
@@ -78,6 +79,7 @@ type agent struct {
 	runMu             sync.Mutex
 	runs              map[string]*generationRun
 	closed            bool
+	permissions       permission.Service
 	workflow          *workflow.Store
 	questions         *interaction.Questions
 	onModeChange      func(string)

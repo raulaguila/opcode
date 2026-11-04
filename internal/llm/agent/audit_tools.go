@@ -58,6 +58,10 @@ func (r *auditRun) bash(ctx context.Context, command string, timeout int) (strin
 }
 
 func (r *auditRun) canExecute(ctx context.Context) bool {
+	return r.executeMode(ctx) && !r.agent.commandsRefused(r.session)
+}
+
+func (r *auditRun) executeMode(ctx context.Context) bool {
 	if r.agent.workflow == nil {
 		return false
 	}
@@ -141,6 +145,9 @@ func analyzerSeverity(name, problem string) string {
 func (r *auditRun) checks(ctx context.Context) string {
 	if r.agent.workflow == nil {
 		return ""
+	}
+	if r.report.noSandbox {
+		return config.Text("Não executadas: o sandbox não inicia nesta máquina.", "Not run: the sandbox cannot start on this machine.")
 	}
 	if !r.canExecute(ctx) {
 		return config.Text("Não executadas: só rodam no modo Executar.", "Not run: they only run in Execute mode.")

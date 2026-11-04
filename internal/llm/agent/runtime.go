@@ -15,10 +15,16 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
 
 type Option func(*agent)
+
+// WithPermissions tells the agent which sessions run on full access.
+func WithPermissions(service permission.Service) Option {
+	return func(a *agent) { a.permissions = service }
+}
 
 func WithWorkflow(store *workflow.Store, questions *interaction.Questions) Option {
 	return func(a *agent) { a.workflow = store; a.questions = questions }
@@ -290,8 +296,11 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 	raw, _ := json.Marshal(taskProjection(task))
 	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
 	if run.selected["bash"] || run.selected["run_checks"] || run.selected["discover_checks"] {
-		constraints, _ := json.Marshal(executionConstraints(run))
+		constraints, _ := json.Marshal(a.executionConstraints(run, session))
 		header = "Execution constraints (policy, not approval or a readiness probe): " + string(constraints) + "\n" + header
+	}
+	if a.commandsRefused(session) {
+		header = sandboxBroken + header
 	}
 	copyHistory := projectReusedSources(history)
 	for i := len(copyHistory) - 1; i >= 0; i-- {

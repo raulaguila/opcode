@@ -4,7 +4,9 @@
 
 - Sandbox: numa máquina que recusa o Bubblewrap, a busca e a listagem continuam
   dentro do processo, com as mesmas regras de caminho, e cada comando recusado
-  explica a causa e a correção, também em `opcode doctor`.
+  explica a causa e a correção, também em `opcode doctor`. O teste roda ao abrir:
+  a interface avisa, o modelo planeja sem comandos e diz que nada foi executado,
+  a auditoria informa o que não rodou e `/sandbox` testa de novo sem reiniciar.
 - `/auditoria` também usa analisadores instalados, três passadas por tipo de
   defeito, chamadores e definições na revisão, testes que provam achados em Go,
   modelo de revisão próprio (`agents.review`), cache por conteúdo, relatório

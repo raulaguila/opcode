@@ -137,14 +137,21 @@ func SandboxActive() bool {
 	return cfg == nil || cfg.Security.Sandbox != "none" || AlreadySandboxed()
 }
 
-// SearchUsesSandbox says a search through rg can start here. Without it, search
-// runs in this process, under the same path policy; commands stay refused.
-func SearchUsesSandbox() bool {
+// SandboxProblem says why a command cannot start here, nil when one can. With
+// a problem search runs in this process under the same path policy, and
+// commands stay refused.
+func SandboxProblem() error {
 	cfg := config.Get()
 	if cfg != nil && cfg.Security.Sandbox == "none" || AlreadySandboxed() {
-		return true
+		return nil
 	}
-	return sandboxStartError() == nil
+	return sandboxStartError()
+}
+
+// RecheckSandbox forgets the last result, for a host fixed while opcode runs.
+func RecheckSandbox() error {
+	sandboxProbes.Clear()
+	return SandboxProblem()
 }
 
 func sandboxStartError() error {

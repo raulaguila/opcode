@@ -63,8 +63,8 @@ func TestTestRequestRespectsModesAndVerifyContract(t *testing.T) {
 				run := &generationRun{mode: mode, contract: contract, selected: map[string]bool{}, available: a.tools}
 				prefetchCommandTools(run, "Run the tests")
 				canCommand := mode == workflow.Execute && contract == nil
-				require.Equal(t, canCommand, executionConstraints(run)["bash_allowed"])
-				require.Equal(t, mode == workflow.Execute, executionConstraints(run)["run_checks_allowed"])
+				require.Equal(t, canCommand, (&agent{}).executionConstraints(run, "s")["bash_allowed"])
+				require.Equal(t, mode == workflow.Execute, (&agent{}).executionConstraints(run, "s")["run_checks_allowed"])
 				names := toolNames(generationCall{exposed: a.exposedTools(run)})
 				require.Equal(t, canCommand, slices.Contains(names, "bash"))
 			}
@@ -110,7 +110,7 @@ func TestRequestHistoryIncludesOnlyExecutionPolicyMetadata(t *testing.T) {
 	config.Get().Security.Sandbox = "bubblewrap"
 	config.Get().Security.AllowNetwork = true
 	run.contract = &workflow.Contract{Kind: "verify"}
-	raw, err := json.Marshal(executionConstraints(run))
+	raw, err := json.Marshal((&agent{}).executionConstraints(run, "s"))
 	require.NoError(t, err)
 	require.Contains(t, string(raw), `"bash_allowed":false`)
 	require.Contains(t, string(raw), `"sandbox_network_enabled":true`)

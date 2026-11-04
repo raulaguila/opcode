@@ -164,6 +164,9 @@ func (r *auditReport) render(brief bool, file string) string {
 	if r.ignored > 0 {
 		fmt.Fprintf(&text, config.Text("%d achados dispensados.\n", "%d findings dismissed.\n"), r.ignored)
 	}
+	if r.noSandbox {
+		text.WriteString(config.Text("Sandbox indisponível: verificações, analisadores e provas não rodaram; /sandbox mostra a causa.\n", "Sandbox unavailable: checks, analyzers and proofs did not run; /sandbox shows the cause.\n"))
+	}
 	if len(r.tools) > 0 {
 		fmt.Fprintf(&text, config.Text("Analisadores: %s.\n", "Analyzers: %s.\n"), strings.Join(r.tools, ", "))
 	}

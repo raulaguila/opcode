@@ -158,7 +158,7 @@ func (g *grepTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 
 func ripgrepUsable() bool {
 	_, err := exec.LookPath("rg")
-	return err == nil && shell.SearchUsesSandbox()
+	return err == nil && shell.SandboxProblem() == nil
 }
 
 func searchFiles(ctx context.Context, pattern, rootPath, include string, limit int) ([]grepMatch, bool, error) {

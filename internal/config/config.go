@@ -114,6 +114,7 @@ type ShellConfig struct {
 type SecurityConfig struct {
 	Sandbox             string   `json:"sandbox,omitempty"`
 	AllowNetwork        bool     `json:"allowNetwork,omitempty"`
+	AllowedDomains      []string `json:"allowedDomains,omitempty"`
 	AllowPrivateNetwork bool     `json:"allowPrivateNetwork,omitempty"`
 	EnvAllow            []string `json:"envAllow,omitempty"`
 	ReadOnlyPaths       []string `json:"readOnlyPaths,omitempty"`

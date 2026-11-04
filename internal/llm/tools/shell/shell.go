@@ -179,6 +179,9 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 			cache = sandboxCachePath
 		}
 		cmd.Env = commandCacheEnvironment(cmd.Env, cache)
+		if downloads := hostModuleDownloads(cfg); sandbox != "none" && downloads != "" {
+			cmd.Env = append(cmd.Env, "GOPROXY="+moduleProxy(downloads, NetworkEnabled(ctx) || len(egressDomains(cfg)) > 0))
+		}
 	}
 	configureProcess(cmd)
 	return cmd, nil
@@ -251,6 +254,9 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 	wrapped, err = appendCommandCache(wrapped, cache, cfg)
 	if err != nil {
 		return nil, err
+	}
+	if cache != "" && !NetworkEnabled(ctx) {
+		wrapped, path, args = appendEgress(wrapped, path, args, cfg)
 	}
 	wrapped = append(wrapped, "--", path)
 	wrapped = append(wrapped, args...)

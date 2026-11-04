@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -63,7 +64,51 @@ func appendCommandCache(args []string, directory string, cfg *config.Config) ([]
 		return nil, fmt.Errorf("cannot inspect command cache credential masks: %w", err)
 	}
 	args = append(args, "--bind", directory, sandboxCachePath)
-	return append(args, masks...), nil
+	args = append(args, masks...)
+	if downloads := hostModuleDownloads(cfg); downloads != "" {
+		args = append(args, "--ro-bind", downloads, downloads)
+	}
+	return args, nil
+}
+
+// hostModuleDownloads finds the Go modules this machine already downloaded, so
+// a sandboxed build needs no network, and no proxy, for what it has. An explicit
+// envAllow GOPROXY wins, and denyPaths can hide the directory.
+// shortcut: reads GOMODCACHE and GOPATH from the environment, not `go env -w`
+// values, because running go for every command costs more; use envAllow GOPROXY.
+func hostModuleDownloads(cfg *config.Config) string {
+	if cfg != nil && slices.Contains(cfg.Security.EnvAllow, "GOPROXY") {
+		if _, set := os.LookupEnv("GOPROXY"); set {
+			return ""
+		}
+	}
+	root := os.Getenv("GOMODCACHE")
+	if root == "" {
+		gopath := filepath.SplitList(os.Getenv("GOPATH"))
+		if len(gopath) == 0 {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				return ""
+			}
+			gopath = []string{filepath.Join(home, "go")}
+		}
+		root = filepath.Join(gopath[0], "pkg", "mod")
+	}
+	downloads := filepath.Join(root, "cache", "download")
+	if info, err := os.Stat(downloads); err != nil || !info.IsDir() || !filepath.IsAbs(downloads) || SensitivePath(downloads) {
+		return ""
+	}
+	return downloads
+}
+
+// moduleProxy answers from downloads first. With no way out the next step is
+// off: a clear "lookup disabled" instead of a DNS timeout.
+func moduleProxy(downloads string, reachable bool) string {
+	next := "off"
+	if reachable {
+		next = "https://proxy.golang.org,direct"
+	}
+	return (&url.URL{Scheme: "file", Path: downloads}).String() + "," + next
 }
 
 func processCommandCache(ctx context.Context, cwd string, git bool) (string, error) {

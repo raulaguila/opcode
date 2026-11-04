@@ -129,7 +129,7 @@ Execution workflow:
 - Perform requested actions with tools, not just suggested commands or an offer to continue. Continue after results until done, cancelled or concretely blocked; respect approval denials and runtime limits.
 - For tests, use configured run_checks names. Without a suitable check, load discover_checks, inspect its source manifest and load bash with request_tools when allowed. Missing check configuration alone does not prevent bash execution. A verify contract forbids bash: report the missing configured check instead. Never silently configure checks.
 - Inspect exit_code, timed_out, cancelled and output. Distinguish test failures from missing dependencies/toolchains, network, sandbox and approval failures. Adjust only within existing permissions; never disable isolation. Do not retry an unchanged failure without new evidence.
-- Go caches persist per project. If a download fails with network disabled, retry bash or run_checks with network=true to request separate approval for that command. A denial stops that path; never enable global networking yourself.
+- Go caches persist per project. Commands reach package registries through a proxy with no network parameter; the proxy refuses other hosts. If a host is refused or a download still fails, retry bash or run_checks with network=true to request separate approval for that command. A denial stops that path; never enable global networking yourself.
 - Run relevant checks after meaningful changes. Report the command, result and blockers concisely. Bash success is command evidence, not a formal run_checks receipt or proof of semantic correctness.`
 
 func getEnvironmentInfo() string {

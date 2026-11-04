@@ -42,6 +42,40 @@ func TestCommandCachePreservesExplicitEnvironmentOverrides(t *testing.T) {
 	require.Contains(t, env, "HOME="+os.DevNull)
 }
 
+func TestSandboxReachesHostModulesWithoutNetwork(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux sandbox only")
+	}
+	root := t.TempDir()
+	cache, err := prepareCommandCache(root)
+	require.NoError(t, err)
+	host := t.TempDir()
+	downloads := filepath.Join(host, "cache", "download")
+	require.NoError(t, os.MkdirAll(downloads, 0700))
+	t.Setenv("GOMODCACHE", host)
+	bin := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(bin, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0700))
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	command, err := sandboxCommand(context.Background(), root, "/bin/sh", []string{"-c", "true"}, nil, false, false, false, cache)
+	require.NoError(t, err)
+	require.Contains(t, strings.Join(command.Args, " "), "--ro-bind "+downloads+" "+downloads)
+	require.NotContains(t, command.Args, "--share-net", "the cache needs no network")
+	require.Equal(t, "file://"+downloads+",off", moduleProxy(downloads, false))
+	require.Equal(t, "file://"+downloads+",https://proxy.golang.org,direct", moduleProxy(downloads, true), "an approved command can still fetch")
+
+	cfg, err := config.LoadOffline(t.TempDir())
+	require.NoError(t, err)
+	old := cfg.Security
+	t.Cleanup(func() { cfg.Security = old })
+	cfg.Security.EnvAllow = []string{"GOPROXY"}
+	t.Setenv("GOPROXY", "https://mirror.example")
+	require.Empty(t, hostModuleDownloads(cfg), "an explicit proxy wins")
+	cfg.Security.EnvAllow = nil
+	cfg.Security.DenyPaths = []string{downloads}
+	require.Empty(t, hostModuleDownloads(cfg), "denyPaths hides the directory")
+}
+
 func TestCommandCacheIsProjectScopedAndRejectsSymlinks(t *testing.T) {
 	first, err := prepareCommandCache(t.TempDir())
 	require.NoError(t, err)

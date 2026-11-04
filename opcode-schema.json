@@ -886,6 +886,12 @@
           "default": false,
           "type": "boolean"
         },
+        "allowedDomains": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "denyPaths": {
           "items": {
             "type": "string"

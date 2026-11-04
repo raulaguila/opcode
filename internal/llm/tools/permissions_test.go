@@ -10,12 +10,17 @@ import (
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/history"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
+	// Sandboxed commands start through this binary, as they do through opcode.
+	if shell.IsEgressBridge(os.Args) {
+		shell.RunEgressBridge(os.Args)
+	}
 	dir, err := os.MkdirTemp("", "opcode-tools-test-")
 	if err != nil {
 		panic(err)

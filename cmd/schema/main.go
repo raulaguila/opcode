@@ -206,6 +206,7 @@ func generateSchema() map[string]any {
 			"allowPrivateNetwork": map[string]any{"type": "boolean", "default": false},
 			"envAllow":            map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"readOnlyPaths":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"allowedDomains":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"denyPaths":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 		}}
 	schema["properties"].(map[string]any)["checks"] = map[string]any{"type": "object", "description": "Named verification commands; every execution still requires command permission.", "additionalProperties": map[string]any{"type": "object", "required": []string{"command"}, "properties": map[string]any{

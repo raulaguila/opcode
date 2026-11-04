@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -84,7 +85,7 @@ func TestAuditPartsCoverEverySourceLineOnce(t *testing.T) {
 }
 
 func TestAuditKeepsOnlyFindingsWhoseQuoteIsAtTheLine(t *testing.T) {
-	root := auditProject(t, map[string]string{"a.go": "package a\n\nfunc f(n int) int {\n\treturn 10 / n\n}\n"})
+	root := auditProject(t, map[string]string{"a.go": "package a\n\nfunc f(n int) int {\n\treturn 10 / n\n}\n", "b.js": "function f(list) {\n  return list[list.length];\n}\n", "c.py": "# pass the value\n    pass\n"})
 	reply := strings.Join([]string{
 		"Here is what I found:",
 		"- FINDING | high | a.go:4 | `return 10 / n` | divides by zero when n is 0",
@@ -94,18 +95,21 @@ func TestAuditKeepsOnlyFindingsWhoseQuoteIsAtTheLine(t *testing.T) {
 		"FINDING | low | ../a.go:4 | `return 10 / n` | outside the project",
 		"FINDING | low | a.go:5 | `}` | quote too short to prove anything",
 		"FINDING | high | a.go:4 | `return 10 / n` | n is undefined, causing a compile error",
+		"FINDING | high | b.js:2 | `return list[list.length];` | returns undefined instead of the last item",
+		"FINDING | high | c.py:2 | `pass` | swallows the error",
+		"FINDING | high | c.py:1 | `pass` | not the whole line it names",
 	}, "\n")
 
 	findings, answered := parseAuditFindings(reply)
 	require.True(t, answered)
-	require.Len(t, findings, 7)
+	require.Len(t, findings, 10)
 	var kept []string
 	for i := range findings {
 		if auditEvidence(root, &findings[i]) {
-			kept = append(kept, findings[i].severity)
+			kept = append(kept, findings[i].Severity)
 		}
 	}
-	require.Equal(t, []string{"high", "medium"}, kept)
+	require.Equal(t, []string{"high", "medium", "high", "high"}, kept)
 
 	_, answered = parseAuditFindings("The code looks fine overall.")
 	require.False(t, answered, "prose is no answer: the part must not count as read")
@@ -151,6 +155,8 @@ func TestAuditReviewDropsOnlyWhatIsClearlyFalse(t *testing.T) {
 			"FINDING | high | a.go:5 | `return 6 / zero` | panics",
 			"FINDING | medium | a.go:6 | `return 10 / zero` | panics",
 		}, "\n"),
+		"NONE",
+		"NONE",
 		"REAL: zero divides",
 		"**FALSE**: zero is a constant one",
 		"I am not sure.",
@@ -165,8 +171,8 @@ func TestAuditReviewDropsOnlyWhatIsClearlyFalse(t *testing.T) {
 	require.NoError(t, err)
 	result := <-events
 
-	require.Len(t, reviewer.asked, 4, "one part, then the three high findings; medium is not reviewed")
-	require.Contains(t, reviewer.asked[2], "Claim about a.go:4")
+	require.Len(t, reviewer.asked, 6, "three passes, then the three high findings; medium is not reviewed")
+	require.Contains(t, reviewer.asked[4], "Claim about a.go:4")
 	text := result.Message.Content().String()
 	require.Contains(t, text, "a.go:3")
 	require.NotContains(t, text, "a.go:4", "clearly false is dropped")
@@ -191,4 +197,83 @@ func TestAuditCancelKeepsWhatWasFound(t *testing.T) {
 	require.ErrorIs(t, result.Error, ErrRequestCancelled)
 	require.Contains(t, result.Message.Content().String(), "a.go")
 	require.False(t, a.IsSessionBusy("session"))
+}
+
+func TestAuditAsksAgainOnlyAboutWhatChanged(t *testing.T) {
+	a, _, _ := steeringAgent(t)
+	reviewer := &auditProvider{replies: []string{"NONE", "NONE", "NONE", "NONE", "NONE", "NONE"}}
+	a.provider = reviewer
+	cfg := config.Get()
+	previousDir, previousData := cfg.WorkingDir, cfg.Data.Directory
+	cfg.WorkingDir = auditProject(t, map[string]string{"a.go": "package a\n", "b.go": "package b\n"})
+	cfg.Data.Directory = t.TempDir()
+	t.Cleanup(func() { cfg.WorkingDir, cfg.Data.Directory = previousDir, previousData })
+
+	events, err := a.Audit(context.Background(), "session")
+	require.NoError(t, err)
+	<-events
+	require.Len(t, reviewer.asked, 6)
+	require.NoError(t, os.WriteFile(filepath.Join(cfg.WorkingDir, "b.go"), []byte("package b\n\nvar changed = 1\n"), 0o644))
+
+	events, err = a.Audit(context.Background(), "session")
+	require.NoError(t, err)
+	result := <-events
+	require.Len(t, reviewer.asked, 9, "only the changed file goes to the model")
+	require.Contains(t, result.Message.Content().String(), "3 replies came from the cache")
+}
+
+func TestAuditDismissedFindingStaysOutAfterItsLineMoves(t *testing.T) {
+	report := auditReport{findings: []auditFinding{{Severity: "low", Path: "a.go", Line: 90, Code: "return  1 / n", Problem: "divides"}, {Severity: "low", Path: "a.go", Line: 91, Code: "return 2", Problem: "other"}}}
+	report.drop(map[string]bool{"a.go: return 1 / n": true})
+	require.Len(t, report.findings, 1)
+	require.Equal(t, 1, report.ignored)
+}
+
+func TestAuditAnalyzerOutputBecomesFindingsOnlyInCoveredSource(t *testing.T) {
+	source := map[string][]string{"a/one.go": {"package a", "", "\tos.Remove(path)"}}
+	output := strings.Join([]string{
+		"# example.com/a",
+		"a/one.go:3:2: Error return value of `os.Remove` is not checked (errcheck)",
+		"./a/one.go:3:2: result of fmt.Errorf call not used",
+		"a/one.go:99:1: past the end of the file (errcheck)",
+		"a/one_test.go:3:2: a test (errcheck)",
+		"1 issues:",
+	}, "\n")
+	findings := parseAnalyzerOutput("golangci-lint", output, source)
+	require.Len(t, findings, 2)
+	require.Equal(t, "medium", findings[0].Severity)
+	require.Equal(t, "os.Remove(path)", findings[0].Code, "the analyzer's line is quoted from the file")
+	require.Equal(t, "high", parseAnalyzerOutput("go vet", output, source)[0].Severity)
+}
+
+func TestAuditClaimShowsCallersAndDefinitions(t *testing.T) {
+	source := map[string][]string{
+		"a.go": strings.Split("package a\n\nfunc Ratio(a, b int) int {\n\treturn a / limit(b)\n}\n", "\n"),
+		"b.go": strings.Split("package a\n\nfunc Use(b int) int {\n\tif b == 0 {\n\t\treturn 0\n\t}\n\treturn Ratio(1, b)\n}\n", "\n"),
+		"c.go": strings.Split("package a\n\nfunc limit(n int) int { return n + 1 }\n", "\n"),
+	}
+	claim := auditClaim(source, auditFinding{Path: "a.go", Line: 4, Code: "return a / limit(b)", Problem: "divides by zero"})
+	require.Contains(t, claim, "caller of Ratio in b.go")
+	require.Contains(t, claim, "return Ratio(1, b)")
+	require.Contains(t, claim, "definition of limit in c.go")
+	require.Contains(t, claim, "Claim about a.go:4: divides by zero")
+}
+
+func TestAuditReportJoinsWhatRepeats(t *testing.T) {
+	report := auditReport{started: time.Now()}
+	for line := 1; line <= 8; line++ {
+		report.findings = append(report.findings, auditFinding{Severity: "medium", Path: "a.go", Line: line, Code: "os.Remove(path)", Problem: "Error return value is not checked (errcheck)", Source: "golangci-lint"})
+	}
+	brief := report.render(true, "report.md")
+	require.Contains(t, brief, "(×8)")
+	require.Contains(t, brief, "3 more")
+	require.Contains(t, report.render(false, ""), "a.go:8")
+}
+
+func TestAuditProofOutcomeComesFromTheTestRun(t *testing.T) {
+	require.Equal(t, auditProved, auditProofState("panic: runtime error: index out of range\n\t/repo/cart/cart.go:12", "cart.go"))
+	require.Equal(t, auditReviewed, auditProofState("panic: runtime error: nil map\n\t/repo/cart/zz_audit_proof_test.go:9", "cart.go"), "a crash in the test itself proves nothing")
+	require.Equal(t, auditReviewed, auditProofState("--- FAIL: TestAuditProof (0.00s)\nFAIL\tshop/cart", "cart.go"), "the model wrote that assertion")
+	require.Equal(t, auditReviewed, auditProofState("ok  \tshop/cart\t0.002s", "cart.go"), "a model test can pass over a real bug")
+	require.Equal(t, auditReviewed, auditProofState("FAIL\tshop/cart [build failed]", "cart.go"), "a test that does not build proves nothing")
 }

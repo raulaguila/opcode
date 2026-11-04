@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,8 +9,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -120,6 +123,7 @@ func (o *doctorOptions) inspect(cmd *cobra.Command, cwd string, cfg *config.Conf
 	}
 	report.inspectBinaries()
 	report.inspectSandbox(cmd.Context(), cwd, cfg)
+	report.inspectEgress(cmd.Context(), cfg)
 	report.inspectLSP(cfg)
 	report.add("command cache", "ok", fmt.Sprintf("%.1f MiB in .opcode/command-cache; emptied at startup above 4 GiB.", float64(shell.CommandCacheSize(cwd))/(1<<20)))
 	if o.languageSupport {
@@ -168,6 +172,38 @@ func (r *doctorReport) inspectSandbox(ctx context.Context, cwd string, cfg *conf
 	} else {
 		r.add("pty", "ok", "PTY implementation is included; terminal interaction is not started by doctor.")
 	}
+}
+
+// inspectEgress tries each allowed domain, so a blocked proxy or a missing
+// corporate CA shows here and not in the middle of a command.
+func (r *doctorReport) inspectEgress(ctx context.Context, cfg *config.Config) {
+	domains := shell.EgressDomains(cfg)
+	if len(domains) == 0 {
+		r.add("egress", "ok", "Package registries are off: security.allowedDomains is empty.")
+		return
+	}
+	failures := make([]string, len(domains))
+	var group sync.WaitGroup
+	for i, domain := range domains {
+		group.Go(func() {
+			probe, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			if err := shell.EgressProbe(probe, domain); err != nil {
+				failures[i] = domain + ": " + err.Error()
+			}
+		})
+	}
+	group.Wait()
+	failures = slices.DeleteFunc(failures, func(failure string) bool { return failure == "" })
+	route := "directly"
+	if proxy := cmp.Or(os.Getenv("HTTPS_PROXY"), os.Getenv("https_proxy")); proxy != "" {
+		route = "through " + proxy
+	}
+	if len(failures) > 0 {
+		r.add("egress", "warning", fmt.Sprintf("%d of %d allowed domains are unreachable %s: %s", len(failures), len(domains), route, strings.Join(failures, "; ")))
+		return
+	}
+	r.add("egress", "ok", fmt.Sprintf("All %d allowed domains answer %s.", len(domains), route))
 }
 
 func (r *doctorReport) inspectLSP(cfg *config.Config) {

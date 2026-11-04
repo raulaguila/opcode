@@ -179,8 +179,9 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 			cache = sandboxCachePath
 		}
 		cmd.Env = commandCacheEnvironment(cmd.Env, cache)
-		if downloads := hostModuleDownloads(cfg); sandbox != "none" && downloads != "" {
-			cmd.Env = append(cmd.Env, "GOPROXY="+moduleProxy(downloads, NetworkEnabled(ctx) || len(egressDomains(cfg)) > 0))
+		if sandbox != "none" {
+			cmd.Env = append(cmd.Env, goProxyEnvironment(cfg, NetworkEnabled(ctx) || len(egressDomains(cfg)) > 0)...)
+			cmd.Env = append(cmd.Env, registryEnvironment(cfg)...)
 		}
 	}
 	configureProcess(cmd)
@@ -452,7 +453,27 @@ func deniedPathPattern(patterns []string, path, base string) bool {
 	return false
 }
 
+// hostToolDirectories are the bin folders in PATH the sandbox does not have, like
+// ~/go/bin: a tool the user installed should run there too. Only a folder named
+// bin, so a PATH holding home or the project exposes nothing else.
+func hostToolDirectories() []string {
+	var directories []string
+	for _, entry := range filepath.SplitList(os.Getenv("PATH")) {
+		info, err := os.Stat(entry)
+		system := slices.ContainsFunc([]string{"/usr", "/bin", "/lib", "/lib64"}, func(root string) bool {
+			return entry == root || strings.HasPrefix(entry, root+"/")
+		})
+		if err == nil && info.IsDir() && !system && filepath.IsAbs(entry) && filepath.Base(entry) == "bin" && !SensitivePath(entry) {
+			directories = append(directories, entry)
+		}
+	}
+	return directories
+}
+
 func appendSandboxReadOnlyPaths(wrapped []string, cfg *config.Config) ([]string, error) {
+	for _, entry := range hostToolDirectories() {
+		wrapped = append(wrapped, "--ro-bind", entry, entry)
+	}
 	if cfg != nil {
 		for _, entry := range cfg.Security.ReadOnlyPaths {
 			if !filepath.IsAbs(entry) {

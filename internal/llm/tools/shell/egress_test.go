@@ -152,3 +152,22 @@ true`, server.URL, target.Host, target.Hostname(), target.Port())
 	require.Contains(t, string(output), "blocked.example is not in security.allowedDomains")
 	require.NotContains(t, string(output), "DIRECT-ROUTE-OPEN", "the proxy is the only way out")
 }
+
+func TestRegistriesReachTheirMirrorThroughOneSetting(t *testing.T) {
+	t.Setenv("GOMODCACHE", t.TempDir())
+	cfg := &config.Config{Security: config.SecurityConfig{AllowedDomains: []string{}, Registries: map[string]string{
+		"go": "https://nexus.corp.example/go", "npm": "https://nexus.corp.example/npm/", "pip": "https://pypi.corp.example/simple",
+	}}}
+	require.ElementsMatch(t, []string{"nexus.corp.example", "nexus.corp.example", "pypi.corp.example"}, egressDomains(cfg))
+	require.ElementsMatch(t, []string{"NPM_CONFIG_REGISTRY=https://nexus.corp.example/npm/", "PIP_INDEX_URL=https://pypi.corp.example/simple"}, registryEnvironment(cfg))
+	require.Equal(t, []string{"GOPROXY=https://nexus.corp.example/go", "GOSUMDB=off"}, goProxyEnvironment(cfg, true))
+	require.Nil(t, goProxyEnvironment(&config.Config{}, true), "nothing cached and no mirror leaves Go alone")
+}
+
+func TestEgressDomainsDefaultsKeepTheirListWhenAMirrorIsAdded(t *testing.T) {
+	cfg := &config.Config{Security: config.SecurityConfig{Registries: map[string]string{"npm": "https://nexus.corp.example/npm/"}}}
+	require.Contains(t, egressDomains(cfg), "pypi.org")
+	require.Contains(t, egressDomains(cfg), "nexus.corp.example")
+	require.NotContains(t, defaultAllowedDomains, "nexus.corp.example", "the default list stays untouched")
+	require.Equal(t, []string{"pypi.org"}, EgressDomains(&config.Config{Security: config.SecurityConfig{AllowedDomains: []string{"pypi.org", "*.corp.example"}}}))
+}

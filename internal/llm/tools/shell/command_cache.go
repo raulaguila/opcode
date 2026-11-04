@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io/fs"
@@ -101,14 +102,36 @@ func hostModuleDownloads(cfg *config.Config) string {
 	return downloads
 }
 
-// moduleProxy answers from downloads first. With no way out the next step is
-// off: a clear "lookup disabled" instead of a DNS timeout.
-func moduleProxy(downloads string, reachable bool) string {
+// moduleProxy answers from downloads first, then from the mirror or the public
+// proxy. With no way out the next step is off: a clear "lookup disabled" instead
+// of a DNS timeout.
+func moduleProxy(downloads, mirror string, reachable bool) string {
 	next := "off"
 	if reachable {
-		next = "https://proxy.golang.org,direct"
+		next = cmp.Or(mirror, "https://proxy.golang.org,direct")
+	}
+	if downloads == "" {
+		return next
 	}
 	return (&url.URL{Scheme: "file", Path: downloads}).String() + "," + next
+}
+
+// goProxyEnvironment sets where Go looks for modules. A mirror cannot answer the
+// public checksum database; go.sum still verifies what the project pinned.
+func goProxyEnvironment(cfg *config.Config, reachable bool) []string {
+	mirror := ""
+	if cfg != nil {
+		mirror = cfg.Security.Registries["go"]
+	}
+	downloads := hostModuleDownloads(cfg)
+	if downloads == "" && mirror == "" {
+		return nil
+	}
+	env := []string{"GOPROXY=" + moduleProxy(downloads, mirror, reachable)}
+	if mirror != "" {
+		env = append(env, "GOSUMDB=off")
+	}
+	return env
 }
 
 func processCommandCache(ctx context.Context, cwd string, git bool) (string, error) {

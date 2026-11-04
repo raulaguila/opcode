@@ -207,6 +207,7 @@ func generateSchema() map[string]any {
 			"envAllow":            map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"readOnlyPaths":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"allowedDomains":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"registries":          map[string]any{"type": "object", "properties": map[string]any{"go": map[string]any{"type": "string"}, "npm": map[string]any{"type": "string"}, "pip": map[string]any{"type": "string"}}, "additionalProperties": false},
 			"denyPaths":           map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 		}}
 	schema["properties"].(map[string]any)["checks"] = map[string]any{"type": "object", "description": "Named verification commands; every execution still requires command permission.", "additionalProperties": map[string]any{"type": "object", "required": []string{"command"}, "properties": map[string]any{
@@ -371,6 +372,7 @@ func generateSchema() map[string]any {
 		string(config.AgentCoder),
 		string(config.AgentTask),
 		string(config.AgentTitle),
+		string(config.AgentReview),
 	}
 
 	for _, agentName := range knownAgents {

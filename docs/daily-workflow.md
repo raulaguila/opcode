@@ -154,19 +154,43 @@ Veja também a [evolução comparativa](comparative-evolution.md) para perguntas
 
 ## Auditar o projeto
 
-`/auditoria` (paleta ou composer; `opcode -p /auditoria` fora do terminal) revisa
-todo o código, e não só os arquivos que o modelo escolheria abrir. O programa
-entrega ao modelo um arquivo por vez, sem ferramentas e em contexto limpo; acima
-de 12 KB, o arquivo vai em pedaços. Testes e código gerado ficam de fora. No modo
-Executar, roda antes os checks configurados, com a aprovação de sempre. Cada
-arquivo custa segundos num modelo local, mas o projeto inteiro leva bastante
-tempo: o progresso aparece na conversa.
+`/auditoria` (ou `/audit`, na paleta e em `opcode -p /auditoria`) revisa o projeto
+inteiro. É o programa, não o modelo, que decide o que ler: um arquivo por vez,
+sem ferramentas, então um modelo pequeno não para nos primeiros arquivos. Acima
+de 12 KB, o arquivo vai em pedaços. Testes e código gerado ficam de fora.
 
-Cada achado precisa citar o trecho e a linha; o programa confere no arquivo e
-descarta o que não estiver lá, além de alegações de erro de compilação, porque
-o modelo vê um arquivo de cada vez. Depois, cada achado de severidade alta volta
-ao modelo sozinho, com thinking, para ser confirmado ou recusado; média e baixa
-não passam por isso. O relatório fica na conversa, por severidade, e
-lista o que o modelo não respondeu. Em `-p`, parte sem resposta sai com código 2.
-`Esc` interrompe e mantém o que já foi encontrado. Pedir "analise o código" em
-texto livre não dispara a auditoria.
+As etapas, em ordem:
+
+1. **Verificações e analisadores:** no modo Executar, roda os checks configurados
+   e, se instalados, `go vet`, `golangci-lint`, `ruff` e `eslint`, com a aprovação
+   de sempre.
+2. **Varredura:** três passadas por arquivo, cada uma atrás de um tipo de defeito:
+   crashes, erros perdidos, segurança e concorrência. Cada achado precisa citar o
+   trecho e a linha; o programa confere no arquivo e descarta o que não estiver
+   lá, além de alegações de erro de compilação.
+3. **Revisão:** cada achado de severidade alta volta ao modelo sozinho, com
+   thinking, com o código em volta, quem chama aquela função e o que ela usa, para
+   ser confirmado ou recusado. Média e baixa não passam por isso.
+4. **Prova:** no modo Executar, até 10 alegações de crash em Go, uma por arquivo,
+   ganham um teste escrito pelo modelo, rodado no sandbox numa cópia do projeto.
+   Só um panic dentro do arquivo acusado marca o achado como provado: uma asserção
+   que falha mostra apenas o que o modelo acreditava.
+
+Para revisar com um modelo mais forte que o da varredura, configure
+`agents.review`.
+
+Repetir a auditoria só pergunta ao modelo sobre o que mudou. O relatório resumido
+fica na conversa, com repetições agrupadas; o completo e os dados ficam em
+`.opcode/audit/` (`report.md`, `findings.json`, `refused.json`). Para dispensar um
+achado de vez, copie a chave dele, listada no fim de `report.md`, para
+`.opcode/audit/ignored.txt`.
+
+Em `-p`, resposta faltando sai com código 2. `Esc` interrompe e mantém o que já
+foi encontrado. Pedir "analise o código" em texto livre não dispara a auditoria.
+
+Para medir uma mudança na auditoria, `scripts/audit-bench` roda tudo sobre um
+projeto com bugs plantados e dá acertos e achados errados:
+
+```bash
+go run ./scripts/audit-bench -bin ./opcode -config .opcode.json -v
+```

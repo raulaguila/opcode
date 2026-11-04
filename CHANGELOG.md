@@ -2,6 +2,13 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- `/auditoria` também usa analisadores instalados, três passadas por tipo de
+  defeito, chamadores e definições na revisão, testes que provam achados em Go,
+  modelo de revisão próprio (`agents.review`), cache por conteúdo, relatório
+  agrupado em `.opcode/audit/` e achados dispensados. `scripts/audit-bench` mede
+  tudo com bugs plantados.
+- Sandbox: `security.registries` configura mirrors num lugar só, `opcode doctor`
+  testa os domínios permitidos e pastas `bin` do `PATH` entram somente leitura.
 - `/auditoria` (ou `/audit`, também na paleta e em `-p /auditoria`) revisa todo
   o projeto: o programa entrega ao modelo um arquivo por vez, sem ferramentas e
   sem raciocínio, com verificações configuradas antes. Achado só entra se o

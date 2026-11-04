@@ -47,6 +47,8 @@ const (
 	AgentSummarizer AgentName = "summarizer"
 	AgentTask       AgentName = "task"
 	AgentTitle      AgentName = "title"
+	// AgentReview is optional: a stronger model for the audit's review alone.
+	AgentReview AgentName = "review"
 )
 
 // Agent defines configuration for different LLM models and their token limits.
@@ -112,13 +114,15 @@ type ShellConfig struct {
 
 // Security settings are loaded only from the user's global configuration.
 type SecurityConfig struct {
-	Sandbox             string   `json:"sandbox,omitempty"`
-	AllowNetwork        bool     `json:"allowNetwork,omitempty"`
-	AllowedDomains      []string `json:"allowedDomains,omitempty"`
-	AllowPrivateNetwork bool     `json:"allowPrivateNetwork,omitempty"`
-	EnvAllow            []string `json:"envAllow,omitempty"`
-	ReadOnlyPaths       []string `json:"readOnlyPaths,omitempty"`
-	DenyPaths           []string `json:"denyPaths,omitempty"`
+	Sandbox        string   `json:"sandbox,omitempty"`
+	AllowNetwork   bool     `json:"allowNetwork,omitempty"`
+	AllowedDomains []string `json:"allowedDomains,omitempty"`
+	// Registries names one mirror per ecosystem: go, npm or pip.
+	Registries          map[string]string `json:"registries,omitempty"`
+	AllowPrivateNetwork bool              `json:"allowPrivateNetwork,omitempty"`
+	EnvAllow            []string          `json:"envAllow,omitempty"`
+	ReadOnlyPaths       []string          `json:"readOnlyPaths,omitempty"`
+	DenyPaths           []string          `json:"denyPaths,omitempty"`
 }
 type CheckConfig struct {
 	Command string `json:"command"`

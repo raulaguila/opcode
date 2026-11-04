@@ -61,8 +61,8 @@ func TestSandboxReachesHostModulesWithoutNetwork(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, strings.Join(command.Args, " "), "--ro-bind "+downloads+" "+downloads)
 	require.NotContains(t, command.Args, "--share-net", "the cache needs no network")
-	require.Equal(t, "file://"+downloads+",off", moduleProxy(downloads, false))
-	require.Equal(t, "file://"+downloads+",https://proxy.golang.org,direct", moduleProxy(downloads, true), "an approved command can still fetch")
+	require.Equal(t, "file://"+downloads+",off", moduleProxy(downloads, "", false))
+	require.Equal(t, "file://"+downloads+",https://proxy.golang.org,direct", moduleProxy(downloads, "", true), "an approved command can still fetch")
 
 	cfg, err := config.LoadOffline(t.TempDir())
 	require.NoError(t, err)

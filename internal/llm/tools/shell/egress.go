@@ -3,6 +3,7 @@ package shell
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -38,12 +39,56 @@ var defaultAllowedDomains = []string{
 }
 
 // egressDomains is the configured list, or the public registries when it is
-// not set. An empty list turns the proxy off.
+// not set, plus the configured mirrors. An empty list and no mirror turn the
+// proxy off.
 func egressDomains(cfg *config.Config) []string {
-	if cfg == nil || cfg.Security.AllowedDomains == nil {
+	if cfg == nil {
 		return defaultAllowedDomains
 	}
-	return cfg.Security.AllowedDomains
+	domains := cfg.Security.AllowedDomains
+	if domains == nil {
+		domains = defaultAllowedDomains
+	}
+	domains = slices.Clone(domains)
+	for _, registry := range cfg.Security.Registries {
+		if mirror, err := url.Parse(registry); err == nil && mirror.Hostname() != "" {
+			domains = append(domains, mirror.Hostname())
+		}
+	}
+	return domains
+}
+
+// registryEnvironment points each package manager at its mirror.
+func registryEnvironment(cfg *config.Config) []string {
+	if cfg == nil {
+		return nil
+	}
+	var env []string
+	for _, variable := range []struct{ registry, name string }{{"npm", "NPM_CONFIG_REGISTRY"}, {"pip", "PIP_INDEX_URL"}} {
+		if mirror := cfg.Security.Registries[variable.registry]; mirror != "" {
+			env = append(env, variable.name+"="+mirror)
+		}
+	}
+	return env
+}
+
+// EgressProbe checks one domain the way a command would reach it, certificates
+// included, for the doctor. Nothing is sent past the handshake.
+func EgressProbe(ctx context.Context, domain string) error {
+	proxy := newEgressProxy(func() []string { return []string{domain} }, func(target *url.URL) (*url.URL, error) {
+		return http.ProxyFromEnvironment(&http.Request{URL: target})
+	})
+	conn, err := proxy.dial(ctx, net.JoinHostPort(domain, "443"))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return tls.Client(conn, &tls.Config{ServerName: domain, MinVersion: tls.VersionTLS12}).HandshakeContext(ctx)
+}
+
+// EgressDomains lists the probeable domains, which leaves out wildcards.
+func EgressDomains(cfg *config.Config) []string {
+	return slices.DeleteFunc(slices.Clone(egressDomains(cfg)), func(domain string) bool { return strings.HasPrefix(domain, "*") })
 }
 
 // domainAllowed takes an exact name or *.example.com, which covers subdomains

@@ -70,6 +70,9 @@
         "coder": {
           "$ref": "#/definitions/agent"
         },
+        "review": {
+          "$ref": "#/definitions/agent"
+        },
         "task": {
           "$ref": "#/definitions/agent"
         },
@@ -909,6 +912,21 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "registries": {
+          "additionalProperties": false,
+          "properties": {
+            "go": {
+              "type": "string"
+            },
+            "npm": {
+              "type": "string"
+            },
+            "pip": {
+              "type": "string"
+            }
+          },
+          "type": "object"
         },
         "sandbox": {
           "default": "bubblewrap",

@@ -155,6 +155,14 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	return b.executeApprovedCommand(ctx, sessionID, params)
 }
 
+type rawCommandOutputKey struct{}
+
+// WithRawCommandOutput keeps a command's output whole for a caller that parses
+// it line by line, where the digest would drop the lines that matter.
+func WithRawCommandOutput(ctx context.Context) context.Context {
+	return context.WithValue(ctx, rawCommandOutputKey{}, true)
+}
+
 func commandNetworkParameter() map[string]any {
 	return map[string]any{"type": "boolean", "description": "Request network for this command only, e.g. dependency downloads. Requires separate approval when global command networking is disabled. Default false; never bypass a denial."}
 }
@@ -174,7 +182,7 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 	dropped := stdoutDropped || stderrDropped
 	full := stdout + "\n" + stderr
 	compacted := false
-	if !interrupted && !params.PTY {
+	if _, raw := ctx.Value(rawCommandOutputKey{}).(bool); !interrupted && !params.PTY && !raw {
 		stdout, stderr, compacted = digestCommandOutput(params.Command, stdout, stderr)
 	}
 	truncated := dropped || len(stdout) > MaxOutputLength || len(stderr) > MaxOutputLength

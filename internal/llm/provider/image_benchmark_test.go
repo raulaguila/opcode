@@ -2,11 +2,12 @@ package provider
 
 import (
 	"bytes"
-	"github.com/raulaguila/opcode/internal/llm/models"
-	"github.com/raulaguila/opcode/internal/message"
 	"image"
 	"image/png"
 	"testing"
+
+	"github.com/raulaguila/opcode/internal/llm/models"
+	"github.com/raulaguila/opcode/internal/message"
 )
 
 // A real uncompressed PNG (~1MiB) exercises wire encoding and visual budgeting;

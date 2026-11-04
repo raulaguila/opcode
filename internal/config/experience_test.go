@@ -69,7 +69,6 @@ func TestSettingValidationDoesNotWriteInvalidShortcutsOrRuntime(t *testing.T) {
 	after, _ := os.ReadFile(global)
 	require.Equal(t, string(before), string(after))
 	require.NoError(t, SaveUserSetting("tui.keybindings.commands", "alt+k", false))
-	require.Equal(t, "alt+k", Shortcut("commands"))
 	require.True(t, strings.Contains(string(after), "future"))
 }
 func TestSidebarPreferenceRespectsTerminalWidth(t *testing.T) {

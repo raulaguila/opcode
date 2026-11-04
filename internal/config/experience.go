@@ -29,12 +29,6 @@ func (t TUIConfig) SidebarVisible(width int) bool {
 
 var DefaultKeybindings = map[string]string{"commands": "ctrl+k", "models": "ctrl+o", "sessions": "ctrl+s", "terminal": "ctrl+p", "files": "ctrl+f", "theme": "ctrl+t", "sidebar": "alt+b"}
 
-func Shortcut(action string) string {
-	if cfg != nil && cfg.TUI.Keybindings[action] != "" {
-		return cfg.TUI.Keybindings[action]
-	}
-	return DefaultKeybindings[action]
-}
 func (t TUIConfig) Validate() error {
 	if t.ProseWidth < 0 || t.ProseWidth > 240 {
 		return fmt.Errorf("proseWidth: 0–240 (0 uses available width)")

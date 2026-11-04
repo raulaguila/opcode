@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/tools"
-	"github.com/raulaguila/opcode/internal/tui/components/dialog"
-	"github.com/raulaguila/opcode/internal/tui/util"
+	"github.com/raulaguila/opcode/internal/ui/dialog"
+	"github.com/raulaguila/opcode/internal/ui/util"
 )
 
 // hosted floats a settings dialog of the earlier interface. Connections,

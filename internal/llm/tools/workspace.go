@@ -153,14 +153,6 @@ func ProjectContextPaths(question string) []string {
 	if mentioned := MentionedPaths(question); len(mentioned) > 0 {
 		return mentioned
 	}
-	lower := strings.ToLower(question)
-	project := false
-	for _, term := range []string{"projeto", "reposit", "codebase", "this project", "current project", "this repo", "estrutura atual", "arquitetura atual"} {
-		project = project || strings.Contains(lower, term)
-	}
-	if !project && !ProjectInquiry(question) {
-		return nil
-	}
 	root, err := os.OpenRoot(config.WorkingDirectory())
 	if err != nil {
 		return nil

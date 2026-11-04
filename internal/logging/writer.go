@@ -36,12 +36,6 @@ func (l *LogData) Add(msg LogMessage) {
 	l.Publish(pubsub.CreatedEvent, msg)
 }
 
-func (l *LogData) List() []LogMessage {
-	l.lock.Lock()
-	defer l.lock.Unlock()
-	return l.messages
-}
-
 var defaultLogData = &LogData{
 	messages: make([]LogMessage, 0),
 	Broker:   pubsub.NewBroker[LogMessage](),
@@ -78,10 +72,6 @@ func NewWriter() *writer {
 
 func Subscribe(ctx context.Context) <-chan pubsub.Event[LogMessage] {
 	return defaultLogData.Subscribe(ctx)
-}
-
-func List() []LogMessage {
-	return defaultLogData.List()
 }
 
 func decodeLogField(msg *LogMessage, key, value string) error {

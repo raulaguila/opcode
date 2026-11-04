@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -14,6 +15,7 @@ import (
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/workflow"
@@ -265,4 +267,32 @@ func TestFilesChangedLaterDoNotReadAsAStoppedTask(t *testing.T) {
 	m.width, m.height = 100, 40
 	m.task = workflow.Task{Status: "blocked", Summary: workflow.StaleValidation}
 	require.Empty(t, m.workView())
+}
+
+func TestApprovalWaitsForItsConversation(t *testing.T) {
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	service := permission.NewPermissionService()
+	service.Subscribe(context.Background())
+	// Already on the default level, or opening it would deny the request.
+	require.NoError(t, service.(permission.ApprovalPolicies).SetApprovalPolicy("busy", permission.ApprovalSandboxed, t.TempDir()))
+	asked := make(chan bool, 1)
+	go func() {
+		asked <- service.Request(context.Background(), permission.CreatePermissionRequest{SessionID: "busy", ToolName: "bash", Action: "execute", Path: "/"})
+	}()
+	require.Eventually(t, func() bool {
+		return len(service.(interface {
+			PendingRequests(string) []permission.PermissionRequest
+		}).PendingRequests("busy")) == 1
+	}, time.Second, time.Millisecond)
+
+	m := New(&app.App{Permissions: service, Messages: emptyMessages{}, Sessions: &clearableSessions{}})
+	m.width, m.height = 100, 40
+	m.openSession(session.Session{ID: "other"})
+	require.Nil(t, m.approval, "another conversation's request is not asked here")
+
+	m.openSession(session.Session{ID: "busy"})
+	require.NotNil(t, m.approval, "the card comes back with its conversation")
+	m.answerApproval("1")
+	require.True(t, <-asked)
 }

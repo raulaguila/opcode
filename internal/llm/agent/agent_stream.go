@@ -33,17 +33,6 @@ func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgH
 		}
 		run.provider = next
 	}
-	if controller, ok := runProvider(a, run).(provider.SourceCitationController); ok && run.citationRepair {
-		var hints []string
-		if run.requiresCitation && run.citationRepair {
-			hints = currentCitationChoices(run, msgHistory)
-		}
-		next, err := controller.WithSourceCitations(hints)
-		if err != nil {
-			return nil, nil, err
-		}
-		run.provider = next
-	}
 	return a.budgetPreparedRequest(sessionID, requestHistory, run)
 }
 func (a *agent) preserveInterruptedStream(sessionID string, assistantMsg *message.Message, toolMsg **message.Message, failure *error) {
@@ -68,12 +57,6 @@ func (a *agent) preserveInterruptedStream(sessionID string, assistantMsg *messag
 	reason := message.FinishReasonError
 	if errors.Is(*failure, context.Canceled) {
 		reason = message.FinishReasonCanceled
-	}
-	if len(assistantMsg.ToolCalls()) > 0 {
-		assistantMsg.SetRevisionOf("")
-	}
-	if assistantMsg.CitationValidation() == message.CitationPending {
-		assistantMsg.SetCitationValidation(message.CitationInvalid)
 	}
 	a.finishMessage(saveCtx, assistantMsg, reason)
 }
@@ -220,10 +203,6 @@ func (b *toolBatchExecution) findTool(call message.ToolCall) tools.BaseTool {
 	for _, tool := range b.run.available {
 		if tool.Info().Name != call.Name || !runAllowsTool(b.run, tool) || !b.run.selected[call.Name] {
 			continue
-		}
-		switch call.Name {
-		case "ls", "glob", "grep", "search_code_index":
-			b.run.searches++
 		}
 		if !coreSchema(call.Name) {
 			if b.run.toolLeases == nil {

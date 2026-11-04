@@ -1,14 +1,15 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 type reasoningProbe struct {

@@ -113,9 +113,6 @@ func (c *copilotClient) refreshToken(ctx context.Context) error {
 	}
 	return nil
 }
-func WithCopilotBearerToken(token string) CopilotOption {
-	return func(o *copilotOptions) { o.bearerToken = token }
-}
 
 func WithCopilotReasoningEffort(effort string) CopilotOption {
 	return func(o *copilotOptions) {
@@ -123,4 +120,8 @@ func WithCopilotReasoningEffort(effort string) CopilotOption {
 		WithReasoningEffort(effort)(&options)
 		o.reasoningEffort = options.reasoningEffort
 	}
+}
+
+func WithCopilotOptions(options ...CopilotOption) ProviderClientOption {
+	return func(client *providerClientOptions) { client.copilotOptions = options }
 }

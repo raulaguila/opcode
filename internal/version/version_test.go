@@ -1,9 +1,10 @@
 package version
 
 import (
-	"github.com/stretchr/testify/require"
 	"runtime/debug"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBuildVersionPreservesReleaseAndIdentifiesSource(t *testing.T) {

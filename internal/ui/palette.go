@@ -249,15 +249,6 @@ func results(n int) string {
 	return fmt.Sprintf(textFor("%d resultados", "%d results"), n)
 }
 
-// openPaletteWith opens the palette already filtered, as a footer control does.
-func (m *Model) openPaletteWith(query string) tea.Cmd {
-	cmd := m.openPalette()
-	if d, ok := m.dialog.(*listDialog); ok {
-		d.list.SetQuery(query)
-	}
-	return cmd
-}
-
 // resumeLast opens the most recent other conversation, its plan unfolded.
 func (m *Model) resumeLast() tea.Cmd {
 	if m.app == nil || m.app.Sessions == nil {

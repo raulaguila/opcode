@@ -2,6 +2,21 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- Interface clássica removida (`--ui classico`, `internal/tui`): `opcode` abre
+  a interface atual. `internal/ui/{theme,styles,dialog,layout,util}` guardam o
+  que ainda era compartilhado.
+- Pedidos não são mais lidos por palavras-chave: a guarda de citações, o
+  reparo com `answer_with_sources` e a exigência de alteração inferida do texto
+  saíram. Ferramentas de escrita ficam sempre disponíveis em Executar; só um
+  contrato `change` exige alteração. Citar segue como orientação do prompt.
+- Trocar de conversa não apaga mais a aprovação pendente de outra, e o app não
+  nega o pedido em espera ao reenviar a mesma política. SQLite espera 10 s por
+  outro processo em vez de falhar. `.opcode/command-cache` é esvaziado ao abrir
+  acima de 4 GiB e aparece em `opcode doctor`. A seleção não congela mais a
+  conversa. O catálogo de conversas esquece a mais antiga sem rascunho ao passar
+  de 500, em vez de falhar.
+- `-c` com caminho relativo não nega mais edições no próprio projeto, e uma
+  operação recusada em `-p` encerra com código 2 e aviso, não 0 e silêncio.
 - Saída de comandos compacta, sempre ligada: cores, progresso, repetições e
   linhas de sucesso de `go`, `cargo`, `pytest`, `npm`, `pip`, `git`, `docker`,
   `make`, `apt` e `ls -l` ficam fora do contexto; `go test` resume em contagem

@@ -2,11 +2,12 @@ package memoryindex
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func TestProjectIsolationUpdatesAndDeletion(t *testing.T) {
+func TestProjectIsolationAndUpdates(t *testing.T) {
 	dir := t.TempDir()
 	ctx := context.Background()
 	d := Document{ID: "message:one", Kind: "conversation", Session: "session", Text: "billing authentication decision", Stamp: 1}
@@ -21,10 +22,6 @@ func TestProjectIsolationUpdatesAndDeletion(t *testing.T) {
 	d.Text = "changed decision"
 	require.NoError(t, Upsert(ctx, dir, "/project-a", d))
 	items, _, err = Search(ctx, dir, "/project-a", "conversation", "", "authentication", 0, 2)
-	require.NoError(t, err)
-	require.Empty(t, items)
-	require.NoError(t, Remove(ctx, dir, "/project-a", d.ID))
-	items, _, err = Search(ctx, dir, "/project-a", "conversation", "", "changed", 0, 2)
 	require.NoError(t, err)
 	require.Empty(t, items)
 }

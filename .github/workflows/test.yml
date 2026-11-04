@@ -115,8 +115,7 @@ jobs:
           go test -count=1 ./internal/localstate ./internal/session
           go test -count=1 ./internal/permission
           go test -count=1 ./internal/llm/tools/shell -run '^TestNativeSmoke'
-          go test -count=1 ./internal/tui/components/chat -run '^Test(Composer|NewlineShortcuts|EditorPreservesDraft|KeyboardSelection|TranscriptSearch|ResponseClick|Selection|MouseWheel|MessageUpdates|ProseUses)'
-          go test -count=1 ./internal/tui/components/dialog -run '^Test(SettingsGeometryAtSmallAndLargeTerminalSizes|PermissionReviewModesAndFullscreenDoNotApprove|ModelLayoutAndMouseShareCompactGeometry|VaultProvider)'
+          go test -count=1 ./internal/ui/...
           go test -count=1 ./scripts/build-release
       - name: Build native CLI and exercise first/second startup without inference
         run: |

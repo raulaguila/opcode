@@ -60,8 +60,6 @@ func testAzureCloneRequests(t *testing.T, version, api string) {
 		require.NoError(t, err)
 		p, err = p.(ContextWindowController).WithContextWindow(16384)
 		require.NoError(t, err)
-		p, err = p.(SourceCitationController).WithSourceCitations([]string{"main.go:1-2"})
-		require.NoError(t, err)
 		require.Same(t, transport, p.(*baseProvider).client.(*openaiClient).transport)
 	}
 	require.Equal(t, 8, requests)

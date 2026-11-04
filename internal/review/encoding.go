@@ -2,6 +2,7 @@ package review
 
 import (
 	"encoding/json"
+
 	"github.com/raulaguila/opcode/internal/llm/tools"
 )
 

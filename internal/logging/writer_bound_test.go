@@ -13,7 +13,7 @@ func TestLogKeepsOnlyRecentMessages(t *testing.T) {
 	for i := range 2500 {
 		data.Add(LogMessage{ID: fmt.Sprint(i)})
 	}
-	list := data.List()
+	list := data.messages
 	require.LessOrEqual(t, len(list), maxLogMessages)
 	require.Equal(t, "2499", list[len(list)-1].ID)
 }

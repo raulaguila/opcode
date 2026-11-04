@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -17,6 +18,7 @@ type chatSelection struct {
 	dragging, moved bool
 	session         string
 	notice          string
+	saved           string // the text, once the rows under it changed
 }
 
 func (m *Model) selectionMouse(msg tea.MouseMsg) bool {
@@ -72,8 +74,22 @@ func (m *Model) clearSelection() {
 	m.refresh()
 }
 
+// holdSelection lets the transcript keep updating under a selection: when new
+// rows differ from the selected ones the highlight goes and the text stays.
+func (m *Model) holdSelection(next []string) {
+	s := m.selection
+	if s == nil || !s.moved || s.saved != "" {
+		return
+	}
+	a, b := min(s.anchor.row, s.focus.row), max(s.anchor.row, s.focus.row)
+	if b < len(m.rows) && b < len(next) && slices.Equal(m.rows[a:b+1], next[a:b+1]) {
+		return
+	}
+	s.saved, s.dragging = m.selectedText(), false
+}
+
 func (m *Model) selectedCells(row int, line string) (int, int) {
-	if m.selection == nil || !m.selection.moved {
+	if m.selection == nil || !m.selection.moved || m.selection.saved != "" {
 		return 0, 0
 	}
 	a, b := m.selection.anchor, m.selection.focus
@@ -107,6 +123,9 @@ func (m *Model) selectedCells(row int, line string) (int, int) {
 func (m *Model) selectedText() string {
 	if m.selection == nil || !m.selection.moved {
 		return ""
+	}
+	if m.selection.saved != "" {
+		return m.selection.saved
 	}
 	a, b := m.selection.anchor.row, m.selection.focus.row
 	if a > b {

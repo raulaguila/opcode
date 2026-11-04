@@ -107,15 +107,6 @@ LIMIT max(0,(SELECT count(*) FROM documents)-?1)`
 	}
 	return nil
 }
-func Remove(ctx context.Context, directory, project, id string) error {
-	db, err := open(ctx, directory, project)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	return remove(ctx, db, id)
-}
-
 func remove(ctx context.Context, db *sql.DB, id string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,12 +18,13 @@ import (
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/session"
-	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/ui/theme"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
 
@@ -74,6 +76,12 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 
 	// Initialize theme based on configuration
 	app.initTheme()
+
+	if trimmed, err := shell.TrimCommandCache(config.WorkingDirectory()); err != nil {
+		logging.Warn("Command cache could not be trimmed", "error", err)
+	} else if trimmed {
+		logging.Info("Command cache was over its limit and has been emptied")
+	}
 
 	app.IndexWatcher = tools.StartIndexWatcher(ctx)
 
@@ -194,10 +202,7 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 		spinner.Stop()
 	}
 
-	report := format.Result{Response: result.Message.Content().String(), Outcome: result.Outcome, SessionID: sess.ID}
-	if report.Response == "" {
-		report.Response = "No content available"
-	}
+	report := finalReport(result, sess.ID)
 	if a.Workflows != nil {
 		if task, err := a.Workflows.Get(ctx, sess.ID); err == nil {
 			for _, file := range task.FileChanges {
@@ -215,6 +220,20 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 		return &ExitError{Code: 2} // the reply printed; the task did not finish
 	}
 	return nil
+}
+
+// finalReport says what a run left. A refused operation ends it without a
+// reply, which must not read as success.
+func finalReport(result agent.AgentEvent, session string) format.Result {
+	report := format.Result{Response: result.Message.Content().String(), Outcome: result.Outcome, SessionID: session}
+	if result.Message.FinishReason() == message.FinishReasonPermissionDenied {
+		report.Outcome = "blocked"
+		report.Response = strings.TrimSpace(report.Response + "\nPermission denied: the run stopped at an operation it may not perform.")
+	}
+	if report.Response == "" {
+		report.Response = "No content available"
+	}
+	return report
 }
 
 // watchCost cancels the run once the session's estimated cost passes MaxCost.

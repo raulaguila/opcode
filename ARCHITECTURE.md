@@ -206,12 +206,12 @@ estão em `docs/evaluation.md`.
 
 ## Workspace da interface e estado local
 
-O catálogo `internal/tui/commands` alimenta sugestões `/` e a paleta. A página de
+A paleta de `internal/ui` lista os comandos e as sugestões `/`. A página de
 chat mantém painéis de fila, contexto, alterações, skills, permissões, ações de
 resposta e recuperação. Operações assíncronas têm sequência/sessão de origem;
 fechar ou trocar de conversa cancela a operação e descarta resultados atrasados.
 Autorizações aparecem acima do painel que as solicitou. Os controles estão em
-`docs/workspace-ui.md`.
+`docs/interfaces.md`.
 
 O transcript agrupa mensagens por turno, com processo recolhível separado da
 resposta. Atualizações preservam a posição de leitura e indicam novas mensagens;
@@ -238,7 +238,7 @@ regra de agente, permissão ou armazenamento; todas leem e chamam esses serviço
 - `internal/ui` é a interface de terminal atual (Bubble Tea v2), o padrão de
   `opcode`. Recebe os eventos pelo mesmo `setupSubscriptions` e consulta
   perguntas e plano enquanto uma execução está viva. Os editores de conexão e de
-  integrações da interface clássica são reaproveitados (`hosted`), e o editor
+  integrações ficam em `internal/ui/dialog` (`hosted`), e o editor
   de conexão expõe seu estado (`FormState`) para ser desenhado no estilo novo;
   chaves, validação e cofre continuam nele.
 - `internal/desktop` é o backend de `opcode app`: uma API HTTP local e a página
@@ -252,8 +252,6 @@ regra de agente, permissão ou armazenamento; todas leem e chamam esses serviço
   `cmd/app_native.go` abre uma janela Wails que carrega a mesma página local;
   sem ela, `cmd/app_browser.go` faz o comando abrir a janela de app de um
   navegador. O binário sem a tag não usa cgo nem bibliotecas gráficas.
-- `internal/tui` é a interface clássica, mantida por um tempo atrás de
-  `--ui classico`; seus testes de PTY a pedem explicitamente.
 
 Uma conexão cuja variável de chave não está definida carrega desligada e
 marcada (`config.KeyMissing`), em vez de impedir o carregamento; a chave literal
@@ -395,14 +393,8 @@ CGO_ENABLED=0 continua suportado.
 
 As ferramentas de leitura emitem `SourceReadReceipt` com snapshot/hash/faixa. O
 runtime preserva os metadados inclusive no contexto inicial e restringe recibos
-ao conteúdo realmente entregue. A guarda de citações revalida fontes locais
-regulares sob uma política sem concessões adicionais, antes de concluir. Um
-reparo conserva o pedido original; o binding Ollama usa `answer_with_sources`
-nesse reparo, com explicação e opções limitadas de intervalos atuais separadas. `SourceCitationController`
-clona a conexão por pedido sem I/O, preserva autenticação e inclui o schema na
-contagem do payload. O retorno ainda passa pela guarda; nenhuma sugestão de
-schema constitui prova ou permissão. A compactação conserva localizadores
-históricos limitados, separados de recibos atuais.
+ao conteúdo realmente entregue. Citações são orientação do prompt: o runtime não
+as valida nem bloqueia a resposta.
 
 `interaction.Questions` mantém uma decisão pendente por sessão; lotes de até
 cinco itens têm IDs e validação por tipo. A TUI coleta as respostas em etapas,
@@ -426,8 +418,8 @@ nem serviço adicional. A política `parser-v4` invalida chunks de parsers antig
 
 A recuperação de protocolo reconhece uma resposta final Ollama malformada por
 `ErrInvalidFinalAnswer`. Há no máximo uma regeneração por turno, sem texto
-parcial/calls publicados e sem reenviar operações concluídas. Parsers, guardas
-de citação e permissões continuam exigidos. A avaliação inclui temperatura
+parcial/calls publicados e sem reenviar operações concluídas. Parsers e permissões
+continuam exigidos. A avaliação inclui temperatura
 observada; o driver Codaro fixa zero apenas no codec público, preservando seu
 transporte e execução. Comparação distingue zero de observação ausente.
 
@@ -466,7 +458,7 @@ após encerrar o processo. Snapshots não compartilham partes mutáveis com o wo
 O orçamento do provedor mede um `PreparedRequest` imutável, e o mesmo envelope é
 enviado. Compactação e mudanças de histórico/ferramentas/opções exigem nova
 preparação. Título, resumo e exploração seguem o mesmo contrato. Transportes e
-autenticação pertencem à conexão; clones de prompt/contexto/citações preservam
+autenticação pertencem à conexão; clones de prompt/contexto preservam
 esse proprietário sem misturar conexões, credenciais ou políticas TLS.
 
 A TUI separa projeção, layout e comandos de carregamento. Renderizadores não

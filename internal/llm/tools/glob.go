@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/config"
 	"strings"
+
+	"github.com/raulaguila/opcode/internal/config"
 )
 
 const (

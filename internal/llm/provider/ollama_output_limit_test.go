@@ -44,7 +44,7 @@ func TestOllamaOutputLimitRejectsCallsAndPreservesExplicitBudget(t *testing.T) {
 func TestOllamaOutputLimitPreservesPlainPartialText(t *testing.T) {
 	value := ollamaResponse{Done: true, DoneReason: "length", EvalCount: 256}
 	value.Message.Content = "partial answer"
-	response, err := ollamaResult(value, nil)
+	response, err := ollamaResult(value)
 	require.NoError(t, err)
 	require.Equal(t, "partial answer", response.Content)
 	require.Equal(t, message.FinishReasonMaxTokens, response.FinishReason)

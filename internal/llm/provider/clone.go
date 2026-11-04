@@ -4,7 +4,7 @@ import "fmt"
 
 // Request clones share only immutable connection resources (headers, endpoint,
 // TLS policy and the concurrency-safe HTTP/auth clients). Protocol options are
-// copied; changing a prompt, window or citation schema never rebuilds a pool or
+// copied; changing a prompt, or window never rebuilds a pool or
 // appends provider defaults to an existing option chain.
 type requestCloner interface {
 	cloneRequest(providerClientOptions) providerClient
@@ -30,7 +30,6 @@ func scopedRequestOptions(original, request providerClientOptions) providerClien
 	original.maxTokens = request.maxTokens
 	original.model.ContextWindow = request.model.ContextWindow
 	original.model.ContextSource = request.model.ContextSource
-	original.sourceCitations = request.sourceCitations
 	return original
 }
 

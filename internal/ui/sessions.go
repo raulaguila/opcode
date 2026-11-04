@@ -170,45 +170,16 @@ func (d *sessionsDialog) meta() string {
 func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	item, ok := d.list.Current()
 	if d.renaming {
-		switch msg.String() {
-		case "esc":
-			d.renaming = false
-		case "enter":
-			d.rename(m, item)
-		case "backspace":
-			if r := []rune(d.draft); len(r) > 0 {
-				d.draft = string(r[:len(r)-1])
-			}
-		default:
-			d.draft += msg.Text
-		}
+		d.renameKey(m, msg, item)
 		return nil, true
 	}
-	key := msg.String()
-	if key == "ctrl+l" {
+	if msg.String() == "ctrl+l" {
 		return nil, d.clear(m)
 	}
 	d.clearing = false
-	switch key {
-	case "right":
-		d.action = min(d.action+1, 3)
-		if !d.acting {
-			d.acting, d.action = true, 0
-		}
+	key, handled := d.actionKey(msg.String())
+	if handled {
 		return nil, true
-	case "left":
-		d.acting, d.action = d.action > 0 && d.acting, max(0, d.action-1)
-		return nil, true
-	case "enter":
-		if d.acting {
-			key = []string{"enter", "ctrl+r", "ctrl+e", "ctrl+a"}[d.action]
-			d.acting = false
-			if key == "enter" {
-				return nil, false // the list opens it
-			}
-		}
-	default:
-		d.acting = false
 	}
 	switch key {
 	case "ctrl+h":
@@ -217,10 +188,7 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, true
 	case "ctrl+r", "ctrl+e", "ctrl+a":
 	default:
-		if key == "enter" {
-			return nil, false
-		}
-		return nil, false
+		return nil, false // Enter and typing belong to the list
 	}
 	if !ok {
 		return nil, true
@@ -230,25 +198,59 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		m.notice = textFor("Aguarde ou cancele esta conversa antes de gerenciá-la", "Wait for or cancel this conversation before managing it")
 		return nil, true
 	}
+	d.manage(m, key, s)
+	return nil, true
+}
+
+func (d *sessionsDialog) renameKey(m *Model, msg tea.KeyPressMsg, item Item) {
+	switch msg.String() {
+	case "esc":
+		d.renaming = false
+	case "enter":
+		d.rename(m, item)
+	case "backspace":
+		if r := []rune(d.draft); len(r) > 0 {
+			d.draft = string(r[:len(r)-1])
+		}
+	default:
+		d.draft += msg.Text
+	}
+}
+
+// actionKey moves along the row's action buttons and turns Enter on one into
+// the shortcut of that action; handled means nothing is left to do.
+func (d *sessionsDialog) actionKey(key string) (string, bool) {
+	switch key {
+	case "right":
+		d.action = min(d.action+1, 3)
+		if !d.acting {
+			d.acting, d.action = true, 0
+		}
+		return key, true
+	case "left":
+		d.acting, d.action = d.action > 0 && d.acting, max(0, d.action-1)
+		return key, true
+	case "enter":
+		if d.acting {
+			d.acting = false
+			return []string{"enter", "ctrl+r", "ctrl+e", "ctrl+a"}[d.action], false
+		}
+	default:
+		d.acting = false
+	}
+	return key, false
+}
+
+func (d *sessionsDialog) manage(m *Model, key string, s session.Session) {
 	switch key {
 	case "ctrl+r":
 		d.renaming, d.draft = true, s.Title
 	case "ctrl+e":
-		cfg := config.Get()
-		messages, err := m.app.Messages.List(context.Background(), s.ID)
-		if err == nil {
-			var path string
-			if path, err = transcript.Save(cfg.Data.Directory, cfg.WorkingDir, s, messages, tools.RedactCredentials); err == nil {
-				m.info = textFor("Conversa exportada: ", "Conversation exported: ") + fileutil.HomeRelative(path)
-			}
-		}
-		if err != nil {
-			m.notice = err.Error()
-		}
+		d.export(m, s)
 	case "ctrl+a":
 		if err := d.catalog().Archive(s.ID, !d.archived[s.ID]); err != nil {
 			m.notice = err.Error()
-			return nil, true
+			return
 		}
 		m.info = textFor("Conversa arquivada", "Conversation archived")
 		if d.archived[s.ID] {
@@ -256,7 +258,20 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		}
 		d.reload(m, "")
 	}
-	return nil, true
+}
+
+func (d *sessionsDialog) export(m *Model, s session.Session) {
+	cfg := config.Get()
+	messages, err := m.app.Messages.List(context.Background(), s.ID)
+	if err == nil {
+		var path string
+		if path, err = transcript.Save(cfg.Data.Directory, cfg.WorkingDir, s, messages, tools.RedactCredentials); err == nil {
+			m.info = textFor("Conversa exportada: ", "Conversation exported: ") + fileutil.HomeRelative(path)
+		}
+	}
+	if err != nil {
+		m.notice = err.Error()
+	}
 }
 
 // clear deletes every conversation but the open and the archived ones, and
@@ -469,6 +484,7 @@ func (m *Model) openSession(s session.Session) {
 	m.dialog = nil
 	m.leaveFullAccess()
 	m.foldPlan, m.task = false, workflow.Task{}
+	m.approval, m.fullDiff = nil, false // poll brings back a request of this conversation
 	m.session, m.notice, m.info = s, "", ""
 	// The footer's choice follows you; the service keeps it per conversation.
 	if policies, ok := m.app.Permissions.(permission.ApprovalPolicies); ok && policies.ApprovalPolicy(s.ID) != m.policy {

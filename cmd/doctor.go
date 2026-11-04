@@ -121,6 +121,7 @@ func (o *doctorOptions) inspect(cmd *cobra.Command, cwd string, cfg *config.Conf
 	report.inspectBinaries()
 	report.inspectSandbox(cmd.Context(), cwd, cfg)
 	report.inspectLSP(cfg)
+	report.add("command cache", "ok", fmt.Sprintf("%.1f MiB in .opcode/command-cache; emptied at startup above 4 GiB.", float64(shell.CommandCacheSize(cwd))/(1<<20)))
 	if o.languageSupport {
 		report.inspectLanguages(cmd.Context())
 	}

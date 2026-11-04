@@ -361,71 +361,81 @@ func (p *settingsPanel) legend() string {
 // status on top, address and authentication, then the actions that fit its
 // state. A disabled connection is one quiet row, as is the offer to add one.
 func (p *settingsPanel) connectionRows(m *Model, width int) []string {
-	active := p.active
 	var rows []string
 	list := connections(p.active)
 	if len(list) == 0 {
 		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ainda.", "No connections yet.")), "")
 	}
 	for i, c := range list {
-		edge, bg := P.CardEdge, P.Surface
-		if i == p.selected {
-			edge, bg = P.CardSelectedEdge, P.CardSelected
-		}
-		inner := width - 4                      // thin edges and a cell of air on each side
-		off := c.raw.Disabled && !keyMissing(c) // a missing key loads off but keeps its full card
-		icon, iconColor, state, stateColor := "●", P.Success, "", P.Muted
-		switch {
-		case keyMissing(c):
-			icon, iconColor, state, stateColor = "▲", P.Plan, textFor("chave ausente", "key missing"), P.Plan
-		case c.raw.Disabled:
-			icon, iconColor, state = "○", P.Faint, textFor("desativada", "disabled")
-		case c.provider == active:
-			state = textFor("em uso", "in use")
-		}
-		name := on(bg, P.Strong).Bold(true).Render(c.name)
-		if off {
-			name = on(bg, P.Muted).Render(c.name)
-		}
-		pad := on(bg, bg).Render(" ")
-		indent := on(bg, bg).Render("    ")
-		body := []string{pad + Spread(on(bg, iconColor).Render(icon)+on(bg, bg).Render("   ")+name, on(bg, stateColor).Render(state), inner, bg)}
-		deleting := i == p.selected && p.deleting
-		if !off {
-			detail := on(bg, P.Muted).Render(connectionDetail(c))
-			if probe, ok := p.probes[c.provider]; ok {
-				color := P.Muted
-				if !probe.ok {
-					color = P.Danger
-				}
-				detail += on(bg, P.Muted).Render(" · ") + on(bg, color).Render(probe.text)
-			}
-			body = append(body, pad+indent+detail)
-			labels := []string{textFor("Editar", "Edit"), textFor("Testar", "Test"), textFor("Modelos", "Models")}
-			if keyMissing(c) {
-				labels = []string{textFor("Editar", "Edit"), textFor("Desativar", "Disable")}
-			}
-			if deleting {
-				body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
-			} else {
-				for _, row := range OutlineButtons(labels, P.Border, P.Strong, bg) {
-					body = append(body, pad+on(bg, bg).Render("   ")+row)
-				}
-			}
-		} else if deleting {
-			body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
-		} else {
-			rows = append(rows, quietRow(body[0], i == p.selected, width, bg), "")
-			continue
-		}
-		card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface}
-		rows = append(rows, strings.Split(card.Render(strings.Join(body, "\n")), "\n")...)
+		rows = append(rows, p.connectionCard(c, i, width)...)
 	}
 	if p.status != "" && p.failed {
 		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(p.status, width, "…")))
 	}
 	offer := on(P.Surface, P.Ask).Render(" " + textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…"))
 	return append(rows, quietRow(offer, false, width, P.Surface))
+}
+
+// connectionCard is one connection; a disabled one folds to a quiet line.
+func (p *settingsPanel) connectionCard(c connection, i, width int) []string {
+	edge, bg := P.CardEdge, P.Surface
+	if i == p.selected {
+		edge, bg = P.CardSelectedEdge, P.CardSelected
+	}
+	off := c.raw.Disabled && !keyMissing(c) // a missing key loads off but keeps its full card
+	name := on(bg, P.Strong).Bold(true).Render(c.name)
+	if off {
+		name = on(bg, P.Muted).Render(c.name)
+	}
+	icon, iconColor, state, stateColor := p.connectionState(c)
+	pad := on(bg, bg).Render(" ")
+	indent := on(bg, bg).Render("    ")
+	inner := width - 4 // thin edges and a cell of air on each side
+	body := []string{pad + Spread(on(bg, iconColor).Render(icon)+on(bg, bg).Render("   ")+name, on(bg, stateColor).Render(state), inner, bg)}
+	deleting := i == p.selected && p.deleting
+	if off && !deleting {
+		return []string{quietRow(body[0], i == p.selected, width, bg), ""}
+	}
+	if !off {
+		body = append(body, pad+indent+p.connectionDetailRow(c, bg))
+	}
+	if deleting {
+		body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
+	} else {
+		labels := []string{textFor("Editar", "Edit"), textFor("Testar", "Test"), textFor("Modelos", "Models")}
+		if keyMissing(c) {
+			labels = []string{textFor("Editar", "Edit"), textFor("Desativar", "Disable")}
+		}
+		for _, row := range OutlineButtons(labels, P.Border, P.Strong, bg) {
+			body = append(body, pad+on(bg, bg).Render("   ")+row)
+		}
+	}
+	card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface}
+	return strings.Split(card.Render(strings.Join(body, "\n")), "\n")
+}
+
+func (p *settingsPanel) connectionState(c connection) (string, color.Color, string, color.Color) {
+	switch {
+	case keyMissing(c):
+		return "▲", P.Plan, textFor("chave ausente", "key missing"), P.Plan
+	case c.raw.Disabled:
+		return "○", P.Faint, textFor("desativada", "disabled"), P.Muted
+	case c.provider == p.active:
+		return "●", P.Success, textFor("em uso", "in use"), P.Muted
+	}
+	return "●", P.Success, "", P.Muted
+}
+
+func (p *settingsPanel) connectionDetailRow(c connection, bg color.Color) string {
+	detail := on(bg, P.Muted).Render(connectionDetail(c))
+	if probe, ok := p.probes[c.provider]; ok {
+		tint := P.Muted
+		if !probe.ok {
+			tint = P.Danger
+		}
+		detail += on(bg, P.Muted).Render(" · ") + on(bg, tint).Render(probe.text)
+	}
+	return detail
 }
 
 // quietRow is a card reduced to its first line, with the selection bar.

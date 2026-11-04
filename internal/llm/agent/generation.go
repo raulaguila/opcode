@@ -18,15 +18,13 @@ import (
 // generationState owns one run's history and bounded recovery attempts.
 // No stage replays completed tool effects or grants permissions.
 type generationState struct {
-	agent                                                        *agent
-	ctx                                                          context.Context
-	sessionID                                                    string
-	run                                                          *generationRun
-	history                                                      []message.Message
-	signatures                                                   [][32]byte
-	repairs, citationRepairs, contextRetries, finalAnswerRetries int
-	citationMessages                                             []string
-	citationQuestionAnswered                                     bool
+	agent                                       *agent
+	ctx                                         context.Context
+	sessionID                                   string
+	run                                         *generationRun
+	history                                     []message.Message
+	signatures                                  [][32]byte
+	repairs, contextRetries, finalAnswerRetries int
 }
 
 func (a *agent) prepareGenerationHistory(ctx context.Context, sessionID, content string, attachmentParts []message.ContentPart, run *generationRun) ([]message.Message, error) {
@@ -107,11 +105,6 @@ func (g *generationState) checkRepetition(agentMessage message.Message, toolResu
 }
 func (g *generationState) applyInstructions(continueTools bool) (bool, error) {
 	instructions := g.agent.takeInstructions(g.run, !continueTools)
-	if len(instructions) > 0 {
-		if err := g.abandonCitationRevision(true); err != nil {
-			return false, err
-		}
-	}
 	for _, instruction := range instructions {
 		msg, err := g.agent.createUserMessage(g.ctx, g.sessionID, instruction.content, instruction.parts)
 		if err != nil {
@@ -119,11 +112,6 @@ func (g *generationState) applyInstructions(continueTools bool) (bool, error) {
 		}
 		g.history = append(g.history, msg)
 		g.agent.prefetchTools(g.run, instruction.content)
-		if g.agent.workflow != nil && g.run.mode == workflow.Execute && g.run.contract == nil && requiresFileChanges(instruction.content) {
-			if _, err := g.agent.workflow.BeginTurn(g.ctx, g.sessionID, true); err != nil {
-				return false, err
-			}
-		}
 	}
 	if len(instructions) > 0 {
 		g.signatures = g.signatures[:0]
@@ -181,45 +169,6 @@ func (g *generationState) validateRequiredCalls() (bool, error) {
 	g.acceptInstructions()
 	return true, nil
 }
-func (g *generationState) validateCitations(agentMessage message.Message) (bool, error) {
-	assessment, err := g.citationProblem(agentMessage)
-	if err != nil {
-		return false, err
-	}
-	state := assessment.state
-	if assessment.direct && g.citationRepairs == 0 && humanTurnID(g.history) != "" {
-		state = message.CitationRevising
-	}
-	if err := g.setCitationState(&agentMessage, state); err != nil {
-		return false, err
-	}
-	if assessment.problem != "" {
-		if g.citationRepairs >= 1 {
-			return false, fmt.Errorf("%w: %s", ErrSourceCitation, tools.Clip(tools.RedactCredentials(assessment.problem), 1800))
-		}
-		g.citationRepairs++
-		if state == message.CitationRevising {
-			g.beginCitationRevision(agentMessage)
-		}
-		g.agent.observePhase(g.sessionID, "repair", 0)
-		g.run.citationRepair = true
-		correction, err := g.agent.createApplicationMessage(g.ctx, g.sessionID, citationRepairRequest(g.run, g.history, assessment.problem), nil)
-		if err != nil {
-			return false, err
-		}
-		g.history = append(g.history, correction)
-		g.agent.runMu.Lock()
-		if g.ctx.Err() == nil {
-			g.run.accepting = true
-		}
-		g.agent.runMu.Unlock()
-		return true, nil
-	}
-	if err := g.completeCitationRevision(agentMessage); err != nil {
-		return false, err
-	}
-	return false, nil
-}
 func (g *generationState) completed(agentMessage message.Message) AgentEvent {
 	for i := len(g.history) - 1; i >= 0; i-- {
 		if g.history[i].ID == agentMessage.ID {
@@ -240,14 +189,11 @@ func (g *generationState) completed(agentMessage message.Message) AgentEvent {
 		Done:    true,
 	}
 }
-func (g *generationState) validateCompletion(agentMessage message.Message) (bool, error) {
+func (g *generationState) validateCompletion() (bool, error) {
 	if retry, err := g.validateTask(); retry || err != nil {
-		return retry, errors.Join(err, g.abandonCitationRevision(true), g.resolvePendingCitation(agentMessage))
+		return retry, err
 	}
-	if retry, err := g.validateRequiredCalls(); retry || err != nil {
-		return retry, errors.Join(err, g.abandonCitationRevision(true), g.resolvePendingCitation(agentMessage))
-	}
-	return g.validateCitations(agentMessage)
+	return g.validateRequiredCalls()
 }
 func (g *generationState) appendOperation(agentMessage message.Message, toolResults *message.Message) {
 	resultCount := 0
@@ -325,15 +271,8 @@ func (a *agent) beginGenerationWorkflow(ctx context.Context, sessionID, content 
 	if run.mode != workflow.Execute {
 		return nil
 	}
-	task, err := a.workflow.Get(ctx, sessionID)
-	if err != nil {
-		return err
-	}
-	requires := requiresFileChanges(content) || (resumingRequest(content) && requiresFileChanges(task.Objective))
-	if run.contract != nil {
-		requires = run.contract.Kind == "change"
-	}
-	_, err = a.workflow.BeginTurn(ctx, sessionID, requires, resumingRequest(content))
+	requires := run.contract != nil && run.contract.Kind == "change"
+	_, err := a.workflow.BeginTurn(ctx, sessionID, requires, resumingRequest(content))
 	return err
 }
 
@@ -405,9 +344,6 @@ func (g *generationState) step() (bool, AgentEvent) {
 	}
 
 	g.appendOperation(reply, results)
-	if err := g.recordPublicCitation(&reply, results); err != nil {
-		return true, g.agent.err(err)
-	}
 	if err := g.checkRepetition(reply, results); err != nil {
 		return true, g.agent.err(err)
 	}
@@ -419,7 +355,7 @@ func (g *generationState) step() (bool, AgentEvent) {
 	if continueTools || instructions {
 		return false, AgentEvent{}
 	}
-	retry, err := g.validateCompletion(reply)
+	retry, err := g.validateCompletion()
 	if err != nil {
 		return true, g.agent.err(err)
 	}

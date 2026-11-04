@@ -35,11 +35,11 @@ não foram medidos.
 1. **Alta — estado da credencial de ambiente.** A escolha explícita de chave
    direta/ambiente/nenhuma já foi implementada. O próximo ganho é mostrar o
    estado definido/ausente da variável, sem exibir seu valor. Evidência:
-   [`edit` e formulário](../internal/tui/components/dialog/providers.go).
+   [`edit` e formulário](../internal/ui/dialog/providers.go).
 2. **Alta — erro no campo responsável.** Ao salvar uma URL, enum ou número
    inválido, focar e rolar até o campo, mantendo todos os valores preenchidos.
    Hoje `readProfile`, `test` e `save` devolvem o erro em uma nota geral, sem
-   direcionar o foco. Evidência: [validação do formulário](../internal/tui/components/dialog/providers.go).
+   direcionar o foco. Evidência: [validação do formulário](../internal/ui/dialog/providers.go).
 3. **Alta — resultado de teste por etapa.** Distinguir URL inválida, falha TLS,
    autenticação recusada e catálogo vazio/indisponível. Oferecer uma correção
    concreta sem ativar TLS inseguro automaticamente. Separar “catálogo
@@ -48,7 +48,7 @@ não foram medidos.
 4. **Média — configuração em sequência.** Após salvar, destacar “Escolher modelo”
    e mostrar conexão/modelo ativos. Separar claramente Salvar, Consultar catálogo
    e Salvar e ativar, mantendo a etapa de escolha já existente. Ao voltar,
-   preservar rascunhos. Evidência: [fluxo de configuração](../internal/tui/components/dialog/experience.go).
+   preservar rascunhos. Evidência: [fluxo de configuração](../internal/ui/dialog/experience.go).
 5. **Média — vocabulário do usuário.** Mostrar “API compatível com OpenAI” no
    formulário e reservar `local`, backend e protocolo para Mais. `local` também
    atende gateways remotos; esse nome técnico pode induzir a uma escolha errada.
@@ -56,7 +56,7 @@ não foram medidos.
 6. **Média — atalhos durante edição.** `Ctrl+A` abre os campos avançados, mas é
    usado para início/seleção de texto em vários ambientes. Mover “Mais” para um
    atalho sem conflito, mantendo ação visível, e exibir ajuda apenas do campo
-   focado. Evidência: [roteamento de teclas](../internal/tui/components/dialog/providers.go).
+   focado. Evidência: [roteamento de teclas](../internal/ui/dialog/providers.go).
 7. **Média — tradução completa.** Revisar notas de teste, erros de validação e
    termos técnicos, inclusive estados com TLS habilitado. Manter nomes de
    protocolos e variáveis literais, mas traduzir as instruções ao redor.

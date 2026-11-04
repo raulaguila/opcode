@@ -70,7 +70,6 @@ func (a *agent) bootstrapCall(ctx context.Context, session string, tool tools.Ba
 	}
 	run.toolBytes += len(response.Metadata)
 	a.observePreparation(session, name, reused, len(response.Content)+len(response.Metadata))
-	run.prepared++
 	a.finishMessage(ctx, &assistant, message.FinishReasonToolUse)
 	result, err := a.messages.Create(ctx, session, message.CreateMessageParams{Role: message.Tool, Parts: []message.ContentPart{message.ToolResult{ToolCallID: call.ID, Name: name, Content: response.Content, Metadata: response.Metadata, IsError: response.IsError}}})
 	if err != nil {
@@ -142,13 +141,10 @@ func (a *agent) bootstrapBasic(ctx context.Context, session, question string, hi
 			break
 		}
 		input, _ := json.Marshal(tools.ViewParams{FilePath: path, Limit: 80})
-		next, response, err := a.bootstrapCall(ctx, session, view, string(input), history, run)
+		next, _, err := a.bootstrapCall(ctx, session, view, string(input), history, run)
 		history = next
 		if err != nil {
 			return history, err
-		}
-		if _, visible := tools.VisibleSourceReadReceipt("view", response.Content, response.Metadata); !response.IsError && visible && len(run.primaryEvidence) == 0 {
-			run.primaryEvidence = map[string]bool{normalizedToolPath(path): true}
 		}
 	}
 	return a.bootstrapImporters(ctx, session, question, history, run)

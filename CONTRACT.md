@@ -257,8 +257,8 @@ identifies observed, untested and unavailable capabilities separately.
 
 Escopo: uma interface de terminal reconstruída a partir da proposta visual
 aprovada (`internal/ui`) e um app gráfico com as mesmas telas (`opcode app`,
-`internal/desktop`), com janela nativa opcional por Wails. `opcode` abre a nova
-interface de terminal; a anterior fica atrás de `--ui classico` por um tempo.
+`internal/desktop`), com janela nativa opcional por Wails. `opcode` abre a
+interface de terminal.
 
 Invariantes preservados: nenhuma interface concede aprovação, altera escopos de
 permissão ou contorna o sandbox; o app escuta só em loopback com chave por

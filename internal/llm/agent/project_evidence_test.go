@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -45,19 +46,6 @@ func TestEncodedChoicesWaitForHumanWithoutRepairGeneration(t *testing.T) {
 	}
 }
 
-func TestGenericProjectQuestionsRequireCitationsInEveryMode(t *testing.T) {
-	for _, mode := range []workflow.Mode{workflow.Ask, workflow.Plan, workflow.Execute} {
-		for _, question := range []string{"o que pode me falar do projeto atual?", "qual linguagens o projeto suporta?", "mas o projeto possui suporte a outras linguagens.."} {
-			run := &generationRun{mode: mode, selected: map[string]bool{}}
-			(&agent{}).prefetchTools(run, question)
-			require.True(t, run.requiresCitation, "%s: %s", mode, question)
-			if strings.Contains(question, "linguagens") {
-				require.True(t, run.selected["get_language_support"])
-			}
-		}
-	}
-}
-
 func TestBootstrapReusesOnlyCurrentVisibleSourcesAndProjectsOnce(t *testing.T) {
 	a, p, saved, root := runtimeAgent(t, workflow.Ask)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# UNIQUE_REPOSITORY_FACT\nRepository evidence.\n"), 0600))
@@ -78,14 +66,6 @@ func TestBootstrapReusesOnlyCurrentVisibleSourcesAndProjectsOnce(t *testing.T) {
 			history, err := saved.List(context.Background(), "s")
 			require.NoError(t, err)
 			require.Equal(t, 2, countSourceBodies(history, "UNIQUE_REPOSITORY_FACT"), "persisted transcript is intact")
-			var turn string
-			for _, msg := range history {
-				if msg.Role == message.User && !msg.IsApplication() {
-					turn = msg.ID
-				}
-			}
-			receipts, _ := sourceReadReceipts(&generationRun{turnMessageID: turn}, history)
-			require.NotEmpty(t, receipts)
 		}
 		if i == 2 {
 			require.EqualValues(t, 2, read.count.Load(), "changed source requires a fresh read")
@@ -104,17 +84,6 @@ func countSourceBodies(history []message.Message, needle string) int {
 		}
 	}
 	return count
-}
-
-func TestProjectFactsWithoutReadEvidenceFailClosedAfterOneCitationRepair(t *testing.T) {
-	a, p, _, _ := runtimeAgent(t, workflow.Execute)
-	done, err := a.Run(context.Background(), "s", "quais linguagens o projeto suporta?")
-	require.NoError(t, err)
-	nextGeneration(t, p).reply <- provider.ProviderResponse{Content: "Suporta tudo.", FinishReason: message.FinishReasonEndTurn}
-	repair := nextGeneration(t, p)
-	require.Contains(t, repair.history[len(repair.history)-1].Content().Text, "No verifiable current interval")
-	repair.reply <- provider.ProviderResponse{Content: "Suporta tudo em imaginary.go:1.", FinishReason: message.FinishReasonEndTurn}
-	require.ErrorContains(t, finishGeneration(t, done).Error, "citation remains missing")
 }
 
 func TestProviderCannotAssignContextProvenance(t *testing.T) {
@@ -194,6 +163,15 @@ func TestQuestionWordsNeverPreloadSources(t *testing.T) {
 	call := nextGeneration(t, p)
 	require.Zero(t, read.count.Load())
 	call.reply <- provider.ProviderResponse{Content: "Preciso ler o código primeiro.", FinishReason: message.FinishReasonEndTurn}
-	nextGeneration(t, p).reply <- provider.ProviderResponse{Content: "Ainda sem leitura.", FinishReason: message.FinishReasonEndTurn}
 	finishGeneration(t, done)
+}
+
+type citationReadTool struct {
+	tools.BaseTool
+	count atomic.Int32
+}
+
+func (t *citationReadTool) Run(ctx context.Context, call tools.ToolCall) (tools.ToolResponse, error) {
+	t.count.Add(1)
+	return t.BaseTool.Run(ctx, call)
 }

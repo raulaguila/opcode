@@ -15,6 +15,8 @@ import (
 
 func TestImplementationCannotFinishWithoutChanges(t *testing.T) {
 	a, p, _, _ := runtimeAgent(t, workflow.Execute)
+	_, err := a.workflow.SetContract(context.Background(), "s", &workflow.Contract{Kind: "change"})
+	require.NoError(t, err)
 	done, err := a.Run(context.Background(), "s", "Corrija o arquivo main.go")
 	require.NoError(t, err)
 	for i := range 3 {
@@ -53,35 +55,11 @@ func TestPartialTaskIsNotReportedAsCompleted(t *testing.T) {
 	require.NoError(t, result.Error)
 	require.Equal(t, "partial", result.Outcome)
 }
-func TestChangeIntentIsBookkeepingAndDoesNotMisclassifyQuestions(t *testing.T) {
-	for _, request := range []string{"Pode corrigir o arquivo?", "Implemente x", "Please update config", "Faça tudo", "Crie o teste", "Quero que você corrija o arquivo", "Renomeie o símbolo"} {
-		require.True(t, requiresFileChanges(request), request)
-	}
-	for _, request := range []string{"Como corrigir o arquivo?", "O que falta implementar?", "Planeje uma alteração", "Explique edit", "Faça uma nova análise", "Faça uma lista", "Crie um plano", "Create a plan"} {
-		require.False(t, requiresFileChanges(request), request)
-	}
-}
-
-func TestSecondaryImperativesAndLiveEditFixtureRequireChanges(t *testing.T) {
-	for _, request := range []string{
-		"Leia counter.py e corrija add para somar seus argumentos, usando return a + b. Altere somente esse arquivo. Não é necessário executar comandos.",
-		"Read counter.py and fix add to sum its arguments.",
-		"Leia o código. Corrija a função add.",
-		"Tarefas:\n- Leia o arquivo\n- Corrija a função add",
-		"Tarefas:\n1. Leia o arquivo\n2. Implemente a validação",
-	} {
-		require.True(t, requiresFileChanges(request), request)
-	}
-	for _, request := range []string{
-		"Como ler counter.py e corrigir a função?", "Explain how to read and fix counter.py", "Planeje a alteração:\n- Corrija add", "Leia counter.py e explique a operação errada, sem editar arquivos.", "Read and fix nothing; do not edit files", "O que falta?\n- Corrija o arquivo seria uma opção?",
-	} {
-		require.False(t, requiresFileChanges(request), request)
-	}
-}
-
 func TestLiveEditFixtureLoadsEditAndRejectsUnchangedFinal(t *testing.T) {
 	a, p, _, _ := runtimeAgent(t, workflow.Execute)
 	a.tools = []tools.BaseTool{&countedTool{name: "edit"}}
+	_, err := a.workflow.SetContract(context.Background(), "s", &workflow.Contract{Kind: "change"})
+	require.NoError(t, err)
 	const request = "Leia counter.py e corrija add para somar seus argumentos, usando return a + b. Altere somente esse arquivo. Não é necessário executar comandos."
 	done, err := a.Run(context.Background(), "s", request)
 	require.NoError(t, err)

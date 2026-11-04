@@ -222,6 +222,8 @@ func TestVerifiedFilesRemainSeparateWhenConfiguredChecksCannotBeVerified(t *test
 
 func TestScopedCreationStillRequiresPermission(t *testing.T) {
 	a, p, root := fileEffectAgent(t, false)
+	_, err := a.workflow.SetContract(context.Background(), "s", &workflow.Contract{Kind: "change"})
+	require.NoError(t, err)
 	done, err := a.Run(context.Background(), "s", "Crie um arquivo de texto")
 	require.NoError(t, err)
 	call := nextGeneration(t, p)

@@ -37,30 +37,7 @@ Não há metas de latência ou paridade de qualidade entre modelos estabelecidas
 
 A conversa mantém a ordem das mensagens públicas e intercala grupos consecutivos
 de ferramentas recolhíveis. Diagnósticos permanecem visíveis após perguntas,
-respostas humanas e reparos internos, com estado de citação associado ao texto.
-Uma falha de citação tem categoria própria e não indica contexto esgotado.
-Correções diretas de referências são versões da mesma resposta. O original
-continua visível durante a revisão; somente uma correção validada vira principal,
-com a versão anterior recolhida e acessível por clique ou `Alt+V`. Falhas mantêm
-o original e seu aviso. Perguntas, mudanças de tarefa e mensagens independentes
-não são agrupadas como revisões por proximidade ou conteúdo.
-Perguntas usam painel com borda, superfície distinta, estado de espera e seleção
-explícita, preservando a distinção entre responder e autorizar uma ferramenta.
-O painel tem borda reta e divisória acima dos controles; o estado de espera
-permanece no rodapé. Menus e formulários usam a mesma superfície elevada,
-borda reta, seleção discreta e divisória acima dos controles quando há espaço.
-Avisos, diffs e permissões mantêm suas cores semânticas e escolhas explícitas.
-O conjunto visual usa Charm v2, com teclado, mouse e colagem nativos, preservando
-temas personalizados e configuração. Ver [dependências](docs/dependencies.md).
-O chat renderiza títulos sem marcadores Markdown, com
-ênfases neutras no tema Opcode e linhas de listas alinhadas depois do marcador.
-A resposta livre é a última opção selecionável; o foco indica se será enviada
-uma sugestão ou o texto, sem um rascunho inativo substituir a escolha. Após o
-envio, pergunta e resposta ficam juntas, com rótulo e pipe na cor de destaque,
-inclusive ao reabrir a conversa e sem depender somente de cores.
-`/quit` usa o encerramento protegido; `--resume` sem ID reabre a última conversa
-disponível do projeto, sem continuar ações ou restaurar aprovações. A sintaxe com
-ID e o comando `/resume` para continuar tarefas permanecem disponíveis.
+respostas humanas e reparos internos.
 
 A estabilidade visual inclui um único composer/rodapé, input de três a oito
 linhas conforme o espaço, foco exclusivo dos diálogos e catálogo com busca,
@@ -107,7 +84,7 @@ oferece acesso ao orçamento, índice, alocação e diagnóstico. A apresentaç�
 prosa com largura configurável (total por padrão), ações visíveis, tempo
 decorrido, prévia de temas e notificações
 optativas. Essas mudanças não concedem capacidades nem alteram os gates de
-citação, conclusão ou permissão. Ver [interface](docs/workspace-ui.md).
+citação, conclusão ou permissão. Ver [interface](docs/interfaces.md).
 
 As aprovações começam em Recusar e aceitam Esc ou clique no botão; o escopo
 continua exato. O editor externo devolve um rascunho. Conexões mostram seu estado
@@ -146,7 +123,7 @@ A investigação de fluxos usa os termos da tarefa e até três pistas distintas
 para obter uma nova fonte, sem aumentar o limite de leituras. O índice favorece identificadores dentro de
 perguntas naturais. Preparação automática resume apenas arquivos lidos no turno;
 referências de símbolos completos exigem intervalo entregue e hash coincidente.
-O histórico bruto, leituras nativas, recibos e a validação das citações permanecem
+O histórico bruto, leituras nativas, e recibos permanecem
 preservados. A explicação distingue contrato, implementação e inferência.
 Listas simples não ganham separadores por quebra visual. As ações da resposta
 expõem largura total/leitura confortável. Fontes mostram o estado registrado

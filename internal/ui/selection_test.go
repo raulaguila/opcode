@@ -64,12 +64,13 @@ func TestSelectionStaysStableWhileMessagesStreamAndClearsOnResize(t *testing.T) 
 	m.messages = []message.Message{{ID: "a", SessionID: "s", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "original"}}}}
 	m.layout()
 	m.selection = &chatSelection{anchor: chatPoint{0, 1}, focus: chatPoint{20, 1}, session: "s", moved: true}
-	before := append([]string(nil), m.rows...)
+	selected := m.selectedText()
+	require.NotEmpty(t, selected)
 	updated := message.Message{ID: "a", SessionID: "s", Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "updated"}}}
 	m.Update(pubsub.Event[message.Message]{Type: pubsub.UpdatedEvent, Payload: updated})
-	require.Equal(t, before, m.rows)
-	m.clearSelection()
-	require.Contains(t, ansi.Strip(strings.Join(m.rows, "\n")), "updated")
+	require.Contains(t, ansi.Strip(strings.Join(m.rows, "\n")), "updated", "a selection never freezes the transcript")
+	require.Equal(t, selected, m.selectedText(), "the selected text survives the rows under it")
+	require.NotContains(t, strings.Join(m.highlightSelection(m.rows, 0), ""), "\x1b[7m")
 	m.selection = &chatSelection{session: "s", moved: true}
 	m.Update(tea.WindowSizeMsg{Width: 90, Height: 24})
 	require.Nil(t, m.selection)

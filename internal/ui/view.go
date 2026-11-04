@@ -19,7 +19,7 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/transcript"
-	"github.com/raulaguila/opcode/internal/tui/styles"
+	"github.com/raulaguila/opcode/internal/ui/styles"
 )
 
 const (
@@ -126,10 +126,40 @@ func (m *Model) renderTranscript(width int) string {
 	if cfg := config.Get(); cfg != nil && cfg.TUI.ProseWidth > 0 {
 		inner = min(inner, cfg.TUI.ProseWidth) // the reading width, as preferred
 	}
-	indent := on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter))
-	results := map[string]message.ToolResult{}
-	started := map[string]int64{} // a call runs once the model finishes asking for it
-	for _, msg := range m.messages {
+	p := transcriptPaint{m: m, inner: inner, indent: on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter)), fresh: map[string]renderedBlock{}, failureAt: -1}
+	p.results, p.started = toolTimeline(m.messages)
+	p.commands = m.commandEntries()
+	p.commandByID = map[string]commandEntry{}
+	for _, entry := range p.commands {
+		p.commandByID[entry.id] = entry
+	}
+	// Messages render once; only the reply still streaming renders again.
+	defer func() { m.blocks = p.fresh }()
+	p.conversation()
+	p.managedCommands()
+	// While the model thinks, its reasoning shows live; the answer replaces it.
+	if thought := message.LiveThought(m.messages, 4000); m.busy && thought != "" {
+		rows := strings.Split(ansi.Wrap(thought, inner-1, ""), "\n")
+		rows = append([]string{textFor("Pensando…", "Thinking…")}, rows[max(0, len(rows)-6):]...)
+		p.blocks = append(p.blocks, barred(strings.Join(rows, "\n"), "┊", P.Faint, P.Muted, inner, p.indent))
+	}
+	if m.failure != nil {
+		if p.failureAt < 0 {
+			p.failureAt = len(p.blocks)
+		}
+		p.blocks = slices.Insert(p.blocks, p.failureAt, m.failureView())
+	}
+	if len(p.blocks) == 0 {
+		return m.emptyState(inner, p.indent)
+	}
+	return "\n" + strings.Join(p.blocks, "\n\n") + "\n"
+}
+
+// toolTimeline pairs each tool call with its result and the moment it started:
+// a call runs once the model finishes asking for it.
+func toolTimeline(messages []message.Message) (map[string]message.ToolResult, map[string]int64) {
+	results, started := map[string]message.ToolResult{}, map[string]int64{}
+	for _, msg := range messages {
 		for _, result := range msg.ToolResults() {
 			results[result.ToolCallID] = result
 		}
@@ -140,11 +170,13 @@ func (m *Model) renderTranscript(width int) string {
 			}
 		}
 	}
-	// A turn shows one reply: when the model revises its answer (citation
-	// repairs), only the last public text is drawn.
-	latest := map[int]string{}
-	turn := 0
-	for _, msg := range m.messages {
+	return results, started
+}
+
+// lastReplies names the reply each turn shows: only its last public text.
+func lastReplies(messages []message.Message) map[int]string {
+	latest, turn := map[int]string{}, 0
+	for _, msg := range messages {
 		if msg.Role == message.User && !msg.IsApplication() {
 			turn++
 		}
@@ -152,142 +184,166 @@ func (m *Model) renderTranscript(width int) string {
 			latest[turn] = msg.ID
 		}
 	}
-	// Messages render once; only the reply still streaming renders again.
-	fresh := map[string]renderedBlock{}
-	defer func() { m.blocks = fresh }()
-	turn = 0
-	var blocks []string
-	var steps, turnCalls []message.ToolCall
-	commands := m.commandEntries()
-	commandByID := map[string]commandEntry{}
-	for _, entry := range commands {
-		commandByID[entry.id] = entry
-	}
-	failureAt := -1 // the recovery card follows the last steps of the conversation
-	flush := func() {
-		if len(steps) > 0 {
-			// A run of steps is redrawn only when a call starts or ends.
-			var key strings.Builder
-			fmt.Fprintf(&key, "%t:%t:%d", m.approval != nil, config.Get() != nil && config.Get().Preferences.ProcessVisible(), m.processVersion)
-			for _, call := range steps {
-				result, done := results[call.ID]
-				fmt.Fprintf(&key, "|%s:%d:%t:%t:%t", call.ID, len(call.Input), call.Finished, done, result.IsError)
-				entry, command := commandByID[call.ID]
-				if command {
-					fmt.Fprintf(&key, ":%q:%q:%q", entry.command, result.Content, result.Metadata)
-				}
-				if !done || command && entry.state == "running" {
-					fmt.Fprintf(&key, ":%d", time.Now().Unix()) // its seconds count
-				}
-			}
-			run := steps
-			blocks = append(blocks, m.cached("steps:"+run[0].ID, key.String(), inner, fresh, func() string {
-				var rows []string
-				var regular []message.ToolCall
-				flushRegular := func() {
-					rows = append(rows, stepsRows(regular, results, started, inner, m.approval != nil, P.Ground)...)
-					regular = nil
-				}
-				for _, call := range run {
-					if entry, ok := commandByID[call.ID]; ok {
-						flushRegular()
-						rows = append(rows, commandRows(entry, inner, m.approval != nil)...)
-					} else {
-						regular = append(regular, call)
-					}
-				}
-				flushRegular()
-				for i := range rows {
-					rows[i] = indent + rows[i]
-				}
-				return strings.Join(rows, "\n")
-			}))
-			failureAt = len(blocks)
-			steps = nil
-		}
-	}
-	for _, msg := range m.messages {
+	return latest
+}
+
+// transcriptPaint is one pass over the conversation, block by block.
+type transcriptPaint struct {
+	m               *Model
+	inner           int
+	indent          string
+	results         map[string]message.ToolResult
+	started         map[string]int64
+	commands        []commandEntry
+	commandByID     map[string]commandEntry
+	fresh           map[string]renderedBlock
+	blocks          []string
+	steps, turnCall []message.ToolCall
+	failureAt       int // the recovery card follows the last steps of the conversation
+}
+
+func (p *transcriptPaint) conversation() {
+	latest, turn := lastReplies(p.m.messages), 0
+	for _, msg := range p.m.messages {
 		if msg.IsApplication() || msg.Role == message.Tool {
 			continue
 		}
 		text := strings.TrimSpace(msg.Content().String())
 		if msg.Role == message.User {
 			turn++
-			turnCalls = nil
-			flush()
-			blocks = append(blocks, m.cached(msg.ID, text, inner, fresh, func() string {
-				return barred(text, "┃", P.User, P.Strong, inner, indent)
+			p.turnCall = nil
+			p.flushSteps()
+			p.blocks = append(p.blocks, p.m.cached(msg.ID, text, p.inner, p.fresh, func() string {
+				return barred(text, "┃", P.User, P.Strong, p.inner, p.indent)
 			}))
 			continue
 		}
 		if text != "" && latest[turn] == msg.ID {
-			flush()
-			key := text
-			read := agent.SourcesLabel(agent.SourcesRead(turnCalls, results))
-			if msg.IsFinished() {
-				key += "\x00" + string(msg.Model) + "\x00" + read // the meta line appears when it finishes
-			}
-			blocks = append(blocks, m.cached(msg.ID, key, inner, fresh, func() string {
-				var body string
-				if msg.IsFinished() {
-					body = styles.RenderMarkdownBlocks(text, inner, inner)
-				} else {
-					// Settled paragraphs of the live reply come from its block cache.
-					body = m.live.RenderStreaming(text, inner, inner)
-				}
-				body = strings.TrimSuffix(body, "\n")
-				if finish := msg.FinishPart(); finish != nil && msg.IsFinished() {
-					meta := " " + modelName(msg.Model) + " · " + duration(msg.CreatedAt, finish.Time)
-					if read != "" {
-						meta += " · " + textFor("lido: ", "read: ") + read
-					} else if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
-						meta += fmt.Sprintf(" · %s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
-					}
-					body += "\n" + on(P.Ground, P.Faint).Render(meta)
-				}
-				return barredRendered(body, "│", P.Ask, indent)
-			}))
+			p.flushSteps()
+			p.reply(msg, text)
 		}
-		for _, call := range msg.ToolCalls() {
-			if decisions := transcript.AnsweredQuestions(call, results[call.ID]); len(decisions) > 0 {
-				flush()
-				for _, decision := range decisions {
-					text := textFor("Pergunta: ", "Question: ") + decision.Question + "\n" + textFor("Sua resposta: ", "Your answer: ") + decision.Answer
-					blocks = append(blocks, barred(safeCommandText(text), "│", P.Ask, P.Text, inner, indent))
-				}
-			} else {
-				steps = append(steps, call)
-			}
-		}
-		turnCalls = append(turnCalls, msg.ToolCalls()...)
+		p.calls(msg)
 	}
-	flush()
-	// Checks and other managed executions may not have a standalone bash call.
-	for _, entry := range commands {
+	p.flushSteps()
+}
+
+func (p *transcriptPaint) reply(msg message.Message, text string) {
+	key := text
+	read := agent.SourcesLabel(agent.SourcesRead(p.turnCall, p.results))
+	if msg.IsFinished() {
+		key += "\x00" + string(msg.Model) + "\x00" + read // the meta line appears when it finishes
+	}
+	p.blocks = append(p.blocks, p.m.cached(msg.ID, key, p.inner, p.fresh, func() string {
+		var body string
+		if msg.IsFinished() {
+			body = styles.RenderMarkdownBlocks(text, p.inner, p.inner)
+		} else {
+			// Settled paragraphs of the live reply come from its block cache.
+			body = p.m.live.RenderStreaming(text, p.inner, p.inner)
+		}
+		body = strings.TrimSuffix(body, "\n")
+		if finish := msg.FinishPart(); finish != nil && msg.IsFinished() {
+			body += "\n" + on(P.Ground, P.Faint).Render(replyMeta(msg, finish, text, read))
+		}
+		return barredRendered(body, "│", P.Ask, p.indent)
+	}))
+}
+
+// replyMeta is the faint line under a finished reply.
+func replyMeta(msg message.Message, finish *message.Finish, text, read string) string {
+	meta := " " + modelName(msg.Model) + " · " + duration(msg.CreatedAt, finish.Time)
+	if read != "" {
+		return meta + " · " + textFor("lido: ", "read: ") + read
+	}
+	if cites := agent.SourceCitations(text); len(cites) > 0 && cites[0].StartLine > 0 {
+		meta += fmt.Sprintf(" · %s:%d", filepath.Base(cites[0].Path), cites[0].StartLine)
+	}
+	return meta
+}
+
+// calls queues a reply's tool calls as steps; answered questions show at once.
+func (p *transcriptPaint) calls(msg message.Message) {
+	for _, call := range msg.ToolCalls() {
+		decisions := transcript.AnsweredQuestions(call, p.results[call.ID])
+		if len(decisions) == 0 {
+			p.steps = append(p.steps, call)
+			continue
+		}
+		p.flushSteps()
+		for _, decision := range decisions {
+			text := textFor("Pergunta: ", "Question: ") + decision.Question + "\n" + textFor("Sua resposta: ", "Your answer: ") + decision.Answer
+			p.blocks = append(p.blocks, barred(safeCommandText(text), "│", P.Ask, P.Text, p.inner, p.indent))
+		}
+	}
+	p.turnCall = append(p.turnCall, msg.ToolCalls()...)
+}
+
+// stepsKey changes only when a call starts, ends or its seconds advance, so a
+// run of steps is not redrawn otherwise.
+func (p *transcriptPaint) stepsKey() string {
+	var key strings.Builder
+	fmt.Fprintf(&key, "%t:%t:%d", p.m.approval != nil, config.Get() != nil && config.Get().Preferences.ProcessVisible(), p.m.processVersion)
+	for _, call := range p.steps {
+		result, done := p.results[call.ID]
+		fmt.Fprintf(&key, "|%s:%d:%t:%t:%t", call.ID, len(call.Input), call.Finished, done, result.IsError)
+		entry, command := p.commandByID[call.ID]
+		if command {
+			fmt.Fprintf(&key, ":%q:%q:%q", entry.command, result.Content, result.Metadata)
+		}
+		if !done || command && entry.state == "running" {
+			fmt.Fprintf(&key, ":%d", time.Now().Unix()) // its seconds count
+		}
+	}
+	return key.String()
+}
+
+func (p *transcriptPaint) flushSteps() {
+	if len(p.steps) == 0 {
+		return
+	}
+	run := p.steps
+	p.blocks = append(p.blocks, p.m.cached("steps:"+run[0].ID, p.stepsKey(), p.inner, p.fresh, func() string {
+		return p.stepRows(run)
+	}))
+	p.failureAt = len(p.blocks)
+	p.steps = nil
+}
+
+// stepRows draws commands on their own and folds the steps between them.
+func (p *transcriptPaint) stepRows(run []message.ToolCall) string {
+	waiting := p.m.approval != nil
+	var rows []string
+	var regular []message.ToolCall
+	flushRegular := func() {
+		rows = append(rows, stepsRows(regular, p.results, p.started, p.inner, waiting, P.Ground)...)
+		regular = nil
+	}
+	for _, call := range run {
+		if entry, ok := p.commandByID[call.ID]; ok {
+			flushRegular()
+			rows = append(rows, commandRows(entry, p.inner, waiting)...)
+		} else {
+			regular = append(regular, call)
+		}
+	}
+	flushRegular()
+	return p.indented(rows)
+}
+
+func (p *transcriptPaint) indented(rows []string) string {
+	for i := range rows {
+		rows[i] = p.indent + rows[i]
+	}
+	return strings.Join(rows, "\n")
+}
+
+// managedCommands shows checks and other executions with no bash call of their own.
+func (p *transcriptPaint) managedCommands() {
+	for _, entry := range p.commands {
 		if strings.HasPrefix(entry.id, "process:") {
-			rows := commandRows(entry, inner, false)
-			for i := range rows {
-				rows[i] = indent + rows[i]
-			}
-			blocks = append(blocks, strings.Join(rows, "\n"))
+			p.blocks = append(p.blocks, p.indented(commandRows(entry, p.inner, false)))
 		}
 	}
-	// While the model thinks, its reasoning shows live; the answer replaces it.
-	if thought := message.LiveThought(m.messages, 4000); m.busy && thought != "" {
-		rows := strings.Split(ansi.Wrap(thought, inner-1, ""), "\n")
-		rows = append([]string{textFor("Pensando…", "Thinking…")}, rows[max(0, len(rows)-6):]...)
-		blocks = append(blocks, barred(strings.Join(rows, "\n"), "┊", P.Faint, P.Muted, inner, indent))
-	}
-	if m.failure != nil {
-		if failureAt < 0 {
-			failureAt = len(blocks)
-		}
-		blocks = slices.Insert(blocks, failureAt, m.failureView())
-	}
-	if len(blocks) == 0 {
-		return m.emptyState(inner, indent)
-	}
-	return "\n" + strings.Join(blocks, "\n\n") + "\n"
 }
 
 // renderedBlock is a message as drawn at one width, kept while its key
@@ -323,14 +379,34 @@ func (m *Model) emptyState(inner int, indent string) string {
 // Older runs fold into a count so the turn stays short.
 // A running step counts its seconds from started (unix time per call ID).
 func stepsRows(calls []message.ToolCall, results map[string]message.ToolResult, started map[string]int64, width int, waiting bool, bg color.Color) []string {
-	type run struct {
-		name, state    string
-		targets        []string
-		added, removed int
-		since          int64
+	runs := foldSteps(calls, results, started)
+	var rows []string
+	const keep = 4
+	if len(runs) > keep {
+		earlier := 0
+		for _, r := range runs[:len(runs)-keep+1] {
+			earlier += len(r.targets)
+		}
+		rows = append(rows, on(bg, P.Muted).Render("› ")+on(bg, P.Success).Render("✓")+on(bg, P.Muted).Render(fmt.Sprintf(config.Text(" %d passos anteriores", " %d earlier steps"), earlier)))
+		runs = runs[len(runs)-keep+1:]
 	}
+	for _, r := range runs {
+		rows = append(rows, r.row(width, waiting, bg))
+	}
+	return rows
+}
+
+// stepRun is consecutive calls of one tool with one outcome.
+type stepRun struct {
+	name, state    string
+	targets        []string
+	added, removed int
+	since          int64
+}
+
+func foldSteps(calls []message.ToolCall, results map[string]message.ToolResult, started map[string]int64) []stepRun {
 	unfold := config.Get() != nil && config.Get().Preferences.ProcessVisible() // one line per call
-	var runs []run
+	var runs []stepRun
 	for _, call := range calls {
 		state := "ok"
 		added, removed := 0, 0
@@ -348,58 +424,54 @@ func stepsRows(calls []message.ToolCall, results map[string]message.ToolResult, 
 			runs[n-1].removed += removed
 			continue
 		}
-		runs = append(runs, run{call.Name, state, []string{target}, added, removed, started[call.ID]})
+		runs = append(runs, stepRun{call.Name, state, []string{target}, added, removed, started[call.ID]})
 	}
-	var rows []string
-	const keep = 4
-	if len(runs) > keep {
-		earlier := 0
-		for _, r := range runs[:len(runs)-keep+1] {
-			earlier += len(r.targets)
+	return runs
+}
+
+// label names the tool and targets: the same target repeated reads "×3",
+// different ones are listed once each.
+func (r stepRun) label() string {
+	var names []string
+	for _, target := range r.targets {
+		if target != "" && !slices.Contains(names, target) {
+			names = append(names, target)
 		}
-		rows = append(rows, on(bg, P.Muted).Render("› ")+on(bg, P.Success).Render("✓")+on(bg, P.Muted).Render(fmt.Sprintf(config.Text(" %d passos anteriores", " %d earlier steps"), earlier)))
-		runs = runs[len(runs)-keep+1:]
 	}
-	for _, r := range runs {
-		// The same target repeated reads "×3"; different ones are listed once each.
-		var names []string
-		for _, target := range r.targets {
-			if target != "" && !slices.Contains(names, target) {
-				names = append(names, target)
-			}
-		}
-		label := r.name
-		if len(names) > 0 {
-			label += " " + strings.Join(names, " · ")
-		}
-		if len(names) == 1 && len(r.targets) > 1 {
-			label += fmt.Sprintf(" ×%d", len(r.targets))
-		}
-		icon, color, status := "✓", P.Success, ""
-		switch r.state {
-		case "running":
-			icon, color = "●", P.Plan
-			if waiting {
-				status = on(bg, P.Muted).Render(config.Text(" · aguardando sua aprovação", " · waiting for your approval"))
-			} else if r.since > 0 {
-				status = on(bg, P.Muted).Render(fmt.Sprintf(" · %ds", max(0, time.Now().Unix()-r.since)))
-			}
-		case "failed":
-			icon, color = "✗", P.Danger
-			unit := config.Text("falhas", "failures")
-			if len(r.targets) == 1 {
-				unit = config.Text("falha", "failure")
-			}
-			status = on(bg, P.Danger).Render(fmt.Sprintf(" · %d %s", len(r.targets), unit))
-		case "ok":
-			if size := sizeLabel(r.added, r.removed); size != "" {
-				status = on(bg, P.Muted).Render(" · " + size)
-			}
-		}
-		label = ansi.Truncate(label, max(1, width-4-ansi.StringWidth(ansi.Strip(status))), "…")
-		rows = append(rows, on(bg, P.Muted).Render("› ")+on(bg, color).Render(icon)+on(bg, P.Muted).Render(" "+label)+status)
+	label := r.name
+	if len(names) > 0 {
+		label += " " + strings.Join(names, " · ")
 	}
-	return rows
+	if len(names) == 1 && len(r.targets) > 1 {
+		label += fmt.Sprintf(" ×%d", len(r.targets))
+	}
+	return label
+}
+
+func (r stepRun) row(width int, waiting bool, bg color.Color) string {
+	icon, tint, status := "✓", P.Success, ""
+	switch r.state {
+	case "running":
+		icon, tint = "●", P.Plan
+		if waiting {
+			status = on(bg, P.Muted).Render(config.Text(" · aguardando sua aprovação", " · waiting for your approval"))
+		} else if r.since > 0 {
+			status = on(bg, P.Muted).Render(fmt.Sprintf(" · %ds", max(0, time.Now().Unix()-r.since)))
+		}
+	case "failed":
+		icon, tint = "✗", P.Danger
+		unit := config.Text("falhas", "failures")
+		if len(r.targets) == 1 {
+			unit = config.Text("falha", "failure")
+		}
+		status = on(bg, P.Danger).Render(fmt.Sprintf(" · %d %s", len(r.targets), unit))
+	case "ok":
+		if size := sizeLabel(r.added, r.removed); size != "" {
+			status = on(bg, P.Muted).Render(" · " + size)
+		}
+	}
+	label := ansi.Truncate(r.label(), max(1, width-4-ansi.StringWidth(ansi.Strip(status))), "…")
+	return on(bg, P.Muted).Render("› ") + on(bg, tint).Render(icon) + on(bg, P.Muted).Render(" "+label) + status
 }
 
 // editSize reads the lines an edit added and removed from its result.

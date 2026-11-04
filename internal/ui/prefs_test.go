@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/tui/components/dialog"
+	"github.com/raulaguila/opcode/internal/ui/dialog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )

@@ -3,13 +3,14 @@ package session
 import (
 	"bufio"
 	"context"
-	"github.com/stretchr/testify/require"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/raulaguila/opcode/internal/localstate"
 )

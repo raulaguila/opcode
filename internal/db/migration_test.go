@@ -82,3 +82,14 @@ func TestConnectAppliesPragmasToEveryPooledConnection(t *testing.T) {
 		require.Equal(t, "wal", journal)
 	}
 }
+
+func TestConnectWaitsForAnotherWriter(t *testing.T) {
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	conn, err := Connect()
+	require.NoError(t, err)
+	defer conn.Close()
+	var timeout int
+	require.NoError(t, conn.QueryRow("PRAGMA busy_timeout").Scan(&timeout))
+	require.Positive(t, timeout, "_pragma turns the driver's default wait off")
+}

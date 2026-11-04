@@ -74,13 +74,12 @@ type Provider interface {
 }
 
 type providerClientOptions struct {
-	tlsInsecure     bool
-	apiKey          string
-	baseURL         string
-	model           models.Model
-	maxTokens       int64
-	systemMessage   string
-	sourceCitations []string
+	tlsInsecure   bool
+	apiKey        string
+	baseURL       string
+	model         models.Model
+	maxTokens     int64
+	systemMessage string
 
 	anthropicOptions []AnthropicOption
 	openaiOptions    []OpenAIOption
@@ -257,10 +256,4 @@ func createLocalClient(options providerClientOptions) (providerClient, providerC
 	}
 	options.openaiOptions = append(options.openaiOptions, WithOpenAIBaseURL(endpoint))
 	return newOpenAIClient(options), options, nil
-}
-
-func WithCopilotOptions(copilotOptions ...CopilotOption) ProviderClientOption {
-	return func(options *providerClientOptions) {
-		options.copilotOptions = copilotOptions
-	}
 }

@@ -3,12 +3,14 @@ package ui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/interaction"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
 
@@ -45,6 +47,14 @@ func (m *Model) poll() {
 			}
 		} else {
 			m.question = nil
+		}
+	}
+	// A request made while another conversation was open had no card, and the agent waits for it.
+	if pending, ok := m.app.Permissions.(interface {
+		PendingRequests(string) []permission.PermissionRequest
+	}); ok && m.approval == nil {
+		if requests := pending.PendingRequests(m.session.ID); len(requests) > 0 {
+			m.approval = &requests[0]
 		}
 	}
 	if m.app.Workflows != nil {
@@ -161,14 +171,6 @@ func (m *Model) questionView() string {
 	if n := len(q.q.Questions); n > 1 {
 		box.Meta = fmt.Sprintf(textFor("%d de %d", "%d of %d"), q.index+1, n)
 	}
-	keys := fmt.Sprintf("1–%d", max(1, min(9, len(item.Choices)+1)))
-	legend := fmt.Sprintf(textFor("%s escolher · ↑↓ navegar · Enter responder · Esc responder depois", "%s choose · ↑↓ navigate · Enter answer · Esc answer later"), keys)
-	if item.Type == "multi_choice" {
-		legend = fmt.Sprintf(textFor("%s marcar · Espaço alternar · Enter responder (%d) · Esc responder depois", "%s check · Space toggle · Enter answer (%d) · Esc answer later"), keys, len(q.checked))
-	}
-	if q.index+1 < len(q.q.Questions) {
-		legend = strings.Replace(legend, " · Esc", textFor(" → próxima pergunta · Esc", " → next question · Esc"), 1)
-	}
 	inner := box.Inner()
 	bg0 := P.AskCard
 	var rows []string
@@ -180,61 +182,78 @@ func (m *Model) questionView() string {
 	}
 	rows = append(rows, "")
 	for i, choice := range item.Choices {
-		mark := "○"
-		if item.Type == "multi_choice" {
-			mark = "☐"
-		}
-		markColor := P.Faint
-		if q.checked[i] {
-			mark, markColor = "●", P.Success
-			if item.Type == "multi_choice" {
-				mark = "☑"
-			}
-		}
-		number := "  "
-		if i < 9 {
-			number = fmt.Sprintf("%d ", i+1)
-		}
-		bg, fg := bg0, P.Text
-		bar := on(bg, bg).Render(" ")
-		if i == q.cursor {
-			bg, fg = P.Selected, P.Strong
-			bar = on(bg0, P.Ask).Render("▌")
-		}
-		row := bar + on(bg, P.Muted).Render(" "+number) + on(bg, markColor).Render(mark) + on(bg, fg).Render(" "+choice)
-		if i < len(item.Notes) && item.Notes[i] != "" {
-			row += on(bg, P.Muted).Render("  " + item.Notes[i])
-		}
-		rows = append(rows, Line(row, inner, bg))
+		rows = append(rows, q.choiceRow(item, i, choice, inner))
 	}
-	if len(item.Choices) > 0 || item.Type == "text" || len(item.Choices) == 0 {
-		bg, fg := bg0, P.Faint
-		bar := on(bg, bg).Render(" ")
-		if q.cursor == len(item.Choices) {
-			bg, fg = P.Selected, P.Strong
-			bar = on(bg0, P.Ask).Render("▌")
-		}
-		text := q.text
-		if text == "" {
-			text = textFor("Outra resposta…", "Other answer…")
-		} else {
-			text += "▏"
-		}
-		number := fmt.Sprintf("%d ", len(item.Choices)+1)
-		if len(item.Choices) == 0 || len(item.Choices) >= 9 {
-			number = "  "
-		}
-		rows = append(rows, Line(bar+on(bg, P.Muted).Render(" "+number)+on(bg, P.Faint).Render("✎")+on(bg, fg).Render(" "+text), inner, bg))
-	}
+	rows = append(rows, q.otherRow(item, inner))
 	if q.required {
 		rows = append(rows, on(bg0, P.Danger).Render("  "+textFor("Escolha uma opção ou escreva uma resposta", "Choose an option or write an answer")))
 	}
 	rows = append(rows, "")
-	rows = append(rows, KeyRow(legend, inner, bg0)...)
+	rows = append(rows, KeyRow(q.legend(item), inner, bg0)...)
 	for i := range rows {
 		rows[i] = Line(rows[i], inner, bg0)
 	}
 	return indentBlock(box.Render(strings.Join(rows, "\n")))
+}
+
+func (q *question) legend(item interaction.QuestionItem) string {
+	keys := fmt.Sprintf("1–%d", max(1, min(9, len(item.Choices)+1)))
+	legend := fmt.Sprintf(textFor("%s escolher · ↑↓ navegar · Enter responder · Esc responder depois", "%s choose · ↑↓ navigate · Enter answer · Esc answer later"), keys)
+	if item.Type == "multi_choice" {
+		legend = fmt.Sprintf(textFor("%s marcar · Espaço alternar · Enter responder (%d) · Esc responder depois", "%s check · Space toggle · Enter answer (%d) · Esc answer later"), keys, len(q.checked))
+	}
+	if q.index+1 < len(q.q.Questions) {
+		legend = strings.Replace(legend, " · Esc", textFor(" → próxima pergunta · Esc", " → next question · Esc"), 1)
+	}
+	return legend
+}
+
+// rowLook is a question row's colors and left bar, cursor or not.
+func (q *question) rowLook(i int, fg color.Color) (color.Color, color.Color, string) {
+	bg := P.AskCard
+	if i == q.cursor {
+		return P.Selected, P.Strong, on(bg, P.Ask).Render("▌")
+	}
+	return bg, fg, on(bg, bg).Render(" ")
+}
+
+func (q *question) choiceRow(item interaction.QuestionItem, i int, choice string, inner int) string {
+	mark, markColor := "○", P.Faint
+	if item.Type == "multi_choice" {
+		mark = "☐"
+	}
+	if q.checked[i] {
+		mark, markColor = "●", P.Success
+		if item.Type == "multi_choice" {
+			mark = "☑"
+		}
+	}
+	number := "  "
+	if i < 9 {
+		number = fmt.Sprintf("%d ", i+1)
+	}
+	bg, fg, bar := q.rowLook(i, P.Text)
+	row := bar + on(bg, P.Muted).Render(" "+number) + on(bg, markColor).Render(mark) + on(bg, fg).Render(" "+choice)
+	if i < len(item.Notes) && item.Notes[i] != "" {
+		row += on(bg, P.Muted).Render("  " + item.Notes[i])
+	}
+	return Line(row, inner, bg)
+}
+
+// otherRow is the free answer that closes every question.
+func (q *question) otherRow(item interaction.QuestionItem, inner int) string {
+	bg, fg, bar := q.rowLook(len(item.Choices), P.Faint)
+	text := q.text
+	if text == "" {
+		text = textFor("Outra resposta…", "Other answer…")
+	} else {
+		text += "▏"
+	}
+	number := fmt.Sprintf("%d ", len(item.Choices)+1)
+	if len(item.Choices) == 0 || len(item.Choices) >= 9 {
+		number = "  "
+	}
+	return Line(bar+on(bg, P.Muted).Render(" "+number)+on(bg, P.Faint).Render("✎")+on(bg, fg).Render(" "+text), inner, bg)
 }
 
 func indentBlock(block string) string {

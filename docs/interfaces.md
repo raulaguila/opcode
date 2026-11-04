@@ -17,9 +17,6 @@ o uso do contexto e o modelo.
 
 Os protótipos das duas estão em [docs/prototipos](prototipos/README.md).
 
-A interface anterior do terminal continua disponível por um tempo com
-`opcode --ui classico`; o guia dela é [Trabalhar pela interface](workspace-ui.md).
-
 ## Qual escolher
 
 | | Terminal (`opcode`) | App (`opcode app`) |
@@ -183,4 +180,3 @@ A janela e o processo do opcode conversam por HTTP local, e só eles:
   binário.
 - `cmd/app.go`: o comando `opcode app`; `cmd/app_native.go` (tag `desktop`)
   abre a janela Wails e `cmd/app_browser.go` o substituto sem a tag.
-- `internal/tui`: a interface clássica.

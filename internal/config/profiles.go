@@ -236,16 +236,6 @@ func SavePreferences(preferences Preferences, runtime RuntimeConfig) error {
 	cfg.Runtime = runtime.Defaults()
 	return nil
 }
-func ToggleFavoriteModel(id models.ModelID) error {
-	prefs := cfg.Preferences
-	prefs.FavoriteModels = slices.Clone(prefs.FavoriteModels)
-	if i := slices.Index(prefs.FavoriteModels, id); i >= 0 {
-		prefs.FavoriteModels = append(prefs.FavoriteModels[:i], prefs.FavoriteModels[i+1:]...)
-	} else {
-		prefs.FavoriteModels = append(prefs.FavoriteModels, id)
-	}
-	return SavePreferences(prefs, cfg.Runtime)
-}
 func uniqueModels(input []models.ModelID, limit int) []models.ModelID {
 	result := []models.ModelID{}
 	for _, id := range input {

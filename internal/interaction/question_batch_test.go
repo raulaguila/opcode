@@ -3,9 +3,10 @@ package interaction
 import (
 	"context"
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBatchQuestionsRequireCompleteValidatedHumanAnswers(t *testing.T) {

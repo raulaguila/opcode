@@ -27,34 +27,26 @@ type instruction struct {
 }
 
 type generationRun struct {
-	contract                *workflow.Contract
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	done                    chan struct{}
-	accepting               bool
-	pending                 []instruction
-	queuedBytes             int
-	mode                    workflow.Mode
-	selected                map[string]bool
-	toolLeases              map[string]int
-	requiredCalls           map[string]int
-	startMessageID          string
-	turnMessageID           string
-	available               []tools.BaseTool
-	limits                  config.RuntimeConfig
-	steps, toolBytes        int
-	hookRuns                int
-	provider                provider.Provider
-	requiresPlan            bool
-	requiresCitation        bool
-	requiresProjectEvidence bool
-	primaryEvidence         map[string]bool
-	citationRepair          bool
-	exposed                 []string // tool schemas in the order the reply first offered them
-	route                   []any    // how the request was read, for the route log
-	prepared, searches      int      // sources read before the model; the model's own searches
-	citationRevisionOf      string
-	citationRevision        *citationRevision
+	contract         *workflow.Contract
+	ctx              context.Context
+	cancel           context.CancelFunc
+	done             chan struct{}
+	accepting        bool
+	pending          []instruction
+	queuedBytes      int
+	mode             workflow.Mode
+	selected         map[string]bool
+	toolLeases       map[string]int
+	requiredCalls    map[string]int
+	startMessageID   string
+	turnMessageID    string
+	available        []tools.BaseTool
+	limits           config.RuntimeConfig
+	steps, toolBytes int
+	hookRuns         int
+	provider         provider.Provider
+	requiresPlan     bool
+	exposed          []string // tool schemas in the order the reply first offered them
 }
 
 func (a *agent) Run(ctx context.Context, sessionID, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {
@@ -222,9 +214,6 @@ func (a *agent) finishGenerationRun(sessionID string, run *generationRun, events
 
 	if result.Error != nil && !errors.Is(result.Error, ErrRequestCancelled) && !errors.Is(result.Error, context.Canceled) {
 		logging.ErrorPersist(result.Error.Error())
-	}
-	if run.prepared == 0 && run.searches >= 2 {
-		logging.Info("Route missed: the model searched for sources nothing was prepared for", append([]any{"searches", run.searches}, run.route...)...)
 	}
 	result.SessionID = sessionID
 	a.Publish(pubsub.CreatedEvent, *result)

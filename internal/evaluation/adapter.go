@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/llm/tools"
-	"github.com/raulaguila/opcode/internal/workflow"
 	"io"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/workflow"
 )
 
 // Adapter is a trusted executable selected explicitly by the user. JSON is

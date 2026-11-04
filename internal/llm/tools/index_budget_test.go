@@ -2,9 +2,10 @@ package tools
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBackgroundBudgetCommitsProgressAndDrainsQueue(t *testing.T) {

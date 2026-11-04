@@ -21,8 +21,8 @@ import (
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
-	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/ui/styles"
+	"github.com/raulaguila/opcode/internal/ui/theme"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
 
@@ -156,48 +156,138 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.input(msg); handled {
+		return m, cmd
+	}
+	if cmd, handled := m.backgroundResult(msg); handled {
+		return m, cmd
+	}
+	if cmd, handled := m.serviceEvent(msg); handled {
+		return m, cmd
+	}
+	m.refresh()
+	return m, nil
+}
+
+// input handles what the terminal sends.
+func (m *Model) input(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case tea.KeyboardEnhancementsMsg:
 		m.shiftEnter = msg.Flags != 0
-		return m, nil
 	case tea.WindowSizeMsg:
-		m.selection = nil
-		first := m.width == 0
-		m.width, m.height = msg.Width, msg.Height
-		m.layout()
-		if h, ok := m.dialog.(*hosted); ok {
-			return m, h.forward(msg)
-		}
-		// With no model yet, the first screen is setting up a connection.
-		if first && m.dialog == nil && !m.hasModel() {
-			return m, m.openProviderForm("")
-		}
-		return m, nil
+		return m.resized(msg), true
 	case tea.MouseMsg:
-		if m.selectionMouse(msg) {
-			return m, nil
-		}
-		if _, ok := m.dialog.(*hosted); ok {
-			return m, m.hostedMouse(msg)
-		}
-		if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft && m.dialog == nil {
-			return m, m.click(click.X, click.Y)
-		}
-		if wheel, ok := msg.(tea.MouseWheelMsg); ok {
-			var cmd tea.Cmd
-			m.transcript, cmd = m.transcript.Update(wheel)
-			m.follow = m.transcript.AtBottom()
-			return m, cmd
-		}
-		return m, nil
+		return m.mouse(msg), true
 	case tea.KeyPressMsg:
 		cmd := m.key(msg)
 		if d, ok := m.dialog.(*sessionsDialog); ok {
 			cmd = tea.Batch(cmd, d.wanted(m))
 		}
-		return m, cmd
+		return cmd, true
+	case tea.PasteMsg:
+		// Pasted text, newlines included, lands in the draft; it never sends.
+		if d, ok := m.dialog.(interface{ paste(string) }); ok {
+			d.paste(strings.TrimSpace(msg.Content))
+			return nil, true
+		}
+		m.composer.InsertString(msg.Content)
+		m.layout()
+	default:
+		return nil, false
+	}
+	return nil, true
+}
+
+func (m *Model) resized(msg tea.WindowSizeMsg) tea.Cmd {
+	m.selection = nil
+	first := m.width == 0
+	m.width, m.height = msg.Width, msg.Height
+	m.layout()
+	if h, ok := m.dialog.(*hosted); ok {
+		return h.forward(msg)
+	}
+	// With no model yet, the first screen is setting up a connection.
+	if first && m.dialog == nil && !m.hasModel() {
+		return m.openProviderForm("")
+	}
+	return nil
+}
+
+func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
+	if m.selectionMouse(msg) {
+		return nil
+	}
+	if _, ok := m.dialog.(*hosted); ok {
+		return m.hostedMouse(msg)
+	}
+	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft && m.dialog == nil {
+		return m.click(click.X, click.Y)
+	}
+	if wheel, ok := msg.(tea.MouseWheelMsg); ok {
+		var cmd tea.Cmd
+		m.transcript, cmd = m.transcript.Update(wheel)
+		m.follow = m.transcript.AtBottom()
+		return cmd
+	}
+	return nil
+}
+
+// backgroundResult takes in what the screen's own commands bring back.
+func (m *Model) backgroundResult(msg tea.Msg) (tea.Cmd, bool) {
+	switch msg := msg.(type) {
 	case chatCopyMsg:
-		return m, m.copiedChat(msg)
+		return m.copiedChat(msg), true
+	case previewMsg:
+		if d, ok := m.dialog.(*sessionsDialog); ok {
+			d.previews[msg.id] = msg.look
+		}
+	case tickMsg:
+		return m.ticked(), true
+	case filesMsg:
+		m.files, m.filesAt, m.listing = msg, time.Now(), false
+		m.found, m.foundFor = nil, "" // searched against the older listing
+		m.findMention()
+		m.layout()
+	case searchMsg:
+		return m.search(string(msg)), true
+	case foundMsg:
+		if current, ok := m.mentionToken(); ok && strings.Contains(strings.ToLower(current), strings.ToLower(msg.query)) {
+			m.found, m.foundFor = msg.files, msg.query
+			m.findMention()
+			m.layout()
+		}
+	case catalogMsg:
+		if picker, ok := m.dialog.(*modelPicker); ok {
+			picker.accept(m, msg)
+		}
+	case probeMsg:
+		if panel, ok := m.dialog.(*settingsPanel); ok {
+			panel.probes[msg.provider] = msg
+		}
+	default:
+		return nil, false
+	}
+	return nil, true
+}
+
+func (m *Model) ticked() tea.Cmd {
+	m.ticking = false
+	m.poll()
+	// The final event can arrive before the agent marks the session free.
+	if m.app != nil && m.app.CoderAgent != nil {
+		m.busy = m.app.CoderAgent.IsSessionBusy(m.session.ID)
+	}
+	if m.busy || m.runningProcesses() {
+		m.refresh() // a running step counts its seconds
+		return m.tick()
+	}
+	return nil
+}
+
+// serviceEvent follows the application's services; a handled event returns
+// without the repaint every other message ends in.
+func (m *Model) serviceEvent(msg tea.Msg) (tea.Cmd, bool) {
+	switch msg := msg.(type) {
 	case commandStoppedMsg:
 		if msg.session == m.session.ID {
 			if msg.err != nil {
@@ -207,59 +297,8 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.pollProcesses()
 		}
-	case previewMsg:
-		if d, ok := m.dialog.(*sessionsDialog); ok {
-			d.previews[msg.id] = msg.look
-		}
-		return m, nil
-	case tea.PasteMsg:
-		// Pasted text, newlines included, lands in the draft; it never sends.
-		if d, ok := m.dialog.(interface{ paste(string) }); ok {
-			d.paste(strings.TrimSpace(msg.Content))
-			return m, nil
-		}
-		m.composer.InsertString(msg.Content)
-		m.layout()
-		return m, nil
-	case tickMsg:
-		m.ticking = false
-		m.poll()
-		// The final event can arrive before the agent marks the session free.
-		if m.app != nil && m.app.CoderAgent != nil {
-			m.busy = m.app.CoderAgent.IsSessionBusy(m.session.ID)
-		}
-		if m.busy || m.runningProcesses() {
-			m.refresh() // a running step counts its seconds
-			return m, m.tick()
-		}
-		return m, nil
-	case filesMsg:
-		m.files, m.filesAt, m.listing = msg, time.Now(), false
-		m.found, m.foundFor = nil, "" // searched against the older listing
-		m.findMention()
-		m.layout()
-		return m, nil
-	case searchMsg:
-		return m, m.search(string(msg))
 	case reviewedMsg:
 		m.reviewed(msg)
-	case foundMsg:
-		if current, ok := m.mentionToken(); ok && strings.Contains(strings.ToLower(current), strings.ToLower(msg.query)) {
-			m.found, m.foundFor = msg.files, msg.query
-			m.findMention()
-			m.layout()
-		}
-		return m, nil
-	case catalogMsg:
-		if picker, ok := m.dialog.(*modelPicker); ok {
-			picker.accept(m, msg)
-		}
-		return m, nil
-	case probeMsg:
-		if panel, ok := m.dialog.(*settingsPanel); ok {
-			panel.probes[msg.provider] = msg
-		}
-		return m, nil
 	case pubsub.Event[logging.LogMessage]:
 		// Persistent warnings say why a run waits, such as a provider retry.
 		if msg.Payload.Persist && msg.Payload.Level == "warn" {
@@ -282,116 +321,39 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.layout()
 		}
 	case pubsub.Event[agent.AgentEvent]:
-		event := msg.Payload
-		if event.Type == agent.AgentEventTypeError || event.Done || event.Type == agent.AgentEventTypeResponse {
-			m.retry, m.busy = "", m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID)
-			switch {
-			case errors.Is(event.Error, agent.ErrRequestCancelled):
-				m.info = textFor("Execução cancelada · rascunho preservado", "Run cancelled · draft kept")
-			case event.Error != nil:
-				m.failure = event.Error
-			}
-			if id := cmp.Or(event.SessionID, event.Message.SessionID, m.session.ID); event.Error != nil && !errors.Is(event.Error, agent.ErrRequestCancelled) {
-				if m.failed == nil {
-					m.failed = map[string]bool{}
-				}
-				m.failed[id] = true
-			}
-			m.poll()
-			if !m.busy {
-				return m, m.tick() // confirm the session settled
-			}
-		}
+		return m.agentEvent(msg.Payload)
 	}
-	m.refresh()
-	return m, nil
+	return nil, false
+}
+
+func (m *Model) agentEvent(event agent.AgentEvent) (tea.Cmd, bool) {
+	if event.Type != agent.AgentEventTypeError && !event.Done && event.Type != agent.AgentEventTypeResponse {
+		return nil, false
+	}
+	m.retry, m.busy = "", m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(m.session.ID)
+	cancelled := errors.Is(event.Error, agent.ErrRequestCancelled)
+	switch {
+	case cancelled:
+		m.info = textFor("Execução cancelada · rascunho preservado", "Run cancelled · draft kept")
+	case event.Error != nil:
+		m.failure = event.Error
+		if m.failed == nil {
+			m.failed = map[string]bool{}
+		}
+		m.failed[cmp.Or(event.SessionID, event.Message.SessionID, m.session.ID)] = true
+	}
+	m.poll()
+	if !m.busy {
+		return m.tick(), true // confirm the session settled
+	}
+	return nil, false
 }
 
 func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
-	if d, ok := m.dialog.(*commandDialog); ok {
-		cmd, _ := d.key(m, msg)
+	if cmd, handled := m.overlayKey(msg); handled {
 		return cmd
 	}
-	if m.dialog == nil && msg.String() == "ctrl+p" {
-		return m.openCommands()
-	}
-	if m.dialog == nil && m.selection != nil {
-		if (msg.String() == "ctrl+c" || msg.String() == "ctrl+shift+c") && m.selection.moved {
-			return copyChatText(m.selectedText())
-		}
-		if msg.String() == "esc" {
-			m.clearSelection()
-			return nil
-		}
-	}
-	if m.approval != nil {
-		return m.answerApproval(msg.String())
-	}
-	if m.dialog != nil {
-		cmd, _ := m.dialog.key(m, msg)
-		return cmd
-	}
-	if m.question != nil && !m.answeringLater() && msg.String() != "ctrl+c" {
-		return m.questionKey(msg)
-	}
-	if m.answeringLater() && msg.String() == "enter" && strings.TrimSpace(m.composer.Value()) == "" {
-		m.laterQuestion = "" // the empty composer's Enter brings the question back
-		m.layout()
-		return nil
-	}
-	if m.failure != nil {
-		if cmd, ok := m.failureKey(msg.String()); ok {
-			return cmd
-		}
-	}
-	if len(m.mention) > 0 && m.mentionKey(msg.String()) {
-		return nil
-	}
-	if m.recallKey(msg.String()) {
-		return nil
-	}
-	switch msg.String() {
-	case "ctrl+c":
-		m.dialog = confirmQuit{}
-		return nil
-	case "ctrl+k":
-		return m.openPalette()
-	case "ctrl+o":
-		return m.openModels()
-	case "ctrl+s":
-		return m.openSessions()
-	case "ctrl+n":
-		return m.newConversation()
-	case "/":
-		if strings.TrimSpace(m.composer.Value()) == "" {
-			return m.openPalette()
-		}
-	case "esc":
-		if m.busy && m.app.CoderAgent != nil {
-			m.app.CoderAgent.Cancel(m.session.ID)
-		}
-		return nil
-	case "shift+tab":
-		m.cycleMode()
-		return nil
-	case "enter":
-		return m.submit()
-	case "alt+enter", "shift+enter", "ctrl+j":
-		m.composer.InsertString("\n")
-		m.layout()
-		return nil
-	case "alt+up", "alt+down":
-		if msg.String() == "alt+up" {
-			m.transcript.ScrollUp(3)
-		} else {
-			m.transcript.ScrollDown(3)
-		}
-		m.follow = m.transcript.AtBottom()
-		return nil
-	case "pgup", "pgdown":
-		var cmd tea.Cmd
-		m.transcript, cmd = m.transcript.Update(msg)
-		m.follow = m.transcript.AtBottom()
+	if cmd, handled := m.shortcut(msg); handled {
 		return cmd
 	}
 	var cmd tea.Cmd
@@ -403,6 +365,97 @@ func (m *Model) key(msg tea.KeyPressMsg) tea.Cmd {
 	listing := m.findMention()
 	m.layout()
 	return tea.Batch(cmd, listing)
+}
+
+// overlayKey gives a key to whatever sits above the composer; false leaves it
+// to the shortcuts and the composer.
+func (m *Model) overlayKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	if d, ok := m.dialog.(*commandDialog); ok {
+		cmd, _ := d.key(m, msg)
+		return cmd, true
+	}
+	if m.dialog == nil && msg.String() == "ctrl+p" {
+		return m.openCommands(), true
+	}
+	if m.dialog == nil && m.selection != nil {
+		if (msg.String() == "ctrl+c" || msg.String() == "ctrl+shift+c") && m.selection.moved {
+			return copyChatText(m.selectedText()), true
+		}
+		if msg.String() == "esc" {
+			m.clearSelection()
+			return nil, true
+		}
+	}
+	if m.approval != nil {
+		return m.answerApproval(msg.String()), true
+	}
+	if m.dialog != nil {
+		cmd, _ := m.dialog.key(m, msg)
+		return cmd, true
+	}
+	if m.question != nil && !m.answeringLater() && msg.String() != "ctrl+c" {
+		return m.questionKey(msg), true
+	}
+	if m.answeringLater() && msg.String() == "enter" && strings.TrimSpace(m.composer.Value()) == "" {
+		m.laterQuestion = "" // the empty composer's Enter brings the question back
+		m.layout()
+		return nil, true
+	}
+	if m.failure != nil {
+		if cmd, ok := m.failureKey(msg.String()); ok {
+			return cmd, true
+		}
+	}
+	return nil, len(m.mention) > 0 && m.mentionKey(msg.String()) || m.recallKey(msg.String())
+}
+
+// shortcut runs the conversation screen's keys; false sends the key to the composer.
+func (m *Model) shortcut(msg tea.KeyPressMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "ctrl+c":
+		m.dialog = confirmQuit{}
+		return nil, true
+	case "ctrl+k":
+		return m.openPalette(), true
+	case "ctrl+o":
+		return m.openModels(), true
+	case "ctrl+s":
+		return m.openSessions(), true
+	case "ctrl+n":
+		return m.newConversation(), true
+	case "/":
+		if strings.TrimSpace(m.composer.Value()) == "" {
+			return m.openPalette(), true
+		}
+	case "esc":
+		if m.busy && m.app.CoderAgent != nil {
+			m.app.CoderAgent.Cancel(m.session.ID)
+		}
+		return nil, true
+	case "shift+tab":
+		m.cycleMode()
+		return nil, true
+	case "enter":
+		return m.submit(), true
+	case "alt+enter", "shift+enter", "ctrl+j":
+		m.composer.InsertString("\n")
+		m.layout()
+		return nil, true
+	case "alt+up", "alt+down":
+		if msg.String() == "alt+up" {
+			m.transcript.ScrollUp(3)
+		} else {
+			m.transcript.ScrollDown(3)
+		}
+		m.follow = m.transcript.AtBottom()
+		return nil, true
+	case "pgup", "pgdown":
+		var cmd tea.Cmd
+		m.transcript, cmd = m.transcript.Update(msg)
+		m.follow = m.transcript.AtBottom()
+		return cmd, true
+	}
+	return nil, false
 }
 
 // answerApproval maps the numbered buttons (and a/s/d) to the decision.
@@ -551,10 +604,7 @@ func (m *Model) refresh() {
 	if m.width == 0 {
 		return
 	}
-	if m.selection != nil {
-		if m.selection.session == m.session.ID {
-			return
-		}
+	if m.selection != nil && m.selection.session != m.session.ID {
 		m.selection = nil
 	}
 	// Every row is painted to the edge so no terminal background shows
@@ -595,6 +645,7 @@ func (m *Model) refresh() {
 	} else {
 		m.painted, m.paintedWidth = nil, m.width
 	}
+	m.holdSelection(rows)
 	m.rows = rows
 	// The viewport keeps only the scroll position: transcriptRows cuts the
 	// painted rows itself. Blank lines give it the count without making it

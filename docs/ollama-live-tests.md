@@ -1,5 +1,8 @@
 # Validação real do terminal e das instruções com Ollama
 
+> Os testes de PTY citados aqui ficavam em `internal/tui` e saíram com a interface
+> clássica. O registro abaixo é histórico; os comandos não rodam mais.
+
 ## Aceitação do binário em PTY: prontidão do Ollama
 
 `TestLiveOllamaPTYUI` executa o binário de produção em um PTY e usa o modelo

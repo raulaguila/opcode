@@ -7,7 +7,7 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
-	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/ui/theme"
 )
 
 // Palette holds the proposal's colors. One dark world: the terminal is used

@@ -66,38 +66,8 @@ A linguagem usada para implementar um projeto tampouco comprova suas capacidades
 Perguntas reconhecidas sobre fatos do projeto exigem referências verificáveis
 em Perguntar, Planejar e Executar, incluindo formulações genéricas como
 “o que pode me falar do projeto atual?” e “quais linguagens suporta?”.
-A resposta precisa citar ao menos uma das fontes selecionadas para aquele
-assunto; numa apresentação genérica, a primeira fonte básica disponível é
-prioritária, normalmente o README. Referências adicionais continuam sujeitas à
-verificação de arquivo, hash atual e intervalo efetivamente entregue.
-
-Sem leitura verificável, o agente solicita recuperação em vez de aceitar uma
-afirmação sobre o projeto. Após uma correção de citação malsucedida, o turno
-encerra com erro preservando as evidências; não inventa uma referência.
-O detalhe do erro distingue a ausência de `arquivo:linha` das referências não
-verificadas e mostra os intervalos disponíveis para recuperação. O texto é
-limitado e passa pela redação de credenciais antes de aparecer em `/error`.
-As exceções explícitas de estilo solicitadas pelo usuário permanecem respeitadas.
-O gate verifica proveniência e o vínculo com a fonte selecionada; não certifica
-a interpretação de cada afirmação. As avaliações de conteúdo permanecem necessárias.
-
-O diagnóstico público que acompanha uma chamada de pergunta também mantém sua
-validação. Uma confirmação simples após a resposta humana pode encerrar o fluxo
-sem repetir as referências quando a explicação anterior continua validada. Isso
-não dispensa novas afirmações técnicas: elas seguem a validação normal, e uma
-confirmação não faz um diagnóstico sem evidências passar.
-O reconhecimento dessas confirmações usa frases conservadoras em português e
-inglês; outras formulações continuam sujeitas à validação normal.
-
-A interface mantém o texto visível durante a validação e associa o estado à
-resposta correspondente. Durante uma correção direta, “Revisando referências…”
-acompanha o original; somente o candidato validado o substitui como principal.
-“Ver versão anterior” expõe o original sem duplicar respostas principais. Se o
-reparo falhar, o original continua com “Citações não validadas” e a tentativa
-fica acessível em detalhes. As mensagens e recibos originais não são apagados.
-Reparos internos ficam nos detalhes do processo, sem recolher diagnósticos ou
-confirmações independentes. A falha de citação é distinta de contexto excedido;
-palavras como “context preparation” no detalhe não mudam a categoria do erro.
+Citar `arquivo:linha` é orientação do prompt. O runtime não valida as
+referências nem interrompe o turno por causa delas.
 
 Uma leitura automática anterior pode ser reaproveitada somente quando seu
 resultado visível e recibo continuam completos e o hash do arquivo é revalidado
@@ -112,18 +82,6 @@ abrevia somente cópias antigas idênticas, preservando pares de ferramentas,
 argumentos, estado privado do provedor, instruções humanas e o histórico salvo.
 A revalidação ainda faz leitura para calcular o hash; isso não é um cache sem I/O
 nem uma promessa de latência menor em todo caso.
-
-Uma citação do modelo também pode usar uma leitura nativa de turno anterior,
-sem repetir a chamada da ferramenta. O validador recupera somente pares originais
-de chamada/resultado bem-sucedidos da mesma conversa e confere novamente hash,
-linhas entregues e acesso atual ao arquivo. Considera até 256 mensagens anteriores
-e mantém até 32 recibos recentes, incluindo os do turno atual. Páginas adjacentes
-só podem ser unidas se tiverem o mesmo caminho e hash; lacunas continuam inválidas.
-Resumos, localizadores copiados, resultados sem metadados ou leituras de outra
-conversa não estabelecem evidência. Fontes alteradas, protegidas, externas ou com
-symlink não são certificadas automaticamente. O reparo, tanto no protocolo nativo
-Ollama quanto em OpenAI-compatible, usa os mesmos limites e verificações; não
-repete efeitos colaterais nem fabrica referências para fazer uma resposta passar.
 
 ## O que o processo mostra
 

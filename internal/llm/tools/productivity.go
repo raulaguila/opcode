@@ -194,34 +194,11 @@ func checkWorktreeFilters(ctx context.Context) error {
 	return nil
 }
 
-// NewWorktreeTool exposes the same protected implementation to user-driven UI.
-func NewWorktreeTool(permissions permission.Service) BaseTool {
-	return &worktreeTool{permissions: permissions}
-}
-
 type Worktree struct {
 	Path     string `json:"path"`
 	Branch   string `json:"branch"`
 	HEAD     string `json:"HEAD"`
 	Detached bool   `json:"detached"`
-}
-
-func ListWorktrees(ctx context.Context) ([]Worktree, error) {
-	response, err := (&worktreeTool{}).Run(ctx, ToolCall{Input: `{"action":"list"}`})
-	if err != nil {
-		return nil, err
-	}
-	if response.IsError {
-		return nil, fmt.Errorf("worktree listing failed")
-	}
-	var value struct {
-		Worktrees []Worktree `json:"worktrees"`
-		Truncated bool       `json:"truncated"`
-	}
-	if json.Unmarshal([]byte(response.Content), &value) != nil || value.Truncated {
-		return nil, fmt.Errorf("invalid or truncated worktree listing")
-	}
-	return value.Worktrees, nil
 }
 
 func worktreeListing(listing string) ToolResponse {

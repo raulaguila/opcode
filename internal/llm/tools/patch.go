@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"sort"
+
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
 	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/permission"
-	"sort"
 )
 
 type PatchParams struct {

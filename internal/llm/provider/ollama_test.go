@@ -196,47 +196,15 @@ func TestOllamaCitationPresentationRetainsUnverifiedSelectionsWithoutDuplicateFo
 		{"Explicação (source.go:1).", "source.go:1\ninvented.go:999", "Explicação (source.go:1). (invented.go:999)"},
 		{"```go\nrun()\n```", "source.go:2", "```go\nrun()\n```\n\n(source.go:2)"},
 	} {
-		require.Equal(t, tc.want, appendOllamaCitations(tc.answer, tc.citations, nil))
+		require.Equal(t, tc.want, appendOllamaCitations(tc.answer, tc.citations))
 	}
 }
 
-func TestOllamaCoveredCitationsRequireAnInspectedRequestScopedRange(t *testing.T) {
-	inspected := []string{"source.go:1-44"}
-	require.Equal(t, "Fato (source.go:3-5).", appendOllamaCitations("Fato (source.go:3-5).", "source.go:1-44", inspected))
-	for _, tc := range []struct{ answer, source string }{
-		{"Fato (source.go:3).", "source.go:1-999"},
-		{"Fato (source.go:30-99).", "source.go:1-44"},
-		{"Fato (other-source.go:3).", "source.go:1-44"},
-		{"Fato (invented.go:3).", "invented.go:1-44"},
-	} {
-		require.Contains(t, appendOllamaCitations(tc.answer, tc.source, inspected), "("+tc.source+")", "unknown/outside selections must reach the ordinary citation guard")
-	}
-}
-
-func TestOllamaRepairSchemaUsesOnlyRequestScopedCitationChoices(t *testing.T) {
-	opts := testOptions(models.ProviderLocal)
-	opts.sourceCitations = []string{"counter.py:1-2", "README.md:1-2"}
-	c := newOllamaClient(opts, "http://local.invalid/v1")
-	_, body, err := c.request(userMessages(), []tools.BaseTool{contractTool{}}, false)
+func TestOllamaFinalAnswerToolClosesTheToolList(t *testing.T) {
+	c := newOllamaClient(testOptions(models.ProviderLocal), "http://local.invalid/v1")
+	_, normal, err := c.request(userMessages(), []tools.BaseTool{contractTool{}}, false)
 	require.NoError(t, err)
-	functions := body.(object)["tools"].([]object)
+	functions := normal.(object)["tools"].([]object)
 	final := functions[len(functions)-1]["function"].(object)
-	properties := final["parameters"].(object)["properties"].(object)
-	require.Equal(t, ollamaSourceAnswer, final["name"])
-	require.Equal(t, opts.sourceCitations, properties["source"].(object)["enum"])
-	require.Contains(t, properties["source"].(object)["description"], "not a restriction on the complete explanation")
-	explanation := properties["explanation"].(object)["description"]
-	for _, phrase := range []string{"ORIGINAL user request", "every requested input/output case", "exact returned values", "not replace concrete results with vague paraphrases", "executable call/return statement lines", "does not limit the answer to one source or one fact"} {
-		require.Contains(t, explanation, phrase)
-	}
-	messages := body.(object)["messages"].([]object)
-	require.Contains(t, messages[0]["content"], "including all requested cases and exact supported results")
-	opts.sourceCitations = nil
-	plain := newOllamaClient(opts, "http://local.invalid/v1")
-	_, normal, err := plain.request(userMessages(), []tools.BaseTool{contractTool{}}, false)
-	require.NoError(t, err)
-	functions = normal.(object)["tools"].([]object)
-	final = functions[len(functions)-1]["function"].(object)
 	require.Equal(t, ollamaFinalAnswer, final["name"])
-	require.NotContains(t, final["parameters"].(object)["properties"].(object), "source", "hints must not leak to another request")
 }

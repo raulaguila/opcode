@@ -3,6 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/raulaguila/opcode/internal/app"
 	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/llm/agent"
@@ -10,9 +14,6 @@ import (
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
-	"sync"
-	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"

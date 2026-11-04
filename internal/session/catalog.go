@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/raulaguila/opcode/internal/localstate"
@@ -14,6 +15,7 @@ import (
 type LocalSession struct {
 	Archived bool   `json:"archived,omitempty"`
 	Draft    string `json:"draft,omitempty"`
+	Seen     int64  `json:"seen,omitempty"`
 }
 type catalogDocument struct {
 	Root     string                  `json:"root"`
@@ -73,6 +75,7 @@ func (c *Catalog) update(id string, change func(*LocalSession), active bool) err
 	}
 	entry := d.Sessions[id]
 	change(&entry)
+	entry.Seen = time.Now().UnixNano()
 	if len(entry.Draft) > 64000 {
 		return fmt.Errorf("session draft exceeds 64 KB")
 	}
@@ -80,10 +83,27 @@ func (c *Catalog) update(id string, change func(*LocalSession), active bool) err
 	if active {
 		d.Last = id
 	}
-	if len(d.Sessions) > 500 {
+	if len(d.Sessions) > 500 && !d.forgetOldest(id) {
 		return fmt.Errorf("session preferences limit reached")
 	}
 	return localstate.Write(c.path, d, 1<<20)
+}
+
+// forgetOldest makes room by dropping the entry least recently used that has
+// nothing to lose: an unsent draft stays, and archived entries go last.
+func (d *catalogDocument) forgetOldest(keep string) bool {
+	oldest, found := "", false
+	for id, entry := range d.Sessions {
+		if id == keep || id == d.Last || entry.Draft != "" {
+			continue
+		}
+		current := d.Sessions[oldest]
+		if !found || (!entry.Archived && current.Archived) || (entry.Archived == current.Archived && entry.Seen < current.Seen) {
+			oldest, found = id, true
+		}
+	}
+	delete(d.Sessions, oldest)
+	return found
 }
 func (c *Catalog) Archive(id string, archived bool) error {
 	return c.update(id, func(s *LocalSession) { s.Archived = archived }, false)

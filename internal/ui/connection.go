@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/raulaguila/opcode/internal/tui/components/dialog"
+	"github.com/raulaguila/opcode/internal/ui/dialog"
 )
 
 // formStater is the connection editor seen as data, so it can be drawn in

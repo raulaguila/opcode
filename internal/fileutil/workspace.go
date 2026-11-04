@@ -31,46 +31,60 @@ func SearchWorkspace(root, query string, limit int) []string {
 }
 
 func listFiles(root string, keep func(string) bool, limit int) []string {
+	if list := ripgrepFiles(root, keep, limit); list != nil {
+		return list
+	}
+	return walkFiles(root, keep, limit)
+}
+
+func ripgrepFiles(root string, keep func(string) bool, limit int) []string {
+	cmd := GetRgCmd("")
+	if cmd == nil {
+		return nil
+	}
+	cmd.Dir = root
+	out, err := cmd.StdoutPipe()
+	if err != nil || cmd.Start() != nil {
+		return nil
+	}
+	scanner := bufio.NewScanner(out)
+	scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
+		if i := bytes.IndexByte(data, 0); i >= 0 {
+			return i + 1, data[:i], nil
+		}
+		if atEOF && len(data) > 0 {
+			return len(data), data, nil
+		}
+		return 0, nil, nil
+	})
 	var list []string
-	if cmd := GetRgCmd(""); cmd != nil {
-		cmd.Dir = root
-		if out, err := cmd.StdoutPipe(); err == nil && cmd.Start() == nil {
-			scanner := bufio.NewScanner(out)
-			scanner.Split(func(data []byte, atEOF bool) (int, []byte, error) {
-				if i := bytes.IndexByte(data, 0); i >= 0 {
-					return i + 1, data[:i], nil
-				}
-				if atEOF && len(data) > 0 {
-					return len(data), data, nil
-				}
-				return 0, nil, nil
-			})
-			for len(list) < limit && scanner.Scan() {
-				if path := strings.TrimPrefix(scanner.Text(), "./"); path != "" && (keep == nil || keep(path)) {
-					list = append(list, path)
-				}
-			}
-			_ = cmd.Process.Kill() // stops a listing past the limit; harmless after it ends
-			_ = cmd.Wait()
+	for len(list) < limit && scanner.Scan() {
+		if path := strings.TrimPrefix(scanner.Text(), "./"); path != "" && (keep == nil || keep(path)) {
+			list = append(list, path)
 		}
 	}
-	if list == nil {
-		_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil || len(list) >= limit {
-				return filepath.SkipDir
+	_ = cmd.Process.Kill() // stops a listing past the limit; harmless after it ends
+	_ = cmd.Wait()
+	return list
+}
+
+func walkFiles(root string, keep func(string) bool, limit int) []string {
+	var list []string
+	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || len(list) >= limit {
+			return filepath.SkipDir
+		}
+		name := entry.Name()
+		if entry.IsDir() && path != root && (strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor") {
+			return filepath.SkipDir
+		}
+		if !entry.IsDir() {
+			if rel, err := filepath.Rel(root, path); err == nil && (keep == nil || keep(rel)) {
+				list = append(list, rel)
 			}
-			name := entry.Name()
-			if entry.IsDir() && path != root && (strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor") {
-				return filepath.SkipDir
-			}
-			if !entry.IsDir() {
-				if rel, err := filepath.Rel(root, path); err == nil && (keep == nil || keep(rel)) {
-					list = append(list, rel)
-				}
-			}
-			return nil
-		})
-	}
+		}
+		return nil
+	})
 	return list
 }
 

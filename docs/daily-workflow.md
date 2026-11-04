@@ -27,11 +27,7 @@ Sem modelo, `opcode` e `opcode app` abrem em **Nova conexão**: escolha um ponto
 de partida, teste o catálogo com `Ctrl+T`, salve com `Ctrl+S` e escolha o modelo
 com `Ctrl+O`. As duas interfaces estão descritas em [Terminal e app](interfaces.md).
 
-Na interface clássica (`opcode --ui classico`), sem modelo a interface abre a etapa 1: editar ou adicionar uma conexão. `N`
-oferece presets; `Ctrl+T` consulta metadados e `Ctrl+S` salva. A etapa 2 lista os
-modelos do provedor para seleção. A etapa 3 destaca “Começar a conversar”.
-“Detalhes e testes opcionais” reúne o caminho do JSON e as verificações. `/setup`
-reabre esse fluxo. Idioma e preferências ficam em `/settings` → `P`.
+Idioma e preferências ficam em `/settings` → `P`.
 
 No uso diário, o modo e o modelo ficam na barra inferior e abrem seus seletores
 ao clicar. O centro mostra comandos ou a atividade atual. `/` oferece as ações

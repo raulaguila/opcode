@@ -78,9 +78,6 @@ func compactPreview(text string, limit int) string {
 	return text[:end] + "..."
 }
 
-func codeChunks(path, text string) []indexedChunk {
-	return codeChunksContext(context.Background(), path, text)
-}
 func codeChunksContext(ctx context.Context, path, text string) []indexedChunk {
 	builder := codeChunkBuilder{lines: strings.Split(text, "\n")}
 	if symbols, err := localOutline(ctx, path, []byte(text)); err == nil {

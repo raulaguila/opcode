@@ -83,3 +83,10 @@ func TestNonInteractiveStopsAtTheCostLimit(t *testing.T) {
 	require.Equal(t, 3, exit.Code)
 	require.Contains(t, err.Error(), "cost limit of $0.50")
 }
+
+func TestRefusedOperationIsNotReportedAsSuccess(t *testing.T) {
+	reply := message.Message{Parts: []message.ContentPart{message.Finish{Reason: message.FinishReasonPermissionDenied}}}
+	report := finalReport(agent.AgentEvent{Message: reply, Outcome: "completed"}, "s")
+	require.Equal(t, "blocked", report.Outcome)
+	require.Contains(t, report.Response, "Permission denied")
+}

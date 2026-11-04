@@ -2,11 +2,12 @@ package models
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestOllamaStatusIsBoundedReadOnlyAndReportsObservedPlacement(t *testing.T) {

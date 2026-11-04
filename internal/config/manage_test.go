@@ -2,10 +2,11 @@ package config
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestConfigurationMigrationPreservesPrivateBackupUnknownFieldsAndRollback(t *testing.T) {

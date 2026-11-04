@@ -738,19 +738,6 @@ func WorkingDirectory() string {
 	return cfg.WorkingDir
 }
 
-func UpdateAgentModel(agentName AgentName, modelID models.ModelID) error {
-	if cfg == nil {
-		panic("config not loaded")
-	}
-
-	model, ok := models.SupportedModels[modelID]
-	if !ok {
-		return fmt.Errorf("model %s not supported", modelID)
-	}
-
-	return UpdateAgentModelDefinition(agentName, model)
-}
-
 // UpdateTheme updates the theme in the configuration and writes it to the config file.
 func UpdateTheme(themeName string) error {
 	if cfg == nil {

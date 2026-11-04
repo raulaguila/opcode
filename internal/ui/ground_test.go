@@ -7,8 +7,8 @@ import (
 
 	"github.com/charmbracelet/colorprofile"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/raulaguila/opcode/internal/tui/styles"
-	"github.com/raulaguila/opcode/internal/tui/theme"
+	"github.com/raulaguila/opcode/internal/ui/styles"
+	"github.com/raulaguila/opcode/internal/ui/theme"
 	"github.com/stretchr/testify/require"
 )
 

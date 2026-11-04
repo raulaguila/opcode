@@ -60,7 +60,7 @@ func TestNamedEnvironmentKeyLoadsWithProviderOnlyConfiguration(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, loaded.ValidateStartup())
 	require.Equal(t, "private-environment-value", loaded.Providers[models.ProviderOpenAI].APIKey)
-	require.NoError(t, UpdateAgentModel(AgentCoder, models.GPT41))
+	require.NoError(t, UpdateAgentModelDefinition(AgentCoder, models.SupportedModels[models.GPT41]))
 	saved, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.NotContains(t, string(saved), "private-environment-value")

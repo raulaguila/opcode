@@ -20,7 +20,7 @@ staticcheck:
 quality: complexity staticcheck vet test test-integration
 
 # Identical offline fixtures/toolchain are required for paired comparisons.
-BENCH_PACKAGES := ./internal/llm/tools ./internal/llm/agent ./internal/llm/provider ./internal/message ./internal/tui/components/chat ./internal/tui/styles
+BENCH_PACKAGES := ./internal/llm/tools ./internal/llm/agent ./internal/llm/provider ./internal/message ./internal/ui/styles
 BENCH_PATTERN := Benchmark(WorkspaceDigest|WarmCodeIndexSearch|FullWarmCodeIndexSearch|CitationCurrent|IndexRefreshChanges|ContextPreparation|PreparedImageBudget|AuditKnownTokenizer|ConversationProjection|AuditChat|SQLiteChatSessionLoad|TranscriptRender|AuditMarkdown)
 
 bench-compile:

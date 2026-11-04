@@ -61,14 +61,6 @@ func newAPITransport(baseURL string) *apiTransport {
 	}, headers: make(http.Header)}
 }
 
-func (t *apiTransport) post(ctx context.Context, path string, payload any, stream bool) (*http.Response, error) {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("encode provider request: %w", err)
-	}
-	return t.postBytes(ctx, path, body, stream)
-}
-
 func (t *apiTransport) postBytes(ctx context.Context, path string, body []byte, stream bool) (*http.Response, error) {
 	endpoint, err := providerRequestURL(t.baseURL + path)
 	if err != nil {

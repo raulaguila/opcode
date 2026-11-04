@@ -2,11 +2,12 @@ package transcript
 
 import (
 	"encoding/json"
+	"strings"
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/stretchr/testify/require"
-	"strings"
-	"testing"
 )
 
 func TestMarkdownExportsVisibleContentWithRedactionAndSafeFences(t *testing.T) {

@@ -118,11 +118,6 @@ func (a *agent) systemPrompt() string {
 	}
 	return ""
 }
-func (a *agent) budgetRequest(session string, history []message.Message, run *generationRun) ([]message.Message, error) {
-	bounded, _, err := a.budgetPreparedRequest(session, history, run)
-	return bounded, err
-}
-
 func (a *agent) budgetPreparedRequest(session string, history []message.Message, run *generationRun) ([]message.Message, provider.PreparedRequest, error) {
 	p := runProvider(a, run)
 	preparation := &requestPreparation{Provider: p}

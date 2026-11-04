@@ -1,9 +1,10 @@
 package provider
 
 import (
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestAdaptiveWindowCloneChangesOllamaRequestWithoutMutatingOriginal(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/tui/layout"
+	"github.com/raulaguila/opcode/internal/ui/layout"
 )
 
 func textFor(pt, en string) string { return config.Text(pt, en) }

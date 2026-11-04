@@ -170,17 +170,6 @@ func TestLargeOutputArtifactRedactedAndDoesNotRepeatTool(t *testing.T) {
 	require.NotContains(t, response.Content, secret)
 	require.Equal(t, 1, stub.calls)
 }
-func TestUserPreviewIsProtectedAndDoesNotMarkFileRead(t *testing.T) {
-	root := productivityWorkspace(t)
-	path := filepath.Join(root, "preview.go")
-	require.NoError(t, os.WriteFile(path, []byte("package main\n"), 0600))
-	require.True(t, getLastReadTime(path).IsZero())
-	response, err := SecureTool(NewPreviewTool(), nil).Run(toolContext(), toolInput(map[string]any{"file_path": path}))
-	require.NoError(t, err)
-	require.Contains(t, response.Content, "package main")
-	require.True(t, getLastReadTime(path).IsZero())
-}
-
 func TestLSPHierarchyLimitsAndSymbolReplacement(t *testing.T) {
 	root := productivityWorkspace(t)
 	path := filepath.Join(root, "main.go")
@@ -217,7 +206,7 @@ func TestCustomPrivateStorageRequiresSensitiveReadApproval(t *testing.T) {
 	path := filepath.Join(config.Get().Data.Directory, "other-session.json")
 	require.NoError(t, os.WriteFile(path, []byte("private history"), 0600))
 	permissions := &denyingPermissions{}
-	_, err := SecureTool(NewPreviewTool(), permissions).Run(toolContext(), toolInput(map[string]any{"file_path": path}))
+	_, err := SecureTool(NewViewTool(nil), permissions).Run(toolContext(), toolInput(map[string]any{"file_path": path}))
 	require.ErrorIs(t, err, permission.ErrorPermissionDenied)
 	require.Len(t, permissions.requests, 1)
 	require.Equal(t, "read_sensitive", permissions.requests[0].Action)
@@ -254,7 +243,7 @@ func TestLegacyPrivatePathsRemainSensitiveAfterRename(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 		require.NoError(t, os.WriteFile(path, []byte("private content"), 0600))
 		permissions := &denyingPermissions{}
-		_, err := SecureTool(NewPreviewTool(), permissions).Run(toolContext(), toolInput(map[string]any{"file_path": path}))
+		_, err := SecureTool(NewViewTool(nil), permissions).Run(toolContext(), toolInput(map[string]any{"file_path": path}))
 		require.ErrorIs(t, err, permission.ErrorPermissionDenied, name)
 		require.Len(t, permissions.requests, 1)
 		require.Equal(t, "read_sensitive", permissions.requests[0].Action)

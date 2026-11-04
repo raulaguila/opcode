@@ -2,10 +2,11 @@ package evaluation
 
 import (
 	"encoding/json"
-	"github.com/raulaguila/opcode/internal/llm/agent"
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
+
+	"github.com/raulaguila/opcode/internal/llm/agent"
+	"github.com/stretchr/testify/require"
 )
 
 func TestComparisonAggregatesOnlyCompletePhaseObservations(t *testing.T) {

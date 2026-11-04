@@ -289,8 +289,7 @@ consultas públicas. As proteções de IP privado/metadata, credenciais e redire
 são as de `fetch`; ativar a busca não altera permissões, sandbox ou TLS.
 
 Snippets são dados externos não confiáveis. Links não equivalem a páginas lidas
-ou fatos verificados e não satisfazem os recibos de leitura do repositório. A
-validação existente de citações locais continua obrigatória. Use `fetch` para
+ou fatos verificados e não satisfazem os recibos de leitura do repositório. Use `fetch` para
 consultar uma fonte necessária, com a aprovação normal. Não há pesquisa web
 automática na preparação das perguntas sobre o projeto.
 

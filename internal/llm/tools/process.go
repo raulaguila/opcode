@@ -86,10 +86,6 @@ func (m *ProcessManager) Start(ctx context.Context, permissions permission.Servi
 	return m.info(process), nil
 }
 
-func (m *ProcessManager) start(parent context.Context, owner, command string, lifetime time.Duration) (*managedProcess, error) {
-	return m.startProcess(parent, owner, ProcessParams{Command: command, Timeout: int(lifetime.Milliseconds())}, true)
-}
-
 func (m *ProcessManager) startProcess(parent context.Context, owner string, params ProcessParams, detached bool) (*managedProcess, error) {
 	if err := parent.Err(); err != nil {
 		return nil, err

@@ -250,6 +250,10 @@ func (s *Server) configure(ctx context.Context, id, mode, policy string) error {
 	if !ok {
 		return nil
 	}
+	// Setting a policy revokes grants and denies pending requests; each prompt sends it.
+	if policies.ApprovalPolicy(id) == permission.ApprovalPolicy(policy) {
+		return nil
+	}
 	return policies.SetApprovalPolicy(id, permission.ApprovalPolicy(policy), config.WorkingDirectory())
 }
 
@@ -396,39 +400,49 @@ func project(messages []message.Message) []Message {
 		case message.User:
 			entry.Text = text
 		case message.Assistant:
-			entry.HTML, entry.Cites = renderReply(text, msg.IsFinished())
-			if read := agent.SourcesLabel(agent.SourcesRead(turnCalls, results)); read != "" {
-				entry.Cites = config.Text("lido: ", "read: ") + read
-			}
+			projectReply(&entry, msg, text, turnCalls, results)
 			turnCalls = append(turnCalls, msg.ToolCalls()...)
-			entry.Model = string(msg.Model)
-			if finish := msg.FinishPart(); finish != nil && msg.IsFinished() && finish.Time > msg.CreatedAt {
-				entry.Seconds = finish.Time - msg.CreatedAt
-			}
-			for _, call := range msg.ToolCalls() {
-				step := Step{Name: call.Name, Target: target(call.Input), State: "ok"}
-				if result, done := results[call.ID]; !done {
-					step.State = "running"
-				} else if result.IsError {
-					step.State = "failed"
-				} else {
-					// Edits report their line counts in the result's metadata.
-					var lines struct {
-						Additions int `json:"additions"`
-						Removals  int `json:"removals"`
-					}
-					if json.Unmarshal([]byte(result.Metadata), &lines) == nil {
-						step.Added, step.Removed = lines.Additions, lines.Removals
-					}
-				}
-				entry.Steps = append(entry.Steps, step)
-			}
 		}
 		if entry.Text != "" || entry.HTML != "" || len(entry.Steps) > 0 {
 			out = append(out, entry)
 		}
 	}
 	return out
+}
+
+func projectReply(entry *Message, msg message.Message, text string, turnCalls []message.ToolCall, results map[string]message.ToolResult) {
+	entry.HTML, entry.Cites = renderReply(text, msg.IsFinished())
+	if read := agent.SourcesLabel(agent.SourcesRead(turnCalls, results)); read != "" {
+		entry.Cites = config.Text("lido: ", "read: ") + read
+	}
+	entry.Model = string(msg.Model)
+	if finish := msg.FinishPart(); finish != nil && msg.IsFinished() && finish.Time > msg.CreatedAt {
+		entry.Seconds = finish.Time - msg.CreatedAt
+	}
+	for _, call := range msg.ToolCalls() {
+		entry.Steps = append(entry.Steps, projectStep(call, results))
+	}
+}
+
+func projectStep(call message.ToolCall, results map[string]message.ToolResult) Step {
+	step := Step{Name: call.Name, Target: target(call.Input), State: "ok"}
+	result, done := results[call.ID]
+	switch {
+	case !done:
+		step.State = "running"
+	case result.IsError:
+		step.State = "failed"
+	default:
+		// Edits report their line counts in the result's metadata.
+		var lines struct {
+			Additions int `json:"additions"`
+			Removals  int `json:"removals"`
+		}
+		if json.Unmarshal([]byte(result.Metadata), &lines) == nil {
+			step.Added, step.Removed = lines.Additions, lines.Removals
+		}
+	}
+	return step
 }
 
 // rendered keeps replies already turned into HTML: the page asks for the

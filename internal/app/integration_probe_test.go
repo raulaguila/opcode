@@ -2,10 +2,11 @@ package app
 
 import (
 	"context"
-	"github.com/spf13/viper"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/permission"

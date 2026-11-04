@@ -54,8 +54,6 @@ func TestRequestClonesReuseConnectionWithoutOptionChainGrowth(t *testing.T) {
 		require.NoError(t, err)
 		clone, err = clone.(ContextWindowController).WithContextWindow(8192)
 		require.NoError(t, err)
-		clone, err = clone.(SourceCitationController).WithSourceCitations([]string{"main.go:1"})
-		require.NoError(t, err)
 		require.Same(t, originalTransport, clone.(*baseProvider).client.(*openaiClient).transport)
 		require.Len(t, clone.(*baseProvider).options.openaiOptions, initial)
 		_, err = clone.SendMessages(context.Background(), []message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "test"}}}}, nil)

@@ -11,30 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPickerMetadataReachesStandaloneAndNamedConnections(t *testing.T) {
-	for _, profile := range []string{"", "office"} {
-		t.Run("profile="+profile, func(t *testing.T) {
-			isolateModelConfig(t)
-			provider := Provider{BaseURL: "http://fixture.invalid/v1", API: "ollama"}
-			cfg = &Config{Providers: map[models.ModelProvider]Provider{models.ProviderLocal: provider}, ProviderProfiles: map[string]ProviderProfile{"office": {Backend: models.ProviderLocal, Provider: provider}}}
-			previous := http.DefaultTransport
-			t.Cleanup(func() { http.DefaultTransport = previous })
-			http.DefaultTransport = localDiscoveryTransport(func(req *http.Request) (*http.Response, error) {
-				require.Equal(t, "/api/show", req.URL.Path)
-				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"capabilities":["embedding"],"remote_host":"https://ollama.com"}`)), Request: req}, nil
-			})
-			model := models.Model{ID: "fixture", APIModel: "fixture", Provider: models.ProviderLocal, ProviderProfile: profile, DefaultMaxTokens: 2048}
-			lookup := ModelMetadata(model)
-			require.NotNil(t, lookup)
-			found, err := lookup(context.Background())
-			require.NoError(t, err)
-			require.True(t, found.EmbeddingOnly())
-			require.Equal(t, "cloud", found.Hosting)
-			require.Equal(t, profile, found.ProviderProfile)
-		})
-	}
-}
-
 func TestPickerCatalogMetadataSurvivesSavedModelMerge(t *testing.T) {
 	for _, profile := range []string{"", "office"} {
 		t.Run("profile="+profile, func(t *testing.T) {

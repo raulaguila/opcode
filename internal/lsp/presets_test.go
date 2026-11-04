@@ -2,11 +2,12 @@ package lsp
 
 import (
 	"context"
-	"github.com/raulaguila/opcode/internal/config"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLazyServerMatchingNeedsKnownTypeAndRootMarker(t *testing.T) {

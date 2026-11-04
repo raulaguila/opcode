@@ -86,9 +86,6 @@ Em qualquer janela, a página só fala com o processo local, que escuta apenas e
 `127.0.0.1` com uma chave nova a cada abertura. Use `opcode app --no-open` para
 só mostrar o endereço.
 
-A interface anterior do terminal continua disponível por um tempo com
-`opcode --ui classico`.
-
 ### Automação
 
 `opcode -p "pedido"` roda um pedido sem interface. O pedido também pode vir pela
@@ -179,9 +176,7 @@ Consultar o catálogo não baixa
 pesos nem gera respostas. Clique no modelo do rodapé ou pressione `Ctrl+O` para
 buscar e escolher: `Tab` troca de conexão, `Ctrl+D` mostra os detalhes (onde o
 modelo está carregado, velocidade, e no app os ajustes de contexto e
-raciocínio) e `Ctrl+P` abre as conexões. `✓` identifica o modelo ativo. Na
-interface clássica, `Ctrl+F` marca favoritos, `Ctrl+A` alterna a função
-principal/auxiliar e `Ctrl+R` atualiza o catálogo.
+raciocínio) e `Ctrl+P` abre as conexões. `✓` identifica o modelo ativo.
 A escolha é salva; o contexto descoberto fica em memória, sem serializar chaves
 resolvidas do ambiente.
 
@@ -221,7 +216,7 @@ andamento. No cliente `attach`, `/quit` apenas desconecta do servidor.
 | --- | --- |
 | Tarefas | Contratos explícitos em `/contract` ou `--task-kind`, com alvos, critérios e checks da revisão atual. |
 | Configuração | Perfis com ID, nome e backend separados; múltiplos endpoints, formulários, teste de conexão, catálogo dinâmico, favoritos, recentes e modelos auxiliares independentes. |
-| Chat | Mensagens em ordem cronológica intercaladas com grupos recolhíveis de ferramentas, estados de citação visíveis, seleção/cópia, aviso de novas mensagens e rascunhos por conversa. |
+| Chat | Mensagens em ordem cronológica intercaladas com grupos recolhíveis de ferramentas, seleção/cópia, aviso de novas mensagens e rascunhos por conversa. |
 | Execução | Terminal PTY com entrada do usuário, saída ao vivo e fila de instruções editável durante o trabalho. |
 | Contexto | Estimativa preventiva do payload e schemas, reserva de resposta e compactação local preservando a conversa salva. |
 | Revisão | Diffs por interação, recibos de checks e undo/redo de edições de arquivos com detecção de conflitos e aprovação. |
@@ -289,31 +284,6 @@ duas interfaces:
 | `Esc` | Cancela a execução |
 | `1` `2` `3` | Responde a uma aprovação |
 | `@` (app) | Cita um arquivo do projeto |
-
-A interface clássica (`opcode --ui classico`) tem outros controles, descritos no
-[guia dela](docs/workspace-ui.md):
-
-| Controle | Ação |
-| --- | --- |
-| `/` e `Ctrl+K` | Sugestões de comandos e paleta |
-| `/mode ask`, `/mode plan`, `/mode execute` | Perguntar, Planejar e Executar |
-| `Ctrl+B`, `/process` | Expandir/recolher o grupo de ferramentas mais recente |
-| `Alt+End`, `/latest` | Ir às mensagens novas |
-| `Alt+PgUp` / `Alt+PgDn` | Rolar meia página de conversa |
-| `Ctrl+U`, `Ctrl+End` | Apagar até o início / ir ao final do rascunho |
-| `Alt+Enter`, `Shift+Enter` | Nova linha; o rodapé indica a combinação suportada |
-| `Ctrl+Y`, `/actions` | Copiar resposta/código ou abrir citação |
-| `Ctrl+P` | Mostrar/ocultar terminal |
-| `/queue` | Editar/remover instruções pendentes |
-| `/context` | Orçamento, índice, alocação e diagnóstico; `C` solicita compactação |
-| `/task` | Plano, fila, alterações, checks e permissões em um painel |
-| `/changes`, `/checks` | Ver alterações e validações; `U`/`R` prepara undo/redo |
-| `/sessions` | Buscar, renomear, arquivar e exportar conversas |
-| `/resume` | Pedir a continuação da tarefa salva |
-| `/quit` | Salvar o rascunho e iniciar o encerramento da interface |
-| `/settings`, `/models`, `/integrations` | Configurar a aplicação |
-| `/skills`, `/skill NOME argumentos` | Consultar/invocar skills cadastradas |
-| `/error`, `/retry` | Ver falha e retomar o último pedido |
 
 ## Permissões, contexto e limites
 
@@ -404,20 +374,15 @@ mostra um diagnóstico sem credenciais; `/context` mostra origem e orçamento.
 Embeddings locais são opcionais. Veja [guia de recuperação](docs/retrieval-runtime.md)
 e [o registro desta implementação](docs/implementation-2026-10.md).
 
-O [editor de tema](docs/theme-editor.md) permite personalizar a paleta com prévia
-e salvamento explícito. [Raciocínio e clipboard](docs/model-and-clipboard.md)
+[Raciocínio e clipboard](docs/model-and-clipboard.md)
 descreve controles por capacidade e cópia por SSH. O comando
 [`watch`](docs/shared-observer.md) acompanha mensagens salvas em outra janela
 somente para leitura; os comandos existentes `serve`/`attach` continuam disponíveis
-para reconectar um cliente à instância ativa. A
-[matriz de regressão da interface](docs/ui-regression-matrix.md) registra a
-cobertura determinística dos menus.
+para reconectar um cliente à instância ativa.
 O [guia de perguntas e evidências](docs/question-and-evidence-recovery.md)
-explica a recuperação de opções malformadas, a busca por assunto, as citações
-em todos os modos e o reaproveitamento de fontes revalidadas.
+explica a recuperação de opções malformadas, a busca por assunto e o reaproveitamento de fontes revalidadas.
 
-Na interface clássica, a [navegação da conversa](docs/workspace-ui.md) inclui busca local e seleção por
-teclado, mantendo o rascunho. [Cofre nativo opcional](docs/native-vault.md) guarda
+[Cofre nativo opcional](docs/native-vault.md) guarda
 credenciais por referência; chave direta e ambiente continuam disponíveis.
 A [busca web opcional](docs/tools.md#busca-web-opcional) começa desativada e
 mantém a aprovação de rede. Para comparações, use o

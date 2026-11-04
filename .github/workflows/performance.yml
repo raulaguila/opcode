@@ -77,13 +77,7 @@ jobs:
             internal/llm/provider/image_benchmark_test.go
             internal/llm/provider/allocation_benchmark_test.go
             internal/message/search_index_bench_test.go
-            internal/tui/components/chat/render_cache_test.go
-            internal/tui/components/chat/event_benchmark_test.go
-            internal/tui/components/chat/session_benchmark_test.go
-            internal/tui/components/chat/sqlite_history_benchmark_test.go
-            internal/tui/components/chat/streaming_benchmark_test.go
-            internal/tui/components/chat/streaming_blocks_benchmark_test.go
-            internal/tui/styles/markdown_benchmark_test.go
+            internal/ui/styles/markdown_benchmark_test.go
           )
           for fixture in "${fixtures[@]}"; do
             test -f "$fixture"

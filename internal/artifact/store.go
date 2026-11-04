@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/localstate"
 	"io"
 	"io/fs"
 	"os"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/localstate"
 )
 
 const MaxContent = 1 << 20

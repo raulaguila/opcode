@@ -2,10 +2,6 @@ package app
 
 import (
 	"context"
-	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/db"
-	"github.com/raulaguila/opcode/internal/llm/tools"
-	"github.com/spf13/viper"
 	"maps"
 	"os"
 	"path/filepath"
@@ -13,6 +9,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/db"
+	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/spf13/viper"
 
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/models"

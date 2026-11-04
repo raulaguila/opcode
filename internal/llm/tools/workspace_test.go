@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"encoding/json"
+
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/stretchr/testify/require"
 )

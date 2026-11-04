@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"github.com/pelletier/go-toml/v2"
 	"go/parser"
 	"go/token"
 	"os"
@@ -11,10 +10,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-)
 
-// IsTestSource shares the structural map's path classification, not proof of coverage.
-func IsTestSource(path string) bool { return projectFileRole(path) == "test" }
+	"github.com/pelletier/go-toml/v2"
+)
 
 func projectFileRole(path string) string {
 	base := strings.ToLower(filepath.Base(path))

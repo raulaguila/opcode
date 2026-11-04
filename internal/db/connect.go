@@ -36,7 +36,7 @@ func Connect() (*sql.DB, error) {
 	}
 	dsn := url.URL{Scheme: "file", Path: uriPath}
 	query := url.Values{}
-	for _, pragma := range []string{"foreign_keys(1)", "journal_mode(wal)", "page_size(4096)", "cache_size(-8000)", "synchronous(normal)"} {
+	for _, pragma := range []string{"busy_timeout(10000)", "foreign_keys(1)", "journal_mode(wal)", "page_size(4096)", "cache_size(-8000)", "synchronous(normal)"} {
 		query.Add("_pragma", pragma)
 	}
 	dsn.RawQuery = query.Encode()

@@ -49,10 +49,6 @@ func indexRefreshPolicy() string {
 	return indexDigest("parser-v5\x00" + strings.Join(secrets, "\x00") + "\x00" + string(limits))
 }
 
-func planIndexRefresh(root string, incremental bool) indexRefreshPlan {
-	return planIndexRefreshLimit(root, incremental, 0)
-}
-
 func planIndexRefreshLimit(root string, incremental bool, batchLimit int) indexRefreshPlan {
 	plan := indexRefreshPlan{policy: indexRefreshPolicy()}
 	value, ok := indexWatchers.Load(root)

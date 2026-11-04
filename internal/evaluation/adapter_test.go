@@ -2,11 +2,12 @@ package evaluation
 
 import (
 	"encoding/json"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAdapterContractAndRetrievalMetrics(t *testing.T) {

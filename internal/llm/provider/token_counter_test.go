@@ -80,8 +80,6 @@ func TestRequestTokenCounterOwnershipAndConcurrentClones(t *testing.T) {
 	require.NoError(t, err)
 	clone, err = clone.(ContextWindowController).WithContextWindow(32768)
 	require.NoError(t, err)
-	clone, err = clone.(SourceCitationController).WithSourceCitations([]string{"main.go:1"})
-	require.NoError(t, err)
 	require.Same(t, original.tokenCounter, clone.(*baseProvider).tokenCounter)
 	require.NotSame(t, original.tokenCounter, tokenizerFixture(t, "gpt-4o").tokenCounter, "connections cannot share prompt caches")
 	other := tokenizerFixture(t, "gpt-4")
@@ -92,7 +90,6 @@ func TestRequestTokenCounterOwnershipAndConcurrentClones(t *testing.T) {
 	require.False(t, original.tokenCounter.matches(local))
 	verifyConcurrentTokenCounts(t, original, clone.(*baseProvider))
 	require.Equal(t, "", original.options.systemMessage)
-	require.Empty(t, original.options.sourceCitations)
 }
 
 func verifyConcurrentTokenCounts(t *testing.T, providers ...*baseProvider) {

@@ -429,8 +429,7 @@ func (p *modelPicker) choose(m *Model, item Item) tea.Cmd {
 
 // detailColumn is the proposal's model sheet: the ID, capability chips, a
 // key-value list and the action.
-func (p *modelPicker) detailColumn(m *Model, item Item, width int) []string {
-	model := item.Value.(models.Model)
+func modelTags(model models.Model) string {
 	var tags string
 	if model.EmbeddingOnly() {
 		tags += Chip("embeddings", P.Faint, P.Surface)
@@ -441,33 +440,56 @@ func (p *modelPicker) detailColumn(m *Model, item Item, width int) []string {
 		tags += Chip(textFor("raciocínio", "reasoning"), P.Info, P.Surface)
 	}
 	if model.SupportsAttachments {
-		tags += Chip(textFor("imagens", "images"), P.User, P.Surface)
-	} else {
-		tags += Chip(textFor("sem imagens", "no images"), P.Faint, P.Surface)
+		return tags + Chip(textFor("imagens", "images"), P.User, P.Surface)
 	}
-	rows := []string{
-		on(P.Surface, P.Strong).Bold(true).Render(ansi.Truncate(modelLabel(model), width, "…")),
-		tags,
-		"",
-	}
-	pair := func(key, value string) {
-		rows = append(rows, on(P.Surface, P.Muted).Render(fmt.Sprintf("%-14s", key))+on(P.Surface, P.Strong).Render(ansi.Truncate(value, max(1, width-14), "…")))
-	}
-	held, isLoaded := p.loaded[model.APIModel]
-	context := textFor("não informado", "not reported")
+	return tags + Chip(textFor("sem imagens", "no images"), P.Faint, P.Surface)
+}
+
+func (p *modelPicker) contextLabel(model models.Model, held models.OllamaRuntime, isLoaded bool) string {
 	switch {
 	case isLoaded && held.Context > 0 && model.ContextWindow > 0 && held.Context != model.ContextWindow:
-		context = fmt.Sprintf(textFor("%s em uso · %s suportado", "%s in use · %s supported"), compactTokens(held.Context), compactTokens(model.ContextWindow))
+		return fmt.Sprintf(textFor("%s em uso · %s suportado", "%s in use · %s supported"), compactTokens(held.Context), compactTokens(model.ContextWindow))
 	case model.ContextWindow > 0:
-		context = compactTokens(model.ContextWindow)
+		context := compactTokens(model.ContextWindow)
 		if model.ContextEstimated {
 			context = "~" + context + textFor(" estimado", " estimated")
 		}
 		if model.ID == p.active {
 			context += textFor(" · em uso", " · in use")
 		}
+		return context
 	}
-	pair(textFor("Contexto", "Context"), context)
+	return textFor("não informado", "not reported")
+}
+
+// modelKnobs are the controls of the model in use: C cycles its context, R its
+// reasoning.
+func modelKnobs(model models.Model) string {
+	gap := on(P.Surface, P.Surface).Render(" ")
+	window := textFor("automático", "automatic")
+	if current := config.ModelWithProviderDefaults(model); !current.UsesAutomaticContext() {
+		window = compactTokens(current.ContextWindow)
+	}
+	effort := textFor("não suportado", "not supported")
+	if choices := config.ModelWithProviderDefaults(model).ReasoningChoices(); len(choices) > 0 {
+		effort = effortName(config.Get().Agents[config.AgentCoder].ReasoningEffort)
+	}
+	return Button(textFor("Contexto: ", "Context: ")+window+" ▾", false, P.Ask) + on(P.Surface, P.Muted).Render(" C") + gap + gap +
+		Button(textFor("Raciocínio: ", "Reasoning: ")+effort+" ▾", false, P.Ask) + on(P.Surface, P.Muted).Render(" R")
+}
+
+func (p *modelPicker) detailColumn(m *Model, item Item, width int) []string {
+	model := item.Value.(models.Model)
+	rows := []string{
+		on(P.Surface, P.Strong).Bold(true).Render(ansi.Truncate(modelLabel(model), width, "…")),
+		modelTags(model),
+		"",
+	}
+	pair := func(key, value string) {
+		rows = append(rows, on(P.Surface, P.Muted).Render(fmt.Sprintf("%-14s", key))+on(P.Surface, P.Strong).Render(ansi.Truncate(value, max(1, width-14), "…")))
+	}
+	held, isLoaded := p.loaded[model.APIModel]
+	pair(textFor("Contexto", "Context"), p.contextLabel(model, held, isLoaded))
 	if model.DefaultMaxTokens > 0 {
 		pair(textFor("Saída", "Output"), fmt.Sprintf(textFor("%d tokens por resposta", "%d tokens per reply"), model.DefaultMaxTokens))
 	}
@@ -504,18 +526,7 @@ func (p *modelPicker) detailColumn(m *Model, item Item, width int) []string {
 	}
 	rows = append(rows, Button(textFor("Usar este modelo", "Use this model"), true, P.Ask))
 	if model.ID == p.active {
-		// The knobs of the model in use: C cycles its context, R its reasoning.
-		gap := on(P.Surface, P.Surface).Render(" ")
-		window := textFor("automático", "automatic")
-		if current := config.ModelWithProviderDefaults(model); !current.UsesAutomaticContext() {
-			window = compactTokens(current.ContextWindow)
-		}
-		effort := textFor("não suportado", "not supported")
-		if choices := config.ModelWithProviderDefaults(model).ReasoningChoices(); len(choices) > 0 {
-			effort = effortName(config.Get().Agents[config.AgentCoder].ReasoningEffort)
-		}
-		rows = append(rows, "", Button(textFor("Contexto: ", "Context: ")+window+" ▾", false, P.Ask)+on(P.Surface, P.Muted).Render(" C")+gap+gap+
-			Button(textFor("Raciocínio: ", "Reasoning: ")+effort+" ▾", false, P.Ask)+on(P.Surface, P.Muted).Render(" R"))
+		rows = append(rows, "", modelKnobs(model))
 	}
 	return rows
 }

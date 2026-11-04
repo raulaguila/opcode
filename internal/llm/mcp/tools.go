@@ -20,13 +20,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-type mcpTool struct {
-	mcpName     string
-	tool        mcp.Tool
-	mcpConfig   config.MCPServer
-	permissions permission.Service
-}
-
 type MCPClient interface {
 	Start(context.Context) error
 	Initialize(
@@ -36,21 +29,6 @@ type MCPClient interface {
 	ListTools(ctx context.Context, request mcp.ListToolsRequest) (*mcp.ListToolsResult, error)
 	CallTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)
 	Close() error
-}
-
-func (*mcpTool) OpaqueTool() bool { return true }
-
-func (b *mcpTool) Info() tools.ToolInfo {
-	required := b.tool.InputSchema.Required
-	if required == nil {
-		required = make([]string, 0)
-	}
-	return tools.ToolInfo{
-		Name:        fmt.Sprintf("%s_%s", b.mcpName, b.tool.Name),
-		Description: b.tool.Description,
-		Parameters:  b.tool.InputSchema.Properties,
-		Required:    required,
-	}
 }
 
 func runTool(ctx context.Context, c MCPClient, toolName string, input string) (tools.ToolResponse, error) {
@@ -107,45 +85,6 @@ func runTool(ctx context.Context, c MCPClient, toolName string, input string) (t
 	response := tools.NewTextResponse(strings.Join(output, "\n"))
 	response.IsError = result.IsError
 	return response, nil
-}
-
-func (b *mcpTool) Run(ctx context.Context, params tools.ToolCall) (tools.ToolResponse, error) {
-	sessionID, messageID := tools.GetContextValues(ctx)
-	if sessionID == "" || messageID == "" {
-		return tools.ToolResponse{}, fmt.Errorf("session ID and message ID are required for MCP execution")
-	}
-	if b.permissions == nil {
-		return tools.ToolResponse{}, permission.ErrorPermissionDenied
-	}
-	permissionDescription := fmt.Sprintf("execute %s with the following parameters: %s", b.Info().Name, params.Input)
-	p := b.permissions.Request(ctx,
-		permission.CreatePermissionRequest{
-			SessionID:   sessionID,
-			Path:        config.WorkingDirectory(),
-			ToolName:    b.Info().Name,
-			Action:      "execute",
-			Description: permissionDescription,
-			Params:      params.Input,
-		},
-	)
-	if !p {
-		return tools.ToolResponse{}, permission.ErrorPermissionDenied
-	}
-
-	c, err := newMCPClient(b.mcpConfig)
-	if err != nil {
-		return tools.NewTextErrorResponse(err.Error()), nil
-	}
-	return runTool(ctx, c, b.tool.Name, params.Input)
-}
-
-func NewMcpTool(name string, tool mcp.Tool, permissions permission.Service, mcpConfig config.MCPServer) tools.BaseTool {
-	return &mcpTool{
-		mcpName:     name,
-		tool:        tool,
-		mcpConfig:   mcpConfig,
-		permissions: permissions,
-	}
 }
 
 func newMCPClient(server config.MCPServer) (MCPClient, error) {

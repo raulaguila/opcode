@@ -11,9 +11,6 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 )
 
-func (o *openaiClient) responseParams(messages []message.Message, tools []tools.BaseTool) object {
-	return o.responsesRequest(messages, tools, false)
-}
 func (o *openaiClient) responsesRequest(messages []message.Message, tools []tools.BaseTool, stream bool) object {
 	input := o.responsesInput(messages)
 	params := object{"model": o.providerOptions.model.APIModel, "instructions": o.providerOptions.systemMessage, "input": input, "max_output_tokens": o.providerOptions.maxTokens, "store": false, "include": []string{"reasoning.encrypted_content"}, "stream": stream}

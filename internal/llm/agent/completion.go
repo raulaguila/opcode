@@ -9,44 +9,6 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 )
 
-// Intent is advisory completion bookkeeping, never authorization. Questions and
-// requests for a plan/analysis do not require a file mutation.
-var changeRequest = regexp.MustCompile(`(?i)^(?:(?:por favor|please)[,: ]+)?(?:(?:quero|preciso|gostaria)(?: que)?\s+)?(?:(?:você|voce)\s+)?(?:(?:pode|poderia|can you|could you|vamos)\s+)?(?:implemente|implementar|implement|corrija|corrigir|fix|adicione|adicionar|add|altere|alterar|change|edite|editar|edit|crie|criar|create|remova|remover|remove|refatore|refatorar|refactor|atualize|atualizar|update|faça|fazer|aplique|aplicar|apply|ajuste|ajustar|troque|trocar|mude|mudar|renomeie|renomear|substitua|substituir|delete)\b`)
-
-var requestClauses = regexp.MustCompile(`(?m)(?:\n+|[.!;]\s+|\s+(?:e|and)\s+)`)
-var questionOrPlan = regexp.MustCompile(`(?i)^(?:como|o que|por que|qual|quais|how|what|why|which|explique|explain|planeje|planejar|plano|plan|planning)\b`)
-var listPrefix = regexp.MustCompile(`^(?:[-*]\s+|[0-9]+[.)]\s+)`)
-
-func requiresFileChanges(content string) bool {
-	text := strings.TrimSpace(content)
-	if questionOrPlan.MatchString(text) {
-		return false
-	}
-	lower := strings.ToLower(text)
-	for _, restriction := range []string{"sem editar", "sem alterar", "não edite", "nao edite", "não altere", "nao altere", "do not edit", "don't edit", "without editing"} {
-		if strings.Contains(lower, restriction) {
-			return false
-		}
-	}
-	for _, clause := range requestClauses.Split(text, -1) {
-		clause = listPrefix.ReplaceAllString(strings.TrimSpace(clause), "")
-		if !changeRequest.MatchString(clause) {
-			continue
-		}
-		analysisOnly := false
-		for _, phrase := range []string{"uma análise", "uma analise", "nova análise", "nova analise", "a análise", "a analise", "uma lista", "uma comparação", "uma comparacao", "um plano", "a plan", "an analysis", "a comparison", "a list", "perguntas"} {
-			if strings.Contains(strings.ToLower(clause), phrase) {
-				analysisOnly = true
-				break
-			}
-		}
-		if !analysisOnly {
-			return true
-		}
-	}
-	return false
-}
-
 func resumingRequest(content string) bool {
 	text := strings.ToLower(strings.TrimSpace(content))
 	for _, prefix := range []string{"continue", "retome", "resume", "prossiga"} {

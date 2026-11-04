@@ -2,9 +2,10 @@ package app
 
 import (
 	"fmt"
+	"slices"
+
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
-	"slices"
 )
 
 func (p *configurableCoder) SetReasoning(role config.AgentName, id models.ModelID, effort string) error {

@@ -14,7 +14,6 @@ import (
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
-	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 )
@@ -192,16 +191,12 @@ func (a *agent) exposedTools(run *generationRun) []tools.BaseTool {
 }
 func (a *agent) prefetchTools(run *generationRun, content string) {
 	requiredToolCalls(content, run)
-	prefetchCitationTools(run, content)
 	if a.workflow == nil {
 		return
 	}
 	prefetchWorkflowTools(run, content)
 	prefetchCommandTools(run, content)
 	renewPrefetchedTools(run)
-	// Keyword routing misses phrasings; the log shows which way a request went.
-	run.route = []any{"project", tools.ProjectInquiry(content), "overview", tools.ProjectOverview(content), "topic", tools.ProjectEvidenceQuery(content), "mentions", len(tools.MentionedPaths(content)), "changes", run.selected["edit"], "command", run.selected["bash"], "citation", run.requiresCitation}
-	logging.Debug("Request route", run.route...)
 }
 func checkCommands() map[string]string {
 	commands := map[string]string{}
@@ -294,12 +289,11 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 	}
 	raw, _ := json.Marshal(taskProjection(task))
 	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
-	header = overviewResponseGuidance(run, history) + flowResponseGuidance(run, history) + header
 	if run.selected["bash"] || run.selected["run_checks"] || run.selected["discover_checks"] {
 		constraints, _ := json.Marshal(executionConstraints(run))
 		header = "Execution constraints (policy, not approval or a readiness probe): " + string(constraints) + "\n" + header
 	}
-	copyHistory := projectReusedSources(projectPreparedIndexes(history, run))
+	copyHistory := projectReusedSources(history)
 	for i := len(copyHistory) - 1; i >= 0; i-- {
 		if copyHistory[i].Role == message.User {
 			copyHistory[i].Parts = slices.Clone(copyHistory[i].Parts)
@@ -541,23 +535,6 @@ func learnedContextProvider(p provider.Provider) provider.Provider {
 	return p
 }
 
-func prefetchCitationTools(run *generationRun, content string) {
-	if citationOptOut(content) {
-		run.requiresCitation = false
-	} else if requiresSourceCitation(content) {
-		run.requiresCitation = true
-	}
-	if tools.ProjectInquiry(content) {
-		run.requiresProjectEvidence = true
-	}
-	if !tools.ProjectInquiry(content) || tools.ProjectEvidenceQuery(content) == "" {
-		return
-	}
-	run.selected["search_code_index"] = true
-	if strings.Contains(tools.ProjectEvidenceQuery(content), "languages") {
-		run.selected["get_language_support"] = true
-	}
-}
 func prefetchWorkflowTools(run *generationRun, content string) {
 	if run.contract != nil && run.contract.Kind == "verify" {
 		run.selected["run_checks"] = true
@@ -568,8 +545,7 @@ func prefetchWorkflowTools(run *generationRun, content string) {
 	if run.mode != workflow.Execute {
 		return
 	}
-	changes := (run.contract != nil && run.contract.Kind == "change") || (run.contract == nil && requiresFileChanges(content))
-	if changes {
+	if run.contract == nil || run.contract.Kind == "change" {
 		for _, name := range []string{"edit", "write", "patch", "run_checks"} {
 			run.selected[name] = true
 		}

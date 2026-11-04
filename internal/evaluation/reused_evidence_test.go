@@ -1,9 +1,10 @@
 package evaluation
 
 import (
+	"testing"
+
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestReusedEvidenceIsNotAnExecutedToolInEvaluation(t *testing.T) {

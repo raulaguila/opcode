@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/lsp/protocol"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -13,6 +12,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/lsp/protocol"
 
 	"github.com/raulaguila/opcode/internal/lsp"
 )

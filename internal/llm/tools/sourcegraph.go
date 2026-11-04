@@ -5,10 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/raulaguila/opcode/internal/permission"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/raulaguila/opcode/internal/permission"
 )
 
 type SourcegraphParams struct {

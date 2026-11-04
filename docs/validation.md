@@ -204,7 +204,7 @@ Não houve chamada à API da empresa ou conta OpenAI. A taxa inicial pode ficar
 indisponível até chegarem amostras reais; o percentual representa a entrada do
 pedido, sem inventar uma contagem de saída em streaming.
 Ver [evidências desta rodada](evidence/2026-10-31-context-progress-validation.json)
-e [comportamento do rodapé](workspace-ui.md#contexto-e-velocidade-no-rodapé).
+e [comportamento do rodapé](interfaces.md).
 
 ## OpenAI e OpenAI-compatible — 31/10/2026
 
@@ -859,7 +859,7 @@ A entrega acrescentou conclusão verificável, recuperação contextual, calibra
 de contexto, diagnóstico offline, teste de ferramenta opt-in, índice incremental,
 exploração limitada, formatação, worktrees, preferências e revisão adaptável,
 OAuth MCP e servidor loopback reconectável. Veja os controles atuais em
-[interface](workspace-ui.md), [ferramentas](tools.md) e
+[interface](interfaces.md), [ferramentas](tools.md) e
 [servidor/autenticação](server-and-auth.md).
 
 Verificação da implementação:
@@ -1190,7 +1190,7 @@ os arquivos-fonte e a conferência dos marcadores antes/depois da aprovação fo
 mantidas. Nenhum desses ajustes altera os critérios da avaliação comparativa.
 
 Veja o [registro desta revisão](evidence/2026-10-29-ui-ux-validation.json) e o
-[guia atualizado da interface](workspace-ui.md). O resultado cobre a fixture
+[guia atualizado da interface](interfaces.md). O resultado cobre a fixture
 local; não demonstra superioridade geral de qualidade ou latência.
 
 ## Linguagens, métricas e conveniência — 29/10/2026
@@ -1258,9 +1258,9 @@ esses gates do teste adicional reprovado na API compatível. A avaliação nativ
 foi executada antes das correções finais exclusivas da TUI; o PTY passou com o
 build final sem CGO.
 Consulte também [as métricas](evaluation.md),
-[a matriz de menus](ui-regression-matrix.md),
+a matriz de menus,
 [raciocínio e clipboard](model-and-clipboard.md),
-[temas](theme-editor.md) e [observação de sessões](shared-observer.md).
+temas e [observação de sessões](shared-observer.md).
 
 ## Perguntas malformadas e evidências por assunto — 29/10/2026
 

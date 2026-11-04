@@ -45,10 +45,10 @@ func TestApprovalConsequencesExplainEffectiveReadOnlyMode(t *testing.T) {
 		config.Get().TUI.Language = language
 		for _, mode := range []string{"mode-ask", "mode-plan", "mode-execute"} {
 			m := NewCommandDialogCmp().(*commandDialogCmp)
-			m.SetCommands([]Command{{ID: mode}, {ID: "approval-project_edits"}})
+			m.SetCommands([]Command{{ID: mode}, {ID: "approval-sandboxed"}})
 			m.SetContext("Work mode", mode)
-			m.SetApprovalContext("approval-project_edits")
-			m.FocusCommand("approval-project_edits")
+			m.SetApprovalContext("approval-sandboxed")
+			m.FocusCommand("approval-sandboxed")
 			m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 			view := ansi.Strip(m.View())
 			readOnly := config.Text("Somente leitura neste modo", "Read only in this mode")
@@ -58,7 +58,7 @@ func TestApprovalConsequencesExplainEffectiveReadOnlyMode(t *testing.T) {
 				require.Contains(t, strings.Join(m.detailLines(52), " "), readOnly)
 			}
 			_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-			require.Equal(t, "approval-project_edits", cmd().(CommandSelectedMsg).Command.ID)
+			require.Equal(t, "approval-sandboxed", cmd().(CommandSelectedMsg).Command.ID)
 		}
 	}
 }

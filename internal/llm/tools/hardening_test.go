@@ -163,6 +163,7 @@ func TestBashStructuredFailureAndEnvironmentIsolation(t *testing.T) {
 	require.Equal(t, "unset|"+config.WorkingDirectory(), response.Content)
 }
 func TestSandboxFailureNeverRunsCommandOutsideSandbox(t *testing.T) {
+	skipInsideSandbox(t)
 	original := config.Get().Security
 	config.Get().Security = config.SecurityConfig{Sandbox: "bubblewrap"}
 	t.Cleanup(func() { config.Get().Security = original })
@@ -279,6 +280,7 @@ func TestRedactionKeepsWrappedErrorsAndEscapedSecretsPrivate(t *testing.T) {
 }
 
 func TestBubblewrapIsolationOnSupportedKernel(t *testing.T) {
+	skipInsideSandbox(t)
 	if _, err := exec.LookPath("bwrap"); err != nil {
 		t.Skip("Bubblewrap not installed; fail-closed behavior has a separate test")
 	}

@@ -44,7 +44,8 @@ func TestResumeLastUsesOnlyCurrentProjectCatalogAndSkipsStaleSessions(t *testing
 		wantID             string
 		lookups            int
 	}{
-		{name: "present", result: session.Session{ID: "saved"}, wantID: "saved", lookups: 1},
+		{name: "present", result: session.Session{ID: "saved", MessageCount: 1}, wantID: "saved", lookups: 1},
+		{name: "empty", result: session.Session{ID: "saved"}, lookups: 1},
 		{name: "absent"},
 		{name: "archived"},
 		{name: "deleted", lookupErr: sql.ErrNoRows, lookups: 1},
@@ -58,7 +59,7 @@ func TestResumeLastUsesOnlyCurrentProjectCatalogAndSkipsStaleSessions(t *testing
 				lookups++
 				require.Equal(t, "saved", id)
 				return tc.result, tc.lookupErr
-			})
+			}, noSessions)
 			require.ErrorIs(t, err, tc.wantErr)
 			require.Equal(t, tc.wantID, saved.ID)
 			require.Equal(t, tc.lookups, lookups)
@@ -82,7 +83,7 @@ func resumeLastFixture(t *testing.T, name string) *config.Config {
 func TestExplicitResumePreservesMissingSessionError(t *testing.T) {
 	_, err := resolveResumeSession(context.Background(), &config.Config{}, "missing", func(context.Context, string) (session.Session, error) {
 		return session.Session{}, sql.ErrNoRows
-	})
+	}, noSessions)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
 
@@ -103,6 +104,22 @@ func TestResumeLastNeverOpensAnotherProjectCatalog(t *testing.T) {
 	_, err := resolveResumeSession(context.Background(), cfg, "last", func(context.Context, string) (session.Session, error) {
 		t.Fatal("another project's session must never be loaded")
 		return session.Session{}, nil
-	})
+	}, noSessions)
 	require.ErrorContains(t, err, "workspace mismatch")
+}
+
+func noSessions(context.Context) ([]session.Session, error) { return nil, nil }
+
+func TestResumeLastFallsBackToNewestRemainingConversation(t *testing.T) {
+	cfg := resumeLastFixture(t, "present")
+	require.NoError(t, session.NewCatalog(cfg.WorkingDir, "").SaveDraft("hidden", "draft"))
+	require.NoError(t, session.NewCatalog(cfg.WorkingDir, "").Archive("hidden", true))
+	require.NoError(t, session.NewCatalog(cfg.WorkingDir, "").Activate("saved"))
+	saved, err := resolveResumeSession(context.Background(), cfg, "last", func(context.Context, string) (session.Session, error) {
+		return session.Session{}, sql.ErrNoRows
+	}, func(context.Context) ([]session.Session, error) {
+		return []session.Session{{ID: "old", MessageCount: 2, UpdatedAt: 1}, {ID: "new", MessageCount: 2, UpdatedAt: 2}, {ID: "child", MessageCount: 2, ParentSessionID: "new", UpdatedAt: 3}, {ID: "hidden", MessageCount: 2, UpdatedAt: 4}, {ID: "unused", UpdatedAt: 5}}, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, "new", saved.ID)
 }

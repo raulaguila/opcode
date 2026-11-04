@@ -8,6 +8,7 @@ import (
 
 type commandCacheKey struct{}
 type commandNetworkKey struct{}
+type commandSandboxKey struct{}
 
 // WithCommandCache is used by the process manager after command authorization.
 func WithCommandCache(ctx context.Context) context.Context {
@@ -18,6 +19,11 @@ func WithCommandCache(ctx context.Context) context.Context {
 // It does not change configuration or grant access to any other command.
 func WithApprovedNetwork(ctx context.Context) context.Context {
 	return context.WithValue(ctx, commandNetworkKey{}, true)
+}
+
+// WithoutSandbox is for a session the user put on full access.
+func WithoutSandbox(ctx context.Context) context.Context {
+	return context.WithValue(ctx, commandSandboxKey{}, false)
 }
 
 func NetworkEnabled(ctx context.Context) bool {

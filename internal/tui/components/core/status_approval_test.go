@@ -13,7 +13,7 @@ import (
 
 func TestFooterAlwaysShowsApprovalControlWithoutMode(t *testing.T) {
 	for _, mode := range []string{"ask", "plan", "execute"} {
-		for _, policy := range []string{"prompt", "project_edits"} {
+		for _, policy := range []string{"prompt", "sandboxed"} {
 			for _, width := range []int{36, 60, 80, 110, 120, 180} {
 				assertApprovalControls(t, width, util.FooterState{Mode: mode, ApprovalPolicy: policy})
 			}
@@ -34,7 +34,7 @@ func TestPortugueseFooterKeepsApprovalTimeContextAndSpeed(t *testing.T) {
 	t.Cleanup(func() { cfg.TUI.Language = previous })
 	cfg.TUI.Language = "pt"
 	for _, mode := range []string{"ask", "plan", "execute"} {
-		for _, policy := range []string{"prompt", "project_edits"} {
+		for _, policy := range []string{"prompt", "sandboxed"} {
 			for _, width := range []int{36, 60, 80, 110, 120, 180} {
 				state := util.FooterState{Mode: mode, ApprovalPolicy: policy, Activity: "Gerando resposta", Busy: true, ElapsedKnown: true, ElapsedSeconds: 65, ContextKnown: true, ContextWindow: 32768, ContextTokens: 8192, SpeedLive: true, TokensPerSecond: 70}
 				assertApprovalControls(t, width, state)
@@ -57,14 +57,14 @@ func assertApprovalControls(t *testing.T, width int, state util.FooterState) {
 	view := ansi.Strip(m.ViewFor(state))
 	require.Equal(t, 1, lipgloss.Height(view))
 	require.Equal(t, width, lipgloss.Width(view))
-	label := config.Text("pedir", "ask")
-	if state.ApprovalPolicy == "project_edits" {
-		label = config.Text("editar", "edit")
+	label := config.Text("confirmar", "confirm")
+	if state.ApprovalPolicy == "sandboxed" {
+		label = config.Text("pedir", "ask")
 	}
 	if width >= 160 {
-		label = config.Text("Aprovação: pedir", "Approval: ask")
-		if state.ApprovalPolicy == "project_edits" {
-			label = config.Text("Aprovação: editar no projeto", "Approval: project edits")
+		label = config.Text("Aprovação: confirmar tudo", "Approval: confirm all")
+		if state.ApprovalPolicy == "sandboxed" {
+			label = config.Text("Aprovação: pedir aprovação", "Approval: ask for approval")
 		}
 	} else if width >= 110 {
 		label = config.Text("Aprov.: ", "Appr.: ") + label

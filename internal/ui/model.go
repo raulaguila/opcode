@@ -50,7 +50,7 @@ type Model struct {
 	retry    string
 	info     string   // a passing confirmation, shown in the footer
 	dialog   floating // the panel floating over the screen, if any
-	showPlan bool
+	foldPlan bool     // the plan shows unless you fold it
 	question *question
 	task     workflow.Task
 
@@ -117,7 +117,8 @@ func New(a *app.App, initial ...session.Session) *Model {
 	// Markdown reuses the shared renderer; its palette is the closest theme.
 	// Preview only: the user's saved theme is never rewritten.
 	_ = theme.PreviewTheme("tokyonight")
-	m := &Model{app: a, composer: composer, transcript: viewport.New(), follow: true, mode: "execute"}
+	theme.UseGround()
+	m := &Model{app: a, composer: composer, transcript: viewport.New(), follow: true, mode: "execute", policy: permission.ApprovalSandboxed}
 	if cfg := config.Get(); cfg != nil {
 		m.mode = cfg.Runtime.Defaults().Mode
 	}
@@ -128,6 +129,8 @@ func New(a *app.App, initial ...session.Session) *Model {
 			if m.messages, err = a.Messages.List(context.Background(), m.session.ID); err != nil {
 				m.notice = textFor("Não foi possível ler a conversa: ", "Could not read the conversation: ") + err.Error()
 			}
+			m.setApproval(m.policy)
+			m.poll()
 		}
 	}
 	return m
@@ -265,6 +268,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case pubsub.Event[message.Message]:
 		m.retry = ""
 		m.upsert(msg)
+		if msg.Payload.Role == message.Tool { // a tool result may have changed the plan
+			m.poll()
+		}
 	case pubsub.Event[session.Session]:
 		if msg.Payload.ID == m.session.ID {
 			m.session = msg.Payload
@@ -442,7 +448,17 @@ func (m *Model) submit() tea.Cmd {
 		return nil
 	}
 	ctx := context.Background()
-	if m.session.ID == "" {
+	fresh := m.session.ID == ""
+	// Nothing was sent, so nothing of a conversation may stay behind.
+	fail := func(err error) tea.Cmd {
+		m.notice = err.Error()
+		if fresh {
+			_ = m.app.Sessions.Delete(ctx, m.session.ID)
+			m.session = session.Session{}
+		}
+		return nil
+	}
+	if fresh {
 		created, err := m.app.Sessions.Create(ctx, config.Text("Nova conversa", "New conversation"))
 		if err != nil {
 			m.notice = err.Error()
@@ -450,21 +466,18 @@ func (m *Model) submit() tea.Cmd {
 		}
 		m.session = created
 		if err := m.app.CoderAgent.SetMode(ctx, m.session.ID, workflow.Mode(m.mode)); err != nil {
-			m.notice = err.Error() // the conversation exists; the message waits in the composer
-			return nil
+			return fail(err) // the message waits in the composer
 		}
-		if m.policy != "" {
-			m.setApproval(m.policy)
-		}
+		m.setApproval(m.policy)
 	}
 	skill, err := m.invokeSkill(ctx, text)
 	if !skill && err == nil {
 		_, _, err = m.app.CoderAgent.Submit(ctx, m.session.ID, text)
 	}
 	if err != nil {
-		m.notice = err.Error()
-		return nil
+		return fail(err)
 	}
+	m.markLast()
 	m.composer.Reset()
 	m.recall, m.draft = 0, ""
 	m.lastText, m.failure, m.info = text, nil, ""
@@ -595,13 +608,21 @@ func (m *Model) refresh() {
 	}
 }
 
-// click handles the footer controls and the mode's name on the composer.
+// click handles the footer controls, the mode's name on the composer and the
+// conversation title, which opens the conversations.
 func (m *Model) click(x, y int) tea.Cmd {
+	if m.clickPlan(x, y) {
+		return nil
+	}
 	switch y {
+	case 0:
+		if title := strings.TrimSpace(m.session.Title); title != "" && x >= m.width-ansi.StringWidth(title)-ansi.StringWidth(config.Text(" · sessão 000 ▾ ", " · session 000 ▾ ")) {
+			return m.openSessions()
+		}
 	case m.height - 1:
 		x -= ansi.StringWidth(m.footerMode())
-		if x < 3+ansi.StringWidth(textFor("Aprov.: editar no projeto ▾", "Approval: project edits ▾")) && x < m.width/3 {
-			return m.openPaletteWith(textFor("Aprovação", "Approval"))
+		if x < 3+ansi.StringWidth(textFor("Aprovar por mim ▾", "Ask for approval ▾")) && x < m.width/3 {
+			return m.openApproval()
 		}
 		if m.app != nil && m.app.CoderAgent != nil && x >= m.width-2-ansi.StringWidth(modelName(m.app.CoderAgent.Model().ID)+" ▾") {
 			return m.openModels()

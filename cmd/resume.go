@@ -38,7 +38,7 @@ func resumeRequest(command *cobra.Command, args []string) (string, error) {
 	return id, nil
 }
 
-func resolveResumeSession(ctx context.Context, cfg *config.Config, requested string, get func(context.Context, string) (session.Session, error)) (session.Session, error) {
+func resolveResumeSession(ctx context.Context, cfg *config.Config, requested string, get func(context.Context, string) (session.Session, error), list func(context.Context) ([]session.Session, error)) (session.Session, error) {
 	if requested == "" {
 		return session.Session{}, nil
 	}
@@ -49,12 +49,28 @@ func resolveResumeSession(ctx context.Context, cfg *config.Config, requested str
 	if err != nil {
 		return session.Session{}, err
 	}
-	if id == "" || metadata[id].Archived {
+	if id == "" {
 		return session.Session{}, nil
 	}
-	saved, err := get(ctx, id)
-	if errors.Is(err, sql.ErrNoRows) || (err == nil && saved.ParentSessionID != "") {
-		return session.Session{}, nil
+	if !metadata[id].Archived {
+		saved, err := get(ctx, id)
+		if err == nil && saved.ParentSessionID == "" && saved.MessageCount > 0 {
+			return saved, nil
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return session.Session{}, err
+		}
 	}
-	return saved, err
+	// The last one was deleted, archived or empty: the newest that remains takes over.
+	sessions, err := list(ctx)
+	if err != nil {
+		return session.Session{}, err
+	}
+	var newest session.Session
+	for _, saved := range sessions {
+		if saved.ParentSessionID == "" && saved.MessageCount > 0 && !metadata[saved.ID].Archived && saved.UpdatedAt >= newest.UpdatedAt {
+			newest = saved
+		}
+	}
+	return newest, nil
 }

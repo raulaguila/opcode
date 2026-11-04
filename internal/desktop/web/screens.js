@@ -733,7 +733,7 @@ async function openSettings(section = 0) {
       if (step) { event.preventDefault(); const n = count(); if (n) { selected = (selected + step + n) % n; draw(); } return true; }
       if (event.key === "ArrowLeft") { event.preventDefault(); pane = "nav"; draw(); return true; }
       if (section === 0) return connectionKey(event);
-      if (section === 3 && ["ArrowRight", " ", "Enter"].includes(event.key)) { event.preventDefault(); view.policy = view.policy === "prompt" ? "project_edits" : "prompt"; renderFrame(); draw(); return true; }
+      if (section === 3 && ["ArrowRight", " ", "Enter"].includes(event.key)) { event.preventDefault(); view.policy = view.policy === "auto" ? "sandboxed" : "auto"; renderFrame(); draw(); return true; }
       if ([1, 2, 4, 6].includes(section)) return prefKey(event);
       if (section === 5 && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); const found = conns.detected[selected]; if (found) enableServer(found.name); return true; }
       return false;
@@ -824,11 +824,11 @@ async function openSettings(section = 0) {
   };
   const drawApproval = () => {
     const seg = el("span", { class: "seg" },
-      el("button", { type: "button", class: view.policy === "prompt" ? "on" : "", onclick: () => { view.policy = "prompt"; renderFrame(); draw(); } }, t("Pedir", "Ask")),
-      el("button", { type: "button", class: view.policy === "project_edits" ? "on" : "", onclick: () => { view.policy = "project_edits"; renderFrame(); draw(); } }, t("Editar no projeto", "Project edits")));
+      el("button", { type: "button", class: view.policy === "sandboxed" ? "on" : "", onclick: () => { view.policy = "sandboxed"; renderFrame(); draw(); } }, t("Pedir aprovação", "Ask for approval")),
+      el("button", { type: "button", class: view.policy === "auto" ? "on" : "", onclick: () => { view.policy = "auto"; renderFrame(); draw(); } }, t("Aprovar por mim", "Approve for me")));
     content.append(el("div", { class: `pref${pane === "content" ? " sel" : ""}` }, el("span", { class: "name" }, t("Política desta conversa", "This conversation's policy")), seg,
-      el("span", { class: "desc" }, t("Editar no projeto aprova edições de arquivos do projeto sem perguntar", "Project edits approves edits to project files without asking")), el("span", {})),
-      el("div", { class: "nothing", style: "padding-top:12px" }, t("Comandos, rede, exclusões e caminhos fora do projeto continuam pedindo aprovação.", "Commands, network, deletions and outside paths still ask for approval.")));
+      el("span", { class: "desc" }, t("Aprovar por mim também baixa as dependências declaradas do projeto", "Approve for me also fetches the project's declared dependencies")), el("span", {})),
+      el("div", { class: "nothing", style: "padding-top:12px" }, t("Edições e comandos no sandbox não pedem. Internet e arquivos fora do projeto pedem. Sem sandbox, todo comando pede.", "Edits and sandboxed commands do not ask. Internet and files outside the project ask. Without the sandbox, every command asks.")));
   };
   const drawIntegrations = () => {
     content.append(el("div", { class: "pane" }, el("h3", {}, t("Servidores de linguagem e MCP", "Language servers and MCP")),

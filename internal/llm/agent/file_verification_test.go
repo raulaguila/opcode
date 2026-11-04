@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,10 +33,12 @@ func fileEffectAgent(t *testing.T, approve bool) (*agent, *controlledProvider, s
 	config.Get().Checks = nil
 	config.Get().Data.Directory = t.TempDir()
 	config.Get().Security.Sandbox = "none"
-	artifact, err := os.Create(filepath.Join(root, "opcode"))
-	require.NoError(t, err)
-	require.NoError(t, artifact.Truncate(17<<20))
-	require.NoError(t, artifact.Close())
+	for i := range 9 { // past the 128 MiB hashed in total, so the digest is unavailable
+		artifact, err := os.Create(filepath.Join(root, fmt.Sprintf("data-%d.bin", i)))
+		require.NoError(t, err)
+		require.NoError(t, artifact.Truncate(16<<20))
+		require.NoError(t, artifact.Close())
+	}
 	permissions := permission.NewPermissionService()
 	if approve {
 		permissions.AutoApproveSession("s")
@@ -160,6 +163,37 @@ func TestFileReceiptsDoNotBypassWorkspaceVerificationAfterCommands(t *testing.T)
 	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError)
 	call.reply <- provider.ProviderResponse{Content: "Arquivo criado.", FinishReason: message.FinishReasonEndTurn}
 	require.ErrorContains(t, finishGeneration(t, done).Error, "workspace exceeds validation fingerprint limit")
+}
+
+func TestUnavailableVerificationTellsTheModelHowToFinish(t *testing.T) {
+	a, p, _ := fileEffectAgent(t, true)
+	done, err := a.Run(context.Background(), "s", "Execute os testes")
+	require.NoError(t, err)
+	call := nextGeneration(t, p)
+	replyTools(call, toolCall("request_tools", `{"names":["bash"]}`))
+	call = nextGeneration(t, p)
+	replyTools(call, toolCall("bash", `{"command":"printf ok"}`))
+	call = nextGeneration(t, p)
+	replyTools(call, toolCall("finish_task", `{"status":"completed","summary":"ok"}`))
+	call = nextGeneration(t, p)
+	refused := call.history[len(call.history)-1].ToolResults()[0]
+	require.True(t, refused.IsError)
+	require.Contains(t, refused.Content, "call finish_task with status partial")
+	replyTools(call, toolCall("finish_task", `{"status":"partial","summary":"tests ran; workspace not verified"}`))
+	call = nextGeneration(t, p)
+	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError)
+	call.reply <- provider.ProviderResponse{Content: "Testes executados.", FinishReason: message.FinishReasonEndTurn}
+	result := finishGeneration(t, done)
+	require.NoError(t, result.Error)
+	require.Equal(t, "partial", result.Outcome)
+}
+
+func TestFinishedPlanNamesFinishTaskAsTheMissingStep(t *testing.T) {
+	g := &generationState{run: &generationRun{mode: workflow.Execute}}
+	task := workflow.Task{Objective: "x", Status: "in_progress", Steps: []workflow.Step{{Title: "a", Status: "completed"}}}
+	require.Contains(t, g.taskCompletionProblem(task), "finish_task has not succeeded")
+	task.Steps[0].Status = "pending"
+	require.Contains(t, g.taskCompletionProblem(task), "remains unfinished")
 }
 
 func TestVerifiedFilesRemainSeparateWhenConfiguredChecksCannotBeVerified(t *testing.T) {

@@ -70,11 +70,14 @@ func (m *ProcessManager) Start(ctx context.Context, permissions permission.Servi
 	if redact(params.Command) != params.Command {
 		return ProcessInfo{}, fmt.Errorf("command contains a configured credential")
 	}
-	if permissions == nil || !permissions.Request(ctx, permission.CreatePermissionRequest{
+	if permissions == nil || !permission.RequestAtLevel(ctx, permissions, permission.CreatePermissionRequest{
 		SessionID: owner, ToolName: "process_start", Action: "execute", Path: config.WorkingDirectory(),
 		Description: "Start command", Params: params,
-	}) {
+	}, permission.ApprovalSandboxed) {
 		return ProcessInfo{}, permission.ErrorPermissionDenied
+	}
+	if permission.FullAccess(permissions, owner) {
+		ctx = shell.WithoutSandbox(ctx)
 	}
 	process, err := m.startProcess(ctx, owner, params, true)
 	if err != nil {

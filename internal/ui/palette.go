@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/raulaguila/opcode/internal/transcript"
 
 	tea "charm.land/bubbletea/v2"
@@ -28,9 +31,6 @@ func (m *Model) commands() []command {
 	conversation := textFor("Conversa", "Conversation")
 	mode := func(id string) func(*Model) tea.Cmd {
 		return func(m *Model) tea.Cmd { m.setMode(id); return nil }
-	}
-	approval := func(policy permission.ApprovalPolicy) func(*Model) tea.Cmd {
-		return func(m *Model) tea.Cmd { m.setApproval(policy); return nil }
 	}
 	return []command{
 		{textFor("Nova conversa", "New conversation"), textFor("começar do zero", "start fresh"), "Ctrl+N", main, (*Model).newConversation},
@@ -62,8 +62,7 @@ func (m *Model) commands() []command {
 		{textFor("Conexões", "Connections"), textFor("provedores e chaves", "providers and keys"), "/connections", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionConnections) }},
 		{textFor("Preferências", "Preferences"), textFor("idioma, notificações, modo inicial", "language, notifications, initial mode"), "/preferences", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionInterface) }},
 		{textFor("Atalhos", "Shortcuts"), textFor("teclas dos comandos", "command keys"), "/keys", settings, func(m *Model) tea.Cmd { return m.openSettingsAt(sectionShortcuts) }},
-		{textFor("Aprovação: pedir", "Approval: ask"), textFor("pede antes de cada alteração", "asks before every change"), "/approval", settings, approval(permission.ApprovalPrompt)},
-		{textFor("Aprovação: editar no projeto", "Approval: project edits"), textFor("edita arquivos do projeto sem pedir", "edits project files without asking"), "/approval", settings, approval(permission.ApprovalProjectEdits)},
+		{textFor("Aprovação", "Approval"), textFor("o que o agente faz sem perguntar", "what the agent does without asking"), "/approval", settings, (*Model).openApproval},
 		{textFor("Sair", "Quit"), textFor("fechar o opcode", "close opcode"), "Ctrl+C", conversation, func(m *Model) tea.Cmd { m.dialog = confirmQuit{}; return nil }},
 	}
 }
@@ -119,6 +118,112 @@ func (m *Model) setMode(mode string) {
 	m.layout()
 }
 
+// approvalName says who decides, so it cannot be read as a work mode.
+func approvalName(policy permission.ApprovalPolicy) string {
+	switch policy {
+	case permission.ApprovalAuto:
+		return textFor("Aprovar por mim", "Approve for me")
+	case permission.ApprovalFull:
+		return textFor("Acesso total", "Full access")
+	}
+	return textFor("Pedir aprovação", "Ask for approval")
+}
+
+// approvalLevels go from least to most autonomy.
+var approvalLevels = []permission.ApprovalPolicy{permission.ApprovalSandboxed, permission.ApprovalAuto, permission.ApprovalFull}
+
+// approvalNote says what a level frees and what still asks.
+func approvalNote(policy permission.ApprovalPolicy) (free, asks string) {
+	switch policy {
+	case permission.ApprovalAuto:
+		free = textFor("Editar o projeto, rodar comandos no sandbox e baixar as dependências declaradas.", "Editing the project, running commands in the sandbox and fetching declared dependencies.")
+		asks = textFor("Só ações potencialmente inseguras: outra internet e arquivos fora do projeto.", "Only potentially unsafe actions: other internet use and files outside the project.")
+	case permission.ApprovalFull:
+		return textFor("Tudo, sem sandbox: internet e qualquer arquivo do computador.", "Everything, without the sandbox: internet and any file on your computer."),
+			textFor("Nada. Vale só nesta conversa.", "Nothing. Applies to this conversation only.")
+	default:
+		free = textFor("Editar o projeto e rodar comandos no sandbox.", "Editing the project and running commands in the sandbox.")
+		asks = textFor("Internet e arquivos fora do projeto.", "Internet and files outside the project.")
+	}
+	if !shell.SandboxActive() {
+		asks += " " + textFor("Sandbox desligado: todo comando também pede.", "Sandbox off: every command asks too.")
+	}
+	return free, asks
+}
+
+// approvalDetail is the side column of the approval menu.
+func approvalDetail(_ *Model, item Item, width int) []string {
+	policy := item.Value.(permission.ApprovalPolicy)
+	free, asks := approvalNote(policy)
+	body := P.Muted
+	if policy == permission.ApprovalFull {
+		body = P.Danger
+	}
+	var rows []string
+	section := func(title, text string) {
+		rows = append(rows, on(P.Surface, P.Strong).Bold(true).Render(title))
+		for _, line := range strings.Split(ansi.Wrap(text, width, ""), "\n") {
+			rows = append(rows, on(P.Surface, body).Render(line))
+		}
+	}
+	section(textFor("Sem perguntar", "Without asking"), free)
+	rows = append(rows, "")
+	section(textFor("Ainda pede", "Still asks"), asks)
+	return rows
+}
+
+// openApproval is the one place that chooses what runs without asking.
+func (m *Model) openApproval() tea.Cmd {
+	selected := 0
+	items := make([]Item, len(approvalLevels))
+	for i, policy := range approvalLevels {
+		items[i] = Item{ID: string(policy), Title: approvalName(policy), Value: policy}
+		if policy == m.policy {
+			selected = i
+			items[i].Mark = "✓"
+		}
+		if m.width < 80 { // too narrow for the side column
+			free, _ := approvalNote(policy)
+			items[i].Desc = free
+		}
+	}
+	armed := false // full access takes a second Enter
+	dialog := &listDialog{
+		title:    textFor("Aprovação", "Approval"),
+		legend:   textFor("↑↓ escolher · Enter aplicar · Esc fechar", "↑↓ choose · Enter apply · Esc close"),
+		noSearch: true,
+		width:    84,
+		split:    36,
+		list:     List{Items: items, Cursor: "◆", Selected: selected},
+		meta:     func(*listDialog) string { return "" },
+		side:     approvalDetail,
+	}
+	dialog.choose = func(m *Model, item Item) tea.Cmd {
+		if m.busy {
+			m.dialog, m.notice = nil, textFor("Aguarde ou cancele a execução antes de alterar as aprovações.", "Wait or cancel the current run before changing approvals.")
+			return nil
+		}
+		policy := item.Value.(permission.ApprovalPolicy)
+		if policy == permission.ApprovalFull && m.policy != policy && !armed {
+			armed = true
+			dialog.legend = textFor("Enter de novo libera acesso total · Esc cancelar", "Enter again allows full access · Esc cancel")
+			return nil
+		}
+		m.dialog = nil
+		m.setApproval(policy)
+		return nil
+	}
+	m.dialog = dialog
+	return nil
+}
+
+// leaveFullAccess keeps full access from outliving its conversation.
+func (m *Model) leaveFullAccess() {
+	if m.policy == permission.ApprovalFull {
+		m.setApproval(permission.ApprovalSandboxed)
+	}
+}
+
 func (m *Model) setApproval(policy permission.ApprovalPolicy) {
 	m.policy = policy
 	if policies, ok := m.app.Permissions.(permission.ApprovalPolicies); ok && m.session.ID != "" {
@@ -129,6 +234,8 @@ func (m *Model) setApproval(policy permission.ApprovalPolicy) {
 }
 
 func (m *Model) newConversation() tea.Cmd {
+	m.leaveFullAccess()
+	m.foldPlan, m.task = false, workflow.Task{}
 	m.session, m.messages, m.notice, m.busy = session.Session{}, nil, "", false
 	m.version++
 	m.refresh()
@@ -166,7 +273,7 @@ func (m *Model) resumeLast() tea.Cmd {
 		if s.ParentSessionID == "" && s.ID != m.session.ID {
 			m.openSession(s)
 			m.poll()
-			m.showPlan = len(m.task.Steps) > 0
+			m.foldPlan = false
 			m.layout()
 			return nil
 		}

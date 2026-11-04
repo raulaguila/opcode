@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -15,9 +16,18 @@ import (
 type ApprovalPolicy string
 
 const (
-	ApprovalPrompt       ApprovalPolicy = "prompt"
-	ApprovalProjectEdits ApprovalPolicy = "project_edits"
+	// ApprovalPrompt confirms every action: a session nobody chose a level for,
+	// such as a headless run.
+	ApprovalPrompt ApprovalPolicy = "prompt"
+	// ApprovalSandboxed frees project edits and commands inside the OS sandbox.
+	ApprovalSandboxed ApprovalPolicy = "sandboxed"
+	// ApprovalAuto also frees network for restoring declared dependencies.
+	ApprovalAuto ApprovalPolicy = "auto"
+	// ApprovalFull removes prompts and the sandbox.
+	ApprovalFull ApprovalPolicy = "full"
 )
+
+var approvalOrder = []ApprovalPolicy{ApprovalPrompt, ApprovalSandboxed, ApprovalAuto, ApprovalFull}
 
 // ApprovalPolicies controls temporary consent, never persisted with a session.
 type ApprovalPolicies interface {
@@ -29,6 +39,7 @@ type projectEditApproval struct {
 	root     string // symlink-free path of the project
 	logical  string // path as configured, which may traverse symlinks
 	identity os.FileInfo
+	level    ApprovalPolicy
 }
 
 func (s *permissionService) SetApprovalPolicy(sessionID string, policy ApprovalPolicy, root string) error {
@@ -38,7 +49,7 @@ func (s *permissionService) SetApprovalPolicy(sessionID string, policy ApprovalP
 	var approval *projectEditApproval
 	switch policy {
 	case ApprovalPrompt:
-	case ApprovalProjectEdits:
+	case ApprovalSandboxed, ApprovalAuto, ApprovalFull:
 		logical, err := filepath.Abs(root)
 		if err != nil {
 			return err
@@ -58,7 +69,7 @@ func (s *permissionService) SetApprovalPolicy(sessionID string, policy ApprovalP
 		if !info.IsDir() {
 			return errors.New("approval policy requires a project directory")
 		}
-		approval = &projectEditApproval{root: resolved, logical: filepath.Clean(logical), identity: info}
+		approval = &projectEditApproval{root: resolved, logical: filepath.Clean(logical), identity: info, level: policy}
 	default:
 		return errors.New("invalid approval policy")
 	}
@@ -77,10 +88,16 @@ func (s *permissionService) SetApprovalPolicy(sessionID string, policy ApprovalP
 func (s *permissionService) ApprovalPolicy(sessionID string) ApprovalPolicy {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.projectEdits[sessionID] != nil {
-		return ApprovalProjectEdits
+	if approval := s.projectEdits[sessionID]; approval != nil {
+		return approval.level
 	}
 	return ApprovalPrompt
+}
+
+// FullAccess says this session's commands run outside the sandbox.
+func FullAccess(service Service, sessionID string) bool {
+	policies, ok := service.(ApprovalPolicies)
+	return ok && policies.ApprovalPolicy(sessionID) == ApprovalFull
 }
 
 // RequestProjectEdit is reserved for native file tools; generic requests never
@@ -93,6 +110,20 @@ func RequestProjectEdit(ctx context.Context, service Service, opts CreatePermiss
 		projectEditAllowed(context.Context, CreatePermissionRequest, string) bool
 	}); ok && native.projectEditAllowed(ctx, opts, targetPath) {
 		return true
+	}
+	return service.Request(ctx, opts)
+}
+
+// RequestAtLevel skips the prompt for an action confined by the OS sandbox when
+// the session's level reaches level. Without a sandbox nothing confines it.
+func RequestAtLevel(ctx context.Context, service Service, opts CreatePermissionRequest, level ApprovalPolicy) bool {
+	if service == nil || ctx.Err() != nil {
+		return false
+	}
+	if policies, ok := service.(ApprovalPolicies); ok && shell.SandboxActive() {
+		if slices.Index(approvalOrder, policies.ApprovalPolicy(opts.SessionID)) >= slices.Index(approvalOrder, level) {
+			return true
+		}
 	}
 	return service.Request(ctx, opts)
 }
@@ -123,7 +154,7 @@ func nativeEditAction(tool, action string) bool {
 	case "write", "edit":
 		return action == "write"
 	case "patch":
-		return action == "create" || action == "update"
+		return action == "create" || action == "update" || action == "delete"
 	}
 	return false
 }

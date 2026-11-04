@@ -123,6 +123,7 @@ func TestLiveOutputRedactsSplitAndWrappedCredentials(t *testing.T) {
 }
 
 func TestPTYRetainsBubblewrapIsolation(t *testing.T) {
+	skipInsideSandbox(t)
 	if runtime.GOOS != "linux" {
 		t.Skip("Bubblewrap requires Linux")
 	}

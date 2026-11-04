@@ -133,3 +133,27 @@ func TestCompletionBaselineNoChangeReasonAndResumption(t *testing.T) {
 	require.False(t, next.RequiresChanges)
 	require.Empty(t, next.NoChangeReason)
 }
+
+func TestCompletionClosesTheLastOpenStepAndNamesTheOthers(t *testing.T) {
+	ctx := context.Background()
+	store := workflow.New(nil, t.TempDir(), workflow.Execute)
+	finish := func(id string, steps ...workflow.Step) (workflow.Task, error) {
+		_, err := store.UpdatePlan(ctx, id, "Rodar testes", steps, []string{"Testes rodam"}, nil)
+		require.NoError(t, err)
+		return store.Finish(ctx, id, "completed", "pronto", nil)
+	}
+
+	task, err := finish("closing", workflow.Step{Title: "Rodar", Status: "completed"}, workflow.Step{Title: "Relatar", Status: "in_progress"})
+	require.NoError(t, err)
+	require.Equal(t, "completed", task.Steps[1].Status)
+
+	_, err = finish("waiting", workflow.Step{Title: "Rodar", Status: "in_progress"}, workflow.Step{Title: "Relatar", Status: "pending"})
+	require.ErrorContains(t, err, `"Rodar", "Relatar"`)
+	require.ErrorContains(t, err, "update_plan")
+	saved, err := store.Get(ctx, "waiting")
+	require.NoError(t, err)
+	require.Equal(t, "in_progress", saved.Steps[0].Status, "a refused completion changes nothing")
+
+	_, err = finish("pending", workflow.Step{Title: "Rodar", Status: "completed"}, workflow.Step{Title: "Relatar", Status: "pending"})
+	require.ErrorContains(t, err, "1 incomplete step(s)", "work never started is not closed for it")
+}

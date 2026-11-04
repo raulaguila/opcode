@@ -242,6 +242,10 @@ func (s *Server) configure(ctx context.Context, id, mode, policy string) error {
 	if policy == "" {
 		return nil
 	}
+	// Full access drops the sandbox; only the terminal asks for that confirmation.
+	if permission.ApprovalPolicy(policy) == permission.ApprovalFull {
+		return fmt.Errorf("full access is unavailable here")
+	}
 	policies, ok := s.app.Permissions.(permission.ApprovalPolicies)
 	if !ok {
 		return nil

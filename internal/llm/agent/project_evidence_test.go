@@ -67,7 +67,7 @@ func TestBootstrapReusesOnlyCurrentVisibleSourcesAndProjectsOnce(t *testing.T) {
 		if i == 2 {
 			require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# UNIQUE_REPOSITORY_FACT\nChanged evidence.\n"), 0600))
 		}
-		done, err := a.Run(context.Background(), "s", "O que pode me falar do projeto atual?")
+		done, err := a.Run(context.Background(), "s", "O que pode me falar do projeto atual em @README.md ?")
 		require.NoError(t, err)
 		call := nextGeneration(t, p)
 		raw, err := json.Marshal(call.history)
@@ -104,26 +104,6 @@ func countSourceBodies(history []message.Message, needle string) int {
 		}
 	}
 	return count
-}
-
-func TestTopicalBootstrapSearchesAndReadsFeatureSource(t *testing.T) {
-	a, p, _, root := runtimeAgent(t, workflow.Execute)
-	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# Go implementation\n"), 0600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "language_registry.py"), []byte("# Supported languages, independent of implementation language\nlanguages = ['Python', 'Rust']\n"), 0600))
-	read := &citationReadTool{BaseTool: tools.NewViewTool(nil)}
-	a.tools = []tools.BaseTool{read, tools.NewCodeIndexTool(), tools.NewLanguageSupportTool()}
-	done, err := a.Run(context.Background(), "s", "quais linguagens o projeto suporta?")
-	require.NoError(t, err)
-	call := nextGeneration(t, p)
-	raw, _ := json.Marshal(call.history)
-	require.Contains(t, string(raw), "language_registry.py")
-	require.Contains(t, string(raw), "Python")
-	require.Contains(t, toolNames(call), "get_language_support")
-	receipts, _ := sourceReadReceipts(&generationRun{}, call.history)
-	require.NotEmpty(t, receipts, "index previews alone cannot satisfy citations")
-	require.LessOrEqual(t, read.count.Load(), int32(2))
-	call.reply <- provider.ProviderResponse{Content: "Suporta Python e Rust (language_registry.py:2).", FinishReason: message.FinishReasonEndTurn}
-	require.NoError(t, finishGeneration(t, done).Error)
 }
 
 func TestProjectFactsWithoutReadEvidenceFailClosedAfterOneCitationRepair(t *testing.T) {
@@ -169,39 +149,6 @@ func TestReusedSourceDoesNotSatisfyExplicitToolCall(t *testing.T) {
 	require.Empty(t, missingRequiredCalls(run, history))
 }
 
-func TestOpcodeLanguageBootstrapUsesCompactInventoryAndParserDefinition(t *testing.T) {
-	a, p, _, root := runtimeAgent(t, workflow.Ask)
-	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module github.com/raulaguila/opcode\n"), 0600))
-	path := "internal/llm/tools/languages.go"
-	require.NoError(t, os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0700))
-	require.NoError(t, os.WriteFile(filepath.Join(root, path), []byte("package fixture\nvar localParsers = map[string]int{\"python\":1, \"rust\":2}\n"), 0600))
-	a.tools = []tools.BaseTool{tools.NewViewTool(nil), tools.NewCodeIndexTool(), tools.NewLanguageSupportTool()}
-	done, err := a.Run(context.Background(), "s", "quais linguagens o projeto suporta?")
-	require.NoError(t, err)
-	call := nextGeneration(t, p)
-	var inventory, definition bool
-	for _, msg := range call.history {
-		for _, result := range msg.ToolResults() {
-			inventory = inventory || strings.Contains(result.Content, `"profile_count":42`)
-		}
-		for _, tool := range msg.ToolCalls() {
-			if tool.Name == "search_code_index" {
-				require.Contains(t, tool.Input, "localParsers")
-			}
-			if tool.Name == "view" && strings.Contains(tool.Input, path) {
-				definition = true
-				var params tools.ViewParams
-				require.NoError(t, json.Unmarshal([]byte(tool.Input), &params))
-				require.LessOrEqual(t, params.Limit, 5, "read the short declaration, not sixty unrelated lines")
-			}
-		}
-	}
-	require.True(t, inventory)
-	require.True(t, definition)
-	call.reply <- provider.ProviderResponse{Content: "O inventário do Opcode é separado das linguagens de implementação. A definição está em internal/llm/tools/languages.go:2.", FinishReason: message.FinishReasonEndTurn}
-	require.NoError(t, finishGeneration(t, done).Error)
-}
-
 func TestMentionedFileIsReadWithItsImportersBeforeTheModel(t *testing.T) {
 	a, p, _, root := runtimeAgent(t, workflow.Ask)
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "internal", "store"), 0700))
@@ -235,4 +182,18 @@ func TestSourcesReadListsSuccessfulReadsOnce(t *testing.T) {
 	read := SourcesRead(calls, results)
 	require.Equal(t, []string{"main.go", "cmd/root.go"}, read)
 	require.Equal(t, "a, b, c +1", SourcesLabel([]string{"a", "b", "c", "d"}))
+}
+
+func TestQuestionWordsNeverPreloadSources(t *testing.T) {
+	a, p, _, root := runtimeAgent(t, workflow.Execute)
+	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# Project\n"), 0600))
+	read := &citationReadTool{BaseTool: tools.NewViewTool(nil)}
+	a.tools = []tools.BaseTool{read}
+	done, err := a.Run(context.Background(), "s", "analise o fluxo com o modelo deste projeto")
+	require.NoError(t, err)
+	call := nextGeneration(t, p)
+	require.Zero(t, read.count.Load())
+	call.reply <- provider.ProviderResponse{Content: "Preciso ler o código primeiro.", FinishReason: message.FinishReasonEndTurn}
+	nextGeneration(t, p).reply <- provider.ProviderResponse{Content: "Ainda sem leitura.", FinishReason: message.FinishReasonEndTurn}
+	finishGeneration(t, done)
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -63,6 +64,8 @@ func TestSandboxCacheMountAndNetworkGrantDoNotExposePrivateParent(t *testing.T) 
 	cache, err := prepareCommandCache(root)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(cache, ".env"), []byte("cache-secret"), 0600))
+	module := filepath.Join(cache, "path", "pkg", "mod", "example.com", "m@v1", "credentials")
+	require.NoError(t, os.MkdirAll(module, 0700))
 	bin := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(bin, "bwrap"), []byte("#!/bin/sh\nexit 0\n"), 0700))
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -74,6 +77,7 @@ func TestSandboxCacheMountAndNetworkGrantDoNotExposePrivateParent(t *testing.T) 
 	require.Contains(t, command.Args, cache)
 	require.Contains(t, command.Args, sandboxCachePath)
 	require.Contains(t, command.Args, filepath.Join(sandboxCachePath, ".env"), "credential paths remain masked inside the mounted cache")
+	require.NotContains(t, strings.Join(command.Args, " "), "m@v1", "a module's credentials package must build")
 	require.NotContains(t, command.Args, filepath.Dir(cache), "only the cache, not private application data, is mounted")
 	_, marker := context.Background().Value(commandNetworkKey{}).(bool)
 	require.False(t, marker)

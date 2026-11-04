@@ -229,9 +229,9 @@ func modeConsequence(id string) string {
 	case "mode-execute":
 		return config.Text("Permite alterações e solicita as permissões necessárias.", "Allows changes and requests the required permissions.")
 	case "approval-prompt":
-		return config.Text("Solicita aprovação para alterações e comandos. Padrão da sessão.", "Requests approval for changes and commands. Session default.")
-	case "approval-project_edits":
-		return config.Text("Em Executar, permite criar e editar arquivos comuns do projeto. Exclusões, movimentações, comandos, rede e caminhos sensíveis ou externos ainda pedem aprovação. Vale só nesta sessão.", "In Execute, allows creating and editing ordinary project files. Deletion, moves, commands, network and sensitive or external paths still require approval. Applies only to this session.")
+		return config.Text("Pede aprovação antes de cada alteração e comando. Padrão da sessão.", "Asks before every change and command. Session default.")
+	case "approval-sandboxed":
+		return config.Text("Em Executar, edita o projeto e roda comandos no sandbox. Internet e arquivos sensíveis ou fora do projeto ainda pedem aprovação. Vale só nesta sessão.", "In Execute, edits the project and runs commands in the sandbox. Internet and sensitive or outside files still require approval. Applies only to this session.")
 	}
 	return ""
 }
@@ -477,9 +477,9 @@ func modeActionTitle(id string) string {
 	case "mode-execute":
 		return config.Text("Executar", "Execute")
 	case "approval-prompt":
+		return config.Text("Confirmar tudo", "Confirm all")
+	case "approval-sandboxed":
 		return config.Text("Pedir aprovação", "Ask for approval")
-	case "approval-project_edits":
-		return config.Text("Permitir edições no projeto", "Allow project edits")
 	}
 	return ""
 }

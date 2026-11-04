@@ -26,7 +26,7 @@ func (p *chatPage) approvalPolicy() permission.ApprovalPolicy {
 }
 
 func (p *chatPage) chooseApprovalPolicy(policy permission.ApprovalPolicy) tea.Cmd {
-	if policy != permission.ApprovalPrompt && policy != permission.ApprovalProjectEdits {
+	if policy != permission.ApprovalPrompt && policy != permission.ApprovalSandboxed {
 		return util.ReportError(fmt.Errorf("invalid approval policy"))
 	}
 	if p.app.CoderAgent != nil && p.app.CoderAgent.IsBusy() {
@@ -75,8 +75,8 @@ func (p *chatPage) resetApprovalPolicy(sessionID string) {
 }
 
 func approvalLabel(policy permission.ApprovalPolicy) string {
-	if policy == permission.ApprovalProjectEdits {
-		return config.Text("Permitir edições no projeto", "Allow project edits")
+	if policy == permission.ApprovalSandboxed {
+		return config.Text("Pedir aprovação", "Ask for approval")
 	}
-	return config.Text("Pedir aprovação", "Ask for approval")
+	return config.Text("Confirmar tudo", "Confirm all")
 }

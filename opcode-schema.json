@@ -857,7 +857,7 @@
               "minimum": 4096
             }
           ],
-          "default": 96000,
+          "default": 384000,
           "description": "Zero uses the default. Durations are seconds; toolBudget counts bytes of tool content and metadata.",
           "type": "integer"
         },

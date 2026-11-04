@@ -15,7 +15,7 @@ func TestApprovalPaletteEntryOpensExistingChooserAtSelectedPolicy(t *testing.T) 
 	a := appModel{
 		currentPage: page.ChatPage,
 		pages: map[page.PageID]util.Model{page.ChatPage: &approvalFooterPage{state: util.FooterState{
-			Mode: "ask", ApprovalPolicy: string(permission.ApprovalProjectEdits),
+			Mode: "ask", ApprovalPolicy: string(permission.ApprovalSandboxed),
 		}}},
 		commandDialog: dialog.NewCommandDialogCmp(),
 		commands:      []dialog.Command{{ID: "mode-ask"}, {ID: "mode-plan"}, {ID: "mode-execute"}},
@@ -34,6 +34,6 @@ func TestApprovalPaletteEntryOpensExistingChooserAtSelectedPolicy(t *testing.T) 
 	require.Nil(t, cmd, "opening a chooser must not apply consent")
 	require.True(t, a.showCommandDialog)
 	_, selected := a.commandDialog.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	require.Equal(t, "approval-project_edits", selected().(dialog.CommandSelectedMsg).Command.ID)
+	require.Equal(t, "approval-sandboxed", selected().(dialog.CommandSelectedMsg).Command.ID)
 	require.Equal(t, "ask", a.footerState().Mode)
 }

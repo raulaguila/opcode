@@ -111,6 +111,9 @@ func (m *Model) header() string {
 	if n := m.sessionNumber(); title != "" && n > 0 {
 		title += config.Text(" · sessão ", " · session ") + fmt.Sprint(n)
 	}
+	if title != "" {
+		title += " ▾"
+	}
 	right := muted.Render(title + " ")
 	return Spread(left, right, m.width, P.Ground) + "\n" + on(P.Ground, P.Rule).Render(strings.Repeat("─", m.width))
 }
@@ -517,18 +520,22 @@ func (m *Model) composerView() string {
 // footer: approval on the left, the run's activity, then context and model.
 func (m *Model) footer() string {
 	muted := on(P.Ground, P.Muted)
-	label := config.Text("Aprov.: pedir ▾", "Approval: ask ▾")
-	if m.policy == permission.ApprovalProjectEdits {
-		label = config.Text("Aprov.: editar no projeto ▾", "Approval: project edits ▾")
-	}
+	label := approvalName(m.policy) + " ▾"
 	compact := m.width < 80 // the proposal's 64-column screen abbreviates
 	if compact {
 		label = config.Text("A:pedir", "A:ask")
-		if m.policy == permission.ApprovalProjectEdits {
-			label = config.Text("A:editar", "A:edits")
+		switch m.policy {
+		case permission.ApprovalAuto:
+			label = "A:auto"
+		case permission.ApprovalFull:
+			label = config.Text("A:total", "A:full")
 		}
 	}
-	approval := on(P.Ground, P.Text).Render(" " + label)
+	tone := P.Text
+	if m.policy == permission.ApprovalFull {
+		tone = P.Danger
+	}
+	approval := on(P.Ground, tone).Render(" " + label)
 	if mode := m.footerMode(); mode != "" {
 		approval = on(P.Ground, ModeColor(m.mode)).Bold(true).Render(" "+mode) + approval
 	}

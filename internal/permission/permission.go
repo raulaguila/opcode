@@ -122,7 +122,7 @@ func (s *permissionService) Request(ctx context.Context, opts CreatePermissionRe
 	permission.parameterHash = sha256.Sum256(encodedParams)
 
 	s.mu.Lock()
-	if slices.Contains(s.autoApproveSessions, opts.SessionID) {
+	if approval := s.projectEdits[opts.SessionID]; slices.Contains(s.autoApproveSessions, opts.SessionID) || approval != nil && approval.level == ApprovalFull {
 		s.mu.Unlock()
 		return ctx.Err() == nil
 	}

@@ -21,7 +21,7 @@ func questionDiagnosis(t *testing.T, diagnosis string) (*agent, *controlledProvi
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# Opcode\nTerminal development agent.\n"), 0600))
 	a.tools = []tools.BaseTool{tools.NewViewTool(nil)}
 	a.questions.SetInteractive(true)
-	done, err := a.Run(context.Background(), "s", "Explique o projeto atual e pergunte se quero implementar as melhorias.")
+	done, err := a.Run(context.Background(), "s", "Explique o projeto atual (@README.md) e pergunte se quero implementar as melhorias.")
 	require.NoError(t, err)
 	first := nextGeneration(t, p)
 	first.reply <- provider.ProviderResponse{Content: diagnosis, ToolCalls: []message.ToolCall{toolCall("ask_user_question", `{"question":"Quer implementar as melhorias?","choices":["Sim","Agora não"]}`)}, FinishReason: message.FinishReasonToolUse}
@@ -155,7 +155,7 @@ func TestLegacyHumanDeclineStartsIndependentCitationScope(t *testing.T) {
 	a, p, _, root := runtimeAgent(t, workflow.Ask)
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# Opcode\nTerminal agent.\n"), 0600))
 	a.tools = []tools.BaseTool{tools.NewViewTool(nil)}
-	done, err := a.Run(context.Background(), "s", "Explique o projeto atual.")
+	done, err := a.Run(context.Background(), "s", "Explique o projeto atual (@README.md ).")
 	require.NoError(t, err)
 	nextGeneration(t, p).reply <- provider.ProviderResponse{Content: "O projeto é um agente (README.md:1-2). Quer implementar as melhorias?", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)

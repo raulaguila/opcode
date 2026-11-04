@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -139,8 +140,12 @@ func selectInitialSchemas(run *generationRun) {
 	for _, name := range []string{"view", "ls", "grep", "glob", "search_code_index", "request_tools", "get_tools_catalog", "ask_user_question", "get_task", "get_context_status"} {
 		run.selected[name] = true
 	}
+	// Execute exists to change files; without edit, models patch with sed.
+	if run.mode == workflow.Execute {
+		run.selected["edit"] = true
+	}
 	if run.provider.Model().ContextWindow > 0 && run.provider.Model().ContextWindow < 10000 {
-		for _, name := range []string{"ls", "grep", "glob", "search_code_index", "ask_user_question"} {
+		for _, name := range []string{"ls", "grep", "glob", "search_code_index", "ask_user_question", "edit"} {
 			delete(run.selected, name)
 		}
 	}
@@ -236,7 +241,7 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 	if simplePlanArguments(run) {
 		planParams = map[string]any{"objective": stringParam, "steps_text": map[string]any{"type": "string", "description": "One status|title per line; statuses pending, in_progress, completed. Example: pending|Inspect relevant files"}, "criteria_text": map[string]any{"type": "string", "description": "One acceptance criterion per line"}, "checks_text": map[string]any{"type": "string", "description": "One configured check name per line. Empty string when no checks are required."}}
 		planRequired = []string{"objective", "steps_text", "criteria_text", "checks_text"}
-		planDescription = "Save a persistent plan. All four arguments are strings: objective, steps_text (one status|title per line), criteria_text (one criterion per line), checks_text (configured check names per line, empty if none). Statuses: pending/in_progress/completed. Never invent check names. Does not grant permission."
+		planDescription = "Save a persistent plan. All four arguments are strings: objective, steps_text (one status|title per line), criteria_text (one criterion per line), checks_text (configured check names per line, empty if none). Statuses: pending/in_progress/completed; mark each finished step completed as you move on. Never invent check names; discover_checks proposals are not configured checks. Does not grant permission."
 	}
 
 	result := []tools.BaseTool{
@@ -252,7 +257,7 @@ func (a *agent) workflowTools(run *generationRun, session string) []tools.BaseTo
 		makeTool("update_plan", planDescription, planParams, planRequired, func(ctx context.Context, call tools.ToolCall) (any, error) {
 			return a.workflowUpdatePlan(run, session, ctx, call)
 		}),
-		makeTool("finish_task", "Mark a task planned, completed, partial or blocked. These status identifiers are internal: describe the outcome to the user in their language without quoting them. Completion requires all steps completed, valid checks for the current file revision, and actual changes for implementation requests. If no changes are needed, supply an explicit no_change_reason; unfinished work is partial or blocked. A successful command alone does not prove semantic correctness.", map[string]any{"status": map[string]any{"type": "string", "enum": []string{"planned", "completed", "blocked", "partial"}}, "summary": stringParam, "no_change_reason": stringParam}, []string{"status", "summary"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
+		makeTool("finish_task", "End the task: call this once, after marking every step completed, and only then give the final answer. Status planned, completed, partial or blocked. These status identifiers are internal: describe the outcome to the user in their language without quoting them. Completion requires all steps completed, valid checks for the current file revision, and actual changes for implementation requests. If no changes are needed, supply an explicit no_change_reason; unfinished work is partial or blocked. If this tool refuses completed, fix what its error names or call it again as partial or blocked; never repeat the same call. A successful command alone does not prove semantic correctness.", map[string]any{"status": map[string]any{"type": "string", "enum": []string{"planned", "completed", "blocked", "partial"}}, "summary": stringParam, "no_change_reason": stringParam}, []string{"status", "summary"}, func(ctx context.Context, call tools.ToolCall) (any, error) {
 			return a.workflowFinishTask(run, session, ctx, call)
 		}),
 	}
@@ -437,18 +442,55 @@ func (a *agent) workflowUpdatePlan(run *generationRun, session string, ctx conte
 		return nil, err
 	}
 	commands := checkCommands()
-	for _, name := range checks {
-		if commands[name] == "" {
-			return nil, fmt.Errorf("unknown configured check: %s", tools.Clip(name, 80))
-		}
-	}
+	// A wrong check name must not cost the plan: small models guess names.
+	known := slices.DeleteFunc(slices.Clone(checks), func(name string) bool { return commands[name] == "" })
+	unknown := len(known) != len(checks)
+	checks = known
 	// Plan mode cannot execute anything, so no step of the plan is done yet.
 	if run.mode == workflow.Plan {
 		for i := range steps {
 			steps[i].Status = "pending"
 		}
+	} else if task, err := a.workflow.Get(ctx, session); err == nil {
+		steps = carryPlanProgress(task.Steps, steps)
+		if task.Objective == objective && slices.Equal(task.Steps, steps) {
+			return map[string]string{"status": "plan unchanged", "next": "Work on the in_progress step with tools. Call update_plan only when a step changes."}, nil
+		}
 	}
-	return a.workflow.UpdatePlan(ctx, session, objective, steps, criteria, checks)
+	task, err := a.workflow.UpdatePlan(ctx, session, objective, steps, criteria, checks)
+	if err != nil || !unknown {
+		return task, err
+	}
+	return struct {
+		workflow.Task
+		Note string `json:"note"`
+	}{task, "Plan saved without checks that are not configured. Configured checks: " + namesJSON(commands) + ". discover_checks proposals are not configured: run them with bash."}, nil
+}
+
+// carryPlanProgress keeps a rewritten plan honest about finished work: small
+// models move the current step on without closing the ones behind it, and drop
+// or reopen finished steps. Marking a finished step in_progress reopens it.
+func carryPlanProgress(previous, steps []workflow.Step) []workflow.Step {
+	current := slices.IndexFunc(steps, func(step workflow.Step) bool { return step.Status == "in_progress" })
+	for i := range current {
+		if steps[i].Status == "pending" {
+			steps[i].Status = "completed"
+		}
+	}
+	var dropped []workflow.Step
+	for _, step := range previous {
+		if step.Status != "completed" {
+			continue
+		}
+		same := slices.IndexFunc(steps, func(other workflow.Step) bool { return other.Title == step.Title })
+		switch {
+		case same < 0:
+			dropped = append(dropped, step)
+		case steps[same].Status == "pending":
+			steps[same].Status = "completed"
+		}
+	}
+	return append(dropped[:min(len(dropped), max(0, 24-len(steps)))], steps...)
 }
 
 func (a *agent) workflowFinishTask(run *generationRun, session string, ctx context.Context, call tools.ToolCall) (any, error) {
@@ -468,6 +510,9 @@ func (a *agent) workflowFinishTask(run *generationRun, session string, ctx conte
 			return nil, fmt.Errorf("required actions lack successful receipts: %s", strings.Join(missing, ", "))
 		}
 		if err := a.observeCompletion(ctx, session); err != nil {
+			if errors.Is(err, errWorkspaceVerification) {
+				return nil, fmt.Errorf("%w. Retrying cannot help: call finish_task with status partial and say what could not be verified", err)
+			}
 			return nil, err
 		}
 	}

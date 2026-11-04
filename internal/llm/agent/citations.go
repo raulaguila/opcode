@@ -268,7 +268,7 @@ func (v *citationValidation) problem() string {
 		problem += "No file:line reference was supplied. "
 	}
 	if !v.primaryValid {
-		problem += "For this project question, include the relevant topic source supplied by context preparation; a manifest/entry point alone does not establish the requested features. "
+		problem += "For this project question, read the relevant source first and cite it; a manifest/entry point alone does not establish the requested features. "
 	}
 	if len(v.invalid) > 0 {
 		bad, _ := json.Marshal(v.invalid)

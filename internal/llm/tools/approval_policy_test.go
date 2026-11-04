@@ -18,7 +18,7 @@ func nativePolicyFixture(t *testing.T) (string, permission.Service) {
 	require.NoError(t, err)
 	t.Cleanup(func() { os.RemoveAll(root) })
 	permissions := permission.NewPermissionService()
-	require.NoError(t, permissions.(permission.ApprovalPolicies).SetApprovalPolicy("test-session", permission.ApprovalProjectEdits, root))
+	require.NoError(t, permissions.(permission.ApprovalPolicies).SetApprovalPolicy("test-session", permission.ApprovalSandboxed, root))
 	return root, permissions
 }
 
@@ -89,8 +89,19 @@ func policyFileChange(t *testing.T, name string, permissions permission.Service,
 	require.False(t, response.IsError, response.Content)
 }
 
-func TestProjectEditPolicyStillRequiresDeletionMoveAndCommandApproval(t *testing.T) {
-	for _, kind := range []string{"delete", "move", "command"} {
+func TestApprovalLevelFreesDeletionButStillAsksForMoves(t *testing.T) {
+	for _, kind := range []string{"delete", "command"} {
+		t.Run(kind, func(t *testing.T) {
+			root, permissions := nativePolicyFixture(t)
+			path := filepath.Join(root, "source.txt")
+			require.NoError(t, os.WriteFile(path, []byte("before\n"), 0o600))
+			recordFileRead(path)
+			tool, params := destructivePolicyOperation(kind, permissions, path)
+			_, err := runPolicyTool(t, SecureTool(tool, permissions), params)
+			require.NoError(t, err, "work inside the project needs no prompt")
+		})
+	}
+	for _, kind := range []string{"move"} {
 		t.Run(kind, func(t *testing.T) {
 			root, permissions := nativePolicyFixture(t)
 			path := filepath.Join(root, "source.txt")

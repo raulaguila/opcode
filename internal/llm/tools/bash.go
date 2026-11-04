@@ -123,26 +123,34 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	if sessionID == "" || messageID == "" {
 		return ToolResponse{}, fmt.Errorf("session ID and message ID are required for creating a new file")
 	}
-	p := b.permissions.Request(ctx, permission.CreatePermissionRequest{
+	request := permission.CreatePermissionRequest{
 		SessionID:   sessionID,
 		Path:        config.WorkingDirectory(),
 		ToolName:    BashToolName,
 		Action:      "execute",
 		Description: fmt.Sprintf("Execute command: %s", params.Command),
 		Params:      BashPermissionsParams(params),
-	})
-	if !p {
+	}
+	if !permission.RequestAtLevel(ctx, b.permissions, request, permission.ApprovalSandboxed) {
 		return ToolResponse{}, permission.ErrorPermissionDenied
 	}
 	if params.Network && !shell.NetworkEnabled(ctx) {
-		if !b.permissions.Request(ctx, permission.CreatePermissionRequest{
+		network := permission.CreatePermissionRequest{
 			SessionID: sessionID, Path: config.WorkingDirectory(), ToolName: BashToolName, Action: "network",
 			Description: "Allow network for this command only (including access to local services): " + params.Command,
 			Params:      BashPermissionsParams(params),
-		}) {
+		}
+		level := permission.ApprovalFull
+		if packageFetchCommand(params.Command) {
+			level = permission.ApprovalAuto
+		}
+		if !permission.RequestAtLevel(ctx, b.permissions, network, level) {
 			return ToolResponse{}, permission.ErrorPermissionDenied
 		}
 		ctx = shell.WithApprovedNetwork(ctx)
+	}
+	if permission.FullAccess(b.permissions, sessionID) {
+		ctx = shell.WithoutSandbox(ctx)
 	}
 	return b.executeApprovedCommand(ctx, sessionID, params)
 }
@@ -164,16 +172,24 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 	// The process buffers already dropped the middle of long output, so an
 	// artifact can only hold what they retained.
 	dropped := stdoutDropped || stderrDropped
+	full := stdout + "\n" + stderr
+	compacted := false
+	if !interrupted && !params.PTY {
+		stdout, stderr, compacted = digestCommandOutput(params.Command, stdout, stderr)
+	}
 	truncated := dropped || len(stdout) > MaxOutputLength || len(stderr) > MaxOutputLength
 
 	artifactNote := ""
-	if len(stdout)+len(stderr) > MaxOutputLength {
-		if snapshot, snapshotErr := SnapshotOutput(ctx, "bash", stdout+"\n"+stderr); snapshotErr == nil {
+	if compacted {
+		artifactNote = fmt.Sprintf("\n[Output compacted from %d to %d bytes, keeping errors; exit code %d is the result]", len(full), len(stdout)+len(stderr), exitCode)
+	}
+	if compacted || len(full) > MaxOutputLength {
+		if snapshot, snapshotErr := SnapshotOutput(ctx, "bash", full); snapshotErr == nil {
 			label := "[Command output saved as artifact]"
 			if dropped {
 				label = "[Partial command output saved as artifact; the middle of the output was not retained]"
 			}
-			artifactNote = "\n" + label + "\n" + snapshot
+			artifactNote += "\n" + label + "\n" + snapshot
 		}
 	}
 	stdout = truncateOutput(stdout)
@@ -189,7 +205,7 @@ func (b *bashTool) executeApprovedCommand(ctx context.Context, sessionID string,
 		ExitCode:  exitCode, TimedOut: interrupted && ctx.Err() == nil, Cancelled: ctx.Err() != nil, Truncated: truncated,
 		NetworkEnabled: shell.NetworkEnabled(ctx),
 	}
-	if stdout == "" {
+	if stdout == "" && artifactNote == "" {
 		return WithResponseMetadata(NewTextResponse("no output"), metadata), nil
 	}
 	if artifactNote != "" {

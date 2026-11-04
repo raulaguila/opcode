@@ -46,23 +46,23 @@ func TestApprovalSelectionBeforeSessionAppliesBeforeSubmissionAndKeepsDraft(t *t
 	p := approvalPage(t)
 	p.session = session.Session{}
 	p.editor.Update(chat.RestoreDraftMsg{Text: "KEEP_DRAFT"})
-	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
+	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
 	require.Empty(t, p.session.ID, "choosing a policy does not create a conversation")
-	require.Equal(t, permission.ApprovalProjectEdits, p.approvalPolicy())
+	require.Equal(t, permission.ApprovalSandboxed, p.approvalPolicy())
 	draft, _ := p.composer.(chat.DraftControl).Draft()
 	require.Equal(t, "KEEP_DRAFT", draft)
 	p.session = session.Session{ID: "created-on-first-message"}
 	probe := &approvalSubmitProbe{workflowProbe: p.app.CoderAgent.(*workflowProbe), policies: p.app.Permissions.(permission.ApprovalPolicies)}
 	p.app.CoderAgent = probe
 	flattenCommands(p.submitAgentMessage("create file", nil, "create file"))
-	require.Equal(t, permission.ApprovalProjectEdits, probe.seen)
+	require.Equal(t, permission.ApprovalSandboxed, probe.seen)
 	require.Empty(t, p.pendingApproval)
 }
 
 func TestApprovalBusyChangeDoesNotIncreasePermissionsOrAlterMode(t *testing.T) {
 	p := approvalPage(t)
 	p.app.CoderAgent.(*workflowProbe).busy = true
-	msgs := flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
+	msgs := flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
 	require.Equal(t, util.InfoTypeWarn, msgs[0].(util.InfoMsg).Type)
 	require.Equal(t, permission.ApprovalPrompt, p.approvalPolicy())
 	require.Equal(t, workflow.Execute, p.mode())
@@ -70,17 +70,17 @@ func TestApprovalBusyChangeDoesNotIncreasePermissionsOrAlterMode(t *testing.T) {
 
 func TestApprovalResetsWhenSwitchingConversationAndRevoking(t *testing.T) {
 	p := approvalPage(t)
-	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
-	require.Equal(t, permission.ApprovalProjectEdits, p.approvalPolicy())
+	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
+	require.Equal(t, permission.ApprovalSandboxed, p.approvalPolicy())
 	policies := p.app.Permissions.(permission.ApprovalPolicies)
 	// Rootless reset remains valid even when no configuration has been loaded.
 	p.resetApprovalPolicy("s")
 	require.Equal(t, permission.ApprovalPrompt, policies.ApprovalPolicy("s"))
-	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
+	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
 	p.Update(chat.SessionSelectedMsg(session.Session{ID: "reopened"}))
 	require.Equal(t, permission.ApprovalPrompt, p.approvalPolicy())
 	require.Equal(t, permission.ApprovalPrompt, policies.ApprovalPolicy("s"))
-	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
+	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
 	p.openPermissions()
 	_, handled := workspaceKeyChatPageR(p)
 	require.True(t, handled)
@@ -90,11 +90,11 @@ func TestApprovalResetsWhenSwitchingConversationAndRevoking(t *testing.T) {
 func TestPendingApprovalResetsForNewConversationAndModeChange(t *testing.T) {
 	p := approvalPage(t)
 	p.session = session.Session{}
-	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
-	require.Equal(t, permission.ApprovalProjectEdits, p.approvalPolicy())
+	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
+	require.Equal(t, permission.ApprovalSandboxed, p.approvalPolicy())
 	flattenCommands(p.newConversation())
 	require.Equal(t, permission.ApprovalPrompt, p.approvalPolicy())
-	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
+	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
 	p.session = session.Session{ID: "created-by-mode-command"}
 	_, err := p.applyWorkflowCommand("mode", "ask")
 	require.NoError(t, err)
@@ -105,7 +105,7 @@ func TestPendingApprovalResetsForNewConversationAndModeChange(t *testing.T) {
 
 func TestReopenedPageDoesNotRestoreSessionApprovalPolicy(t *testing.T) {
 	p := approvalPage(t)
-	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalProjectEdits))
+	flattenCommands(p.chooseApprovalPolicy(permission.ApprovalSandboxed))
 	reopened := NewChatPage(p.app).(*chatPage)
 	reopened.Update(chat.SessionSelectedMsg(p.session))
 	require.Equal(t, permission.ApprovalPrompt, reopened.approvalPolicy())
@@ -116,8 +116,8 @@ func TestApprovalSelectionExplainsReadOnlyModesWithoutRepeatingExecuteState(t *t
 	for _, mode := range []workflow.Mode{workflow.Ask, workflow.Plan, workflow.Execute} {
 		p := approvalPage(t)
 		p.workflow.task.Mode = mode
-		cmd := p.chooseApprovalPolicy(permission.ApprovalProjectEdits)
-		require.Equal(t, permission.ApprovalProjectEdits, p.approvalPolicy())
+		cmd := p.chooseApprovalPolicy(permission.ApprovalSandboxed)
+		require.Equal(t, permission.ApprovalSandboxed, p.approvalPolicy())
 		require.Equal(t, mode, p.mode())
 		if mode == workflow.Execute {
 			require.Nil(t, cmd, "the selected footer value already confirms ordinary execute changes")

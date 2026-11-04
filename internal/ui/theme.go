@@ -7,6 +7,7 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 )
 
 // Palette holds the proposal's colors. One dark world: the terminal is used
@@ -24,7 +25,7 @@ type Palette struct {
 }
 
 var P = Palette{
-	Ground:           lipgloss.Color("#16161e"),
+	Ground:           theme.Ground,
 	Surface:          lipgloss.Color("#1b1c29"),
 	Raised:           lipgloss.Color("#1f2030"),
 	Field:            lipgloss.Color("#13131b"),

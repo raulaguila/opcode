@@ -3,8 +3,9 @@ package ui
 import (
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/fileutil"

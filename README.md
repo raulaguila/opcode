@@ -105,8 +105,9 @@ entrada padrão (`git diff | opcode -p "revise"` ou `opcode < pedido.txt`, até
 | `130` | cancelada |
 
 Sem interface ninguém aprova nada, então as alterações são recusadas.
-`--approval project-edits` deixa editar arquivos do projeto sem perguntar e
-continua recusando comandos; `--auto-approve` aprova tudo (inseguro).
+`--approval sandbox` deixa editar o projeto e rodar comandos no sandbox, e recusa
+internet e arquivos fora do projeto; `--approval auto` também restaura
+dependências declaradas; `--auto-approve` aprova tudo (inseguro).
 `--max-cost 0.50` cancela a execução quando o custo estimado passa de US$ 0,50,
 verificado após cada resposta do modelo. `--debug` grava `debug.log` (0600) na
 pasta de dados e mostra o caminho; o arquivo contém pedidos e saídas de

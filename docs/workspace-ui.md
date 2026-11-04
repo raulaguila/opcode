@@ -774,8 +774,11 @@ uma opção” no próprio painel. Editar, colar ou mudar a resposta ativa remov
 aviso, preservando outros erros e o rascunho da conversa. O serviço mantém a
 validação de respostas e o limite de 4000 bytes, inclusive com texto multibyte.
 
-O título do plano explicita “1/14 concluídas”; ↑ e ↓ indicam conteúdo oculto
-acima ou abaixo. A posição de leitura, a etapa ativa, Alt+↑/↓ e `/task` continuam
+O plano aparece aberto por padrão; a seta no canto superior direito, ou `/plan`,
+recolhe e reabre. Quando todas as etapas terminam, vira uma faixa “Plano concluído”
+que a seta reabre, e etapa nova traz o card de volta. Tarefa parcial ou bloqueada
+ganha uma linha com o resumo acima do campo de mensagem até a próxima execução. Plano longo mostra só as etapas em torno da atual. O título
+explicita “1/14 concluídas”; ↑ e ↓ indicam conteúdo oculto acima ou abaixo. A posição de leitura, a etapa ativa, Alt+↑/↓ e `/task` continuam
 nos controles existentes, sem criar outro painel.
 
 
@@ -805,27 +808,35 @@ A cópia da resposta final preserva seu Markdown original e não inclui raciocí
 O seletor de modo apresenta uma seção **Aprovação**, independente de Perguntar,
 Planejar e Executar:
 
-- **Pedir aprovação** é o padrão e mantém as solicitações existentes.
-- **Permitir edições no projeto** autoriza as ferramentas nativas de criação e
-  edição de arquivos comuns dentro do projeto selecionado. Só tem efeito em
-  Executar. Excluir ou mover arquivos, executar comandos, acessar a rede e
-  escrever em caminhos externos, sensíveis ou com links simbólicos continuam
-  exigindo as permissões existentes. Perguntar e Planejar continuam sem edições.
+- **Pedir aprovação** é o padrão: edita, exclui e cria arquivos comuns do projeto
+  e roda comandos no sandbox sem perguntar. Internet, arquivos sensíveis ou fora
+  do projeto e mover arquivos pedem.
+- **Aprovar por mim** também libera rede para restaurar dependências já
+  declaradas, como `go mod download` e `npm ci`, no sandbox. Outra rede pede.
+- **Acesso total** remove pedidos e sandbox para esta conversa: internet e
+  qualquer arquivo do computador. Exige segundo Enter, acaba ao trocar de
+  conversa e nunca é salvo. Só existe nesta interface; desktop o recusa.
 
-A escolha vale em memória para a sessão atual. Pode ser feita antes da primeira
-mensagem e não altera o rascunho. Reiniciar, abrir outra conversa, retomar uma
-conversa, trocar o modo ou revogar em `/permissions` restaura Pedir aprovação.
+Sem sandbox (`security.sandbox=none`), Pedir aprovação e Aprovar por mim pedem
+todo comando, e o menu avisa. Credenciais seguem mascaradas no sandbox, e `.git`
+fica oculto dos comandos. Perguntar e Planejar continuam sem edições.
+
+A escolha vale em memória, enquanto o programa roda; nada é salvo. A UI clássica
+mantém dois níveis: **Confirmar tudo**, seu padrão, que pede cada ação, e
+**Pedir aprovação**, igual ao acima. Na clássica, reiniciar, abrir outra
+conversa, retomar uma conversa, trocar o modo ou revogar em `/permissions`
+restaura Confirmar tudo.
 Não se pode ampliar permissões durante uma execução; aguarde ou cancele primeiro.
 Selecionar uma política não responde a solicitações pendentes.
 
 O rodapé mostra controles separados de modo e aprovação. A política selecionada
 fica sempre visível, inclusive Pedir aprovação; clicar nela abre o seletor
-existente com a política atual destacada. Clicar no modo destaca o modo atual.
+com a política atual marcada. Clicar no modo destaca o modo atual.
 Abrir ou navegar não muda consentimento; Enter ou clique na opção confirma.
 Em Perguntar/Planejar, a política continua identificada, mas as ferramentas de
 escrita permanecem indisponíveis; permitir edições só tem efeito em Executar.
 
-Rótulos longos são compactados para `Aprov.: pedir` ou `A:pedir` (e `editar`),
+Rótulos longos são compactados para `Pedir aprovação` ou `A:pedir` (e `A:auto`, `A:total`),
 preservando etapa, tempo, contexto e tok/s. Abaixo de 80 colunas, o contexto usa
 percentual; abaixo de 60, o nome do modelo cede espaço aos controles e continua
 acessível pelo atalho de modelos. O rodapé permanece em uma linha e a margem

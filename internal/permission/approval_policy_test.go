@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/stretchr/testify/require"
 )
 
@@ -13,7 +15,7 @@ func editPolicyFixture(t *testing.T) (*permissionService, string, CreatePermissi
 	t.Helper()
 	root := t.TempDir()
 	s := NewPermissionService().(*permissionService)
-	require.NoError(t, s.SetApprovalPolicy("session", ApprovalProjectEdits, root))
+	require.NoError(t, s.SetApprovalPolicy("session", ApprovalSandboxed, root))
 	opts := CreatePermissionRequest{SessionID: "session", ToolName: "write", Action: "write", Path: root, Params: map[string]string{"diff": "new content"}}
 	return s, root, opts
 }
@@ -21,7 +23,7 @@ func editPolicyFixture(t *testing.T) (*permissionService, string, CreatePermissi
 func TestProjectEditConsentIsTemporaryAndDoesNotAuthorizeGenericRequests(t *testing.T) {
 	s, root, opts := editPolicyFixture(t)
 	path := filepath.Join(root, "nested", "new.go")
-	require.Equal(t, ApprovalProjectEdits, s.ApprovalPolicy(opts.SessionID))
+	require.Equal(t, ApprovalSandboxed, s.ApprovalPolicy(opts.SessionID))
 	require.True(t, RequestProjectEdit(context.Background(), s, opts, path))
 	require.False(t, s.Request(context.Background(), opts), "matching metadata is not native edit consent")
 	other := opts
@@ -54,11 +56,11 @@ func TestProjectEditConsentRejectsSensitiveExternalAndSymlinkPaths(t *testing.T)
 func TestProjectEditConsentRequiresNativeActionAndValidLiveRequest(t *testing.T) {
 	s, root, opts := editPolicyFixture(t)
 	path := filepath.Join(root, "new.go")
-	for _, pair := range [][2]string{{"patch", "create"}, {"patch", "update"}, {"edit", "write"}, {"write", "write"}} {
+	for _, pair := range [][2]string{{"patch", "create"}, {"patch", "update"}, {"patch", "delete"}, {"edit", "write"}, {"write", "write"}} {
 		opts.ToolName, opts.Action = pair[0], pair[1]
 		require.True(t, RequestProjectEdit(context.Background(), s, opts, path))
 	}
-	for _, pair := range [][2]string{{"patch", "delete"}, {"patch", "move"}, {"bash", "execute"}, {"mcp_write", "write"}, {"write", "write_external"}, {"network", "connect"}} {
+	for _, pair := range [][2]string{{"patch", "move"}, {"bash", "execute"}, {"mcp_write", "write"}, {"write", "write_external"}, {"network", "connect"}} {
 		opts.ToolName, opts.Action = pair[0], pair[1]
 		require.False(t, RequestProjectEdit(context.Background(), s, opts, path))
 	}
@@ -88,9 +90,9 @@ func TestSwitchToPromptRevokesBroadAndRememberedConsent(t *testing.T) {
 func TestInvalidPolicyPreservesConsentAndReplacedRootRequiresApproval(t *testing.T) {
 	s, root, opts := editPolicyFixture(t)
 	require.Error(t, s.SetApprovalPolicy(opts.SessionID, "unknown", root))
-	require.Error(t, s.SetApprovalPolicy(opts.SessionID, ApprovalProjectEdits, filepath.Join(root, "absent")))
-	require.Error(t, s.SetApprovalPolicy("", ApprovalProjectEdits, root))
-	require.Equal(t, ApprovalProjectEdits, s.ApprovalPolicy(opts.SessionID))
+	require.Error(t, s.SetApprovalPolicy(opts.SessionID, ApprovalSandboxed, filepath.Join(root, "absent")))
+	require.Error(t, s.SetApprovalPolicy("", ApprovalSandboxed, root))
+	require.Equal(t, ApprovalSandboxed, s.ApprovalPolicy(opts.SessionID))
 	original := root + "-original"
 	require.NoError(t, os.Rename(root, original))
 	t.Cleanup(func() { os.RemoveAll(original) })
@@ -101,7 +103,7 @@ func TestInvalidPolicyPreservesConsentAndReplacedRootRequiresApproval(t *testing
 func TestProjectEditFallbackCanStillBeExplicitlyApproved(t *testing.T) {
 	s, events := testPermissionService(t)
 	root := t.TempDir()
-	require.NoError(t, s.SetApprovalPolicy("session", ApprovalProjectEdits, root))
+	require.NoError(t, s.SetApprovalPolicy("session", ApprovalSandboxed, root))
 	opts := CreatePermissionRequest{SessionID: "session", ToolName: "write", Action: "write", Path: root}
 	result := make(chan bool, 1)
 	go func() { result <- RequestProjectEdit(context.Background(), s, opts, filepath.Join(root, ".env")) }()
@@ -115,7 +117,7 @@ func TestChangingPolicyDeniesPendingInsteadOfApprovingIt(t *testing.T) {
 	s, events := testPermissionService(t)
 	opts := testOptions(t)
 	request, result, _ := askPermission(t, s, events, opts)
-	require.NoError(t, s.SetApprovalPolicy(opts.SessionID, ApprovalProjectEdits, opts.Path))
+	require.NoError(t, s.SetApprovalPolicy(opts.SessionID, ApprovalSandboxed, opts.Path))
 	require.False(t, permissionResult(t, result))
 	s.GrantPersistant(request)
 	require.Empty(t, s.SessionGrants(opts.SessionID), "stale replies must not broaden the selected policy")
@@ -129,7 +131,7 @@ func TestProjectEditConsentWorksThroughSymlinkedProjectPath(t *testing.T) {
 	link := filepath.Join(base, "link")
 	require.NoError(t, os.Symlink(real, link))
 	s := NewPermissionService().(*permissionService)
-	require.NoError(t, s.SetApprovalPolicy("session", ApprovalProjectEdits, link))
+	require.NoError(t, s.SetApprovalPolicy("session", ApprovalSandboxed, link))
 	opts := CreatePermissionRequest{SessionID: "session", ToolName: "write", Action: "write", Path: link, Params: map[string]string{"diff": "x"}}
 
 	require.True(t, RequestProjectEdit(context.Background(), s, opts, filepath.Join(link, "src", "main.go")))
@@ -141,4 +143,38 @@ func TestProjectEditConsentWorksThroughSymlinkedProjectPath(t *testing.T) {
 	require.NoError(t, os.Remove(link))
 	require.NoError(t, os.Symlink(other, link))
 	require.False(t, s.projectEditAllowed(context.Background(), opts, filepath.Join(link, "src", "main.go")))
+}
+
+func TestLevelsFreeOnlyWhatTheSandboxConfines(t *testing.T) {
+	root := t.TempDir()
+	_, err := config.Load(root, false)
+	require.NoError(t, err)
+	config.Get().Security.Sandbox = "bubblewrap"
+	s := NewPermissionService()
+	policies := s.(ApprovalPolicies)
+	opts := CreatePermissionRequest{SessionID: "levels", Path: root, ToolName: "bash", Action: "execute"}
+	free := func(needed ApprovalPolicy) bool { return RequestAtLevel(context.Background(), s, opts, needed) }
+
+	require.False(t, free(ApprovalSandboxed), "no chosen level confirms everything, as in a headless run")
+	require.NoError(t, policies.SetApprovalPolicy(opts.SessionID, ApprovalSandboxed, root))
+	require.True(t, free(ApprovalSandboxed))
+	require.False(t, free(ApprovalAuto))
+	require.False(t, s.Request(context.Background(), opts), "anything outside the sandbox keeps asking")
+
+	require.NoError(t, policies.SetApprovalPolicy(opts.SessionID, ApprovalAuto, root))
+	require.True(t, free(ApprovalAuto))
+	require.False(t, free(ApprovalFull), "general network stays a question")
+
+	config.Get().Security.Sandbox = "none"
+	if !shell.AlreadySandboxed() {
+		require.False(t, free(ApprovalSandboxed), "without a sandbox nothing confines the command")
+		require.False(t, free(ApprovalAuto))
+	}
+
+	require.False(t, FullAccess(s, opts.SessionID))
+	require.NoError(t, policies.SetApprovalPolicy(opts.SessionID, ApprovalFull, root))
+	require.True(t, FullAccess(s, opts.SessionID))
+	require.True(t, s.Request(context.Background(), opts))
+	require.NoError(t, policies.SetApprovalPolicy(opts.SessionID, ApprovalPrompt, root))
+	require.False(t, s.Request(context.Background(), opts), "leaving full access revokes it at once")
 }

@@ -14,9 +14,12 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/tools"
+	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/raulaguila/opcode/internal/transcript"
+	"github.com/raulaguila/opcode/internal/workflow"
 )
 
 // sessionDay groups conversations by when they last changed.
@@ -60,6 +63,7 @@ type sessionsDialog struct {
 	showArchived bool
 	renaming     bool
 	draft        string
+	clearing     bool // the first Ctrl+L asked for confirmation
 	acting       bool // → moved from the list to the preview's buttons
 	action       int  // the button Enter presses while acting
 	previews     map[string]preview
@@ -106,7 +110,7 @@ func (d *sessionsDialog) catalog() *session.Catalog {
 
 // reload reads the conversations again and keeps the selection on keep.
 func (d *sessionsDialog) reload(m *Model, keep string) {
-	d.legend = textFor("Enter abrir · → ações · Ctrl+R renomear · Ctrl+E exportar · Ctrl+A arquivar · Ctrl+H arquivadas · Esc fechar", "Enter open · → actions · Ctrl+R rename · Ctrl+E export · Ctrl+A archive · Ctrl+H archived · Esc close")
+	d.legend = textFor("Enter abrir · → ações · Ctrl+R renomear · Ctrl+E exportar · Ctrl+A arquivar · Ctrl+H arquivadas · Ctrl+L limpar · Esc fechar", "Enter open · → actions · Ctrl+R rename · Ctrl+E export · Ctrl+A archive · Ctrl+L clear · Ctrl+H archived · Esc close")
 	list, err := m.app.Sessions.List(context.Background())
 	if err != nil {
 		m.notice = err.Error()
@@ -181,6 +185,10 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, true
 	}
 	key := msg.String()
+	if key == "ctrl+l" {
+		return nil, d.clear(m)
+	}
+	d.clearing = false
 	switch key {
 	case "right":
 		d.action = min(d.action+1, 3)
@@ -249,6 +257,37 @@ func (d *sessionsDialog) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		d.reload(m, "")
 	}
 	return nil, true
+}
+
+// clear deletes every conversation but the open and the archived ones, and
+// the running ones; deleting cannot be undone, so it takes a second press.
+func (d *sessionsDialog) clear(m *Model) bool {
+	var doomed []session.Session
+	for _, item := range d.list.Items {
+		s := item.Value.(session.Session)
+		if s.ID != m.session.ID && !d.archived[s.ID] && (m.app.CoderAgent == nil || !m.app.CoderAgent.IsSessionBusy(s.ID)) {
+			doomed = append(doomed, s)
+		}
+	}
+	switch {
+	case len(doomed) == 0:
+		m.info = textFor("Nenhuma conversa para limpar", "No conversations to clear")
+	case !d.clearing:
+		d.clearing = true
+		m.notice = fmt.Sprintf(textFor("Ctrl+L de novo apaga %d conversas para sempre; arquivadas ficam. Outra tecla cancela", "Ctrl+L again deletes %d conversations for good; archived ones stay. Any other key cancels"), len(doomed))
+	default:
+		d.clearing, m.notice = false, ""
+		for _, s := range doomed {
+			if err := m.app.Sessions.Delete(context.Background(), s.ID); err != nil {
+				m.notice = err.Error()
+				break
+			}
+		}
+		m.numbered = "" // the header's count changed
+		m.info = fmt.Sprintf(textFor("%d conversas apagadas", "%d conversations deleted"), len(doomed))
+		d.reload(m, m.session.ID)
+	}
+	return true
 }
 
 func (d *sessionsDialog) rename(m *Model, item Item) {
@@ -416,9 +455,25 @@ func planning(m *Model, id string) bool {
 	return false
 }
 
+// markLast makes this conversation the one --resume finds; only a sent message
+// earns that, so opening one to read it changes nothing.
+func (m *Model) markLast() {
+	if cfg := config.Get(); cfg != nil && m.session.ID != "" {
+		if err := session.NewCatalog(cfg.WorkingDir, cfg.Data.Directory).Activate(m.session.ID); err != nil {
+			logging.Warn("Could not record the last conversation", "error", err)
+		}
+	}
+}
+
 func (m *Model) openSession(s session.Session) {
 	m.dialog = nil
+	m.leaveFullAccess()
+	m.foldPlan, m.task = false, workflow.Task{}
 	m.session, m.notice, m.info = s, "", ""
+	// The footer's choice follows you; the service keeps it per conversation.
+	if policies, ok := m.app.Permissions.(permission.ApprovalPolicies); ok && policies.ApprovalPolicy(s.ID) != m.policy {
+		m.setApproval(m.policy)
+	}
 	m.messages, m.version = nil, m.version+1
 	if messages, err := m.app.Messages.List(context.Background(), s.ID); err != nil {
 		// An empty screen would look like a lost conversation.
@@ -428,5 +483,5 @@ func (m *Model) openSession(s session.Session) {
 	}
 	m.busy = m.app.CoderAgent != nil && m.app.CoderAgent.IsSessionBusy(s.ID)
 	m.follow = true
-	m.refresh()
+	m.poll() // nothing else reads the plan of a conversation at rest
 }

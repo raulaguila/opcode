@@ -367,7 +367,10 @@ func (g *generationState) taskCompletionProblem(task workflow.Task) string {
 		problem = "A structured saved plan was explicitly requested, but no valid objective and steps were saved. Call update_plan using its advertised argument schema to save objective, 1–24 steps and at least one criterion, then finish_task as planned. If unable to save the plan, mark the task blocked or partial instead of claiming success."
 	}
 	if task.Objective != "" && task.Status == "in_progress" {
-		problem = "An active plan remains unfinished. Update the steps and call finish_task (planned in plan mode, completed or blocked in execute mode)."
+		problem = "An active plan remains unfinished. Update the steps and call finish_task (planned in plan mode; completed, partial or blocked in execute mode)."
+		if len(task.Steps) > 0 && !slices.ContainsFunc(task.Steps, func(step workflow.Step) bool { return step.Status != "completed" }) {
+			problem = "Every step is completed but finish_task has not succeeded. Call finish_task now; if it refused completed, fix what its error names or call it with status partial and explain why."
+		}
 	}
 	if g.run.mode == workflow.Execute && (task.Changed || (g.run.contract != nil && len(g.run.contract.Checks) > 0)) {
 		if why := task.ValidationProblem(checkCommands()); why != "" {

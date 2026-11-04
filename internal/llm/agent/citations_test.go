@@ -41,7 +41,7 @@ func TestExplanationRepairsMissingCitationWithoutRepeatingRead(t *testing.T) {
 
 func TestInitialSourceReadsPreserveVerifiableReceiptsThroughRepair(t *testing.T) {
 	for _, scenario := range []struct{ file, source, request, answer string }{
-		{"README.md", "# IgarapeWatch\nSensores MQTT e SQLite.\n", "Explique em português o projeto atual usando os arquivos reais. Cite IgarapeWatch, MQTT, SQLite e o arquivo consultado.", "IgarapeWatch recebe sensores MQTT e armazena SQLite (README.md:1-2)."},
+		{"README.md", "# IgarapeWatch\nSensores MQTT e SQLite.\n", "Explique em português o projeto atual usando @README.md real. Cite IgarapeWatch, MQTT, SQLite e o arquivo consultado.", "IgarapeWatch recebe sensores MQTT e armazena SQLite (README.md:1-2)."},
 		{"main.py", "def add(a,b):\n    return a - b\n", "Localize no projeto a causa de add(2,3) retornar -1. Leia main.py e explique sem editar arquivos.", "Em main.py:2, add subtrai os argumentos em vez de somá-los."},
 	} {
 		t.Run(scenario.file, func(t *testing.T) {
@@ -61,7 +61,7 @@ func TestInitialSourceReadsPreserveVerifiableReceiptsThroughRepair(t *testing.T)
 			repair := nextGeneration(t, p)
 			notice := repair.history[len(repair.history)-1].Content().Text
 			require.Contains(t, notice, scenario.file+":1-2")
-			require.Contains(t, notice, scenario.request)
+			require.Contains(t, notice, strings.ReplaceAll(scenario.request, "@", "./"), "the mention reaches the model as a path")
 			require.Contains(t, notice, "not a new user task")
 			repair.reply <- provider.ProviderResponse{Content: scenario.answer, FinishReason: message.FinishReasonEndTurn}
 			result := finishGeneration(t, done)

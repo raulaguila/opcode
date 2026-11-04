@@ -14,6 +14,9 @@ import (
 )
 
 func TestNativeSmokeSandboxAndCredentialDenial(t *testing.T) {
+	if AlreadySandboxed() {
+		t.Skip("namespaces do not nest inside the sandbox")
+	}
 	home, root := t.TempDir(), t.TempDir()
 	for _, name := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME"} {
 		t.Setenv(name, home)

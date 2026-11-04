@@ -3,11 +3,13 @@ package ui
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/interaction"
+	"github.com/raulaguila/opcode/internal/workflow"
 )
 
 // question is the agent's pending question and the answer being composed.
@@ -47,10 +49,18 @@ func (m *Model) poll() {
 	}
 	if m.app.Workflows != nil {
 		if task, err := m.app.Workflows.Get(context.Background(), m.session.ID); err == nil {
-			m.task = task
+			m.setTask(task)
 		}
 	}
 	m.layout()
+}
+
+// setTask folds a finished plan into a receipt; a new step brings it back.
+func (m *Model) setTask(task workflow.Task) {
+	if planDone(task.Steps) != planDone(m.task.Steps) {
+		m.foldPlan = planDone(task.Steps)
+	}
+	m.task = task
 }
 
 func (m *Model) questionKey(msg tea.KeyPressMsg) tea.Cmd {
@@ -236,6 +246,12 @@ func indentBlock(block string) string {
 	return strings.Join(lines, "\n")
 }
 
+const (
+	planFoldArrow    = "▴"
+	planUnfoldArrow  = "▾"
+	planArrowColumns = 8 // wider than the arrow, for a forgiving click
+)
+
 // planView is the proposal's plan card: title with the count, the mode in the
 // corner, a progress row and the steps.
 func (m *Model) planView() string {
@@ -249,13 +265,17 @@ func (m *Model) planView() string {
 	bg := P.PlanCard
 	box := Box{
 		Title: fmt.Sprintf(textFor("Plano · %d de %d concluídas", "Plan · %d of %d completed"), done, len(steps)),
-		Meta:  modeLabel(string(m.task.Mode)) + textFor(" · tarefa salva", " · task saved"),
+		Meta:  modeLabel(string(m.task.Mode)) + textFor(" · tarefa salva ", " · task saved ") + planFoldArrow,
 		Width: m.width - 2*gutter + 2, PadX: 1, PadY: 1, Accent: P.Plan, TitleColor: P.Plan, Background: bg, Outer: P.Ground,
 	}
 	inner := box.Inner()
 	filled := done * inner / max(1, len(steps))
 	rows := []string{on(bg, P.Plan).Render(strings.Repeat("━", filled)) + on(bg, P.Rule).Render(strings.Repeat("━", inner-filled)), ""}
+	first, last := planWindow(steps, max(3, m.height/2-10))
 	for i, step := range steps {
+		if i < first || i >= last {
+			continue
+		}
 		rowBg, mark, markColor := bg, "○", P.Faint
 		bar := on(bg, bg).Render(" ")
 		title := on(rowBg, P.Text).Render(fmt.Sprintf("%d. %s", i+1, step.Title))
@@ -274,6 +294,9 @@ func (m *Model) planView() string {
 		}
 		rows = append(rows, Line(row, inner, rowBg))
 	}
+	if hidden := len(steps) - (last - first); hidden > 0 {
+		rows = append(rows, on(bg, P.Faint).Render(fmt.Sprintf(textFor("   ↑ %d · ↓ %d etapas fora da vista", "   ↑ %d · ↓ %d steps out of view"), first, len(steps)-last)))
+	}
 	keys := KeyRow(textFor("Alt+↑↓ rolar · /plan recolher", "Alt+↑↓ scroll · /plan fold"), inner, bg)
 	if objective := strings.TrimSpace(m.task.Objective); objective != "" {
 		keys[1] = Spread(on(bg, P.Muted).Render(textFor("Resultado esperado: ", "Expected result: ")+objective), on(bg, P.Strong).Bold(true).Render("Alt+↑↓")+on(bg, P.Muted).Render(textFor(" rolar  ", " scroll  "))+on(bg, P.Strong).Bold(true).Render("/plan")+on(bg, P.Muted).Render(textFor(" recolher", " fold")), inner, bg)
@@ -285,7 +308,26 @@ func (m *Model) planView() string {
 	return indentBlock(box.Render(strings.Join(rows, "\n")))
 }
 
-// planStrip is the folded plan: progress, the current step and the key.
+// planDone says every step finished; a blocked or skipped one keeps the plan open.
+func planDone(steps []workflow.Step) bool {
+	return len(steps) > 0 && !slices.ContainsFunc(steps, func(step workflow.Step) bool { return step.Status != "completed" })
+}
+
+// planWindow keeps a long plan from filling the screen: limit steps around the
+// first unfinished one, with the step before it for context.
+func planWindow(steps []workflow.Step, limit int) (first, last int) {
+	if len(steps) <= limit {
+		return 0, len(steps)
+	}
+	active := slices.IndexFunc(steps, func(step workflow.Step) bool { return step.Status != "completed" })
+	if active < 0 {
+		active = len(steps) - 1
+	}
+	first = min(max(0, active-1), len(steps)-limit)
+	return first, first + limit
+}
+
+// planStrip is the folded plan: progress, the current step and the arrow.
 func (m *Model) planStrip() string {
 	steps := m.task.Steps
 	done, current := 0, ""
@@ -299,7 +341,10 @@ func (m *Model) planStrip() string {
 		}
 	}
 	head := on(P.Surface, P.Plan).Render(fmt.Sprintf(textFor(" Plano %d/%d ", " Plan %d/%d "), done, len(steps)))
-	tail := on(P.Surface, P.Muted).Render(" /plan ")
+	if planDone(steps) {
+		head = on(P.Surface, P.Success).Render(fmt.Sprintf(textFor(" ✓ Plano concluído · %d/%d ", " ✓ Plan completed · %d/%d "), done, len(steps)))
+	}
+	tail := on(P.Surface, P.Plan).Render(" " + planUnfoldArrow + " ")
 	middle := on(P.Surface, P.Muted).Render(" " + current)
 	strip := Spread(head+middle, tail, m.width-2*gutter, P.Surface)
 	return on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter)) + strip + on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter))
@@ -312,12 +357,43 @@ func (m *Model) workView() string {
 		return m.approvalView()
 	case m.question != nil && !m.answeringLater():
 		return m.questionView()
-	case len(m.task.Steps) > 0 && m.showPlan:
-		return m.planView()
-	case len(m.task.Steps) > 0 && m.width >= 40:
-		return m.planStrip()
 	}
-	return ""
+	rows := make([]string, 0, 2)
+	switch {
+	case len(m.task.Steps) == 0 || m.width < 40:
+	case m.foldPlan:
+		rows = append(rows, m.planStrip())
+	default:
+		rows = append(rows, m.planView())
+	}
+	if outcome := m.outcomeRow(); outcome != "" {
+		rows = append(rows, outcome)
+	}
+	return strings.Join(rows, "\n")
+}
+
+// outcomeRow says a task stopped short; the answer alone may not make it clear.
+func (m *Model) outcomeRow() string {
+	var label string
+	tone := P.Warning
+	switch m.task.Status {
+	case "partial":
+		label = textFor("◐ Tarefa parcial", "◐ Task partial")
+	case "blocked":
+		label, tone = textFor("■ Tarefa bloqueada", "■ Task blocked"), P.Danger
+	default:
+		return ""
+	}
+	if m.busy || m.width < 20 || m.task.Summary == workflow.StaleValidation {
+		return ""
+	}
+	row := " " + label
+	if summary := strings.Join(strings.Fields(m.task.Summary), " "); summary != "" {
+		row += " · " + summary
+	}
+	inner := m.width - 2*gutter
+	pad := on(P.Ground, P.Ground).Render(strings.Repeat(" ", gutter))
+	return pad + Line(on(P.Surface, tone).Render(ansi.Truncate(row, inner, "…")), inner, P.Surface) + pad
 }
 
 func (m *Model) togglePlan() tea.Cmd {
@@ -326,9 +402,23 @@ func (m *Model) togglePlan() tea.Cmd {
 		m.info = textFor("Sem plano ainda · peça um em Planejar", "No plan yet · ask for one in Plan")
 		return nil
 	}
-	m.showPlan = !m.showPlan
+	m.foldPlan = !m.foldPlan
 	m.layout()
 	return nil
+}
+
+// clickPlan folds or unfolds the plan from the arrow at the card's top right.
+func (m *Model) clickPlan(x, y int) bool {
+	work := m.workView()
+	if work == "" || len(m.task.Steps) == 0 || m.approval != nil || m.question != nil && !m.answeringLater() {
+		return false
+	}
+	top := m.height - footerRows - m.composerRows() - len(m.mention) - strings.Count(work, "\n") - 1
+	if y != top || x < m.width-planArrowColumns {
+		return false
+	}
+	m.togglePlan()
+	return true
 }
 
 // failureView is the proposal's error card: what stopped, that the draft and
@@ -373,6 +463,8 @@ func failureTitle(reason string) string {
 		return textFor("O modelo repetiu a mesma ação sem progresso", "The model repeated the same action without progress")
 	case strings.Contains(lower, "step limit"), strings.Contains(lower, "max steps"):
 		return textFor("Limite de etapas atingido", "Step limit reached")
+	case strings.Contains(lower, "tool result budget"):
+		return textFor("Limite de saída de ferramentas do turno atingido", "This turn's tool output limit was reached")
 	case strings.Contains(lower, "context budget exceeded"):
 		return textFor("A conversa não cabe mais no modelo", "The conversation no longer fits the model")
 	}
@@ -415,6 +507,8 @@ func cause(reason string) string {
 		return textFor("A mesma ação falhou várias vezes do mesmo jeito.", "The same action failed the same way several times.")
 	case strings.Contains(lower, "step limit"), strings.Contains(lower, "max steps"):
 		return textFor("A tarefa usou todas as etapas permitidas.", "The task used every step it was allowed.")
+	case strings.Contains(lower, "tool result budget"):
+		return textFor("Retomar continua pelo plano salvo; em tarefas grandes, aumente runtime.toolBudget.", "Resume continues from the saved plan; for large tasks, raise runtime.toolBudget.")
 	case strings.Contains(lower, "context budget exceeded"):
 		return textFor("Use Compactar conversa (/compact) e retome, ou troque de modelo.", "Use Compact conversation (/compact) and resume, or change model.")
 	}

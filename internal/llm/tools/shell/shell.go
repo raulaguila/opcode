@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -66,7 +67,7 @@ func Environment() []string {
 	if cfg := config.Get(); cfg != nil {
 		allowed = append(allowed, cfg.Security.EnvAllow...)
 	}
-	values := map[string]string{"GOFLAGS": "-buildvcs=false", "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.DevNull, "HOME": os.DevNull, "TMPDIR": os.TempDir(), "BASH_ENV": os.DevNull, "ENV": os.DevNull, "GOCACHE": filepath.Join(os.TempDir(), "opcode-command-go-build"), "GOMODCACHE": filepath.Join(os.TempDir(), "opcode-command-go-mod")}
+	values := map[string]string{"GOFLAGS": "-buildvcs=false -modcacherw", "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.DevNull, "HOME": os.DevNull, "TMPDIR": os.TempDir(), "BASH_ENV": os.DevNull, "ENV": os.DevNull, "GOCACHE": filepath.Join(os.TempDir(), "opcode-command-go-build"), "GOMODCACHE": filepath.Join(os.TempDir(), "opcode-command-go-mod")}
 	values["GOPATH"] = filepath.Join(os.TempDir(), "opcode-command-go-path")
 	for _, name := range allowed {
 		if name != "BASH_ENV" && name != "ENV" && name != "HOME" {
@@ -121,6 +122,20 @@ func WorktreeCommand(ctx context.Context, cwd string, args []string) (*exec.Cmd,
 func PTYCommand(ctx context.Context, cwd, command string) (*exec.Cmd, error) {
 	return commandProcess(ctx, cwd, command, false, true, false)
 }
+
+// AlreadySandboxed says this process runs inside a command sandbox.
+func AlreadySandboxed() bool {
+	_, err := os.Lstat(sandboxMarker)
+	return err == nil
+}
+
+// SandboxActive says commands here run confined; approval levels that free
+// commands rest on it.
+func SandboxActive() bool {
+	cfg := config.Get()
+	return cfg == nil || cfg.Security.Sandbox != "none" || AlreadySandboxed()
+}
+
 func commandProcess(ctx context.Context, cwd, command string, readGit, interactive, writeGit bool) (*exec.Cmd, error) {
 	cfg := config.Get()
 	path := "/bin/bash"
@@ -136,6 +151,10 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 		sandbox = cfg.Security.Sandbox
 	}
 	args = append(args, "-c", command)
+	// A command inside the sandbox stays confined by it; namespaces rarely nest.
+	if on, set := ctx.Value(commandSandboxKey{}).(bool); AlreadySandboxed() || set && !on {
+		sandbox = "none"
+	}
 	cache, err := processCommandCache(ctx, cwd, readGit || writeGit)
 	if err != nil {
 		return nil, err
@@ -152,6 +171,9 @@ func commandProcess(ctx context.Context, cwd, command string, readGit, interacti
 	}
 	cmd.Dir = cwd
 	cmd.Env = Environment()
+	if sandbox != "none" {
+		cmd.Env = append(slices.DeleteFunc(cmd.Env, func(entry string) bool { return strings.HasPrefix(entry, "HOME=") }), "HOME="+sandboxHome)
+	}
 	if cache != "" {
 		if sandbox != "none" {
 			cache = sandboxCachePath
@@ -204,8 +226,9 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 			wrapped = append(wrapped, "--ro-bind", dir, dir)
 		}
 	}
-	wrapped = append(wrapped, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", "/etc")
-	for _, entry := range []string{"/etc/ssl/certs", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf"} {
+	wrapped = append(wrapped, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--dir", sandboxHome, "--ro-bind", os.DevNull, sandboxMarker, "--dir", "/etc")
+	// Debian's alternatives hold awk, which and others as links under /etc.
+	for _, entry := range []string{"/etc/alternatives", "/etc/ssl/certs", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf"} {
 		if _, err := os.Stat(entry); err == nil {
 			wrapped = append(wrapped, "--ro-bind", entry, entry)
 		}
@@ -234,6 +257,14 @@ func sandboxCommand(ctx context.Context, cwd, path string, args []string, cfg *c
 	return exec.CommandContext(ctx, binary, wrapped...), nil
 
 }
+
+// sandboxHome is empty and vanishes with the command, so tools that need a
+// home work without seeing the user's. Creating sandboxMarker on the host
+// takes root, so a project cannot fake it to skip the sandbox.
+const (
+	sandboxHome   = "/tmp/opcode-home"
+	sandboxMarker = "/.opcode-sandbox"
+)
 
 // maskInspectionLimit bounds the first walk of a workspace; later commands
 // reuse its result while no inspected directory changes.
@@ -344,6 +375,11 @@ func (m *sandboxCredentialMasks) visit(name string, d os.DirEntry, err error) er
 	relative, err := filepath.Rel(m.cwd, name)
 	if err != nil {
 		return err
+	}
+	// Downloaded modules and build output hold no user secrets, but packages
+	// called credentials and test keys: masking them breaks builds.
+	if m.destination != m.cwd && (relative == "build" || relative == filepath.Join("path", "pkg", "mod")) {
+		return filepath.SkipDir
 	}
 	target := name
 	if m.destination != "" {

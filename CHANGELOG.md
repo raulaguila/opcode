@@ -2,6 +2,53 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- Saída de comandos compacta, sempre ligada: cores, progresso, repetições e
+  linhas de sucesso de `go`, `cargo`, `pytest`, `npm`, `pip`, `git`, `docker`,
+  `make`, `apt` e `ls -l` ficam fora do contexto; `go test` resume em contagem
+  de pacotes, `git status`, `git log` e `git diff` ficam curtos, `grep` e linters
+  agrupam por arquivo, `find` agrupa por pasta, JSON perde a indentação, tabelas
+  perdem o preenchimento e logs juntam linhas iguais;
+  erros ficam, e a saída completa é guardada em artefato.
+- `finish_task` não trava mais em projetos com binários grandes ou cache de
+  comandos: arquivos acima de 16 MiB entram na verificação por tamanho e data,
+  e `.opcode/command-cache` fica fora. Quando a verificação falha de fato, o
+  modelo é orientado a concluir como parcial em vez de repetir a chamada.
+- Leitura automática removida: antes da primeira resposta só são lidos arquivos
+  citados por nome ou com `@`; o resto o modelo busca sozinho. A busca ignora
+  palavras comuns (`com`, `entao`, `codigo`), com ou sem acento, e `modelo`
+  procura `model` e `provider`.
+- Chat: `$\rightarrow$` e símbolos simples aparecem como `→`; respostas ficam
+  no fundo da aplicação em todas as linhas, definido em um só lugar
+  (`theme.Ground`).
+- Título no topo abre as conversas; Ctrl+L limpa as que não estão abertas,
+  arquivadas ou em execução, pedindo confirmação.
+- `--resume` abre a última conversa da interface nova; se ela foi apagada ou
+  arquivada, abre a mais recente que restou.
+- `finish_task`: fecha a única etapa em andamento ao concluir, e o erro de etapas
+  abertas agora nomeia quais são e o próximo passo.
+- Tarefa parcial ou bloqueada agora aparece acima do campo de mensagem, com o
+  resumo.
+- Plano: check não configurado não recusa mais o plano inteiro; plano aparece ao
+  abrir ou retomar conversa e logo após cada ferramenta, sem esperar o relógio.
+- Plano: aparece aberto por padrão, com seta para recolher no canto superior
+  direito; plano longo mostra só as etapas em torno da atual, e plano concluído
+  vira uma faixa que a seta reabre.
+- Aprovação: três níveis com fronteira no sandbox. **Pedir aprovação** libera
+  edições do projeto e comandos no sandbox e pede internet e arquivos fora do
+  projeto; **Aprovar por mim** também restaura dependências declaradas; **Acesso
+  total** tira sandbox e pedidos, exige segundo Enter, vale só na conversa e só
+  no terminal. Sem sandbox, todo comando volta a pedir. `--approval` agora
+  aceita `sandbox` e `auto`; `project-edits` saiu para não ampliar scripts.
+- Plano: passos atrás do atual ficam concluídos e passos terminados não somem
+  quando o modelo reescreve o plano; um plano reenviado sem mudança não conta
+  como progresso e pede a próxima ação.
+- Sandbox: `awk`, `which` e outros comandos de `/etc/alternatives` funcionam;
+  `HOME` é uma pasta vazia e temporária; pacotes `credentials` de módulos
+  compilam; `go test` dentro da sandbox passa neste projeto.
+- Executar já traz `edit`, evitando edições por `sed`.
+- `runtime.toolBudget` padrão sobe de 96 mil para 384 mil bytes; o card
+  **Parado** explica esse limite.
+
 - Automação: `-p` aceita o pedido pela entrada padrão; `-f json` traz
   `outcome`, `session_id`, `files_changed` e `checks`; saída 2 para tarefa
   parcial ou bloqueada, 3 para limite de custo e 130 para cancelada. Sem

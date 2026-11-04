@@ -15,7 +15,6 @@ import (
 	"github.com/raulaguila/opcode/internal/fileutil"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/lsp"
-	"github.com/raulaguila/opcode/internal/permission"
 )
 
 // Settings sections, in the proposal's nav order.
@@ -461,24 +460,21 @@ func integrationWarnings() int {
 
 // approvalRows offer the policy of this conversation; it is not saved.
 func (p *settingsPanel) approvalRows(m *Model, width int) []string {
-	options := []struct {
-		label  string
-		policy permission.ApprovalPolicy
-	}{{textFor("Pedir", "Ask"), permission.ApprovalPrompt}, {textFor("Editar no projeto", "Project edits"), permission.ApprovalProjectEdits}}
 	var control string
-	for _, option := range options {
-		if option.policy == m.policy {
-			control += on(P.Segment, P.Strong).Bold(true).Render(" " + option.label + " ")
+	for _, policy := range approvalLevels {
+		if policy == m.policy {
+			control += on(P.Segment, P.Strong).Bold(true).Render(" " + approvalName(policy) + " ")
 		} else {
-			control += on(P.Raised, P.Muted).Render(" " + option.label + " ")
+			control += on(P.Raised, P.Muted).Render(" " + approvalName(policy) + " ")
 		}
 	}
 	bg := P.Selected
 	return []string{
-		on(P.Surface, P.Ask).Render("▌") + Spread(on(bg, P.Strong).Render(" "+textFor("Política desta conversa", "This conversation's policy")), control+on(bg, bg).Render(" "), width-1, bg),
-		on(P.Surface, P.Ask).Render("▌") + Line(on(bg, P.Muted).Render(" "+textFor("Editar no projeto aprova edições de arquivos do projeto sem perguntar", "Project edits approves edits to project files without asking")), width-1, bg),
+		on(P.Surface, P.Ask).Render("▌") + Line(on(bg, P.Strong).Render(" "+textFor("Política desta conversa", "This conversation's policy")), width-1, bg),
+		on(P.Surface, P.Ask).Render("▌") + Line(on(bg, bg).Render(" ")+control, width-1, bg),
+		on(P.Surface, P.Ask).Render("▌") + Line(on(bg, P.Muted).Render(" "+textFor("Enter abre o menu com o que cada nível libera", "Enter opens the menu with what each level frees")), width-1, bg),
 		"",
-		on(P.Surface, P.Muted).Render(ansi.Truncate(textFor("Comandos, rede, exclusões e caminhos fora do projeto continuam pedindo aprovação.", "Commands, network, deletions and outside paths still ask for approval."), width, "…")),
+		on(P.Surface, P.Muted).Render(ansi.Truncate(textFor("Sem sandbox, todo comando pede aprovação.", "Without the sandbox, every command asks for approval."), width, "…")),
 	}
 }
 
@@ -686,11 +682,7 @@ func (p *settingsPanel) key(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		return nil, true
 	case sectionApproval:
 		if key == "right" || key == "space" || key == "enter" {
-			if m.policy == permission.ApprovalProjectEdits {
-				m.setApproval(permission.ApprovalPrompt)
-			} else {
-				m.setApproval(permission.ApprovalProjectEdits)
-			}
+			return m.openApproval(), true
 		}
 		return nil, true
 	}

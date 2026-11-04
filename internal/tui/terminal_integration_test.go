@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"io"
 	"os"
 	"path/filepath"
@@ -98,6 +99,9 @@ func isolateTUIStorage(t *testing.T) {
 }
 
 func TestUserApprovesTerminalEntersInputAndReturnsToChat(t *testing.T) {
+	if shell.AlreadySandboxed() {
+		t.Skip("the terminal needs its own sandbox")
+	}
 	if runtime.GOOS == "windows" {
 		t.Skip("interactive PTYs require Unix")
 	}

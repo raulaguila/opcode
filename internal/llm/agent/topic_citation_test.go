@@ -18,11 +18,11 @@ func TestProjectExplanationCannotCiteOnlyImplementationManifest(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# Project\nFeatures are described here.\n"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.test/project\n"), 0600))
 	a.tools = []tools.BaseTool{tools.NewViewTool(nil)}
-	done, err := a.Run(context.Background(), "s", "o que pode me falar do projeto atual?")
+	done, err := a.Run(context.Background(), "s", "o que pode me falar do projeto atual em @README.md ?")
 	require.NoError(t, err)
 	nextGeneration(t, p).reply <- provider.ProviderResponse{Content: "As funcionalidades estão em go.mod:1.", FinishReason: message.FinishReasonEndTurn}
 	repair := nextGeneration(t, p)
-	require.Contains(t, repair.history[len(repair.history)-1].Content().Text, "topic source")
+	require.Contains(t, repair.history[len(repair.history)-1].Content().Text, "read the relevant source")
 	repair.reply <- provider.ProviderResponse{Content: "As funcionalidades estão descritas em README.md:1-2.", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 }

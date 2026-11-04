@@ -31,20 +31,20 @@ func (m statusCmp) modeLabel(state util.FooterState) string {
 
 func (m statusCmp) approvalLabel(state util.FooterState) string {
 	if m.width >= 160 {
-		if state.ApprovalPolicy == "project_edits" {
-			return config.Text("Aprovação: editar no projeto", "Approval: project edits")
+		if state.ApprovalPolicy == "sandboxed" {
+			return config.Text("Aprovação: pedir aprovação", "Approval: ask for approval")
 		}
-		return config.Text("Aprovação: pedir", "Approval: ask")
+		return config.Text("Aprovação: confirmar tudo", "Approval: confirm all")
 	}
 	// One concept, one name: menus call it Aprovação, so the footer abbreviates that.
 	prefix := "A:"
 	if m.width >= 110 {
 		prefix = config.Text("Aprov.: ", "Appr.: ")
 	}
-	if state.ApprovalPolicy == "project_edits" {
-		return prefix + config.Text("editar", "edit")
+	if state.ApprovalPolicy == "sandboxed" {
+		return prefix + config.Text("pedir", "ask")
 	}
-	return prefix + config.Text("pedir", "ask")
+	return prefix + config.Text("confirmar", "confirm")
 }
 
 func (m statusCmp) controlWidths(state util.FooterState) (mode, approval int) {

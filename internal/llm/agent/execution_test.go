@@ -116,3 +116,14 @@ func TestRequestHistoryIncludesOnlyExecutionPolicyMetadata(t *testing.T) {
 	require.Contains(t, string(raw), `"sandbox_network_enabled":true`)
 	require.Contains(t, string(raw), `"host_network_without_sandbox":false`)
 }
+
+func TestPlanKeepsFinishedWorkWhenASmallModelRewritesIt(t *testing.T) {
+	previous := []workflow.Step{{Title: "Ler", Status: "completed"}, {Title: "Editar", Status: "in_progress"}}
+	steps := []workflow.Step{{Title: "Editar", Status: "pending"}, {Title: "Testar", Status: "in_progress"}, {Title: "Publicar", Status: "pending"}}
+	require.Equal(t, []workflow.Step{{Title: "Ler", Status: "completed"}, {Title: "Editar", Status: "completed"}, {Title: "Testar", Status: "in_progress"}, {Title: "Publicar", Status: "pending"}}, carryPlanProgress(previous, steps), "steps behind the current one are done, and a dropped finished step stays")
+
+	reopened := carryPlanProgress(previous[:1], []workflow.Step{{Title: "Ler", Status: "in_progress"}})
+	require.Equal(t, "in_progress", reopened[0].Status, "a finished step can be reopened on purpose")
+	resent := carryPlanProgress(previous[:1], []workflow.Step{{Title: "Ler", Status: "pending"}})
+	require.Equal(t, "completed", resent[0].Status)
+}

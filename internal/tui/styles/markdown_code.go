@@ -19,7 +19,7 @@ func markdownCodeBlock(node ast.Node) bool {
 
 func markdownCodeFrame(width int) lipgloss.Style {
 	t := theme.CurrentTheme()
-	return BaseStyle().Background(t.BackgroundSecondary()).BorderLeft(true).
+	return BaseStyle().Background(t.BackgroundSecondary()).BorderLeft(true).BorderBackground(theme.Surface()).
 		BorderStyle(lipgloss.NormalBorder()).BorderForeground(t.BorderNormal()).
 		Padding(0, 1).Width(max(1, width-defaultMargin))
 }

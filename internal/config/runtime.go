@@ -25,7 +25,7 @@ func (r RuntimeConfig) Defaults() RuntimeConfig {
 		r.MaxSeconds = 1800
 	}
 	if r.ToolBudget == 0 {
-		r.ToolBudget = 96000
+		r.ToolBudget = 384000
 	}
 	if r.FirstTokenTimeout == 0 {
 		r.FirstTokenTimeout = 300

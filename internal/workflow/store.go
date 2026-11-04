@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -187,6 +188,11 @@ func (s *Store) UpdatePlan(ctx context.Context, id, objective string, steps []St
 		return nil
 	})
 }
+
+// StaleValidation is the summary of a finished task whose files changed later:
+// its work ended, only its check receipts aged.
+const StaleValidation = "Files changed after validation"
+
 func (s *Store) Observe(ctx context.Context, id, digest string) (Task, error) {
 	return s.update(ctx, id, func(t *Task) error {
 		if digest == "" {
@@ -199,7 +205,7 @@ func (s *Store) Observe(ctx context.Context, id, digest string) (Task, error) {
 			t.Changed = true
 			if t.Status == "completed" {
 				t.Status = "blocked"
-				t.Summary = "Files changed after validation"
+				t.Summary = StaleValidation
 			}
 		}
 		t.Digest = digest
@@ -365,13 +371,25 @@ func (t *Task) validateCompletion(noChangeReason string, commands map[string]str
 	if t.Mode != Execute {
 		return fmt.Errorf("completion requires execute mode")
 	}
-	for _, step := range t.Steps {
+	var open []string
+	last := -1
+	for i, step := range t.Steps {
 		if step.Status != "completed" {
-			return fmt.Errorf("plan has incomplete steps")
+			open, last = append(open, strconv.Quote(step.Title)), i
 		}
+	}
+	// A closing step such as "report the results" ends with this very call.
+	closing := len(open) == 1 && t.Steps[last].Status == "in_progress"
+	if len(open) > 0 && !closing {
+		shown := open[:min(3, len(open))]
+		return fmt.Errorf("plan has %d incomplete step(s): %s. If they are done, mark them completed with update_plan and call finish_task again; if not, do them or finish with status partial", len(open), strings.Join(shown, ", "))
 	}
 	if problem := t.ValidationProblem(commands); problem != "" {
 		return errors.New(problem)
+	}
+	if closing {
+		t.Steps = slices.Clone(t.Steps)
+		t.Steps[last].Status = "completed"
 	}
 	return nil
 }

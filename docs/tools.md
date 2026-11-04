@@ -37,7 +37,7 @@ No Linux, o padrão exige Bubblewrap (`bwrap`). Ele fornece namespaces separados
 Se o binário ou o suporte a namespaces estiver indisponível, o comando falha. Não existe fallback automático para execução sem isolamento. Em plataformas sem esse mecanismo, ou quando o usuário optar conscientemente por execução sem isolamento, `security.sandbox: "none"` pode ser definido **na configuração global**. Nesse modo, a filtragem de ambiente continua ativa, mas o processo possui o acesso ao sistema de arquivos e à rede do usuário.
 
 - `allowNetwork: true` libera a rede dos processos isolados. O padrão é `false`. `bash` e `run_checks` também aceitam `network: true`: nesse caso há uma aprovação adicional para o comando exato antes de iniciar o processo. A concessão vale para aquele processo e seus filhos; não muda o JSON global nem libera comandos seguintes. Assim como a opção global, ela permite acessar a rede do host, incluindo serviços locais. Aprovar apenas a execução não aprova essa solicitação de rede.
-- `envAllow` acrescenta nomes de variáveis ao ambiente mínimo. Variáveis com chaves de API, tokens, senhas, proxies e opções de inicialização não são herdadas por padrão. `HOME`, `BASH_ENV` e `ENV` permanecem neutralizados; configurações de sessão do usuário não são carregadas implicitamente.
+- `envAllow` acrescenta nomes de variáveis ao ambiente mínimo. Variáveis com chaves de API, tokens, senhas, proxies e opções de inicialização não são herdadas por padrão. `BASH_ENV` e `ENV` permanecem neutralizados; na sandbox, `HOME` é uma pasta vazia e temporária, sem nada da sua conta; configurações de sessão do usuário não são carregadas implicitamente.
 - `readOnlyPaths` expõe caminhos absolutos adicionais, somente para leitura, no sandbox. Pode ser necessário para toolchains e caches instalados fora dos diretórios de sistema, ou para os metadados externos de um Git worktree. Evite expor diretórios que contenham credenciais. Para substituir os caches gerenciados de Go, configure os caminhos via `envAllow` e exponha os diretórios correspondentes.
 - `denyPaths` acrescenta padrões de caminho/nome às proteções de credenciais. As proteções padrão incluem `.env*`, configurações do Opcode, arquivos de integração, chaves privadas e diretórios usuais de credenciais. Essa classificação não detecta todo segredo que possa estar escrito em código comum.
 - `allowPrivateNetwork` controla destinos privados/loopback de `fetch` e `sourcegraph`. Não libera endereços link-local de metadata. É independente de `allowNetwork`, que trata de subprocessos.
@@ -96,11 +96,35 @@ Isso não é uma transação entre filesystem e SQLite, nem uma transação resi
 
 `bash` executa um processo independente, com diretório inicial fixo no workspace. `cd`, exports e ativação de ambientes não persistem entre chamadas; agrupe a preparação e o comando na mesma invocação quando necessário.
 
+Toda saída de `bash` e `run_checks` é compactada antes de chegar ao modelo, sem
+configuração. Em qualquer comando saem cores, barras de progresso e linhas
+repetidas (`×N`); acima de 200 linhas ficam o começo, o fim e as linhas de erro
+do meio. `go`, `cargo`, `pytest`, `npm`, `pip`, `git`, `docker`, `make`, `apt`,
+`gradle`, `mvn`, `wget` e `ls -l` também perdem as linhas de sucesso e o ruído próprios. `go test` vira a
+contagem de pacotes (`N packages passed, F failed, M without tests`), `git status` vira
+seções com letra e caminho, `git log` vira uma linha por commit (sem o corpo),
+`git diff` e `git show` perdem os cabeçalhos repetidos, `grep`, `rg` e linters
+(`tsc`, `eslint`, `ruff`, `mypy`, `golangci-lint`) agrupam por arquivo, `find`,
+`fd` e `git ls-files` listam nomes por pasta sem perder nenhum, tabelas (`docker
+ps`, `kubectl get`, `psql`, `df`) perdem o preenchimento e logs de `docker`,
+`kubectl` e `journalctl` juntam linhas que só mudam o horário. JSON inteiro
+perde a indentação, sem mudar valores, e linhas acima de 2000 bytes são cortadas.
+Falhas, panics e erros de
+compilação ficam; formato que a regra não reconhece, como `git log -p`, fica
+como veio.
+
+A saída completa vai para um artefato, que o modelo lê com `read_artifact`.
+Nenhum comando é reescrito nem repetido. Ficam como estão: ganhos abaixo de
+512 bytes, terminal interativo, comandos abortados e os filtros por ferramenta
+em comandos com pipe ou com `-cover`, `-bench`, `-json` e `--verbose`. Conteúdo
+pedido por nome (`cat`, `sed`, `head`, `tail`, `git diff`) não é cortado por
+tamanho.
+
 Os comandos do gerenciador de processos reutilizam caches de Go privados por
 projeto em `.opcode/command-cache/go/`: build, módulos e os dados de verificação
 em `GOPATH`. No sandbox, somente esse cache é montado em um caminho próprio sob
 `/tmp`; os demais dados privados continuam ocultos. O cache do terminal externo
-não é herdado automaticamente. `HOME` e credenciais continuam filtrados. A
+não é herdado automaticamente. Credenciais continuam filtradas; módulos baixados e saída de build não recebem as máscaras de credenciais, para pacotes chamados `credentials` compilarem. A
 preparação só ocorre após a aprovação do comando, e diretórios de cache por
 symlink são recusados. Pode remover esse diretório com o Opcode encerrado para
 liberar espaço; a próxima execução o recria.

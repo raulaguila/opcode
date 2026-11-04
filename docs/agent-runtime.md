@@ -156,8 +156,8 @@ automaticamente promovidos a testes aprovados. Configure os checks necessários:
 ```
 
 O hash ignora credenciais, links, armazenamento do aplicativo e diretórios de
-dependências/cache/build conhecidos. Limites: 20 mil arquivos, 128 MiB no total e
-16 MiB por arquivo. Se a impressão não puder ser produzida, não é possível
+dependências/cache/build conhecidos. `.opcode/command-cache` fica fora. Limites: 20 mil arquivos e 128 MiB no total;
+arquivos acima de 16 MiB, como binários, entram por tamanho e data. Se a impressão não puder ser produzida, não é possível
 declarar validação global/testes atuais. Arquivos grandes não relacionados não
 bloqueiam a confirmação dos arquivos afetados. Alterações externas fora do
 workspace e em diretórios
@@ -190,7 +190,7 @@ Salve uma vez na configuração do usuário ou do projeto:
     "mode": "execute",
     "maxSteps": 32,
     "maxSeconds": 1800,
-    "toolBudget": 96000,
+    "toolBudget": 384000,
     "firstTokenTimeout": 300,
     "idleTimeout": 90
   }

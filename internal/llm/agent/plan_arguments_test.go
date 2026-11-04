@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/raulaguila/opcode/internal/llm/provider"
+	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/workflow"
 	"github.com/stretchr/testify/require"
@@ -69,4 +71,22 @@ func TestAppliedChangesWithoutConfiguredChecksArePartialNotFalseSuccess(t *testi
 	require.Empty(t, saved.Validation)
 	require.Equal(t, "partial", saved.Status)
 	require.Contains(t, saved.Summary, "no configured checks")
+}
+
+func TestWrongCheckNameDoesNotCostThePlan(t *testing.T) {
+	_, err := config.Load(t.TempDir(), false)
+	require.NoError(t, err)
+	store := workflow.New(nil, t.TempDir(), workflow.Execute)
+	a := &agent{workflow: store}
+	input := `{"objective":"Rodar testes","steps":[{"title":"Rodar","status":"in_progress"}],"criteria":["Rodam"],"checks":["test"]}`
+	result, err := a.workflowUpdatePlan(&generationRun{mode: workflow.Execute}, "s", context.Background(), tools.ToolCall{Input: input})
+	require.NoError(t, err)
+	raw, err := json.Marshal(result)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "Plan saved without checks")
+
+	task, err := store.Get(context.Background(), "s")
+	require.NoError(t, err)
+	require.Len(t, task.Steps, 1)
+	require.Empty(t, task.Checks, "a check nobody configured can never pass")
 }

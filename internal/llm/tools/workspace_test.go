@@ -48,9 +48,9 @@ func TestOverviewPrefetchUsesOnlyExistingSafePaths(t *testing.T) {
 		require.NoError(t, os.WriteFile(filepath.Join(root, name), []byte("contents"), 0600))
 	}
 	require.Nil(t, ProjectContextPaths("Olá"))
-	require.ElementsMatch(t, []string{"README.md", "package.json", "AGENTS.md"}, ProjectContextPaths("Explique este projeto"))
+	require.Empty(t, ProjectContextPaths("Explique este projeto"), "only a named file is read ahead")
 	require.NoError(t, os.WriteFile(filepath.Join(root, "counter.py"), []byte("def add(a,b): return a - b"), 0600))
-	require.Equal(t, []string{"counter.py"}, ProjectContextPaths("Localize no projeto a causa de add retornar -1. Leia counter.py e explique."), "a named source takes precedence over the generic README")
+	require.Equal(t, []string{"counter.py"}, ProjectContextPaths("Localize no projeto a causa de add retornar -1. Leia counter.py e explique."), "a named source is read")
 }
 
 func TestFileMutationObserverRunsOnCommitAndFailureRestoresFiles(t *testing.T) {

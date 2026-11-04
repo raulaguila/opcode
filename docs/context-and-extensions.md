@@ -162,13 +162,10 @@ para Ollama nativo. `contextPaths` é relido, com os limites/redação existente
 a cada requisição do agente principal, evitando cache global entre projetos.
 
 A primeira requisição principal já inclui schemas de leitura/busca, sujeitos ao
-modo e ao perfil de contexto; os demais ficam disponíveis por catálogo. Em
-perguntas amplas como “o que pode me falar sobre esse projeto?”, a preparação
-lê arquivos básicos e consulta o índice local por componentes de aplicação.
-São no máximo dois resultados e duas leituras de até 60 linhas, dentro do
-orçamento existente. Resultados do índice são navegação; somente a leitura real
-gera evidência. Fontes inalteradas podem ser reutilizadas após revalidação.
-Perguntas específicas e caminhos explícitos preservam suas rotas de recuperação.
+modo e ao perfil de contexto; os demais ficam disponíveis por catálogo. Antes
+da primeira resposta só são lidos os arquivos que a pergunta cita por `@` ou por
+caminho. Nada é adivinhado pelas palavras do pedido: o modelo busca o que precisa.
+Resultados do índice são navegação; somente a leitura real gera evidência.
 
 O prompt `opcode-2026-10-v6` trata essas fontes como ponto de partida limitado:
 o modelo deve buscar o que falta, separar capacidades documentadas de
@@ -189,51 +186,10 @@ projeções ficam em `data.directory/memory-index/<hash>.sqlite`, modo 0600; sã
 reconstruíveis. Originais continuam no histórico/findings existentes. A projeção
 retém no máximo 100 mil documentos de até 8 KiB e omite raciocínio/anexos.
 
-### Seleção de fontes para visões gerais
-
-Perguntas amplas usam a documentação e o ponto de entrada existentes como
-início. Em uma visão geral sem pedido sobre dependências, os manifestos usam
-somente as primeiras seis linhas para identificação de linguagem/projeto,
-evitando que uma lista de SDKs seja interpretada como funcionalidades. Pedidos
-explícitos sobre dependências preservam a leitura usual. Chamadas observadas
-nas linhas entregues do ponto de entrada fornecem
-pistas de navegação; chamadas comuns de logging/utilidades são descartadas.
-Sem uma pista útil, uma consulta genérica limitada busca serviços/aplicação.
-
-A consulta usa `intent: "overview"` no índice. Símbolos declarados e caminhos
-de implementação têm preferência sobre ocorrências incidentais no corpo,
-como uma string que contém a própria consulta. Havendo pistas em identificadores,
-as ocorrências que só correspondem ao corpo são omitidas antes de fornecer
-contexto ao modelo. Sem esse sinal, a busca lexical permanece disponível.
-São retornados no máximo quatro candidatos na preparação e lidos no máximo
-dois caminhos adicionais, sem repetir fontes já entregues no turno. Resultados
-de busca têm orçamento de até 6.000 bytes, dentro do orçamento de ferramentas
-existente; truncamento ou falta de resultados não são apresentados como inspeção
-completa. O modelo pode continuar explorando pelas ferramentas autorizadas.
-
-Essas pistas não resolvem vínculos semânticos nem provam que um componente é
-central. A explicação deve distinguir capacidades documentadas de comportamentos
-confirmados no código e declarar o escopo/limites da inspeção. Citações continuam
-exigindo leitura real, linhas entregues e hash atual; o ranking não concede
-permissões e não transforma previews em evidências de leitura.
-
-A orientação de resposta também acompanha a pergunta original durante reparos
-de citações: preservar os fatos pedidos, explicar o produto e terminar com
-escopo/limites explícitos. Isso não adiciona tentativas de reparo nem altera a
-validação; a qualidade da interpretação continua dependendo do modelo.
-
-
 ### Perguntas sobre fluxos e evidência de comportamento
 
-Perguntas de fluxo em português/inglês usam termos da própria tarefa para
-localizar implementações. A preparação tenta até três chamadas textuais distintas
-encontradas em leituras reais, parando ao obter uma nova fonte. Pistas sem nova
-leitura não encerram a busca; tentativas de leitura que falham também consomem o
-limite existente: quatro leituras indexadas no preparo temático ou duas depois
-da leitura básica. O orçamento de bytes permanece o mesmo.
-Essas pistas não resolvem símbolos nem comprovam relações; o agente deve ler os
-trechos relevantes e usar definição/referências/hierarquia LSP quando disponíveis.
-Declarações de interface e campos descrevem contratos/dependências, não provam
+O agente deve ler os trechos relevantes e usar definição/referências/hierarquia
+LSP quando disponíveis. Declarações de interface e campos descrevem contratos/dependências, não provam
 execução, tratamento de erros ou cancelamento. A orientação pede distinguir
 implementação observada, documentação e inferência, indicando elos não verificados.
 Quando a pergunta pede resultados para entradas específicas, a orientação pede
@@ -245,7 +201,7 @@ sujeita a homônimos; resultados do índice são navegação e precisam de leitu
 atual antes de servirem como fonte citada.
 
 
-Os resultados de buscas automáticas de preparação são resumidos na projeção
+Em conversas antigas, os resultados de buscas automáticas de preparação são resumidos na projeção
 para o provedor: somente arquivos realmente lidos no turno permanecem como
 pistas de caminho/símbolo. Prévias e assinaturas do índice não são entregues como se fossem leituras. O histórico persistido mantém o resultado
 bruto; buscas pedidas pelo próprio modelo mantêm a resposta normal da ferramenta.

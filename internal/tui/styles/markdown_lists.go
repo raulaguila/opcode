@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/raulaguila/opcode/internal/tui/theme"
 	"github.com/yuin/goldmark/ast"
 	extast "github.com/yuin/goldmark/extension/ast"
 )
@@ -126,5 +127,7 @@ func removeMarkdownListMargin(view string) string {
 func indentMarkdownListItem(body, marker string) string {
 	margin := strings.Repeat(" ", defaultMargin)
 	indent := margin + strings.Repeat(" ", ansi.StringWidth(marker))
-	return margin + marker + strings.ReplaceAll(body, "\n", "\n"+indent)
+	r, g, b := getColorRGB(theme.Surface())
+	surface := fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r, g, b)
+	return surface + margin + marker + strings.ReplaceAll(body, "\n", "\n"+surface+indent)
 }

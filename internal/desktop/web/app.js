@@ -24,7 +24,7 @@ function applyTheme(choice = themeChoice()) {
 applyTheme();
 matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => applyTheme());
 const modes = ["ask", "plan", "execute"];
-const view = { state: null, session: "", conversation: null, mode: "execute", policy: "prompt", started: 0, error: "", lang: "pt" };
+const view = { state: null, session: "", conversation: null, mode: "execute", policy: "sandboxed", started: 0, error: "", lang: "pt" };
 const t = (pt, en) => (view.lang === "pt" ? pt : en);
 
 async function api(path, body) {
@@ -280,8 +280,8 @@ function renderFrame() {
   $("input").placeholder = deciding ? t("Rascunho preservado enquanto você decide", "Draft kept while you decide") : busy ? t("Mensagem entra na fila", "Message joins the queue") : "";
   const narrow = window.innerWidth < 760; // the proposal's compact screen abbreviates
   $("policy").textContent = narrow
-    ? (view.policy === "project_edits" ? t("A:editar", "A:edits") : t("A:pedir", "A:ask"))
-    : (view.policy === "project_edits" ? t("Aprov.: editar no projeto", "Approval: project edits") : t("Aprov.: pedir", "Approval: ask")) + " ▾";
+    ? (view.policy === "auto" ? "A:auto" : t("A:pedir", "A:ask"))
+    : (view.policy === "auto" ? t("Aprovar por mim", "Approve for me") : t("Pedir aprovação", "Ask for approval"));
   const activity = $("activity");
   activity.className = "";
   activity.style.color = "";

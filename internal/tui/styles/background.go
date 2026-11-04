@@ -73,17 +73,18 @@ func restoreBackground(input string, bg color.Color) string {
 	r, g, b := getColorRGB(bg)
 	newBg := fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
 	var out strings.Builder
-	out.Grow(len(input) + len(newBg) + 3 + count*(len(newBg)+2))
-	out.WriteString("\x1b[")
-	out.WriteString(newBg)
-	out.WriteByte('m')
+	open := "\x1b[" + newBg + "m"
+	// Whatever is drawn before a row resets the color, so every row sets it again.
+	writeRows := func(text string) { out.WriteString(strings.ReplaceAll(text, "\n", "\n"+open)) }
+	out.Grow(len(input) + len(open) + count*(len(newBg)+2))
+	out.WriteString(open)
 	offset := 0
 	for {
 		start, end := nextBackgroundSGR(input, offset)
 		if start < 0 {
 			break
 		}
-		out.WriteString(input[offset:start])
+		writeRows(input[offset:start])
 		if backgroundSGRAffects(input, start+2, end-1) {
 			writeBackgroundSGR(&out, input, start, end, newBg)
 		} else {
@@ -91,7 +92,7 @@ func restoreBackground(input string, bg color.Color) string {
 		}
 		offset = end
 	}
-	out.WriteString(input[offset:])
+	writeRows(input[offset:])
 	return out.String()
 }
 

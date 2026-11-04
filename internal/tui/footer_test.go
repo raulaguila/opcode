@@ -33,7 +33,7 @@ func (p *approvalFooterPage) FooterState() util.FooterState { return p.state }
 
 func TestFooterApprovalClickFocusesSelectedPolicyWithoutChangingMode(t *testing.T) {
 	for _, width := range []int{60, 180} {
-		for _, policy := range []permission.ApprovalPolicy{permission.ApprovalPrompt, permission.ApprovalProjectEdits} {
+		for _, policy := range []permission.ApprovalPolicy{permission.ApprovalPrompt, permission.ApprovalSandboxed} {
 			state := util.FooterState{Mode: "execute", ApprovalPolicy: string(policy)}
 			status, _ := core.NewStatusCmp(nil).Update(tea.WindowSizeMsg{Width: width})
 			a := appModel{currentPage: page.ChatPage, pages: map[page.PageID]util.Model{page.ChatPage: &approvalFooterPage{state: state}}, status: status.(core.StatusCmp), commandDialog: dialog.NewCommandDialogCmp()}

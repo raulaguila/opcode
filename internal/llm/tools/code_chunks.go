@@ -36,17 +36,28 @@ func codeTerms(text string) []string {
 	return terms
 }
 
+var unaccented = strings.NewReplacer("á", "a", "à", "a", "â", "a", "ã", "a", "é", "e", "ê", "e", "í", "i", "ó", "o", "ô", "o", "õ", "o", "ú", "u", "ç", "c")
+
 func codeQueryTerms(query string) []string {
 	stop := map[string]bool{}
-	for term := range strings.FieldsSeq("a as o os de da do das dos e em no na nos nas um uma para por que como onde qual quais the an of to in is are where how what this project projeto código code") {
+	for term := range strings.FieldsSeq("a as o os ao aos de da do das dos e em no na nos nas num numa um uma com sem se ou mas sobre pelo pela pra pro para por que como onde qual quais entao ja agora aqui isso isto esse essa este esta meu minha seu sua the an of to in is are where how what with this that then now project projeto codigo code") {
 		stop[term] = true
 	}
-	concepts := map[string][]string{"permissão": {"permission", "authorize", "access"}, "permissões": {"permission", "authorize", "access"}, "autenticação": {"authentication", "auth", "login"}, "usuário": {"user"}, "contexto": {"context"}, "estado": {"state"}, "modo": {"mode"}, "concorrência": {"concurrency"}, "concorrencia": {"concurrency"}, "configuração": {"config", "settings"}, "arquivo": {"file"}, "busca": {"search"}, "erro": {"error", "exception"}, "conversa": {"conversation", "session"}, "ferramenta": {"tool"}, "ferramentas": {"tool", "tools"}, "cancelamento": {"cancel", "cancelled"}, "limite": {"limit", "budget"}, "permissions": {"permission", "authorize", "access"}, "authorization": {"authorize", "permission"}, "authentication": {"authenticate", "auth", "login"}}
+	concepts := map[string][]string{"permissão": {"permission", "authorize", "access"}, "permissões": {"permission", "authorize", "access"}, "autenticação": {"authentication", "auth", "login"}, "usuário": {"user"}, "contexto": {"context"}, "estado": {"state"}, "modo": {"mode"}, "concorrência": {"concurrency"}, "concorrencia": {"concurrency"}, "configuração": {"config", "settings"}, "arquivo": {"file"}, "busca": {"search"}, "erro": {"error", "exception"}, "conversa": {"conversation", "session"}, "modelo": {"model", "provider"}, "modelos": {"model", "provider"}, "ferramenta": {"tool"}, "ferramentas": {"tool", "tools"}, "cancelamento": {"cancel", "cancelled"}, "limite": {"limit", "budget"}, "permissions": {"permission", "authorize", "access"}, "authorization": {"authorize", "permission"}, "authentication": {"authenticate", "auth", "login"}}
 	var result []string
 	for _, term := range codeTerms(query) {
-		if !stop[term] {
+		if plain := unaccented.Replace(term); !stop[plain] {
 			result = append(result, term)
 			result = append(result, concepts[term]...)
+			if plain != term || concepts[term] != nil {
+				continue
+			}
+			for name, related := range concepts { // "permissao" typed without the accent
+				if unaccented.Replace(name) == term {
+					result = append(result, related...)
+					break
+				}
+			}
 		}
 	}
 	if len(result) == 0 {

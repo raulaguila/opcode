@@ -18,6 +18,9 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 )
 
+// A built binary sits in many workspaces and must not end verification.
+const maxHashedFile = 16 << 20
+
 // WorkspaceDigest covers regular workspace files, including external edits.
 // Secrets, links, storage and generated/dependency directories are excluded.
 func WorkspaceDigest(ctx context.Context) (string, error) {
@@ -71,10 +74,15 @@ func (w *workspaceHasher) visit(path string, entry fs.DirEntry, walkErr error) e
 	if !info.Mode().IsRegular() {
 		return nil
 	}
+	if info.Size() > maxHashedFile {
+		// shortcut: a same-size rewrite that keeps the mtime goes unseen, read the content if a large file ever needs proof.
+		fmt.Fprintf(w.digest, "large:%s:%d:%d\x00", path, info.Size(), info.ModTime().UnixNano())
+		return nil
+	}
 	w.count++
 	w.total += info.Size()
-	if w.count > 20000 || w.total > 128<<20 || info.Size() > 16<<20 {
-		return fmt.Errorf("workspace exceeds validation fingerprint limit (20000 files, 128 MiB total, 16 MiB per file)")
+	if w.count > 20000 || w.total > 128<<20 {
+		return fmt.Errorf("workspace exceeds validation fingerprint limit (20000 files, 128 MiB total)")
 	}
 	return w.writeFile(path, info.Size())
 }
@@ -90,6 +98,9 @@ func (w *workspaceHasher) excluded(path string, entry fs.DirEntry) bool {
 	if !entry.IsDir() {
 		return false
 	}
+	if path == ".opcode/command-cache" { // every go test writes here
+		return true
+	}
 	switch entry.Name() {
 	case "node_modules", "vendor", ".venv", "venv", "__pycache__", "target", "dist", "build", ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache", "htmlcov", "coverage":
 		return true
@@ -102,7 +113,7 @@ func (w *workspaceHasher) writeFile(path string, size int64) error {
 		return err
 	}
 	fmt.Fprintf(w.digest, "%d:%s:%d\x00", len(path), path, size)
-	_, readErr := io.CopyBuffer(w.digest, io.LimitReader(file, 16<<20+1), w.buffer)
+	_, readErr := io.CopyBuffer(w.digest, io.LimitReader(file, maxHashedFile+1), w.buffer)
 	closeErr := file.Close()
 	if readErr != nil {
 		return readErr
@@ -162,17 +173,7 @@ func ProjectContextPaths(question string) []string {
 			explicit = append(explicit, path)
 		}
 	}
-	if len(explicit) > 0 {
-		return explicit
-	}
-	groups := [][]string{{"README.md", "readme.md", "README.rst", "README"}, {"go.mod", "package.json", "pyproject.toml", "Cargo.toml", "pom.xml"}, {"main.go", "src/main.rs", "src/main.ts", "src/main.py", "main.py", "src/index.ts", "index.js"}, {"AGENTS.md"}}
-	var paths []string
-	for _, group := range groups {
-		if path := firstProjectContextPath(root, group); path != "" {
-			paths = append(paths, path)
-		}
-	}
-	return paths
+	return explicit
 }
 
 // FileFingerprint hashes a protected source without recording edit-read evidence.
@@ -194,14 +195,4 @@ func FileFingerprint(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func firstProjectContextPath(root *os.Root, paths []string) string {
-	for _, path := range paths {
-		info, err := root.Lstat(path)
-		if err == nil && info.Mode().IsRegular() && !shell.SensitivePath(filepath.Join(config.WorkingDirectory(), path)) {
-			return path
-		}
-	}
-	return ""
 }

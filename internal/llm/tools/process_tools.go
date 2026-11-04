@@ -76,10 +76,10 @@ func (p *processTool) writeInput(ctx context.Context, owner string, record *mana
 	if len(data) == 0 || len(data) > 16384 || redact(data) != data {
 		return NewTextErrorResponse("invalid terminal input or configured credential in input"), nil
 	}
-	if p.permissions == nil || !p.permissions.Request(ctx, permission.CreatePermissionRequest{
+	if p.permissions == nil || !permission.RequestAtLevel(ctx, p.permissions, permission.CreatePermissionRequest{
 		SessionID: owner, ToolName: p.name, Action: "write_stdin:" + record.id, Path: config.WorkingDirectory(),
 		Description: "Send input to interactive process", Params: map[string]string{"id": id, "data": data},
-	}) {
+	}, permission.ApprovalSandboxed) {
 		return ToolResponse{}, permission.ErrorPermissionDenied
 	}
 	if err := ctx.Err(); err != nil {

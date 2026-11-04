@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -101,25 +100,6 @@ func TestProgressiveToolsLoadForNextRequest(t *testing.T) {
 	last.reply <- provider.ProviderResponse{Content: "Feito", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 	require.EqualValues(t, 1, extra.count.Load())
-}
-func TestProjectOverviewReceivesActualLocalEvidenceBeforeModel(t *testing.T) {
-	a, p, _, root := runtimeAgent(t, workflow.Ask)
-	require.NoError(t, os.WriteFile(filepath.Join(root, "README.md"), []byte("# RioSensor\nMonitora sensores de nível."), 0600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module rio/sensor\ngo 1.26\n"), 0600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\nfunc main() {}"), 0600))
-	require.NoError(t, os.WriteFile(filepath.Join(root, ".env"), []byte("NEVER_PREFETCH_THIS"), 0600))
-	a.tools = []tools.BaseTool{tools.SecureTool(tools.NewViewTool(nil), permission.NewPermissionService())}
-	done, err := a.Run(context.Background(), "s", "O que pode me falar do projeto atual?")
-	require.NoError(t, err)
-	first := nextGeneration(t, p)
-	raw, _ := json.Marshal(first.history)
-	require.Contains(t, string(raw), "RioSensor")
-	require.Contains(t, string(raw), "rio/sensor")
-	require.NotContains(t, string(raw), "NEVER_PREFETCH_THIS")
-	require.Equal(t, message.User, first.history[0].Role)
-	require.Contains(t, first.history[0].Content().String(), "O que pode me falar do projeto atual?")
-	first.reply <- provider.ProviderResponse{Content: "RioSensor monitora sensores (README.md:1-2).", FinishReason: message.FinishReasonEndTurn}
-	require.NoError(t, finishGeneration(t, done).Error)
 }
 func TestRepeatedCallsStopAndSaveBlockedTask(t *testing.T) {
 	a, p, _, _ := runtimeAgent(t, workflow.Execute)

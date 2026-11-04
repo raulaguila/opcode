@@ -95,10 +95,12 @@ to assist developers in writing, debugging, and understanding code directly from
 		policy := permission.ApprovalPolicy("")
 		switch approval {
 		case "":
-		case "project-edits":
-			policy = permission.ApprovalProjectEdits
+		case "sandbox":
+			policy = permission.ApprovalSandboxed
+		case "auto":
+			policy = permission.ApprovalAuto
 		default:
-			return fmt.Errorf("--approval must be project-edits")
+			return fmt.Errorf("--approval must be sandbox or auto")
 		}
 		if maxCost < 0 {
 			return fmt.Errorf("--max-cost must be positive")
@@ -209,7 +211,7 @@ to assist developers in writing, debugging, and understanding code directly from
 
 		var initialSessions []session.Session
 		if resumeID != "" {
-			saved, err := resolveResumeSession(ctx, loadedConfig, resumeID, app.Sessions.Get)
+			saved, err := resolveResumeSession(ctx, loadedConfig, resumeID, app.Sessions.Get, app.Sessions.List)
 			if err != nil {
 				return fmt.Errorf("resume session: %w", err)
 			}
@@ -487,7 +489,7 @@ func init() {
 	rootCmd.Flags().Int("first-token-timeout", 0, "Maximum wait for initial model output (seconds, 1–1800)")
 	rootCmd.Flags().Int("idle-timeout", 0, "Maximum model streaming inactivity (seconds, 1–600)")
 	rootCmd.Flags().Bool("auto-approve", false, "Approve all tool permissions for a non-interactive prompt (unsafe)")
-	rootCmd.Flags().String("approval", "", "Approval for a non-interactive prompt: project-edits edits project files without asking; anything else is refused")
+	rootCmd.Flags().String("approval", "", "Approval for a non-interactive prompt: sandbox edits the project and runs sandboxed commands without asking; auto also restores declared dependencies; anything else is refused")
 	rootCmd.Flags().Float64("max-cost", 0, "Stop a non-interactive prompt once its estimated cost passes this many dollars (exit 3)")
 
 	// Register custom validation for the format flag

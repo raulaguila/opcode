@@ -2,6 +2,7 @@ package styles
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 
 	"charm.land/glamour/v2/ansi"
@@ -23,11 +24,46 @@ var sharedMarkdownParser = goldmark.New(goldmark.WithExtensions(extension.GFM, e
 // Parse once so reference links, citations and list numbering survive rendering
 // at different widths. Containers with code/tables retain their full structure.
 // This changes presentation only; stored and copied source remains untouched.
+var (
+	inlineMath  = regexp.MustCompile(`\$([^$\n]*\\[a-zA-Z]+[^$\n]*)\$`)
+	mathCommand = regexp.MustCompile(`\\[a-zA-Z]+`)
+	mathSymbols = map[string]string{`\rightarrow`: "→", `\to`: "→", `\leftarrow`: "←", `\leftrightarrow`: "↔", `\Rightarrow`: "⇒", `\Leftarrow`: "⇐", `\implies`: "⇒", `\times`: "×", `\cdot`: "·", `\leq`: "≤", `\le`: "≤", `\geq`: "≥", `\ge`: "≥", `\neq`: "≠", `\ne`: "≠", `\approx`: "≈", `\infty`: "∞", `\pm`: "±", `\checkmark`: "✓"}
+)
+
+// plainInlineMath writes $\rightarrow$ as the arrow models mean by it: terminals
+// have no math. Code, and math with a command outside the table, stay as typed.
+func plainInlineMath(content string) string {
+	if !strings.Contains(content, `$\`) && !strings.Contains(content, `\`) {
+		return content
+	}
+	fences := strings.Split(content, "```")
+	for i := 0; i < len(fences); i += 2 {
+		spans := strings.Split(fences[i], "`")
+		for j := 0; j < len(spans); j += 2 {
+			spans[j] = inlineMath.ReplaceAllStringFunc(spans[j], func(math string) string {
+				known := true
+				plain := mathCommand.ReplaceAllStringFunc(math[1:len(math)-1], func(command string) string {
+					symbol, ok := mathSymbols[command]
+					known = known && ok
+					return symbol
+				})
+				if !known {
+					return math
+				}
+				return strings.TrimSpace(plain)
+			})
+		}
+		fences[i] = strings.Join(spans, "`")
+	}
+	return strings.Join(fences, "```")
+}
+
 func RenderMarkdownBlocks(content string, width, proseWidth int) string {
 	return renderMarkdownBlocks(content, width, proseWidth, nil, false)
 }
 
 func renderMarkdownBlocks(content string, width, proseWidth int, cache *MarkdownCache, streaming bool) string {
+	content = plainInlineMath(content)
 	source := []byte(content)
 	doc := sharedMarkdownParser.Parse(text.NewReader(source))
 	literalHTML(doc, source)
@@ -158,7 +194,7 @@ func (b *markdownBlockRenderer) renderFresh(node ast.Node) (string, error) {
 			view = wrapMarkdownProse(view, measure)
 		}
 		// Restore the surface after wrapping to avoid reflowing expanded SGR codes.
-		view = restoreBackground(view, theme.CurrentTheme().Background())
+		view = restoreBackground(view, theme.Surface())
 	}
 	return view, nil
 }

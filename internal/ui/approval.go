@@ -21,7 +21,7 @@ const diffRows = 6
 func (m *Model) approvalView() string {
 	request := m.approval
 	title := config.Text("Aprovação necessária", "Approval required")
-	scope := config.Text("2 Permitir este escopo na sessão", "2 Allow this scope for the session")
+	scope := config.Text("2 Repetir sem perguntar nesta sessão", "2 Repeat without asking this session")
 	var diff, command, file string
 	switch params := request.Params.(type) {
 	case tools.EditPermissionsParams:
@@ -34,9 +34,9 @@ func (m *Model) approvalView() string {
 	switch request.ToolName {
 	case tools.EditToolName, tools.WriteToolName, tools.PatchToolName:
 		title = config.Text("Aprovar edição", "Approve edit")
-		scope = config.Text("2 Permitir edições no projeto nesta sessão", "2 Allow project edits this session")
 	case tools.BashToolName:
 		title = config.Text("Aprovar comando", "Approve command")
+		scope = config.Text("2 Permitir este comando exato na sessão", "2 Allow this exact command this session")
 	case tools.FetchToolName:
 		title = config.Text("Aprovar acesso à rede", "Approve network access")
 	}

@@ -79,6 +79,7 @@ func assertGitFilterNeverExecutes(t *testing.T, sandbox, driver string) {
 }
 
 func TestGitInspectionMountCannotWriteWorkspace(t *testing.T) {
+	skipInsideSandbox(t)
 	if runtime.GOOS != "linux" {
 		t.Skip("Bubblewrap is Linux-only")
 	}

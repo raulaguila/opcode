@@ -15,42 +15,17 @@ import (
 	"github.com/raulaguila/opcode/internal/message"
 )
 
+// bootstrap reads only the files the question names. Guessing sources from its
+// words read unrelated code; the model searches for what it needs.
 func (a *agent) bootstrap(ctx context.Context, session, question string, history []message.Message, run *generationRun) ([]message.Message, error) {
 	if a.workflow == nil {
 		return history, nil
 	}
-	view, index, inventory := bootstrapTools(run)
+	view := bootstrapView(run)
 	if view == nil {
 		return history, nil
 	}
-	query := tools.ProjectEvidenceQuery(question)
-	if review := tools.ProjectReviewQuery(question); review != "" && query == review && index != nil && tools.ProjectFlowQuery(question) == "" {
-		return a.bootstrapReview(ctx, session, question, review, history, run, view, index)
-	}
-	if query != "" && tools.ProjectInquiry(question) && index != nil && len(tools.ProjectSourcePaths(question)) == 0 {
-		b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, flow: tools.ProjectFlowQuery(question) != "", flowReadsRemaining: 4}
-		read, err := b.prepareTopic(query, index, inventory)
-		history = b.history
-		if err != nil || read {
-			return history, err
-		}
-	}
-	history, err := a.bootstrapBasic(ctx, session, question, history, run, view)
-	if err != nil || index == nil {
-		return history, err
-	}
-	b := evidenceBootstrap{agent: a, ctx: ctx, session: session, run: run, history: history, view: view, flowReadsRemaining: 2}
-	if tools.ProjectFlowQuery(question) != "" {
-		b.flow = true
-		err = b.followFlowCalls(index)
-		return b.history, err
-	}
-	if !tools.ProjectOverview(question) {
-		return history, nil
-	}
-	b.overview = true
-	_, err = b.readIndex(overviewQuery(history), index, "overview")
-	return b.history, err
+	return a.bootstrapBasic(ctx, session, question, history, run, view)
 }
 
 func (a *agent) bootstrapCall(ctx context.Context, session string, tool tools.BaseTool, input string, history []message.Message, run *generationRun) ([]message.Message, tools.ToolResponse, error) {
@@ -152,148 +127,21 @@ func reusableSource(ctx context.Context, history []message.Message, name, input 
 	return tools.ToolResponse{}, false
 }
 
-func bootstrapTools(run *generationRun) (view, index, inventory tools.BaseTool) {
+func bootstrapView(run *generationRun) tools.BaseTool {
 	for _, tool := range run.available {
-		if !runAllowsTool(run, tool) || tools.IsOpaqueTool(tool) {
-			continue
-		}
-		switch tool.Info().Name {
-		case tools.ViewToolName:
-			view = tool
-		case "search_code_index":
-			index = tool
-		case "get_language_support":
-			inventory = tool
+		if tool.Info().Name == tools.ViewToolName && runAllowsTool(run, tool) && !tools.IsOpaqueTool(tool) {
+			return tool
 		}
 	}
-	return
+	return nil
 }
 
-type projectEvidenceHit struct {
-	Path   string `json:"path"`
-	Symbol string `json:"symbol"`
-	Start  int    `json:"start_line"`
-	End    int    `json:"end_line"`
-	Hash   string `json:"file_hash"`
-}
-type evidenceBootstrap struct {
-	agent              *agent
-	ctx                context.Context
-	session            string
-	run                *generationRun
-	history            []message.Message
-	view               tools.BaseTool
-	overview           bool
-	flow               bool
-	review             bool
-	flowReadsRemaining int
-}
-
-func (b *evidenceBootstrap) topicQuery(query string, inventory tools.BaseTool) (string, error) {
-	if !strings.Contains(query, "languages") || !tools.OpcodeWorkspace(b.ctx) {
-		return query, nil
-	}
-	query = "localParsers"
-	if inventory == nil {
-		return query, nil
-	}
-	history, _, err := b.agent.bootstrapCall(b.ctx, b.session, inventory, `{"summary":true,"limit":6}`, b.history, b.run)
-	b.history = history
-	return query, err
-}
-func (b *evidenceBootstrap) readIndex(query string, index tools.BaseTool, intent string) (bool, error) {
-	limit := 2
-	if b.overview || b.flow || b.review {
-		limit = 4
-	}
-	input, _ := json.Marshal(map[string]any{"query": query, "limit": limit, "intent": intent, "strategy": "lexical"})
-	history, response, err := b.agent.bootstrapCall(b.ctx, b.session, index, string(input), b.history, b.run)
-	b.history = history
-	if err != nil {
-		return false, err
-	}
-	var result struct {
-		Results []projectEvidenceHit `json:"results"`
-	}
-	if response.IsError || json.Unmarshal([]byte(response.Content), &result) != nil {
-		return false, nil
-	}
-	if b.review && intent == "tests" {
-		result.Results = slices.DeleteFunc(result.Results, func(hit projectEvidenceHit) bool { return !tools.IsTestSource(hit.Path) })
-	}
-	return b.readIndexHits(query, result.Results[:min(limit, len(result.Results))])
-}
-
-func (b *evidenceBootstrap) readIndexHits(query string, hits []projectEvidenceHit) (bool, error) {
-	seen := map[string]bool{}
-	if b.overview || b.flow || b.review {
-		seen = overviewReadPaths(b.run, b.history)
-	}
-	attempts := 0
-	read := false
-	for _, hit := range hits {
-		if !b.reserveIndexRead(hit, seen) {
-			continue
-		}
-		attempts++
-		visible, complete, err := b.readHit(query, hit)
-		if err != nil {
-			return false, err
-		}
-		read = read || visible
-		if complete && !b.overview && !b.flow && !b.review || attempts == 2 {
-			break
-		}
-	}
-	return read, nil
-}
-
-func (b *evidenceBootstrap) reserveIndexRead(hit projectEvidenceHit, seen map[string]bool) bool {
-	key := normalizedToolPath(hit.Path)
-	if !filepath.IsLocal(hit.Path) || hit.Start < 1 || seen[key] {
-		return false
-	}
-	if b.flow {
-		if b.flowReadsRemaining == 0 {
-			return false
-		}
-		b.flowReadsRemaining--
-	}
-	seen[key] = true
-	return true
-}
-
-func (b *evidenceBootstrap) readHit(query string, hit projectEvidenceHit) (bool, bool, error) {
-	limit := 60
-	if hit.End >= hit.Start {
-		limit = min(60, hit.End-hit.Start+3)
-	}
-	input, _ := json.Marshal(tools.ViewParams{FilePath: hit.Path, Offset: max(0, hit.Start-3), Limit: limit})
-	history, response, err := b.agent.bootstrapCall(b.ctx, b.session, b.view, string(input), b.history, b.run)
-	b.history = history
-	if err != nil {
-		return false, false, err
-	}
-	receipt, visible := tools.VisibleSourceReadReceipt("view", response.Content, response.Metadata)
-	if response.IsError || !visible {
-		return false, false, nil
-	}
-	if b.run.primaryEvidence == nil {
-		b.run.primaryEvidence = map[string]bool{}
-	}
-	b.run.primaryEvidence[normalizedToolPath(hit.Path)] = true
-	return true, hit.Symbol == query && hit.Hash != "" && receipt.Hash == hit.Hash && receipt.StartLine <= hit.Start && receipt.EndLine >= hit.End, nil
-}
 func (a *agent) bootstrapBasic(ctx context.Context, session, question string, history []message.Message, run *generationRun, view tools.BaseTool) ([]message.Message, error) {
 	for _, path := range tools.ProjectContextPaths(question) {
 		if run.toolBytes >= run.limits.ToolBudget {
 			break
 		}
-		limit := 80
-		if tools.ProjectOverview(question) {
-			limit = overviewSourceLimit(path, question)
-		}
-		input, _ := json.Marshal(tools.ViewParams{FilePath: path, Limit: limit})
+		input, _ := json.Marshal(tools.ViewParams{FilePath: path, Limit: 80})
 		next, response, err := a.bootstrapCall(ctx, session, view, string(input), history, run)
 		history = next
 		if err != nil {

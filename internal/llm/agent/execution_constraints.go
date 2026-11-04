@@ -29,6 +29,6 @@ func executionConstraints(run *generationRun) map[string]any {
 		"go_cache":                             "private per-project cache reused across commands",
 		"default_command_timeout_ms":           tools.DefaultTimeout,
 		"max_command_timeout_ms":               tools.MaxTimeout,
-		"environment":                          "filtered; HOME disabled; shell setup does not persist between calls",
+		"environment":                          "filtered; HOME is empty and temporary; shell setup does not persist between calls",
 	}
 }

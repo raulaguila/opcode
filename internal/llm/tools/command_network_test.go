@@ -94,6 +94,7 @@ func TestCommandNetworkDenialDoesNotStartOrCreateCache(t *testing.T) {
 }
 
 func TestCommandNetworkGrantIsScopedAndChecksForwardIt(t *testing.T) {
+	skipInsideSandbox(t)
 	networkFixture(t)
 	// This fixture prints the actual sandbox argv; it never executes the command.
 	bin := t.TempDir()
@@ -155,4 +156,12 @@ func TestCommandCachePersistsAcrossSeparateApprovedCommands(t *testing.T) {
 	require.Contains(t, response.Content, os.DevNull)
 	_, err = os.Stat(filepath.Join(root, ".opcode", "command-cache", "go", "path", "pkg", "mod", "fixture"))
 	require.NoError(t, err)
+}
+
+// Isolation is proved from the host; inside the sandbox commands run directly.
+func skipInsideSandbox(t *testing.T) {
+	t.Helper()
+	if shell.AlreadySandboxed() {
+		t.Skip("namespaces do not nest inside the sandbox")
+	}
 }

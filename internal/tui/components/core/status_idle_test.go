@@ -14,7 +14,7 @@ import (
 func TestCompactIdleFooterKeepsRecognizableModelAndUsage(t *testing.T) {
 	for _, width := range []int{60, 70, 79} {
 		for _, activity := range []string{"", config.Text("Concluído", "Completed")} {
-			state := util.FooterState{Mode: "execute", ApprovalPolicy: "project_edits", Activity: activity, ContextWindow: 32768, ContextTokens: 8192, ContextKnown: true, TokensPerSecond: 70}
+			state := util.FooterState{Mode: "execute", ApprovalPolicy: "sandboxed", Activity: activity, ContextWindow: 32768, ContextTokens: 8192, ContextKnown: true, TokensPerSecond: 70}
 			m := statusCmp{width: width}
 			plain := ansi.Strip(m.ViewFor(state))
 			require.Equal(t, 1, lipgloss.Height(plain))
@@ -23,7 +23,7 @@ func TestCompactIdleFooterKeepsRecognizableModelAndUsage(t *testing.T) {
 			_, _, _, modelWidth := m.metricWidths(state)
 			model := ansi.Cut(plain, width-1-modelWidth, width-1)
 			require.Contains(t, model, ansi.Truncate(strings.TrimSuffix(label, " ▾"), 3, ""), "model identity must survive compact idle layout")
-			require.Contains(t, plain, "A:"+config.Text("editar", "edit"))
+			require.Contains(t, plain, "A:"+config.Text("pedir", "ask"))
 			require.Contains(t, plain, "25%")
 			require.Contains(t, plain, "70.0 t/s")
 			require.Equal(t, "models", m.ActionAt(width-2, state))

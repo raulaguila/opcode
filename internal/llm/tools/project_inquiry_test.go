@@ -38,6 +38,14 @@ func TestProjectFlowQuestionsUseBoundedTaskTerms(t *testing.T) {
 	require.Contains(t, ProjectFlowQuery("analise o fluxo de conversa e ferramentas"), "tool")
 }
 
+func TestQueryTermsDropFunctionWordsWithOrWithoutAccents(t *testing.T) {
+	require.Equal(t, []string{"modelo", "model", "provider"}, codeQueryTerms("com o modelo entao"))
+	require.Equal(t, []string{"modelo", "model", "provider"}, codeQueryTerms("com o modelo então"))
+	require.Contains(t, codeQueryTerms("permissao"), "permission")
+	require.Equal(t, "request run execute", ProjectEvidenceQuery("faça uma analise de codigo e sugira melhorias"))
+	require.Equal(t, "modelo model provider", ProjectEvidenceQuery("analise o fluxo com o modelo entao"))
+}
+
 func TestProjectReviewHintsStayBoundedAndSeparateEditsFromAdvice(t *testing.T) {
 	for _, question := range []string{
 		"sugira melhorias no próprio código do opcode",

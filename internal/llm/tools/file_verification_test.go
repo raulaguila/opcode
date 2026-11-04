@@ -18,8 +18,6 @@ func TestAffectedFileVerificationIgnoresUnrelatedSizeAndDetectsSameSizeChanges(t
 	require.NoError(t, err)
 	require.NoError(t, artifact.Truncate(17<<20))
 	require.NoError(t, artifact.Close())
-	_, err = WorkspaceDigest(context.Background())
-	require.ErrorContains(t, err, "fingerprint limit")
 	path := filepath.Join(root, "created.txt")
 	require.NoError(t, os.WriteFile(path, []byte("one"), 0600))
 	receipts := []workflow.FileReceipt{{Path: path, After: fmt.Sprintf("%x", sha256.Sum256([]byte("one")))}}
@@ -29,6 +27,27 @@ func TestAffectedFileVerificationIgnoresUnrelatedSizeAndDetectsSameSizeChanges(t
 	require.NoError(t, os.WriteFile(path, []byte("two"), 0600))
 	require.NoError(t, os.Chtimes(path, stamp.ModTime(), stamp.ModTime()))
 	require.ErrorContains(t, VerifyFileReceipts(context.Background(), receipts), "content changed")
+}
+
+func TestWorkspaceDigestSurvivesBinariesAndCommandCaches(t *testing.T) {
+	root := workspaceTestDir(t)
+	binary := filepath.Join(root, "opcode")
+	require.NoError(t, os.WriteFile(binary, nil, 0600))
+	require.NoError(t, os.Truncate(binary, 17<<20))
+	before, err := WorkspaceDigest(context.Background())
+	require.NoError(t, err, "a large build output must not end verification")
+
+	cache := filepath.Join(root, ".opcode", "command-cache", "go")
+	require.NoError(t, os.MkdirAll(cache, 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(cache, "entry"), []byte("x"), 0600))
+	after, err := WorkspaceDigest(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, before, after, "go test writing its cache is not a workspace change")
+
+	require.NoError(t, os.Truncate(binary, 18<<20))
+	after, err = WorkspaceDigest(context.Background())
+	require.NoError(t, err)
+	require.NotEqual(t, before, after, "a rebuilt binary is still seen")
 }
 
 func TestAffectedFileVerificationRequiresExactDeletionAndRejectsSymlinks(t *testing.T) {

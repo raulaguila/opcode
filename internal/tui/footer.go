@@ -52,7 +52,7 @@ func (a *appModel) openModeChooserAt(approvalFocus bool) tea.Cmd {
 			items = append(items, command)
 		}
 	}
-	for _, policy := range []permission.ApprovalPolicy{permission.ApprovalPrompt, permission.ApprovalProjectEdits} {
+	for _, policy := range []permission.ApprovalPolicy{permission.ApprovalPrompt, permission.ApprovalSandboxed} {
 		items = append(items, dialog.Command{ID: "approval-" + string(policy), Handler: func(dialog.Command) tea.Cmd {
 			return util.CmdHandler(page.ApprovalPolicyMsg{Policy: policy})
 		}})

@@ -151,3 +151,22 @@ não é desativada para contornar isso.
 
 
 Veja também a [evolução comparativa](comparative-evolution.md) para perguntas agrupadas, busca aproximada de modelos, citações verificadas e diagnóstico de linguagens.
+
+## Auditar o projeto
+
+`/auditoria` (paleta ou composer; `opcode -p /auditoria` fora do terminal) revisa
+todo o código, e não só os arquivos que o modelo escolheria abrir. O programa
+entrega ao modelo um arquivo por vez, sem ferramentas e em contexto limpo; acima
+de 12 KB, o arquivo vai em pedaços. Testes e código gerado ficam de fora. No modo
+Executar, roda antes os checks configurados, com a aprovação de sempre. Cada
+arquivo custa segundos num modelo local, mas o projeto inteiro leva bastante
+tempo: o progresso aparece na conversa.
+
+Cada achado precisa citar o trecho e a linha; o programa confere no arquivo e
+descarta o que não estiver lá, além de alegações de erro de compilação, porque
+o modelo vê um arquivo de cada vez. Depois, cada achado de severidade alta volta
+ao modelo sozinho, com thinking, para ser confirmado ou recusado; média e baixa
+não passam por isso. O relatório fica na conversa, por severidade, e
+lista o que o modelo não respondeu. Em `-p`, parte sem resposta sai com código 2.
+`Esc` interrompe e mantém o que já foi encontrado. Pedir "analise o código" em
+texto livre não dispara a auditoria.

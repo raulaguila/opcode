@@ -40,7 +40,7 @@ func (l *List) Visible() []Item {
 		switch {
 		case strings.Contains(strings.ToLower(item.Title), query):
 			titles = append(titles, item)
-		case strings.Contains(strings.ToLower(item.Desc+" "+item.ID), query):
+		case strings.Contains(strings.ToLower(item.Desc+" "+item.ID+" "+item.Right), query):
 			others = append(others, item)
 		}
 	}

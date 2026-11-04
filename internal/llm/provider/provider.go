@@ -79,6 +79,7 @@ type providerClientOptions struct {
 	baseURL       string
 	model         models.Model
 	maxTokens     int64
+	noThinking    bool
 	systemMessage string
 
 	anthropicOptions []AnthropicOption

@@ -55,7 +55,7 @@ func TestSkillCallGoesToTheSkill(t *testing.T) {
 	coder := &queueAgent{}
 	m := New(&app.App{CoderAgent: coder})
 	m.session.ID = "s"
-	handled, err := m.invokeSkill(context.Background(), "/skill revisar  o diff ")
+	handled, err := m.invokeCommand(context.Background(), "/skill revisar  o diff ")
 	require.NoError(t, err)
 	require.True(t, handled)
 	require.Equal(t, []string{"revisar", "o diff"}, coder.skilled)

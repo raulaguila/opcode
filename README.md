@@ -215,6 +215,7 @@ andamento. No cliente `attach`, `/quit` apenas desconecta do servidor.
 | Frente | Disponível neste fork |
 | --- | --- |
 | Tarefas | Contratos explícitos em `/contract` ou `--task-kind`, com alvos, critérios e checks da revisão atual. |
+| Auditoria | `/auditoria` revisa todo o projeto parte por parte, inclusive com modelos pequenos: cada arquivo vai ao modelo em contexto limpo e só ficam achados cuja citação existe no código |
 | Configuração | Perfis com ID, nome e backend separados; múltiplos endpoints, formulários, teste de conexão, catálogo dinâmico, favoritos, recentes e modelos auxiliares independentes. |
 | Chat | Mensagens em ordem cronológica intercaladas com grupos recolhíveis de ferramentas, seleção/cópia, aviso de novas mensagens e rascunhos por conversa. |
 | Execução | Terminal PTY com entrada do usuário, saída ao vivo e fila de instruções editável durante o trabalho. |

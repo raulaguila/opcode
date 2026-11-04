@@ -128,9 +128,13 @@ func (m *Model) openSkills() tea.Cmd {
 	return nil
 }
 
-// invokeSkill runs "/skill NAME request" through the skill instead of as a
-// plain message; ok is false when the text is not a skill call.
-func (m *Model) invokeSkill(ctx context.Context, text string) (bool, error) {
+// invokeCommand runs "/auditoria" or "/skill NAME request" instead of sending a
+// plain message; ok is false when the text is neither.
+func (m *Model) invokeCommand(ctx context.Context, text string) (bool, error) {
+	if control, ok := m.app.CoderAgent.(agent.AuditControl); ok && agent.IsAuditCommand(text) {
+		_, err := control.Audit(ctx, m.session.ID)
+		return true, err
+	}
 	rest, found := strings.CutPrefix(text, "/skill ")
 	control, ok := m.app.CoderAgent.(agent.ExtensionControl)
 	if !found || !ok {

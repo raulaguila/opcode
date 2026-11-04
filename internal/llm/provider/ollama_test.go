@@ -208,3 +208,15 @@ func TestOllamaFinalAnswerToolClosesTheToolList(t *testing.T) {
 	final := functions[len(functions)-1]["function"].(object)
 	require.Equal(t, ollamaFinalAnswer, final["name"])
 }
+
+func TestOllamaThinkingCanBeTurnedOffForOneRequest(t *testing.T) {
+	base := &baseProvider{options: providerClientOptions{model: models.Model{APIModel: "m", CanReason: true}}, client: &ollamaClient{httpProvider: &httpProvider{}, opts: providerClientOptions{model: models.Model{APIModel: "m", CanReason: true}}}}
+	scoped, err := base.WithoutThinking()
+	require.NoError(t, err)
+	_, body, err := scoped.(*baseProvider).client.(*ollamaClient).request(userMessages(), nil, false)
+	require.NoError(t, err)
+	require.Equal(t, false, body.(object)["think"])
+	_, body, err = base.client.(*ollamaClient).request(userMessages(), nil, false)
+	require.NoError(t, err)
+	require.Equal(t, true, body.(object)["think"])
+}

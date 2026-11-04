@@ -2,6 +2,17 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- `/auditoria` (ou `/audit`, também na paleta e em `-p /auditoria`) revisa todo
+  o projeto: o programa entrega ao modelo um arquivo por vez, sem ferramentas e
+  sem raciocínio, com verificações configuradas antes. Achado só entra se o
+  trecho citado estiver na linha indicada; cada achado de severidade alta volta
+  ao modelo, com raciocínio, para ser confirmado ou recusado; o relatório diz o
+  que ficou de fora. Testes e código gerado não entram. Modelo pequeno não pula arquivos.
+- Sandbox: gerenciadores de pacotes baixam dependências sem liberar a rede, por
+  um proxy do Opcode com lista de domínios (`security.allowedDomains`), que usa
+  o proxy corporativo e a CA da máquina.
+- Sandbox: comandos Go usam os módulos já baixados na máquina, sem rede e sem
+  proxy; o cache do host entra somente para leitura.
 - Interface clássica removida (`--ui classico`, `internal/tui`): `opcode` abre
   a interface atual. `internal/ui/{theme,styles,dialog,layout,util}` guardam o
   que ainda era compartilhado.

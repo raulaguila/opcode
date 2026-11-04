@@ -28,6 +28,7 @@ func (p *baseProvider) cloneRequest(options providerClientOptions) (Provider, er
 func scopedRequestOptions(original, request providerClientOptions) providerClientOptions {
 	original.systemMessage = request.systemMessage
 	original.maxTokens = request.maxTokens
+	original.noThinking = request.noThinking
 	original.model.ContextWindow = request.model.ContextWindow
 	original.model.ContextSource = request.model.ContextSource
 	return original

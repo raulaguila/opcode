@@ -180,7 +180,12 @@ func (a *App) RunNonInteractive(ctx context.Context, prompt string, outputFormat
 	}
 	overBudget := a.watchCost(ctx, sess.ID)
 
-	done, err := a.CoderAgent.Run(ctx, sess.ID, prompt)
+	var done <-chan agent.AgentEvent
+	if control, ok := a.CoderAgent.(agent.AuditControl); ok && agent.IsAuditCommand(prompt) {
+		done, err = control.Audit(ctx, sess.ID)
+	} else {
+		done, err = a.CoderAgent.Run(ctx, sess.ID, prompt)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to start agent processing stream: %w", err)
 	}

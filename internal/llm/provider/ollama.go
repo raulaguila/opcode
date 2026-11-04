@@ -69,7 +69,9 @@ func (o *ollamaClient) request(history []message.Message, definitions []tools.Ba
 	}
 	params := object{"model": o.opts.model.APIModel, "messages": messages, "stream": stream, "truncate": false,
 		"options": object{"num_ctx": cmp.Or(o.opts.model.ContextWindow, 16384), "num_predict": cmp.Or(o.opts.maxTokens, 2048), "temperature": 0}}
-	if o.opts.model.CanReason {
+	if o.opts.noThinking {
+		params["think"] = false
+	} else if o.opts.model.CanReason {
 		params["think"] = true
 	}
 	var functions []object

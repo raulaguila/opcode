@@ -523,8 +523,8 @@ func (m *Model) submit() tea.Cmd {
 		}
 		m.setApproval(m.policy)
 	}
-	skill, err := m.invokeSkill(ctx, text)
-	if !skill && err == nil {
+	handled, err := m.invokeCommand(ctx, text)
+	if !handled && err == nil {
 		_, _, err = m.app.CoderAgent.Submit(ctx, m.session.ID, text)
 	}
 	if err != nil {

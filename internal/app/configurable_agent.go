@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -217,6 +218,19 @@ func (p *configurableCoder) Skills(ctx context.Context) ([]extensions.Skill, err
 	}
 	return nil, errSetupRequired
 }
+func (p *configurableCoder) Audit(ctx context.Context, id string) (<-chan agent.AgentEvent, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	c, ok := p.delegate.(agent.AuditControl)
+	if !ok {
+		return nil, errors.New("audit unavailable for this agent")
+	}
+	if err := p.validateConnection(); err != nil {
+		return nil, err
+	}
+	return c.Audit(ctx, id)
+}
+
 func (p *configurableCoder) InvokeSkill(ctx context.Context, id, name, args string) (<-chan agent.AgentEvent, bool, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

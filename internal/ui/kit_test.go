@@ -51,6 +51,15 @@ func TestSpreadAndMeter(t *testing.T) {
 	require.Equal(t, "█████", ansi.Strip(Meter(2, P.Info, P.Ground)))
 }
 
+func TestListSearchFindsCommandByItsKey(t *testing.T) {
+	list := List{Items: []Item{{Title: "Audit", Right: "/auditoria"}, {Title: "Checks", Right: "/checks"}}}
+	list.SetQuery("auditoria")
+	visible := list.Visible()
+	if len(visible) != 1 || visible[0].Title != "Audit" {
+		t.Fatalf("typing a command must find it in any language, got %v", visible)
+	}
+}
+
 func TestListSearchRanksTitleMatchesFirst(t *testing.T) {
 	l := List{Items: []Item{{Title: "Planejar", Desc: "prepara um plano"}, {Title: "Plano", Desc: "mostrar"}}}
 	l.SetQuery("plano")

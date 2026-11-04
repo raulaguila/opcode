@@ -49,6 +49,10 @@ func (m *Model) commands() []command {
 			}
 			return nil
 		}},
+		{textFor("Auditoria", "Audit"), textFor("revisa todo o projeto, parte por parte", "reviews the whole project, part by part"), "/auditoria", work, func(m *Model) tea.Cmd {
+			m.composer.SetValue("/auditoria")
+			return m.submit()
+		}},
 		{textFor("Alterações", "Changes"), textFor("arquivos alterados por interação; desfazer ou refazer", "files changed per turn; undo or redo"), "/changes", work, (*Model).openChanges},
 		{textFor("Verificações", "Checks"), textFor("resultado das verificações da tarefa", "the task's check results"), "/checks", work, (*Model).openChecks},
 		{textFor("Comandos", "Commands"), textFor("comando completo, saída e cópia", "full command, output and copy"), "Ctrl+P", work, (*Model).openCommands},

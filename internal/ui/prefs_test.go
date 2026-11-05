@@ -26,7 +26,7 @@ func TestConnectionViewDrawsFieldsMaskedAndTheCatalogResult(t *testing.T) {
 	view := ansi.Strip(connectionView(dialog.ProviderFormState{
 		Title: "Nova conexão", Meta: "Ollama", Tested: true, Note: "8 modelos",
 		Fields: []dialog.ProviderFormField{
-			{Label: "Nome", Value: "Ollama", Focused: true},
+			{Label: "Nome", Value: "Ollama", Cursor: 6, Focused: true},
 			{Label: "Chave", Value: "sk-secret", Secret: true},
 			{Label: "Auth", Value: "none", Options: []string{"none", "api_key"}, OptionLabels: []string{"Nenhuma", "Chave"}},
 		},
@@ -35,6 +35,84 @@ func TestConnectionViewDrawsFieldsMaskedAndTheCatalogResult(t *testing.T) {
 	require.NotContains(t, view, "sk-secret")
 	require.Contains(t, view, " Auth   ◉ Nenhuma   ○ Chave")
 	require.Contains(t, view, "✓ 8 modelos")
+}
+
+func TestConnectionsShowKeysInsteadOfButtons(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	global := filepath.Join(t.TempDir(), "global.json")
+	require.NoError(t, os.WriteFile(global, []byte(`{}`), 0600))
+	oldPath := viper.ConfigFileUsed()
+	viper.SetConfigFile(global)
+	t.Cleanup(func() { viper.SetConfigFile(oldPath) })
+	_, err := config.Load(root, false)
+	require.NoError(t, err)
+	useWorkspace(t, root)
+	cfg := config.Get()
+	oldProfiles := cfg.ProviderProfiles
+	t.Cleanup(func() { cfg.ProviderProfiles = oldProfiles })
+	cfg.ProviderProfiles = map[string]config.ProviderProfile{"casa": {Name: "Casa"}}
+	for _, width := range []int{80, 120} {
+		m := New(nil)
+		m.width, m.height = width, 30
+		m.openSettingsAt(sectionConnections)
+		view := ansi.Strip(m.dialog.(*settingsPanel).view(m))
+		require.Contains(t, view, "Casa")
+		require.NotContains(t, view, "▕ Edit")
+		require.NotContains(t, view, "+ New connection")
+		require.NotContains(t, view, "+ Nova conexão")
+		for _, key := range []string{"N ", "Enter ", "T ", "M ", "A ", "D ", "Esc "} {
+			require.Contains(t, view, "  "+key, "width %d", width)
+		}
+	}
+}
+
+func TestFieldCaretFollowsTheCursor(t *testing.T) {
+	draw := func(field dialog.ProviderFormField) string {
+		return strings.TrimRight(ansi.Strip(fieldValue(field, 12)), " ")
+	}
+	require.Equal(t, " ab▏cd", draw(dialog.ProviderFormField{Value: "abcd", Cursor: 2, Focused: true}))
+	require.Equal(t, " abcd", draw(dialog.ProviderFormField{Value: "abcd", Cursor: 2}))
+	require.Equal(t, " …ijklmnop▏", draw(dialog.ProviderFormField{Value: "abcdefghijklmnop", Cursor: 16, Focused: true}))
+	require.Equal(t, " ▏abcdefghi", draw(dialog.ProviderFormField{Value: "abcdefghijklmnop", Cursor: 0, Focused: true}))
+	require.Equal(t, " ••▏•", draw(dialog.ProviderFormField{Value: "abc", Cursor: 2, Focused: true, Secret: true}))
+	require.Equal(t, " ▏hint", draw(dialog.ProviderFormField{Placeholder: "hint", Focused: true}))
+}
+
+func TestPresetNameCanBeErasedAndTypedOver(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	global := filepath.Join(t.TempDir(), "global.json")
+	require.NoError(t, os.WriteFile(global, []byte(`{}`), 0600))
+	oldPath := viper.ConfigFileUsed()
+	viper.SetConfigFile(global)
+	t.Cleanup(func() { viper.SetConfigFile(oldPath) })
+	_, err := config.Load(root, false)
+	require.NoError(t, err)
+	useWorkspace(t, root)
+	for preset := range config.ProviderPresets {
+		m := New(nil)
+		m.width, m.height = 110, 30
+		m.openProviderForm("")
+		form := m.dialog.(*hosted).cmp.(formStater)
+		for range preset {
+			m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		}
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+		state, ok := form.FormState()
+		require.True(t, ok)
+		for range len([]rune(state.Fields[0].Value)) {
+			m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		}
+		m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+		state, _ = form.FormState()
+		require.Equal(t, "x", state.Fields[0].Value, config.ProviderPresets[preset].ID)
+		m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+		state, _ = form.FormState()
+		require.Zero(t, state.Fields[0].Cursor)
+	}
 }
 
 func TestSettingsArrowsMoveBetweenTheMenuAndTheSection(t *testing.T) {

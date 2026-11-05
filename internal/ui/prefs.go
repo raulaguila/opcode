@@ -341,7 +341,7 @@ func (p *settingsPanel) legend() string {
 	case !p.inside:
 		return textFor("↑↓ seção · → entrar · Esc fechar", "↑↓ section · → enter · Esc close")
 	case p.section == sectionConnections:
-		return textFor("N nova · Enter editar · T testar · D excluir · ← menu · Esc fechar", "N new · Enter edit · T test · D delete · ← menu · Esc close")
+		return textFor("N nova · Enter editar · T testar · M modelos · A ligar/desligar · D excluir · ← menu · Esc fechar", "N new · Enter edit · T test · M models · A on/off · D delete · ← menu · Esc close")
 	case p.section == sectionApproval:
 		return textFor("→ política · ← menu · Esc fechar", "→ policy · ← menu · Esc close")
 	case p.section == sectionIntegrations:
@@ -358,13 +358,13 @@ func (p *settingsPanel) legend() string {
 }
 
 // connectionRows draws each connection as a framed card: state, name and
-// status on top, address and authentication, then the actions that fit its
-// state. A disabled connection is one quiet row, as is the offer to add one.
+// status on top, then address and authentication. A disabled connection is
+// one quiet row. The actions live in the legend, which the keys answer to.
 func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 	var rows []string
 	list := connections(p.active)
 	if len(list) == 0 {
-		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ainda.", "No connections yet.")), "")
+		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ainda. Pressione N para adicionar.", "No connections yet. Press N to add one.")), "")
 	}
 	for i, c := range list {
 		rows = append(rows, p.connectionCard(c, i, width)...)
@@ -372,8 +372,7 @@ func (p *settingsPanel) connectionRows(m *Model, width int) []string {
 	if p.status != "" && p.failed {
 		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(p.status, width, "…")))
 	}
-	offer := on(P.Surface, P.Ask).Render(" " + textFor("+ Nova conexão · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…", "+ New connection · Ollama, OpenAI, Anthropic, Gemini, OpenRouter…"))
-	return append(rows, quietRow(offer, false, width, P.Surface))
+	return rows
 }
 
 // connectionCard is one connection; a disabled one folds to a quiet line.
@@ -401,14 +400,6 @@ func (p *settingsPanel) connectionCard(c connection, i, width int) []string {
 	}
 	if deleting {
 		body = append(body, pad+indent+on(bg, P.Danger).Render(textFor("Excluir esta conexão? Enter confirma · Esc cancela", "Delete this connection? Enter confirms · Esc cancels")))
-	} else {
-		labels := []string{textFor("Editar", "Edit"), textFor("Testar", "Test"), textFor("Modelos", "Models")}
-		if keyMissing(c) {
-			labels = []string{textFor("Editar", "Edit"), textFor("Desativar", "Disable")}
-		}
-		for _, row := range OutlineButtons(labels, P.Border, P.Strong, bg) {
-			body = append(body, pad+on(bg, bg).Render("   ")+row)
-		}
 	}
 	card := Box{Width: width, Accent: edge, Background: bg, Outer: P.Surface}
 	return strings.Split(card.Render(strings.Join(body, "\n")), "\n")

@@ -11,6 +11,7 @@ type ProviderFormField struct {
 	Label, Value, Placeholder string
 	Options, OptionLabels     []string // choices drawn as radios; empty for text
 	Focused, Secret           bool
+	Cursor                    int // rune position inside Value
 }
 
 // ProviderFormState is what the connection editor shows, for an interface
@@ -57,6 +58,7 @@ func (m *providerDialogCmp) FormState() (ProviderFormState, bool) {
 		field := ProviderFormField{
 			Label:       interfaceCopy(fieldLabel(m.labels[i])),
 			Value:       m.fields[i].Value(),
+			Cursor:      m.fields[i].Position(),
 			Placeholder: m.fields[i].Placeholder,
 			Options:     fieldOptions(m.labels[i]),
 			Focused:     i == m.focus,

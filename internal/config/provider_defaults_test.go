@@ -102,10 +102,26 @@ func TestNamedEmptyCredentialStillRejectsLiteralFallbackAfterDecode(t *testing.T
 	path := filepath.Join(t.TempDir(), "settings.json")
 	require.NoError(t, os.WriteFile(path, []byte(document), 0600))
 	viper.SetConfigFile(path)
-	_, err := LoadOffline(t.TempDir())
+	loaded, err := LoadOffline(t.TempDir())
+	require.NoError(t, err) // setup must stay reachable; only a run refuses
+	err = loaded.ValidateStartup()
 	require.ErrorContains(t, err, "environment variable OPCODE_EMPTY_PROVIDER_KEY is not set")
 	require.NotContains(t, err.Error(), "literal-must-not-win")
 	raw, readErr := os.ReadFile(path)
 	require.NoError(t, readErr)
 	require.JSONEq(t, document, string(raw))
+}
+
+func TestLocalModelWithoutServerLoadsForSetup(t *testing.T) {
+	isolateModelConfig(t)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LOCAL_ENDPOINT", "")
+	path := filepath.Join(t.TempDir(), "settings.json")
+	require.NoError(t, os.WriteFile(path, []byte(`{"models":{"local.fixture":{"provider":"local","api_model":"fixture","context_window":16384,"default_max_tokens":2048}},"agents":{"coder":{"model":"local.fixture"}}}`), 0600))
+	viper.SetConfigFile(path)
+	loaded, err := LoadOffline(t.TempDir())
+	require.NoError(t, err)
+	require.Empty(t, loaded.Agents[AgentCoder].Model)
+	require.ErrorContains(t, loaded.ValidateStartup(), "no model configured")
 }

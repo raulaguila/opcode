@@ -2,6 +2,14 @@
 
 ## Em desenvolvimento — 2026-11-03
 
+- Sem provedor utilizável, a interface abre em **Nova conexão** em vez de sair com
+  erro na partida, inclusive quando o agente aponta para um modelo `local.*` sem
+  URL. `opcode -p` continua recusando e diz o que configurar.
+- Conexões: saíram os botões sem clique e a linha "+ Nova conexão"; `M` (modelos)
+  e `A` (ligar/desligar) entraram na legenda, que agora quebra linha quando não
+  cabe, sem esconder teclas.
+- Formulário de conexão: o cursor dos presets começa no fim do texto, o que
+  impedia apagar parte do nome, e o traço do campo acompanha o cursor real.
 - Segurança: `.opcode.json` de um repositório não redefine mais `providers`,
   `providerProfiles`, `data`, `lsp`, `mcpServers` nem `shell`; esses campos valem
   só na configuração global e o log avisa quando foram ignorados. Salvar provedor

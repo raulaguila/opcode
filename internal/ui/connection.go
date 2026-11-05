@@ -90,16 +90,29 @@ func fieldValue(field dialog.ProviderFormField, width int) string {
 		}
 		return Line(on(P.Surface, P.Surface).Render(" ")+strings.Join(parts, on(P.Surface, P.Surface).Render("   ")), width, P.Surface)
 	}
-	value := field.Value
-	if field.Secret && value != "" {
-		value = strings.Repeat("•", min(24, len([]rune(value))))
+	value := []rune(field.Value)
+	if field.Secret && len(value) > 0 {
+		value = []rune(strings.Repeat("•", min(24, len(value))))
 	}
-	text := on(P.Field, P.Strong).Render(" " + ansi.TruncateLeft(value, max(0, ansi.StringWidth(value)-width+3), "…"))
-	if value == "" {
-		text = on(P.Field, P.Faint).Render(" " + field.Placeholder)
-	}
+	caret := ""
 	if field.Focused {
-		text += on(P.Field, P.Ask).Render("▏")
+		caret = on(P.Field, P.Ask).Render("▏")
 	}
+	if len(value) == 0 {
+		return Line(on(P.Field, P.Faint).Render(" ")+caret+on(P.Field, P.Faint).Render(field.Placeholder), width, P.Field)
+	}
+	cursor := min(field.Cursor, len(value))
+	if !field.Focused {
+		cursor = len(value)
+	}
+	// The window shows the end of a long value until the cursor leaves it.
+	room := max(1, width-3)
+	start := min(cursor, max(0, len(value)-room))
+	end := min(len(value), start+room)
+	head, tail := value[start:cursor], value[cursor:end]
+	if start > 0 {
+		head = append([]rune("…"), head[min(1, len(head)):]...)
+	}
+	text := on(P.Field, P.Strong).Render(" "+string(head)) + caret + on(P.Field, P.Strong).Render(string(tail))
 	return Line(text, width, P.Field)
 }

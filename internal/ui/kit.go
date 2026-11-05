@@ -147,28 +147,20 @@ func KeyRow(legend string, width int, bg color.Color) []string {
 	if len(parts) == 1 {
 		return []string{on(bg, P.Rule).Render(strings.Repeat("─", width)), Line(right, width, bg)}
 	}
-	return []string{on(bg, P.Rule).Render(strings.Repeat("─", width)), Spread(strings.Join(left, gap), right, width, bg)}
+	rows := []string{on(bg, P.Rule).Render(strings.Repeat("─", width))}
+	line := left[0]
+	for _, part := range left[1:] { // a legend that does not fit keeps every key, on more rows
+		if ansi.StringWidth(line+gap+part)+ansi.StringWidth(right)+1 > width {
+			rows = append(rows, Line(line, width, bg))
+			line = part
+			continue
+		}
+		line += gap + part
+	}
+	return append(rows, Spread(line, right, width, bg))
 }
 
 // Chip is a short tag on a raised tint: "ferramentas", "Ctrl+O".
 func Chip(text string, fg, bg color.Color) string {
 	return on(P.Raised, fg).Render(" "+text+" ") + on(bg, bg).Render(" ")
-}
-
-// OutlineButtons draws buttons with thin outlines over three rows: a line
-// above, the labels between side edges, a line below.
-func OutlineButtons(labels []string, edge, text, bg color.Color) [3]string {
-	var out [3]string
-	for i, label := range labels {
-		if i > 0 {
-			for r := range out {
-				out[r] += on(bg, bg).Render(" ")
-			}
-		}
-		span := ansi.StringWidth(label) + 2
-		out[0] += on(bg, edge).Render(" " + strings.Repeat("▁", span) + " ")
-		out[1] += on(bg, edge).Render("▕") + on(bg, text).Render(" "+label+" ") + on(bg, edge).Render("▏")
-		out[2] += on(bg, edge).Render(" " + strings.Repeat("▔", span) + " ")
-	}
-	return out
 }

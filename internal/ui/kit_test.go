@@ -76,14 +76,11 @@ func TestKeyRowPushesTheLastPairRight(t *testing.T) {
 	require.True(t, strings.HasSuffix(row, "Esc fechar"))
 }
 
-func TestThinEdgesHugTheFillAndButtonsKeepWidths(t *testing.T) {
+func TestThinEdgesHugTheFill(t *testing.T) {
 	box := strings.Split(ansi.Strip(Box{Width: 10}.Render("x")), "\n")
 	require.Equal(t, " ▁▁▁▁▁▁▁▁ ", box[0])
 	require.Equal(t, "▕x       ▏", box[1])
 	require.Equal(t, " ▔▔▔▔▔▔▔▔ ", box[2])
-	buttons := OutlineButtons([]string{"Editar", "Testar"}, P.Border, P.Text, P.Card)
-	require.Equal(t, "▕ Editar ▏ ▕ Testar ▏", ansi.Strip(buttons[1]))
-	require.Equal(t, ansi.StringWidth(ansi.Strip(buttons[1])), ansi.StringWidth(ansi.Strip(buttons[0])))
 }
 
 func TestRecentCommandsKeepThreeNewestFirst(t *testing.T) {

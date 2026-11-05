@@ -19,10 +19,10 @@ func configureLocalProvider(discovery ...bool) error {
 	if endpoint == "" {
 		endpoint = local.BaseURL
 	}
-	needsDiscovery, usesLocal := localDiscoveryNeeded()
-	if endpoint == "" && !usesLocal {
+	if endpoint == "" { // no server yet: the agents fall back and setup opens
 		return nil
 	}
+	needsDiscovery := localDiscoveryNeeded()
 	baseURL, err := models.NormalizeLocalEndpoint(endpoint)
 	if err != nil {
 		return err
@@ -45,20 +45,18 @@ func configureLocalProvider(discovery ...bool) error {
 	return publishDiscoveredLocalModels(local, found)
 }
 
-func localDiscoveryNeeded() (bool, bool) {
+func localDiscoveryNeeded() bool {
 	needsDiscovery := cfg.Agents[AgentCoder].Model == ""
-	usesLocal := false
 	for _, agent := range cfg.Agents {
 		model, exists := models.SupportedModels[agent.Model]
 		if model.ProviderProfile != "" {
 			continue
 		}
 		if model.Provider == models.ProviderLocal || strings.HasPrefix(string(agent.Model), "local.") {
-			usesLocal = true
 			needsDiscovery = needsDiscovery || !exists
 		}
 	}
-	return needsDiscovery, usesLocal
+	return needsDiscovery
 }
 
 func publishDiscoveredLocalModels(local Provider, found []models.Model) error {

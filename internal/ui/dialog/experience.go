@@ -184,6 +184,9 @@ func experienceUpdateProviderDialogCmpEnter(m *providerDialogCmp) (extractedResu
 	m.fields[5].SetValue(p.Profile.API)
 	m.fields[6].SetValue(fmt.Sprint(p.Profile.ContextWindow))
 	m.fields[7].SetValue(fmt.Sprint(p.Profile.DefaultMaxTokens))
+	for i := range m.fields { // SetValue keeps the cursor where the blank form left it
+		m.fields[i].CursorEnd()
+	}
 	return cmd, true, true
 
 }

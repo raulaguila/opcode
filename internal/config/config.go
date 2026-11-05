@@ -185,7 +185,7 @@ var cfg *Config
 func (c *Config) ValidateStartup() error {
 	for _, name := range []AgentName{AgentCoder, AgentTitle, AgentSummarizer, AgentTask} {
 		if c == nil || c.Agents[name].Model == "" {
-			return fmt.Errorf("no model configured for agent %q: set LOCAL_ENDPOINT for Ollama/LM Studio, set a provider API key (e.g. OPENAI_API_KEY or ANTHROPIC_API_KEY), or configure providers and agents.coder.model in ~/.opcode/config.json", name)
+			return fmt.Errorf("no model configured for agent %q: set LOCAL_ENDPOINT for Ollama/LM Studio, set a provider API key (e.g. OPENAI_API_KEY or ANTHROPIC_API_KEY), or configure providers and agents.coder.model in ~/.opcode/config.json%s", name, missingKeyHint())
 		}
 	}
 	return nil
@@ -564,10 +564,11 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 	if err != nil {
 		return err
 	}
+	noEndpoint := provider == models.ProviderLocal && providerCfg.BaseURL == "" && os.Getenv("LOCAL_ENDPOINT") == ""
 	if !providerExists {
 		// Provider not configured, check if we have environment variables
 		apiKey := getProviderAPIKey(provider)
-		if apiKey == "" && provider != models.ProviderLocal {
+		if apiKey == "" && (provider != models.ProviderLocal || noEndpoint) {
 			logging.Warn("provider not configured for model, reverting to default",
 				"agent", name,
 				"model", agent.Model,
@@ -584,7 +585,7 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 			}
 			logging.Info("added provider from environment", "provider", provider)
 		}
-	} else if providerCfg.Disabled || (providerCfg.APIKey == "" && providerCfg.APIKeyRef == "" && requiresAPIKey(provider)) {
+	} else if noEndpoint || providerCfg.Disabled || (providerCfg.APIKey == "" && providerCfg.APIKeyRef == "" && requiresAPIKey(provider)) {
 		// Provider is disabled or has no API key
 		logging.Warn("provider is disabled or has no API key, reverting to default",
 			"agent", name,
@@ -597,6 +598,9 @@ func validateAgent(cfg *Config, name AgentName, agent Agent) error {
 		}
 	}
 
+	if cfg.Agents[name].Model == "" {
+		return nil
+	}
 	validateAgentTokenBudget(cfg, name, agent, model)
 	return validateAgentReasoning(cfg, name, agent, model, provider)
 }
@@ -1019,7 +1023,13 @@ func fallbackAgentDefinition(name AgentName, model, title models.ModelID, effort
 
 func fallbackValidatedAgent(cfg *Config, name AgentName) error {
 	if !setDefaultModelForAgent(name) {
-		return fmt.Errorf("no valid provider available for agent %s%s", name, missingKeyHint())
+		// No model is a valid state: the interface opens setup, and -p refuses
+		// it in ValidateStartup. Failing here would lock the user out of setup.
+		logging.Warn("no provider available, agent left without a model", "agent", name)
+		agent := cfg.Agents[name]
+		agent.Model = ""
+		cfg.Agents[name] = agent
+		return nil
 	}
 	logging.Info("set default model for agent", "agent", name, "model", cfg.Agents[name].Model)
 	return nil

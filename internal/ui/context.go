@@ -28,7 +28,21 @@ func (m *Model) showContext(compact bool) tea.Cmd {
 		return nil
 	}
 	m.info = contextLine(status, compact)
+	if usage, ok := m.app.CoderAgent.(agent.UsageControl); ok {
+		if metrics, err := usage.Usage(ctx, m.session.ID); err == nil {
+			m.info += cacheLine(metrics)
+		}
+	}
 	return nil
+}
+
+// cacheLine shows how much of the prompt the provider served from its cache.
+// A drop means the request prefix changed between steps.
+func cacheLine(metrics agent.UsageMetrics) string {
+	if metrics.CachedInputTokens <= 0 || metrics.InputTokens <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(textFor(" · cache: %d%% do prompt reaproveitado", " · cache: %d%% of the prompt reused"), metrics.CachedInputTokens*100/metrics.InputTokens)
 }
 
 func contextLine(status agent.ContextStatus, compact bool) string {

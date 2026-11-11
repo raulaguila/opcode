@@ -118,3 +118,59 @@ func truncateContinuitySummaries(history []message.Message) {
 		history[i].Parts[0] = message.TextContent{Text: tools.Clip(history[i].Content().Text, 500) + " [Exact evidence retained in saved conversation.]"}
 	}
 }
+
+// compactAppliedEdits shortens the text a finished write/edit/patch carried:
+// the change is on disk, so a 3K-token file body need not ride along in every
+// later request of the turn. Only applied calls change; the input stays JSON.
+func compactAppliedEdits(history []message.Message) ([]message.Message, int) {
+	applied := map[string]bool{}
+	for _, msg := range history {
+		for _, result := range msg.ToolResults() {
+			applied[result.ToolCallID] = !result.IsError
+		}
+	}
+	out := slices.Clone(history)
+	changed := 0
+	for i, msg := range history {
+		if msg.Role != message.Assistant {
+			continue
+		}
+		cloned := false
+		for j, part := range msg.Parts {
+			call, ok := part.(message.ToolCall)
+			if !ok || !applied[call.ID] || call.Name != tools.WriteToolName && call.Name != tools.EditToolName && call.Name != tools.PatchToolName {
+				continue
+			}
+			input, ok := clippedEditInput(call.Input)
+			if !ok {
+				continue
+			}
+			if !cloned {
+				out[i].Parts, cloned = slices.Clone(msg.Parts), true
+			}
+			call.Input = input
+			out[i].Parts[j] = call
+			changed++
+		}
+	}
+	return out, changed
+}
+
+func clippedEditInput(raw string) (string, bool) {
+	var fields map[string]any
+	if len(raw) <= 1024 || json.Unmarshal([]byte(raw), &fields) != nil {
+		return "", false
+	}
+	clipped := false
+	for key, value := range fields {
+		if text, ok := value.(string); ok && len(text) > 512 {
+			fields[key] = tools.Clip(text, 256) + fmt.Sprintf("\n[%d bytes already applied to disk; view the file for its current content.]", len(text))
+			clipped = true
+		}
+	}
+	if !clipped {
+		return "", false
+	}
+	encoded, err := json.Marshal(fields)
+	return string(encoded), err == nil
+}

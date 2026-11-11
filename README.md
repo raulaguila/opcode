@@ -161,8 +161,7 @@ Para configurar Ollama uma vez, por exemplo:
       "name": "Ollama local",
       "backend": "local",
       "baseURL": "http://127.0.0.1:11434/v1",
-      "api": "ollama",
-      "defaultMaxTokens": 2048
+      "api": "ollama"
     }
   }
 }
@@ -170,6 +169,8 @@ Para configurar Ollama uma vez, por exemplo:
 
 O contexto é consultado no provedor, sem guardar seu tamanho no JSON.
 Um `contextWindow` positivo é uma opção para definir um limite manual.
+Sem `defaultMaxTokens`, um modelo local responde com até 1/4 da janela
+(entre 4096 e 16384 tokens); defina-o para fixar outro limite.
 O seletor identifica contexto alocado, máximo anunciado ou estimativa alternativa,
 e mostra suporte a ferramentas informado pelo provedor (ou desconhecido).
 A configuração básica inclui o estado ativo da conexão; salvar um perfil

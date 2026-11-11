@@ -3,15 +3,18 @@
 package evaluation
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	appconfig "github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/models"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,12 +48,17 @@ func liveOllamaEvaluation(t *testing.T, caseIDs []string, allowExecution bool) {
 	require.NoError(t, err)
 	require.Contains(t, []string{"127.0.0.1", "localhost", "::1"}, parsed.Hostname())
 	require.Contains(t, []string{"http", "https"}, parsed.Scheme)
-	model := appconfig.Environment("OPCODE_LIVE_OLLAMA_MODEL")
-	if model == "" {
-		model = "llama3.1:8b"
+	// A comma-separated list runs the same gate on each model in turn.
+	for _, model := range strings.Split(cmp.Or(appconfig.Environment("OPCODE_LIVE_OLLAMA_MODEL"), "llama3.1:8b"), ",") {
+		t.Run(model, func(t *testing.T) {
+			liveOllamaModel(t, endpoint, binary, strings.TrimSpace(model), caseIDs, allowExecution)
+		})
 	}
+}
+
+func liveOllamaModel(t *testing.T, endpoint, binary, model string, caseIDs []string, allowExecution bool) {
 	id := "local." + model
-	configuration := map[string]any{"providers": map[string]any{"local": map[string]any{"baseURL": endpoint}}, "models": map[string]any{id: map[string]any{"provider": "local", "api": "ollama", "api_model": model, "context_window": 16384, "default_max_tokens": 2048}}, "agents": map[string]any{"coder": map[string]any{"model": id}, "title": map[string]any{"model": id}, "summarizer": map[string]any{"model": id}, "task": map[string]any{"model": id}}}
+	configuration := map[string]any{"providers": map[string]any{"local": map[string]any{"baseURL": endpoint}}, "models": map[string]any{id: map[string]any{"provider": "local", "api": "ollama", "api_model": model, "context_window": 16384, "default_max_tokens": models.LocalOutputTokens(16384)}}, "agents": map[string]any{"coder": map[string]any{"model": id}, "title": map[string]any{"model": id}, "summarizer": map[string]any{"model": id}, "task": map[string]any{"model": id}}}
 	raw, err := json.Marshal(configuration)
 	require.NoError(t, err)
 	path := filepath.Join(t.TempDir(), "provider.json")

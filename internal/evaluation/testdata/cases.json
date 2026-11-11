@@ -374,6 +374,51 @@
           "value": "fora.txt"
         }
       ]
+    },
+    {
+      "id": "short-request",
+      "mode": "execute",
+      "files": {
+        "README.md": "# ShortLab\n",
+        "Makefile": "test:\n\tsh test.sh\n",
+        "test.sh": "test 2 -eq 2 && echo 'shortlab tests passed'\n"
+      },
+      "prompts": [
+        "Rode os testes"
+      ],
+      "criteria": [
+        {
+          "kind": "response_not_matches",
+          "value": "(?i)(qual (é )?a tarefa|o que (você )?(deseja|quer|gostaria)|what('s| is) the task|how can i help)"
+        },
+        {
+          "kind": "response_matches",
+          "value": "(?i)(pass|passou|passaram|sucesso|ok)"
+        }
+      ]
+    },
+    {
+      "id": "long-reply",
+      "mode": "execute",
+      "files": {
+        "README.md": "# TableLab\n"
+      },
+      "prompts": [
+        "Crie numbers.py com uma lista NUMBERS contendo literalmente os inteiros de 1 a 600, um por linha, sem usar range nem laços. Não execute comandos."
+      ],
+      "criteria": [
+        {
+          "kind": "file_contains",
+          "path": "numbers.py",
+          "value": "NUMBERS"
+        },
+        {
+          "kind": "file_contains",
+          "path": "numbers.py",
+          "value": "600"
+        }
+      ],
+      "timeout_seconds": 420
     }
   ]
 }

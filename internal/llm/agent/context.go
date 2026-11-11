@@ -150,6 +150,12 @@ func (a *agent) budgetRequestWithProvider(session string, history []message.Mess
 			return nil, err
 		}
 	}
+	if !status.Fits { // the newest batch is kept whole above; an applied edit's body is not needed to continue
+		history, status, err = a.compactRequestHistory(p, history, status, ts, compactAppliedEdits)
+		if err != nil {
+			return nil, err
+		}
+	}
 	a.contextMu.Lock()
 	if a.contextStatuses == nil {
 		a.contextStatuses = map[string]ContextStatus{}

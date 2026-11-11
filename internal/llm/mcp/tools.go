@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -111,9 +112,9 @@ func newMCPClient(server config.MCPServer) (MCPClient, error) {
 			return cmd, err
 		}))), nil
 	case config.MCPSse:
-		return client.NewSSEMCPClient(server.URL, client.WithHeaders(server.Headers))
+		return client.NewSSEMCPClient(server.URL, client.WithHeaders(server.Headers), client.WithHTTPClient(noRedirects()))
 	case config.MCPHTTP:
-		return client.NewStreamableHttpClient(server.URL, transport.WithHTTPHeaders(server.Headers))
+		return client.NewStreamableHttpClient(server.URL, transport.WithHTTPHeaders(server.Headers), transport.WithHTTPBasicClient(noRedirects()))
 	default:
 		return nil, fmt.Errorf("invalid mcp type: %s", server.Type)
 	}
@@ -142,4 +143,10 @@ func newOAuthMCPClient(server config.MCPServer) (MCPClient, error) {
 	}
 	return nil, fmt.Errorf("OAuth requires HTTP or SSE transport")
 
+}
+
+// noRedirects keeps configured headers (API keys) on the server the user named:
+// mcp-go's default client follows a Location to any host with them (GO-2026-6911).
+func noRedirects() *http.Client {
+	return &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }

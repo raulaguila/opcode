@@ -1,6 +1,7 @@
 package config
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -381,6 +382,7 @@ func (snapshot providerCatalogSnapshot) refreshAutomaticModel(existing, model mo
 		} else if existing.ContextSource != "catalog" {
 			existing.ContextSource = "cache"
 		}
+		existing.DefaultMaxTokens = cmp.Or(model.DefaultMaxTokens, existing.DefaultMaxTokens)
 		if configured, ok := snapshot.explicit[existing.ID]; ok && configured.DefaultMaxTokens > 0 {
 			existing.DefaultMaxTokens = configured.DefaultMaxTokens
 		}

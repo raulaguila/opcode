@@ -70,3 +70,11 @@ func TestLocalDiscoveryRejectsBadResponsesAndCancellation(t *testing.T) {
 	_, err := DiscoverLocalModels(ctx, "http://local.invalid/v1", "")
 	require.Error(t, err)
 }
+
+func TestLocalReplyBudgetScalesWithTheWindow(t *testing.T) {
+	for window, want := range map[int64]int64{4096: 2048, 8192: 4096, 32768: 8192, 131072: 16384} {
+		if got := LocalOutputTokens(window); got != want {
+			t.Fatalf("window %d: got %d, want %d", window, got, want)
+		}
+	}
+}

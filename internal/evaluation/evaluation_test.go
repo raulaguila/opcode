@@ -16,7 +16,7 @@ import (
 func TestBundledOfflineFixtureValidationNeverClaimsAgentQuality(t *testing.T) {
 	suite, raw, err := Load("")
 	require.NoError(t, err)
-	require.Len(t, suite.Cases, 14)
+	require.Len(t, suite.Cases, 16)
 	first, err := Run(context.Background(), suite, raw, Options{})
 	require.NoError(t, err)
 	second, err := Run(context.Background(), suite, raw, Options{})

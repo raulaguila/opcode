@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/raulaguila/opcode/internal/config"
+	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
@@ -66,4 +67,9 @@ func TestFailureCardAlwaysSaysWhatStopped(t *testing.T) {
 	require.Contains(t, explain(limit), "output tokens")
 	require.Equal(t, "disk quota exceeded.", explain("disk quota exceeded"), "an unknown error is shown, not hidden")
 	require.Empty(t, explain("context canceled"), "a titled cause needs no repeat")
+}
+
+func TestContextReportsTheProviderCacheOnlyWhenMeasured(t *testing.T) {
+	require.Empty(t, cacheLine(agent.UsageMetrics{InputTokens: 1000}), "Ollama reports no cache: say nothing rather than 0%")
+	require.Equal(t, " · cache: 75% of the prompt reused", cacheLine(agent.UsageMetrics{InputTokens: 4000, CachedInputTokens: 3000}))
 }

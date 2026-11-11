@@ -174,7 +174,7 @@ func convertLocalModel(model localModel) Model {
 		ContextAuto:         true,
 		ContextSource:       source,
 		ContextWindow:       window,
-		DefaultMaxTokens:    min(cmp.Or(model.ReportedOutput, 4096), window/2),
+		DefaultMaxTokens:    min(cmp.Or(model.ReportedOutput, LocalOutputTokens(window)), window/2),
 		CanReason:           false,
 		SupportsAttachments: false,
 		SupportsTools:       model.SupportsTools,
@@ -300,4 +300,11 @@ func catalogLocalModels(page catalogPage, lmStudio bool) []localModel {
 		result = append(result, model)
 	}
 	return result
+}
+
+// LocalOutputTokens is the reply budget for a local model that reports none.
+// A local model costs nothing per token, so a quarter of the window (one file
+// written in a single reply) beats the old flat 2–4K, which cut replies off.
+func LocalOutputTokens(window int64) int64 {
+	return min(max(window/4, 4096), 16384, window/2)
 }

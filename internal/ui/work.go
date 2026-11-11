@@ -449,7 +449,7 @@ func (m *Model) failureView() string {
 	bg := P.DangerCard
 	rows := []string{
 		on(bg, P.Danger).Bold(true).Render(ansi.Truncate("■ "+textFor("Parado: ", "Stopped: ")+failureTitle(reason), inner, "…")),
-		on(bg, P.Muted).Render(ansi.Truncate(strings.TrimSpace(cause(reason)+" "+textFor("Rascunho e progresso foram preservados.", "Draft and progress were kept.")), inner, "…")),
+		on(bg, P.Muted).Render(ansi.Truncate(strings.TrimSpace(explain(reason)+" "+textFor("Rascunho e progresso foram preservados.", "Draft and progress were kept.")), inner, "…")),
 	}
 	if m.showFailure {
 		for _, line := range strings.Split(ansi.Wrap(reason, inner, ""), "\n") {
@@ -459,11 +459,23 @@ func (m *Model) failureView() string {
 	gap := on(bg, bg).Render("  ")
 	rows = append(rows, "", Button(textFor("Retomar · Ctrl+R", "Resume · Ctrl+R"), false, P.Danger)+gap+
 		Button(textFor("Detalhes · Ctrl+E", "Details · Ctrl+E"), false, P.Danger)+gap+
-		Button(textFor("Trocar modelo · Ctrl+O", "Change model · Ctrl+O"), false, P.Danger)+gap+on(bg, P.Faint).Render(textFor("Esc dispensa", "Esc dismisses")))
+		Button(textFor("Trocar modelo · ", "Change model · ")+keyLabel(binding("models")), false, P.Danger)+gap+on(bg, P.Faint).Render(textFor("Esc dispensa", "Esc dismisses")))
 	for i := range rows {
 		rows[i] = Line(rows[i], inner, bg)
 	}
 	return indentBlock(box.Render(strings.Join(rows, "\n")))
+}
+
+// explain is the known cause, or the error itself when none is known, so
+// the card never says only that something went wrong.
+func explain(reason string) string {
+	if known := cause(reason); known != "" {
+		return known
+	}
+	if failureTitle(reason) == textFor("A execução parou com um erro", "The run stopped with an error") {
+		return reason + "."
+	}
+	return ""
 }
 
 // failureTitle names the common causes in the user's words.
@@ -486,6 +498,8 @@ func failureTitle(reason string) string {
 		return textFor("Limite de saída de ferramentas do turno atingido", "This turn's tool output limit was reached")
 	case strings.Contains(lower, "context budget exceeded"):
 		return textFor("A conversa não cabe mais no modelo", "The conversation no longer fits the model")
+	case strings.Contains(lower, "output token limit"):
+		return textFor("A resposta passou do limite de tokens de saída", "The reply hit the output token limit")
 	}
 	return textFor("A execução parou com um erro", "The run stopped with an error")
 }
@@ -516,6 +530,8 @@ func (m *Model) failureKey(key string) (tea.Cmd, bool) {
 func cause(reason string) string {
 	lower := strings.ToLower(reason)
 	switch {
+	case strings.Contains(lower, "output token limit"):
+		return textFor("Aumente os tokens de saída da conexão (Conexões › Avançado) ou use outro modelo.", "Raise the connection's output tokens (Connections › Advanced) or use another model.")
 	case strings.Contains(lower, "connection refused"), strings.Contains(lower, "deadline exceeded"), strings.Contains(lower, "no such host"):
 		return textFor("O servidor do modelo não respondeu.", "The model server did not answer.")
 	case strings.Contains(lower, "401"), strings.Contains(lower, "unauthorized"), strings.Contains(lower, "api key"):

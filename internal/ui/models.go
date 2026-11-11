@@ -116,7 +116,7 @@ func (m *Model) openModels() tea.Cmd {
 	}
 	picker.listDialog = &listDialog{
 		title:        textFor("Escolher modelo", "Choose model"),
-		legend:       textFor("Enter usar · Tab provedor · Ctrl+D detalhes · Ctrl+P conexão · Esc fechar", "Enter use · Tab provider · Ctrl+D details · Ctrl+P connection · Esc close"),
+		legend:       textFor("Enter usar · Tab provedor · Ctrl+D detalhes · Ctrl+E conexão · Esc fechar", "Enter use · Tab provider · Ctrl+D details · Ctrl+E connection · Esc close"),
 		searchPrompt: "⌕",
 		placeholder:  textFor("Buscar por nome ou ID", "Search by name or ID"),
 		width:        96,
@@ -307,7 +307,15 @@ func (p *modelPicker) meta() string {
 	case p.list.Query != "":
 		return name + " · " + results(len(p.list.Visible()))
 	}
-	return fmt.Sprintf(textFor("%s · %d de %d", "%s · %d of %d"), name, chat, len(p.catalog))
+	// The list's group already names the provider; say what is hidden instead.
+	count := fmt.Sprintf(textFor("%d modelos", "%d models"), chat)
+	if chat == 1 {
+		count = textFor("1 modelo", "1 model")
+	}
+	if hidden := len(p.catalog) - chat; hidden > 0 {
+		count += fmt.Sprintf(textFor(" · %d de embedding oculto", " · %d embedding hidden"), hidden)
+	}
+	return count
 }
 
 // providerHost is the connection's address without scheme and path.
@@ -341,7 +349,7 @@ func (p *modelPicker) tabs(_ *Model, width int) []string {
 	}
 	switch {
 	case p.provider == "":
-		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ativa · Ctrl+P configura uma", "No active connection · Ctrl+P sets one up")))
+		rows = append(rows, on(P.Surface, P.Muted).Render(textFor("Nenhuma conexão ativa · Ctrl+E configura uma", "No active connection · Ctrl+E sets one up")))
 	case p.err != nil:
 		rows = append(rows, on(P.Surface, P.Danger).Render(ansi.Truncate(textFor("Catálogo indisponível: ", "Catalog unavailable: ")+p.err.Error(), width, "…")))
 	}
@@ -376,7 +384,7 @@ func (p *modelPicker) keys(m *Model, msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		p.markActive(m)
 		p.setDetails(p.details)
 		return nil, true
-	case "ctrl+p":
+	case "ctrl+e": // Ctrl+P stays the global key for commands run
 		m.dialog = nil
 		return m.openSettings(), true
 	}
@@ -389,7 +397,7 @@ func (p *modelPicker) setDetails(on bool) {
 	current, _ := p.list.Current()
 	p.details, p.noSearch, p.side, p.split, p.width = on, on, nil, 0, 96
 	p.title = textFor("Escolher modelo", "Choose model")
-	p.legend = textFor("Enter usar · Tab provedor · Ctrl+A função · Ctrl+D detalhes · Ctrl+P conexão · Esc fechar", "Enter use · Tab provider · Ctrl+A role · Ctrl+D details · Ctrl+P connection · Esc close")
+	p.legend = textFor("Enter usar · Tab provedor · Ctrl+A função · Ctrl+D detalhes · Ctrl+E conexão · Esc fechar", "Enter use · Tab provider · Ctrl+A role · Ctrl+D details · Ctrl+E connection · Esc close")
 	if on {
 		p.side, p.split, p.width = p.detailColumn, 36, 120
 		p.title = textFor("Escolher modelo · detalhes", "Choose model · details")

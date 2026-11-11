@@ -35,7 +35,7 @@ var P = Palette{
 	Text:             lipgloss.Color("#c8cbe0"),
 	Strong:           lipgloss.Color("#e1e3f0"),
 	Muted:            lipgloss.Color("#8a8fa8"),
-	Faint:            lipgloss.Color("#6f7490"),
+	Faint:            lipgloss.Color("#7c819d"), // ≥4.5:1 on Ground, 4.4:1 on panels
 	Dim:              lipgloss.Color("#4d5069"),
 	Ask:              lipgloss.Color("#7aa2f7"),
 	Plan:             lipgloss.Color("#e0af68"),

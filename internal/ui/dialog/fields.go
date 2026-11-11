@@ -34,8 +34,6 @@ func settingOptions(path string) []string {
 	switch path {
 	case "tui.language":
 		return []string{"en", "pt"}
-	case "tui.sidebar":
-		return []string{"auto", "shown", "hidden"}
 	case "tui.notifications":
 		return []string{"off", "bell", "auto", "native", "osc"}
 	case "runtime.mode":

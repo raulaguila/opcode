@@ -46,5 +46,5 @@ func catalogFailureHint(err error) string {
 }
 
 func catalogFailureNotice(summary string) util.InfoMsg {
-	return util.InfoMsg{Type: util.InfoTypeError, Msg: summary, Details: summary + "\n" + config.Text("Ctrl+R tenta novamente; Ctrl+P revisa a conexão em Modelos. Nenhum modelo foi selecionado.", "Ctrl+R retries; Ctrl+P reviews the connection in Models. No model was selected.")}
+	return util.InfoMsg{Type: util.InfoTypeError, Msg: summary, Details: summary + "\n" + config.Text("Ctrl+R tenta novamente; Ctrl+E revisa a conexão em Modelos. Nenhum modelo foi selecionado.", "Ctrl+R retries; Ctrl+E reviews the connection in Models. No model was selected.")}
 }

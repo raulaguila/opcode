@@ -21,26 +21,26 @@ func experienceConfig(t *testing.T) (string, string) {
 	project := filepath.Join(root, "project")
 	require.NoError(t, os.Mkdir(project, 0700))
 	require.NoError(t, os.Mkdir(filepath.Join(project, ".opcode"), 0700))
-	require.NoError(t, os.WriteFile(global, []byte(`{"future":{"keep":true},"tui":{"sidebar":"hidden"}}`), 0600))
+	require.NoError(t, os.WriteFile(global, []byte(`{"future":{"keep":true},"tui":{"notifications":"bell"}}`), 0600))
 	viper.SetConfigFile(global)
-	cfg = &Config{WorkingDir: project, TUI: TUIConfig{Sidebar: "shown"}, Runtime: (RuntimeConfig{}).Defaults()}
+	cfg = &Config{WorkingDir: project, TUI: TUIConfig{Notifications: "auto"}, Runtime: (RuntimeConfig{}).Defaults()}
 	t.Cleanup(func() { cfg = old; viper.SetConfigFile(oldPath) })
 	return global, ProjectConfigPath(project)
 }
 func TestUserSettingUpdatesOwningLayerAndResetRevealsInheritedValue(t *testing.T) {
 	global, project := experienceConfig(t)
-	require.NoError(t, os.WriteFile(project, []byte(`{"tui":{"sidebar":"shown"},"unknown":1}`), 0600))
-	require.Equal(t, "project", EffectiveSetting("tui.sidebar").Origin)
-	require.NoError(t, SaveUserSetting("tui.sidebar", "auto", false))
-	require.Equal(t, "auto", cfg.TUI.Sidebar)
-	require.NoError(t, SaveUserSetting("tui.sidebar", "", true))
-	require.Equal(t, "hidden", cfg.TUI.Sidebar)
-	require.Equal(t, "global", EffectiveSetting("tui.sidebar").Origin)
+	require.NoError(t, os.WriteFile(project, []byte(`{"tui":{"notifications":"auto"},"unknown":1}`), 0600))
+	require.Equal(t, "project", EffectiveSetting("tui.notifications").Origin)
+	require.NoError(t, SaveUserSetting("tui.notifications", "osc", false))
+	require.Equal(t, "osc", cfg.TUI.Notifications)
+	require.NoError(t, SaveUserSetting("tui.notifications", "", true))
+	require.Equal(t, "bell", cfg.TUI.Notifications)
+	require.Equal(t, "global", EffectiveSetting("tui.notifications").Origin)
 	data, err := os.ReadFile(project)
 	require.NoError(t, err)
 	require.Contains(t, string(data), `"unknown": 1`)
-	require.NoError(t, SaveUserSetting("tui.sidebar", "", true))
-	require.Equal(t, "hidden", cfg.TUI.Sidebar)
+	require.NoError(t, SaveUserSetting("tui.notifications", "", true))
+	require.Equal(t, "off", cfg.TUI.Notifications)
 	data, err = os.ReadFile(global)
 	require.NoError(t, err)
 	require.Contains(t, string(data), "future")
@@ -71,27 +71,35 @@ func TestSettingValidationDoesNotWriteInvalidShortcutsOrRuntime(t *testing.T) {
 	require.NoError(t, SaveUserSetting("tui.keybindings.commands", "alt+k", false))
 	require.True(t, strings.Contains(string(after), "future"))
 }
-func TestSidebarPreferenceRespectsTerminalWidth(t *testing.T) {
-	for _, tc := range []struct {
-		mode    string
-		width   int
-		visible bool
-	}{{"auto", 80, false}, {"auto", 139, false}, {"auto", 140, true}, {"shown", 109, false}, {"shown", 110, true}, {"hidden", 200, false}} {
-		require.Equal(t, tc.visible, (TUIConfig{Sidebar: tc.mode}).SidebarVisible(tc.width))
+func TestInterfaceLanguageFollowsLocaleUntilChosen(t *testing.T) {
+	for env, want := range map[string]string{"pt_BR.UTF-8": "pt", "pt": "pt", "en_US.UTF-8": "en", "": "en", "C": "en"} {
+		require.Equal(t, want, localeLanguage(func(name string) string {
+			if name == "LANG" {
+				return env
+			}
+			return ""
+		}), env)
 	}
+	// LC_ALL wins over LANG, as in libc.
+	require.Equal(t, "en", localeLanguage(func(name string) string { return map[string]string{"LC_ALL": "C", "LANG": "pt_BR"}[name] }))
+}
+
+func TestRetiredShortcutsStillLoad(t *testing.T) {
+	require.NoError(t, TUIConfig{Keybindings: map[string]string{"sidebar": "alt+b", "theme": "ctrl+t"}}.Validate())
+	require.Error(t, TUIConfig{Keybindings: map[string]string{"nonsense": "alt+q"}}.Validate())
 }
 
 func TestSavingPreferenceRejectsMalformedOversizedAndSymlinkDocuments(t *testing.T) {
 	global, project := experienceConfig(t)
 	for _, data := range []string{`{"future":`, strings.Repeat(" ", maxSettingsDocument+1), `[]`, `null`} {
 		require.NoError(t, os.WriteFile(global, []byte(data), 0600))
-		require.Error(t, SaveUserSetting("tui.sidebar", "auto", false))
+		require.Error(t, SaveUserSetting("tui.notifications", "bell", false))
 		after, err := os.ReadFile(global)
 		require.NoError(t, err)
 		require.Equal(t, data, string(after))
 	}
 	require.NoError(t, os.WriteFile(global, []byte(`{"future":900719925474099312345}`), 0600))
-	require.NoError(t, SaveUserSetting("tui.sidebar", "auto", false))
+	require.NoError(t, SaveUserSetting("tui.notifications", "bell", false))
 	after, err := os.ReadFile(global)
 	require.NoError(t, err)
 	require.Contains(t, string(after), "900719925474099312345")

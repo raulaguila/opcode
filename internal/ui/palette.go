@@ -34,13 +34,14 @@ func (m *Model) commands() []command {
 	}
 	return []command{
 		{textFor("Nova conversa", "New conversation"), textFor("começar do zero", "start fresh"), "Ctrl+N", main, (*Model).newConversation},
-		{textFor("Escolher modelo", "Choose model"), textFor("modelo e provedor", "model and provider"), "Ctrl+O", main, (*Model).openModels},
-		{textFor("Conversas", "Conversations"), textFor("abrir, renomear, arquivar", "open, rename, archive"), "Ctrl+S", main, (*Model).openSessions},
+		{textFor("Escolher modelo", "Choose model"), textFor("modelo e provedor", "model and provider"), keyLabel(binding("models")), main, (*Model).openModels},
+		{textFor("Conversas", "Conversations"), textFor("abrir, renomear, arquivar", "open, rename, archive"), keyLabel(binding("sessions")), main, (*Model).openSessions},
+		{textFor("Ajuda", "Help"), textFor("todas as teclas", "every key"), "F1", main, (*Model).openHelp},
 		{textFor("Configurações", "Settings"), textFor("conexões e preferências", "connections and preferences"), "/settings", main, (*Model).openSettings},
 		{textFor("Perguntar", "Ask"), textFor("lê e explica, sem alterar", "reads and explains, no changes"), "Shift+Tab", work, mode("ask")},
 		{textFor("Planejar", "Plan"), textFor("prepara um plano, sem editar", "prepares a plan, no edits"), "Shift+Tab", work, mode("plan")},
 		{textFor("Executar", "Execute"), textFor("altera arquivos com aprovação", "changes files with approval"), "Shift+Tab", work, mode("execute")},
-		{textFor("Plano", "Plan"), textFor("mostrar ou recolher o plano", "show or fold the plan"), "/plan", work, (*Model).togglePlan},
+		{textFor("Mostrar plano", "Show plan"), textFor("mostrar ou recolher o plano", "show or fold the plan"), "/plan", work, (*Model).togglePlan},
 		{textFor("Retomar tarefa", "Resume task"), textFor("abre a última conversa e o plano salvo", "opens the last conversation and its saved plan"), "/resume", work, (*Model).resumeLast},
 		{textFor("Responder pergunta", "Answer question"), textFor("reabre a pergunta pendente do agente", "reopens the agent's pending question"), "Enter", work, func(m *Model) tea.Cmd { m.laterQuestion = ""; m.layout(); return nil }},
 		{textFor("Cancelar execução", "Cancel run"), textFor("para a tarefa em andamento", "stops the running task"), "Esc", work, func(m *Model) tea.Cmd {
@@ -55,7 +56,7 @@ func (m *Model) commands() []command {
 		}},
 		{textFor("Alterações", "Changes"), textFor("arquivos alterados por interação; desfazer ou refazer", "files changed per turn; undo or redo"), "/changes", work, (*Model).openChanges},
 		{textFor("Verificações", "Checks"), textFor("resultado das verificações da tarefa", "the task's check results"), "/checks", work, (*Model).openChecks},
-		{textFor("Comandos", "Commands"), textFor("comando completo, saída e cópia", "full command, output and copy"), "Ctrl+P", work, (*Model).openCommands},
+		{textFor("Comandos", "Commands"), textFor("comando completo, saída e cópia", "full command, output and copy"), keyLabel(binding("terminal")), work, (*Model).openCommands},
 		{textFor("Fila", "Queue"), textFor("mensagens enviadas durante a execução", "messages sent while the agent works"), "/queue", work, (*Model).openQueue},
 		{textFor("Skills", "Skills"), textFor("instruções prontas da configuração global", "ready-made instructions from the global configuration"), "/skills", work, (*Model).openSkills},
 		{textFor("Desfazer interação", "Undo turn"), textFor("reverte as edições da última resposta", "reverts the last reply's edits"), "/undo", work, func(m *Model) tea.Cmd { return m.undoLast(false) }},
@@ -70,6 +71,71 @@ func (m *Model) commands() []command {
 		{textFor("Aprovação", "Approval"), textFor("o que o agente faz sem perguntar", "what the agent does without asking"), "/approval", settings, (*Model).openApproval},
 		{textFor("Sair", "Quit"), textFor("fechar o opcode", "close opcode"), "Ctrl+C", conversation, func(m *Model) tea.Cmd { m.dialog = confirmQuit{}; return nil }},
 	}
+}
+
+// binding is the key the configuration gives an action.
+func binding(action string) string {
+	if cfg := config.Get(); cfg != nil && cfg.TUI.Keybindings[action] != "" {
+		return cfg.TUI.Keybindings[action]
+	}
+	return config.DefaultKeybindings[action]
+}
+
+// keyLabel writes ctrl+k as the screen does everywhere else: Ctrl+K.
+func keyLabel(key string) string {
+	parts := strings.Split(key, "+")
+	for i, part := range parts {
+		if part != "" {
+			parts[i] = strings.ToUpper(part[:1]) + part[1:]
+		}
+	}
+	return strings.Join(parts, "+")
+}
+
+// openHelp lists every key of the conversation screen; Enter runs it.
+func (m *Model) openHelp() tea.Cmd {
+	none := func(*Model) tea.Cmd { return nil }
+	// One ungrouped list that fits the panel's twelve rows without scrolling.
+	keys := []command{
+		{textFor("Comandos", "Commands"), "", keyLabel(binding("commands")), "", (*Model).openPalette},
+		{textFor("Escolher modelo", "Choose model"), "", keyLabel(binding("models")), "", (*Model).openModels},
+		{textFor("Conversas", "Conversations"), "", keyLabel(binding("sessions")), "", (*Model).openSessions},
+		{textFor("Comandos executados", "Commands run"), "", keyLabel(binding("terminal")), "", (*Model).openCommands},
+		{textFor("Inserir arquivo", "Insert file"), "", keyLabel(binding("files")) + " · @", "", (*Model).insertMention},
+		{textFor("Trocar modo", "Switch mode"), "", "Shift+Tab", "", func(m *Model) tea.Cmd { m.cycleMode(); return nil }},
+		{textFor("Enviar · nova linha", "Send · new line"), "", "Enter · Alt+Enter", "", none},
+		{textFor("Cancelar execução", "Cancel run"), "", "Esc", "", none},
+		{textFor("Rolar a conversa", "Scroll the conversation"), "", "PgUp PgDn · Alt+↑↓", "", none},
+		{textFor("Nova conversa", "New conversation"), "", "Ctrl+N", "", (*Model).newConversation},
+		{textFor("Sair", "Quit"), "", "Ctrl+C", "", func(m *Model) tea.Cmd { m.dialog = confirmQuit{}; return nil }},
+	}
+	items := make([]Item, len(keys))
+	for i, k := range keys {
+		items[i] = Item{ID: fmt.Sprint(i), Title: k.title, Right: k.key, Value: k.run}
+	}
+	m.dialog = &listDialog{
+		title:    textFor("Teclas", "Keys"),
+		legend:   textFor("↑↓ escolher · Enter usar · Esc fechar", "↑↓ choose · Enter use · Esc close"),
+		noSearch: true,
+		width:    74,
+		list:     List{Items: items, Cursor: "◆", Chips: true},
+		meta: func(*listDialog) string {
+			return textFor("mudar em Configurações › Atalhos", "change in Settings › Shortcuts")
+		},
+		choose: func(m *Model, item Item) tea.Cmd {
+			m.dialog = nil
+			return item.Value.(func(*Model) tea.Cmd)(m)
+		},
+	}
+	return nil
+}
+
+// insertMention starts an @ file reference, as typing @ does.
+func (m *Model) insertMention() tea.Cmd {
+	m.composer.InsertString("@")
+	listing := m.findMention()
+	m.layout()
+	return listing
 }
 
 func (m *Model) openPalette() tea.Cmd {

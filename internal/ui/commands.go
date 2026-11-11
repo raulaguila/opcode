@@ -246,7 +246,7 @@ func commandRows(entry commandEntry, width int, waiting bool) []string {
 			rows = append(rows, on(P.Ground, P.Muted).Render("    "+line))
 		}
 	}
-	rows = append(rows, on(P.Ground, P.Faint).Render("    "+textFor("Ctrl+P · detalhes e copiar", "Ctrl+P · details and copy")))
+	rows = append(rows, on(P.Ground, P.Faint).Render("    "+keyLabel(binding("terminal"))+textFor(" · detalhes e copiar", " · details and copy")))
 	return rows
 }
 

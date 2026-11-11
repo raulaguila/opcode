@@ -7,10 +7,7 @@ func (a *agent) budgetRequest(session string, history []message.Message, run *ge
 	return bounded, err
 }
 
-// lastSent is the last message a request carried before its application state.
+// lastSent is the last message a request carried.
 func lastSent(history []message.Message) *message.Message {
-	if n := len(history); n > 0 && history[n-1].Content().Origin == stateOrigin {
-		history = history[:n-1]
-	}
 	return &history[len(history)-1]
 }

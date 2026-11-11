@@ -138,7 +138,10 @@ func (m *Model) overlay(base string) string {
 	// tone. It changes rarely while a panel is open, so it is kept.
 	if base != m.behind {
 		var dimmed []string
-		for _, line := range strings.Split(ansi.Strip(base), "\n") {
+		// Half-block frame edges would peek out beside the panel as stray
+		// fragments; the receded screen keeps its text without them.
+		plain := strings.NewReplacer("▁", " ", "▔", " ", "▕", " ", "▏", " ").Replace(ansi.Strip(base))
+		for _, line := range strings.Split(plain, "\n") {
 			dimmed = append(dimmed, on(P.Ground, P.Dim).Render(line))
 		}
 		m.behind, m.dimmed = base, strings.Join(dimmed, "\n")

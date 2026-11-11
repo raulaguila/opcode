@@ -209,8 +209,12 @@ func (m *Model) resized(msg tea.WindowSizeMsg) tea.Cmd {
 	if h, ok := m.dialog.(*hosted); ok {
 		return h.forward(msg)
 	}
-	// With no model yet, the first screen is setting up a connection.
+	// With no model yet, the first screen picks one, or sets up a connection
+	// when none can offer it.
 	if first && m.dialog == nil && !m.hasModel() {
+		if hasConnection() {
+			return m.openModels()
+		}
 		return m.openProviderForm("")
 	}
 	return nil
@@ -380,7 +384,7 @@ func (m *Model) overlayKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 		cmd, _ := d.key(m, msg)
 		return cmd, true
 	}
-	if m.dialog == nil && msg.String() == "ctrl+p" {
+	if m.dialog == nil && msg.String() == binding("terminal") {
 		return m.openCommands(), true
 	}
 	if m.dialog == nil && m.selection != nil {
@@ -421,12 +425,16 @@ func (m *Model) shortcut(msg tea.KeyPressMsg) (tea.Cmd, bool) {
 	case "ctrl+c":
 		m.dialog = confirmQuit{}
 		return nil, true
-	case "ctrl+k":
+	case binding("commands"):
 		return m.openPalette(), true
-	case "ctrl+o":
+	case binding("models"):
 		return m.openModels(), true
-	case "ctrl+s":
+	case binding("sessions"):
 		return m.openSessions(), true
+	case binding("files"):
+		return m.insertMention(), true
+	case "f1":
+		return m.openHelp(), true
 	case "ctrl+n":
 		return m.newConversation(), true
 	case "/":
@@ -690,6 +698,16 @@ func (m *Model) click(x, y int) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// hasConnection says whether some enabled connection can offer models.
+func hasConnection() bool {
+	for _, c := range connections("") {
+		if !c.raw.Disabled {
+			return true
+		}
+	}
+	return false
 }
 
 // hasModel says whether a model is chosen for the coder.

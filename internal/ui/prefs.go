@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -178,6 +179,9 @@ func (p *settingsPanel) count() int {
 
 // localLabel picks the language half of "Idioma / Language".
 func localLabel(label string) string {
+	if name, ok := shortcutNames[label]; ok {
+		return textFor(name[0], name[1])
+	}
 	pt, en, ok := strings.Cut(label, " / ")
 	if !ok {
 		return label
@@ -228,6 +232,42 @@ func optionLabel(value string) string {
 	return value
 }
 
+// shortcutNames are the shortcut settings in the screen's words: name, then
+// what the key does.
+var shortcutNames = map[string][4]string{
+	"commands": {"Comandos", "Commands", "Abre a lista de comandos", "Opens the command list"},
+	"models":   {"Modelos", "Models", "Escolhe o modelo e o provedor", "Picks the model and provider"},
+	"sessions": {"Conversas", "Conversations", "Abre, renomeia e arquiva conversas", "Opens, renames and archives conversations"},
+	"terminal": {"Comandos executados", "Commands run", "Comando completo, saída e cópia", "Full command, output and copy"},
+	"files":    {"Arquivos", "Files", "Insere @ para citar um arquivo", "Inserts @ to cite a file"},
+}
+
+// settingValue shows a stored value with its unit; editing keeps the raw one.
+func settingValue(s config.Setting, value string) string {
+	n, err := strconv.Atoi(value)
+	switch {
+	case s.Category == "shortcuts":
+		return keyLabel(value)
+	case s.Path == "runtime.embeddingModel" && value == "":
+		return textFor("Desligada", "Off")
+	case err != nil:
+		return optionLabel(value)
+	case s.Path == "tui.proseWidth":
+		if n == 0 {
+			return textFor("Toda a largura", "Full width")
+		}
+		return fmt.Sprintf(textFor("%d colunas", "%d columns"), n)
+	case s.Path == "runtime.toolBudget":
+		return fmt.Sprintf("%d KiB", n/1024)
+	case s.Path == "runtime.maxSeconds" || s.Path == "runtime.firstTokenTimeout" || s.Path == "runtime.idleTimeout":
+		if n >= 60 && n%60 == 0 {
+			return fmt.Sprintf("%d min", n/60)
+		}
+		return fmt.Sprintf("%d s", n)
+	}
+	return value
+}
+
 // settingHelp is the line under a preference.
 func settingHelp(s config.Setting) string {
 	switch s.Path {
@@ -235,8 +275,6 @@ func settingHelp(s config.Setting) string {
 		return textFor("Textos da interface e respostas", "Interface copy and replies")
 	case "tui.proseWidth":
 		return textFor("0 usa a largura toda do terminal", "0 uses the full terminal width")
-	case "tui.sidebar":
-		return textFor("Auto aparece a partir de 140 colunas", "Auto appears from 140 columns")
 	case "tui.notifications":
 		return textFor("Ao terminar uma tarefa longa ou pedir aprovação", "When a long task ends or asks for approval")
 	case "preferences.showProcess":
@@ -256,12 +294,12 @@ func settingHelp(s config.Setting) string {
 	case "runtime.idleTimeout":
 		return textFor("Segundos sem resposta do modelo · 1–600", "Seconds without model output · 1–600")
 	case "runtime.embeddingModel":
-		return textFor("Modelo de embeddings no Ollama local, ex.: nomic-embed-text · vazio desliga", "Embedding model in the local Ollama, e.g. nomic-embed-text · empty turns it off")
+		return textFor("Embeddings do Ollama, ex.: nomic-embed-text · vazio desliga", "Ollama embedding model, e.g. nomic-embed-text · empty: off")
 	case "runtime.webSearch":
 		return textFor("Busca externa; cada destino ainda pede aprovação de rede", "External search; each destination still asks for network approval")
 	}
-	if s.Category == "shortcuts" {
-		return textFor("Ctrl ou Alt com uma letra · Enter edita", "Ctrl or Alt with a letter · Enter edits")
+	if name, ok := shortcutNames[s.Label]; ok && s.Category == "shortcuts" {
+		return textFor(name[2], name[3])
 	}
 	return s.Help
 }
@@ -336,6 +374,8 @@ func (p *settingsPanel) legend() string {
 	switch {
 	case p.deleting:
 		return textFor("Enter excluir · Esc cancelar", "Enter delete · Esc cancel")
+	case p.editing && p.section == sectionShortcuts:
+		return textFor("Ctrl ou Alt com uma letra · Enter salvar · Esc cancelar", "Ctrl or Alt with a letter · Enter save · Esc cancel")
 	case p.editing:
 		return textFor("Enter salvar · Esc cancelar", "Enter save · Esc cancel")
 	case !p.inside:
@@ -596,7 +636,7 @@ func (p *settingsPanel) valueView(s config.Setting, selected bool, bg color.Colo
 	}
 	options := settingOptions(s)
 	if len(options) == 0 || len(options) > 3 {
-		label := optionLabel(value)
+		label := settingValue(s, value)
 		if label == "" {
 			label = "—"
 		}

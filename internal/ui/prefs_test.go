@@ -165,9 +165,9 @@ func TestPreferencesScrollToKeepTheSelectedOneInView(t *testing.T) {
 	require.Greater(t, len(all), 3)
 	p.selected = len(all) - 1
 	view := ansi.Strip(strings.Join(p.preferenceRows(60, 10), "\n"))
-	require.Contains(t, view, all[len(all)-1].Label)
-	require.NotContains(t, view, all[0].Label, "only three preferences fit in ten rows")
+	require.Contains(t, view, localLabel(all[len(all)-1].Label))
+	require.NotContains(t, view, settingHelp(all[0]), "only three preferences fit in ten rows")
 	require.Contains(t, view, "───", "a rule separates the preferences")
 	p.selected = len(all) - 2
-	require.Contains(t, ansi.Strip(strings.Join(p.preferenceRows(60, 10), "\n")), all[len(all)-1].Label, "moving up inside the view does not scroll")
+	require.Contains(t, ansi.Strip(strings.Join(p.preferenceRows(60, 10), "\n")), localLabel(all[len(all)-1].Label), "moving up inside the view does not scroll")
 }

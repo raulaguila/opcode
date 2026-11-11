@@ -90,7 +90,6 @@ type LSPConfig struct {
 type TUIConfig struct {
 	ProseWidth    int               `json:"proseWidth,omitempty"`
 	Theme         string            `json:"theme,omitempty"`
-	Sidebar       string            `json:"sidebar,omitempty"`
 	Language      string            `json:"language,omitempty"`
 	Notifications string            `json:"notifications,omitempty"`
 	Keybindings   map[string]string `json:"keybindings,omitempty"`

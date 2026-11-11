@@ -232,7 +232,7 @@ andamento. No cliente `attach`, `/quit` apenas desconecta do servidor.
 | Avaliações | Fixtures e avaliações reais opt-in, drivers Codaro/Crush, comparação de condições e medição de ranking lexical/híbrido sem inferência. |
 | Confiabilidade | Conclusão com evidência de alteração ou justificativa explícita, estado parcial/bloqueado e recuperação de contexto/OOM com calibração local temporária. |
 | Produtividade | Índice incremental FTS5/BM25, exploração somente leitura com orçamento, formatação e worktrees protegidas. |
-| Preferências | Lateral adaptável, input crescente, busca de configurações com origem efetiva, atalhos, idioma e notificações opcionais. |
+| Preferências | Input crescente, busca de configurações com origem efetiva, atalhos, idioma e notificações opcionais. |
 | Reconexão | Servidor local autenticado e cliente `attach`, com snapshots de sessão, aprovações, perguntas e PTY sem repetir comandos. |
 
 ## Configuração pela CLI
@@ -257,9 +257,10 @@ real e inerte de chamada de ferramenta, que pode consumir tokens. Um teste de
 catálogo aprovado não certifica a capacidade de executar tarefas.
 
 As preferências pesquisáveis mostram o valor efetivo e sua origem. Por exemplo,
-no JSON global, `"tui": {"language":"pt","sidebar":"auto","notifications":"off"}`
-seleciona controles em português e lateral adaptável. Atalhos podem ser alterados
-em `tui.keybindings`; valores controlados por ambiente precisam ser alterados na
+no JSON global, `"tui": {"language":"pt","notifications":"off"}` seleciona
+controles em português. Sem `language`, o idioma segue o locale (`LANG`).
+Atalhos podem ser alterados em `tui.keybindings` (`commands`, `models`,
+`sessions`, `terminal`, `files`) e a ajuda (`F1`) mostra os valores em uso; valores controlados por ambiente precisam ser alterados na
 variável correspondente. Alguns textos legados e mensagens técnicas mantêm o
 idioma original.
 
@@ -284,9 +285,11 @@ duas interfaces:
 | `Ctrl+O` | Escolher modelo |
 | `Ctrl+S` | Conversas: abrir, renomear, exportar, arquivar |
 | `Ctrl+N` | Nova conversa |
+| `Ctrl+P` | Comandos executados: saída e cópia |
+| `F1` | Todas as teclas |
 | `Esc` | Cancela a execução |
 | `1` `2` `3` | Responde a uma aprovação |
-| `@` (app) | Cita um arquivo do projeto |
+| `@`, `Ctrl+F` | Cita um arquivo do projeto |
 
 ## Permissões, contexto e limites
 

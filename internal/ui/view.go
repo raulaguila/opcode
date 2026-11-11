@@ -366,10 +366,14 @@ func (m *Model) cached(id, key string, width int, fresh map[string]renderedBlock
 
 func (m *Model) emptyState(inner int, indent string) string {
 	title := on(P.Ground, P.Strong).Bold(true).Render(config.Text("O que vamos fazer neste projeto?", "What shall we do in this project?"))
-	hint := on(P.Ground, P.Muted).Render(ansi.Truncate(config.Text("Shift+Tab alterna Perguntar, Planejar e Executar · / comandos", "Shift+Tab cycles Ask, Plan and Execute · / commands"), inner, "…"))
+	hint := on(P.Ground, P.Muted).Render(ansi.Truncate(config.Text("Perguntar lê, Planejar prepara, Executar altera arquivos · F1 teclas", "Ask reads, Plan prepares, Execute changes files · F1 keys"), inner, "…"))
 	if m.app != nil && !m.hasModel() {
 		title = on(P.Ground, P.Strong).Bold(true).Render(config.Text("Configure uma conexão para começar", "Set up a connection to begin"))
-		hint = on(P.Ground, P.Muted).Render(ansi.Truncate(config.Text("Ctrl+K › Configurações › Conexões · depois escolha o modelo com Ctrl+O", "Ctrl+K › Settings › Connections · then pick the model with Ctrl+O"), inner, "…"))
+		hint = on(P.Ground, P.Muted).Render(ansi.Truncate(fmt.Sprintf(config.Text("%s › Configurações › Conexões · depois escolha o modelo com %s", "%s › Settings › Connections · then pick the model with %s"), keyLabel(binding("commands")), keyLabel(binding("models"))), inner, "…"))
+		if hasConnection() {
+			title = on(P.Ground, P.Strong).Bold(true).Render(config.Text("Escolha um modelo para começar", "Choose a model to begin"))
+			hint = on(P.Ground, P.Muted).Render(ansi.Truncate(fmt.Sprintf(config.Text("%s abre os modelos das suas conexões", "%s opens the models of your connections"), keyLabel(binding("models"))), inner, "…"))
+		}
 	}
 	return "\n" + indent + title + "\n" + indent + hint + "\n"
 }
@@ -593,14 +597,14 @@ func (m *Model) composerView() string {
 func (m *Model) footer() string {
 	muted := on(P.Ground, P.Muted)
 	label := approvalName(m.policy) + " ▾"
-	compact := m.width < 80 // the proposal's 64-column screen abbreviates
+	compact := m.width < 80 // a narrow screen keeps one word of the level
 	if compact {
-		label = config.Text("A:pedir", "A:ask")
+		label = config.Text("Aprovação ▾", "Approval ▾") // "Ask" would read as the mode
 		switch m.policy {
 		case permission.ApprovalAuto:
-			label = "A:auto"
+			label = "Auto ▾"
 		case permission.ApprovalFull:
-			label = config.Text("A:total", "A:full")
+			label = config.Text("Total ▾", "Full ▾")
 		}
 	}
 	tone := P.Text

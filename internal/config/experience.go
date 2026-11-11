@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"testing"
 	"unicode"
 
 	"github.com/raulaguila/opcode/internal/llm/models"
@@ -18,23 +19,46 @@ import (
 
 // Text localizes interface copy without modifying user or model content.
 func Text(portuguese, english string) string {
-	if cfg != nil && cfg.TUI.Language == "pt" {
+	language := systemLanguage
+	if cfg != nil && cfg.TUI.Language != "" {
+		language = cfg.TUI.Language
+	}
+	if language == "pt" {
 		return portuguese
 	}
 	return english
 }
-func (t TUIConfig) SidebarVisible(width int) bool {
-	return (t.Sidebar == "shown" || t.Sidebar == "auto" && width >= 140) && width >= 110
+
+// systemLanguage is the interface language until one is chosen: the locale's.
+// Test binaries keep English so assertions do not depend on the machine.
+var systemLanguage = func() string {
+	if testing.Testing() {
+		return "en"
+	}
+	return localeLanguage(os.Getenv)
+}()
+
+func localeLanguage(getenv func(string) string) string {
+	for _, name := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+		if value := getenv(name); value != "" {
+			if strings.HasPrefix(strings.ToLower(value), "pt") {
+				return "pt"
+			}
+			return "en"
+		}
+	}
+	return "en"
 }
 
-var DefaultKeybindings = map[string]string{"commands": "ctrl+k", "models": "ctrl+o", "sessions": "ctrl+s", "terminal": "ctrl+p", "files": "ctrl+f", "theme": "ctrl+t", "sidebar": "alt+b"}
+var DefaultKeybindings = map[string]string{"commands": "ctrl+k", "models": "ctrl+o", "sessions": "ctrl+s", "terminal": "ctrl+p", "files": "ctrl+f"}
+
+// retiredKeybindings named features the interface no longer has; old
+// configuration files keep loading.
+var retiredKeybindings = map[string]bool{"theme": true, "sidebar": true}
 
 func (t TUIConfig) Validate() error {
 	if t.ProseWidth < 0 || t.ProseWidth > 240 {
 		return fmt.Errorf("proseWidth: 0–240 (0 uses available width)")
-	}
-	if t.Sidebar != "" && t.Sidebar != "auto" && t.Sidebar != "shown" && t.Sidebar != "hidden" {
-		return fmt.Errorf("sidebar: auto/shown/hidden")
 	}
 	if t.Language != "" && t.Language != "pt" && t.Language != "en" {
 		return fmt.Errorf("language: pt/en")
@@ -59,8 +83,7 @@ type Setting struct {
 
 var UserSettings = []Setting{
 	{"tui.proseWidth", "interface", "Largura de leitura / Reading width", "0: available width; 1–240 columns. Code keeps full width.", 0, false},
-	{"tui.sidebar", "interface", "Lateral / Sidebar", "auto, shown, hidden", "hidden", false},
-	{"tui.language", "interface", "Idioma / Language", "pt, en", "en", false},
+	{"tui.language", "interface", "Idioma / Language", "pt, en", systemLanguage, false},
 	{"tui.notifications", "interface", "Notificações / Notifications", "off, bell, auto, native, osc (only when unfocused)", "off", false},
 	{"preferences.resumeLast", "sessions", "Retomar conversa / Resume last session", "true, false", false, false},
 	{"preferences.showProcess", "interface", "Mostrar processo / Show process", "true, false", false, false},
@@ -335,7 +358,7 @@ func (t TUIConfig) validateKeybindings() error {
 		seen[shortcut] = true
 	}
 	for action := range t.Keybindings {
-		if _, ok := DefaultKeybindings[action]; !ok {
+		if _, ok := DefaultKeybindings[action]; !ok && !retiredKeybindings[action] {
 			return fmt.Errorf("unknown shortcut action %s", action)
 		}
 	}

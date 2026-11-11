@@ -965,18 +965,8 @@
               "pattern": "^(ctrl|alt)\\+[a-z]$",
               "type": "string"
             },
-            "sidebar": {
-              "default": "alt+b",
-              "pattern": "^(ctrl|alt)\\+[a-z]$",
-              "type": "string"
-            },
             "terminal": {
               "default": "ctrl+p",
-              "pattern": "^(ctrl|alt)\\+[a-z]$",
-              "type": "string"
-            },
-            "theme": {
-              "default": "ctrl+t",
               "pattern": "^(ctrl|alt)\\+[a-z]$",
               "type": "string"
             }
@@ -1008,15 +998,6 @@
           "maximum": 240,
           "minimum": 0,
           "type": "integer"
-        },
-        "sidebar": {
-          "default": "hidden",
-          "enum": [
-            "auto",
-            "shown",
-            "hidden"
-          ],
-          "type": "string"
         },
         "theme": {
           "default": "opcode",

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/raulaguila/opcode/internal/config"
@@ -99,11 +100,10 @@ func TestRequestHistoryIncludesOnlyExecutionPolicyMetadata(t *testing.T) {
 	history := []message.Message{{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: "Rode os testes"}}}}
 	projected, err := a.requestHistory(context.Background(), "s", history, run)
 	require.NoError(t, err)
-	require.Equal(t, history[0], projected[0], "the user's request stays byte-identical for prompt caching")
+	require.Len(t, projected, 1, "the state rides inside the request: a separate trailing message is answered as if it were the request")
 	text := projected[len(projected)-1].Content().String()
-	compacted, count := compactHistory(append([]message.Message{{Role: message.Assistant, Parts: []message.ContentPart{message.TextContent{Text: "earlier"}}}}, projected...))
-	require.Zero(t, count, "the tail state must not hide the latest request from compaction")
-	require.Len(t, compacted, len(projected)+1)
+	require.True(t, strings.HasSuffix(text, "User request:\nRode os testes"), "the user's words close the message the model answers")
+	require.Equal(t, "Rode os testes", history[0].Content().String(), "the stored request is not rewritten")
 	require.Contains(t, text, `"bash_allowed":true`)
 	require.Contains(t, text, `"host_network_without_sandbox":true`)
 	require.Contains(t, text, `"default_command_timeout_ms":60000`)

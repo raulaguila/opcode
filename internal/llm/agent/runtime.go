@@ -294,7 +294,7 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 		return nil, err
 	}
 	raw, _ := json.Marshal(taskProjection(task))
-	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s", run.mode, namesJSON(checkCommands()), string(raw))
+	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
 	if run.selected["bash"] || run.selected["run_checks"] || run.selected["discover_checks"] {
 		constraints, _ := json.Marshal(a.executionConstraints(run, session))
 		header = "Execution constraints (policy, not approval or a readiness probe): " + string(constraints) + "\n" + header
@@ -302,20 +302,30 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 	if a.commandsRefused(session) {
 		header = sandboxBroken + header
 	}
-	// The state changes from step to step, so it rides at the tail as its own
-	// message: everything before it, the user's request included, stays
-	// byte-identical and keeps the provider's prompt cache.
-	return append(projectReusedSources(history), message.Message{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: header, Origin: stateOrigin}}}), nil
+	// The state leads the latest request, inside it: a separate message after
+	// the request is answered by models as if it were the request itself.
+	// It is stable between steps, so the prompt cache still holds.
+	copyHistory := projectReusedSources(history)
+	i := latestRequest(copyHistory)
+	if i < 0 {
+		return copyHistory, nil
+	}
+	request := &copyHistory[i]
+	request.Parts = slices.Clone(request.Parts)
+	for j, part := range request.Parts {
+		if text, ok := part.(message.TextContent); ok {
+			request.Parts[j] = message.TextContent{Text: header + text.Text}
+			return copyHistory, nil
+		}
+	}
+	request.Parts = append(request.Parts, message.TextContent{Text: header})
+	return copyHistory, nil
 }
 
-// stateOrigin marks the per-request application state; it is never stored.
-const stateOrigin = "application-state"
-
-// latestRequest is the index of the last user message, skipping the
-// per-request state, or -1.
+// latestRequest is the index of the last user message, or -1.
 func latestRequest(history []message.Message) int {
 	for i, h := range slices.Backward(history) {
-		if h.Role == message.User && h.Content().Origin != stateOrigin {
+		if h.Role == message.User {
 			return i
 		}
 	}

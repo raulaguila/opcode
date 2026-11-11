@@ -80,56 +80,36 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                          DBTX
-	tx                          *sql.Tx
-	createFileStmt              *sql.Stmt
-	createMessageStmt           *sql.Stmt
-	createSessionStmt           *sql.Stmt
-	deleteFileStmt              *sql.Stmt
-	deleteMessageStmt           *sql.Stmt
-	deleteSessionStmt           *sql.Stmt
-	deleteSessionFilesStmt      *sql.Stmt
-	deleteSessionMessagesStmt   *sql.Stmt
-	getFileStmt                 *sql.Stmt
-	getFileByPathAndSessionStmt *sql.Stmt
-	getMessageStmt              *sql.Stmt
-	getSessionByIDStmt          *sql.Stmt
-	listFilesByPathStmt         *sql.Stmt
-	listFilesBySessionStmt      *sql.Stmt
-	listLatestSessionFilesStmt  *sql.Stmt
-	listMessagesBySessionStmt   *sql.Stmt
-	listNewFilesStmt            *sql.Stmt
-	listSessionsStmt            *sql.Stmt
-	updateFileStmt              *sql.Stmt
-	updateMessageStmt           *sql.Stmt
-	updateSessionStmt           *sql.Stmt
+	db                        DBTX
+	tx                        *sql.Tx
+	createMessageStmt         *sql.Stmt
+	createSessionStmt         *sql.Stmt
+	deleteMessageStmt         *sql.Stmt
+	deleteSessionStmt         *sql.Stmt
+	deleteSessionMessagesStmt *sql.Stmt
+	getMessageStmt            *sql.Stmt
+	getSessionByIDStmt        *sql.Stmt
+	listMessagesBySessionStmt *sql.Stmt
+	listSessionsStmt          *sql.Stmt
+	updateMessageStmt         *sql.Stmt
+	updateSessionStmt         *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                          tx,
-		tx:                          tx,
-		createFileStmt:              q.createFileStmt,
-		createMessageStmt:           q.createMessageStmt,
-		createSessionStmt:           q.createSessionStmt,
-		deleteFileStmt:              q.deleteFileStmt,
-		deleteMessageStmt:           q.deleteMessageStmt,
-		deleteSessionStmt:           q.deleteSessionStmt,
-		deleteSessionFilesStmt:      q.deleteSessionFilesStmt,
-		deleteSessionMessagesStmt:   q.deleteSessionMessagesStmt,
-		getFileStmt:                 q.getFileStmt,
-		getFileByPathAndSessionStmt: q.getFileByPathAndSessionStmt,
-		getMessageStmt:              q.getMessageStmt,
-		getSessionByIDStmt:          q.getSessionByIDStmt,
-		listFilesByPathStmt:         q.listFilesByPathStmt,
-		listFilesBySessionStmt:      q.listFilesBySessionStmt,
-		listLatestSessionFilesStmt:  q.listLatestSessionFilesStmt,
-		listMessagesBySessionStmt:   q.listMessagesBySessionStmt,
-		listNewFilesStmt:            q.listNewFilesStmt,
-		listSessionsStmt:            q.listSessionsStmt,
-		updateFileStmt:              q.updateFileStmt,
-		updateMessageStmt:           q.updateMessageStmt,
-		updateSessionStmt:           q.updateSessionStmt,
+		db:                        tx,
+		tx:                        tx,
+		createMessageStmt:         q.createMessageStmt,
+		createSessionStmt:         q.createSessionStmt,
+		deleteMessageStmt:         q.deleteMessageStmt,
+		deleteSessionStmt:         q.deleteSessionStmt,
+		deleteSessionMessagesStmt: q.deleteSessionMessagesStmt,
+		getMessageStmt:            q.getMessageStmt,
+		getSessionByIDStmt:        q.getSessionByIDStmt,
+		listMessagesBySessionStmt: q.listMessagesBySessionStmt,
+		listSessionsStmt:          q.listSessionsStmt,
+		updateMessageStmt:         q.updateMessageStmt,
+		updateSessionStmt:         q.updateSessionStmt,
 	}
 }
 
@@ -142,25 +122,15 @@ type preparedStatement struct {
 
 func (q *Queries) preparedStatements() [21]preparedStatement {
 	return [21]preparedStatement{
-		{"CreateFile", "createFileStmt", &q.createFileStmt, createFile},
 		{"CreateMessage", "createMessageStmt", &q.createMessageStmt, createMessage},
 		{"CreateSession", "createSessionStmt", &q.createSessionStmt, createSession},
-		{"DeleteFile", "deleteFileStmt", &q.deleteFileStmt, deleteFile},
 		{"DeleteMessage", "deleteMessageStmt", &q.deleteMessageStmt, deleteMessage},
 		{"DeleteSession", "deleteSessionStmt", &q.deleteSessionStmt, deleteSession},
-		{"DeleteSessionFiles", "deleteSessionFilesStmt", &q.deleteSessionFilesStmt, deleteSessionFiles},
 		{"DeleteSessionMessages", "deleteSessionMessagesStmt", &q.deleteSessionMessagesStmt, deleteSessionMessages},
-		{"GetFile", "getFileStmt", &q.getFileStmt, getFile},
-		{"GetFileByPathAndSession", "getFileByPathAndSessionStmt", &q.getFileByPathAndSessionStmt, getFileByPathAndSession},
 		{"GetMessage", "getMessageStmt", &q.getMessageStmt, getMessage},
 		{"GetSessionByID", "getSessionByIDStmt", &q.getSessionByIDStmt, getSessionByID},
-		{"ListFilesByPath", "listFilesByPathStmt", &q.listFilesByPathStmt, listFilesByPath},
-		{"ListFilesBySession", "listFilesBySessionStmt", &q.listFilesBySessionStmt, listFilesBySession},
-		{"ListLatestSessionFiles", "listLatestSessionFilesStmt", &q.listLatestSessionFilesStmt, listLatestSessionFiles},
 		{"ListMessagesBySession", "listMessagesBySessionStmt", &q.listMessagesBySessionStmt, listMessagesBySession},
-		{"ListNewFiles", "listNewFilesStmt", &q.listNewFilesStmt, listNewFiles},
 		{"ListSessions", "listSessionsStmt", &q.listSessionsStmt, listSessions},
-		{"UpdateFile", "updateFileStmt", &q.updateFileStmt, updateFile},
 		{"UpdateMessage", "updateMessageStmt", &q.updateMessageStmt, updateMessage},
 		{"UpdateSession", "updateSessionStmt", &q.updateSessionStmt, updateSession},
 	}

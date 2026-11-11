@@ -13,7 +13,6 @@ import (
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/permission"
 )
@@ -36,7 +35,6 @@ type PatchResponseMetadata struct {
 type patchTool struct {
 	lspClients  map[string]*lsp.Client
 	permissions permission.Service
-	files       history.Service
 }
 
 const (
@@ -71,11 +69,10 @@ CRITICAL REQUIREMENTS FOR USING THIS TOOL:
 The tool will apply all changes in a single atomic operation.`
 )
 
-func NewPatchTool(lspClients map[string]*lsp.Client, permissions permission.Service, files history.Service) BaseTool {
+func NewPatchTool(lspClients map[string]*lsp.Client, permissions permission.Service) BaseTool {
 	return &patchTool{
 		lspClients:  lspClients,
 		permissions: permissions,
-		files:       files,
 	}
 }
 
@@ -171,9 +168,8 @@ func (p *patchTool) applyPreparedPatch(ctx context.Context, commit *diff.Commit,
 		return ToolResponse{}, err
 	}
 
-	// Update file history for all modified files
-	summary := p.recordAppliedPatchHistory(ctx, sessionID, changes)
-	changedFiles, totalAdditions, totalRemovals, historyFailed := summary.files, summary.additions, summary.removals, summary.failed
+	summary := recordAppliedPatch(changes)
+	changedFiles, totalAdditions, totalRemovals := summary.files, summary.additions, summary.removals
 	sort.Strings(changedFiles)
 
 	// Run LSP diagnostics on all changed files
@@ -184,9 +180,6 @@ func (p *patchTool) applyPreparedPatch(ctx context.Context, commit *diff.Commit,
 	result := fmt.Sprintf("Patch applied successfully. %d files changed, %d additions, %d removals",
 		len(changedFiles), totalAdditions, totalRemovals)
 
-	if historyFailed {
-		result += "; filesystem updated but file history could not be fully saved"
-	}
 	var diagnosticsText strings.Builder
 	for _, filePath := range changedFiles {
 		diagnosticsText.WriteString(getDiagnostics(filePath, p.lspClients))
@@ -204,7 +197,6 @@ func (p *patchTool) applyPreparedPatch(ctx context.Context, commit *diff.Commit,
 			Additions: totalAdditions,
 			Removals:  totalRemovals,
 		})
-	response.IsError = historyFailed
 	return response, nil
 }
 
@@ -457,14 +449,13 @@ func validatePatchSources(ctx context.Context, filesToRead []string) (ToolRespon
 	return ToolResponse{}, nil
 }
 
-type patchHistorySummary struct {
+type patchSummary struct {
 	files               []string
 	additions, removals int
-	failed              bool
 }
 
-func (p *patchTool) recordAppliedPatchHistory(ctx context.Context, sessionID string, changes map[string]fileChange) patchHistorySummary {
-	summary := patchHistorySummary{files: []string{}}
+func recordAppliedPatch(changes map[string]fileChange) patchSummary {
+	summary := patchSummary{files: []string{}}
 
 	for path, change := range changes {
 		summary.files = append(summary.files, path)
@@ -478,17 +469,6 @@ func (p *patchTool) recordAppliedPatchHistory(ctx context.Context, sessionID str
 		_, additions, removals := diff.GenerateDiff(oldContent, newContent, path)
 		summary.additions += additions
 		summary.removals += removals
-		file, historyErr := p.files.GetByPathAndSession(ctx, path, sessionID)
-		if historyErr != nil {
-			file, historyErr = p.files.Create(ctx, sessionID, path, oldContent)
-		}
-		if historyErr == nil && file.Content != oldContent {
-			_, historyErr = p.files.CreateVersion(ctx, sessionID, path, oldContent)
-		}
-		if historyErr == nil {
-			_, historyErr = p.files.CreateVersion(ctx, sessionID, path, newContent)
-		}
-		summary.failed = summary.failed || historyErr != nil
 		recordFileWrite(path)
 		recordFileRead(path)
 	}

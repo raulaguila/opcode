@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/llm/tools/shell"
 	"github.com/raulaguila/opcode/internal/permission"
 	"github.com/spf13/viper"
@@ -88,10 +87,10 @@ func TestDeniedFileCreationLeavesNoDirectories(t *testing.T) {
 			var tool BaseTool
 			var params any
 			if name == "write" {
-				tool = NewWriteTool(nil, permissions, nil)
+				tool = NewWriteTool(nil, permissions)
 				params = WriteParams{FilePath: path, Content: "denied"}
 			} else {
-				tool = NewEditTool(nil, permissions, nil)
+				tool = NewEditTool(nil, permissions)
 				params = EditParams{FilePath: path, NewString: "denied"}
 			}
 			input, err := json.Marshal(params)
@@ -115,10 +114,10 @@ func TestFilePermissionUsesExactDirectory(t *testing.T) {
 					var tool BaseTool
 					var params any
 					if name == "write" {
-						tool = NewWriteTool(nil, permissions, nil)
+						tool = NewWriteTool(nil, permissions)
 						params = WriteParams{FilePath: path, Content: "denied"}
 					} else {
-						tool = NewEditTool(nil, permissions, nil)
+						tool = NewEditTool(nil, permissions)
 						params = EditParams{FilePath: path, NewString: "denied"}
 					}
 					input, err := json.Marshal(params)
@@ -147,34 +146,15 @@ func TestBashWhitespaceCommand(t *testing.T) {
 	}
 }
 
-type fileHistory struct {
-	history.Service
-	lastVersion string
-}
-
-func (h *fileHistory) Create(_ context.Context, _, path, content string) (history.File, error) {
-	return history.File{Path: path, Content: content}, nil
-}
-
-func (h *fileHistory) GetByPathAndSession(_ context.Context, path, _ string) (history.File, error) {
-	return history.File{Path: path}, nil
-}
-
-func (h *fileHistory) CreateVersion(_ context.Context, _, path, content string) (history.File, error) {
-	h.lastVersion = content
-	return history.File{Path: path, Content: content}, nil
-}
-
 func TestApprovedFileChanges(t *testing.T) {
 	for _, name := range []string{"write", "edit-create", "edit-replace", "edit-delete"} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "nested", "file.txt")
 			permissions := &denyingPermissions{allow: func(permission.CreatePermissionRequest) bool { return true }}
-			files := &fileHistory{}
-			var tool BaseTool = NewEditTool(nil, permissions, files)
+			var tool BaseTool = NewEditTool(nil, permissions)
 			var params any = EditParams{FilePath: path, NewString: "after"}
 			if name == "write" {
-				tool = NewWriteTool(nil, permissions, files)
+				tool = NewWriteTool(nil, permissions)
 				params = WriteParams{FilePath: path, Content: "after"}
 			} else if name == "edit-replace" || name == "edit-delete" {
 				require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -195,7 +175,6 @@ func TestApprovedFileChanges(t *testing.T) {
 			content, err := os.ReadFile(path)
 			require.NoError(t, err)
 			require.Equal(t, "after", string(content))
-			require.Equal(t, "after", files.lastVersion)
 		})
 	}
 }
@@ -209,7 +188,7 @@ func TestPatchMoveRequiresDestinationApproval(t *testing.T) {
 	permissions := &denyingPermissions{allow: func(opts permission.CreatePermissionRequest) bool {
 		return opts.Action == "update"
 	}}
-	tool := NewPatchTool(nil, permissions, &fileHistory{})
+	tool := NewPatchTool(nil, permissions)
 	patch := fmt.Sprintf("*** Begin Patch\n*** Update File: %s\n*** Move to: %s\n@@\n-before\n+after\n*** End Patch", source, target)
 	input, err := json.Marshal(PatchParams{PatchText: patch})
 	require.NoError(t, err)
@@ -230,7 +209,7 @@ func TestPatchMoveToSameFileDoesNotDeleteIt(t *testing.T) {
 	patch := fmt.Sprintf("*** Begin Patch\n*** Update File: %s\n*** Move to: %s\n@@\n-before\n+after\n*** End Patch", path, filepath.Join(filepath.Dir(path), ".", "file.txt"))
 	input, err := json.Marshal(PatchParams{PatchText: patch})
 	require.NoError(t, err)
-	response, err := NewPatchTool(nil, permissions, &fileHistory{}).Run(toolContext(), ToolCall{Input: string(input)})
+	response, err := NewPatchTool(nil, permissions).Run(toolContext(), ToolCall{Input: string(input)})
 	require.NoError(t, err)
 	require.False(t, response.IsError, response.Content)
 	content, err := os.ReadFile(path)

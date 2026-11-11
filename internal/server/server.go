@@ -294,9 +294,12 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, 400, "title or session ID too long")
 		return
 	}
+	// Storage work runs unlocked so a busy database never stalls other requests;
+	// the slot is checked again before attaching.
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if len(s.allowed) >= 64 && !s.allowed[request.Resume] && !s.detachIdleSession() {
+	room := s.hasRoom(request.Resume)
+	s.mu.Unlock()
+	if !room {
 		s.fail(w, 409, "server session limit reached")
 		return
 	}
@@ -321,8 +324,26 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.allowed[id] = true
+	s.mu.Lock()
+	room = !s.closed && s.hasRoom(id)
+	if room {
+		s.allowed[id] = true
+	}
+	s.mu.Unlock()
+	if !room {
+		if request.Resume == "" {
+			s.app.Sessions.Delete(r.Context(), id)
+		}
+		s.fail(w, 409, "server session limit reached")
+		return
+	}
 	s.write(w, 201, map[string]string{"id": id})
+}
+
+// hasRoom says id can be attached, freeing an idle slot if needed. It runs
+// while s.mu is held.
+func (s *Server) hasRoom(id string) bool {
+	return len(s.allowed) < 64 || s.allowed[id] || s.detachIdleSession()
 }
 
 // detachIdleSession frees one attachment slot held by a finished session; its

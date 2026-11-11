@@ -11,8 +11,6 @@ import (
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
-	"github.com/raulaguila/opcode/internal/history"
-	"github.com/raulaguila/opcode/internal/logging"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/permission"
 )
@@ -37,7 +35,6 @@ type EditResponseMetadata struct {
 type editTool struct {
 	lspClients  map[string]*lsp.Client
 	permissions permission.Service
-	files       history.Service
 }
 
 const (
@@ -91,11 +88,10 @@ When making edits:
 Remember: when making multiple file edits in a row to the same file, you should prefer to send all edits in a single message with multiple calls to this tool, rather than multiple messages with a single call each.`
 )
 
-func NewEditTool(lspClients map[string]*lsp.Client, permissions permission.Service, files history.Service) BaseTool {
+func NewEditTool(lspClients map[string]*lsp.Client, permissions permission.Service) BaseTool {
 	return &editTool{
 		lspClients:  lspClients,
 		permissions: permissions,
-		files:       files,
 	}
 }
 
@@ -205,20 +201,6 @@ func (e *editTool) createNewFile(ctx context.Context, filePath, content string) 
 		return ToolResponse{}, err
 	}
 
-	// File can't be in the history so we create a new file history
-	_, err = e.files.Create(ctx, sessionID, filePath, "")
-	if err != nil {
-		// Log error but don't fail the operation
-		return ToolResponse{}, fmt.Errorf("error creating file history: %w", err)
-	}
-
-	// Add the new content to the file history
-	_, err = e.files.CreateVersion(ctx, sessionID, filePath, content)
-	if err != nil {
-		// Log error but don't fail the operation
-		logging.Debug("Error creating file history version", "error", err)
-	}
-
 	recordFileWrite(filePath)
 	recordFileRead(filePath)
 
@@ -310,10 +292,6 @@ func (e *editTool) deleteContent(ctx context.Context, filePath, oldString string
 	err = atomicWriteFile(ctx, filePath, newContent, &oldContent)
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("failed to write file: %w", err)
-	}
-
-	if err := saveEditedFileHistory(ctx, e.files, sessionID, filePath, oldContent, newContent); err != nil {
-		return ToolResponse{}, err
 	}
 
 	recordFileWrite(filePath)
@@ -410,10 +388,6 @@ func (e *editTool) replaceContent(ctx context.Context, filePath, oldString, newS
 		return ToolResponse{}, fmt.Errorf("failed to write file: %w", err)
 	}
 
-	if err := saveEditedFileHistory(ctx, e.files, sessionID, filePath, oldContent, newContent); err != nil {
-		return ToolResponse{}, err
-	}
-
 	recordFileWrite(filePath)
 	recordFileRead(filePath)
 
@@ -424,30 +398,4 @@ func (e *editTool) replaceContent(ctx context.Context, filePath, oldString, newS
 			Additions: additions,
 			Removals:  removals,
 		}), nil
-}
-
-func saveEditedFileHistory(ctx context.Context, files history.Service, sessionID, filePath, oldContent, newContent string) error {
-	// Check if file exists in history
-	file, err := files.GetByPathAndSession(ctx, filePath, sessionID)
-	if err != nil {
-		file, err = files.Create(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			// Log error but don't fail the operation
-			return fmt.Errorf("error creating file history: %w", err)
-		}
-	}
-	if file.Content != oldContent {
-		// User Manually changed the content store an intermediate version
-		_, err = files.CreateVersion(ctx, sessionID, filePath, oldContent)
-		if err != nil {
-			logging.Debug("Error creating file history version", "error", err)
-		}
-	}
-	// Store the new version
-	_, err = files.CreateVersion(ctx, sessionID, filePath, newContent)
-	if err != nil {
-		logging.Debug("Error creating file history version", "error", err)
-	}
-
-	return nil
 }

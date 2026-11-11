@@ -14,7 +14,6 @@ import (
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/db"
 	"github.com/raulaguila/opcode/internal/format"
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -35,7 +34,6 @@ type App struct {
 	MaxCost          float64
 	Sessions         session.Service
 	Messages         message.Service
-	History          history.Service
 	Permissions      permission.Service
 
 	CoderAgent   agent.Service
@@ -61,12 +59,10 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 	q := db.New(conn)
 	sessions := session.NewService(q)
 	messages := message.NewService(q, message.WithSearchIndex(config.Get().Data.Directory, config.WorkingDirectory(), tools.RedactCredentials))
-	files := history.NewService(q, conn)
 
 	app := &App{
 		Sessions:    sessions,
 		Messages:    messages,
-		History:     files,
 		Permissions: permission.NewPermissionService(),
 		LSPClients:  make(map[string]*lsp.Client),
 		Processes:   tools.NewProcessManager(),
@@ -111,7 +107,7 @@ func (app *App) ConfigureCoderAgent() error {
 		return err
 	}
 	candidate, err := agent.NewAgent(config.AgentCoder, app.Sessions, app.Messages,
-		agent.CoderAgentTools(app.Permissions, app.Sessions, app.Messages, app.History, app.LSPClients, app.Processes),
+		agent.CoderAgentTools(app.Permissions, app.Sessions, app.Messages, app.LSPClients, app.Processes),
 		agent.WithWorkflow(app.Workflows, app.Questions),
 		agent.WithPermissions(app.Permissions),
 		agent.WithModeChange(func(id string) { app.Processes.CancelSession(id); app.Permissions.RevokeSession(id) }))

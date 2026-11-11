@@ -115,7 +115,7 @@ func TestAtomicWriteRejectsStaleApprovalAndPreservesMode(t *testing.T) {
 		return true
 	}}
 	recordFileRead(path)
-	_, err := NewEditTool(nil, p, &fileHistory{}).Run(toolContext(), toolInput(EditParams{FilePath: path, OldString: "before", NewString: "after"}))
+	_, err := NewEditTool(nil, p).Run(toolContext(), toolInput(EditParams{FilePath: path, OldString: "before", NewString: "after"}))
 	require.ErrorContains(t, err, "changed since approval")
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -399,7 +399,7 @@ func TestWriteSymlinkRequiresDestinationApproval(t *testing.T) {
 	require.NoError(t, os.Symlink(target, link))
 	recordFileRead(link)
 	p := &denyingPermissions{allow: func(opts permission.CreatePermissionRequest) bool { return opts.Action == "write" }}
-	_, err := SecureTool(NewWriteTool(nil, p, &fileHistory{}), p).Run(toolContext(), toolInput(WriteParams{FilePath: link, Content: "after"}))
+	_, err := SecureTool(NewWriteTool(nil, p), p).Run(toolContext(), toolInput(WriteParams{FilePath: link, Content: "after"}))
 	require.ErrorIs(t, err, permission.ErrorPermissionDenied)
 	raw, err := os.ReadFile(target)
 	require.NoError(t, err)

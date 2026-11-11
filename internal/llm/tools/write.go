@@ -10,7 +10,6 @@ import (
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/diff"
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/lsp"
 	"github.com/raulaguila/opcode/internal/permission"
 )
@@ -28,7 +27,6 @@ type WritePermissionsParams struct {
 type writeTool struct {
 	lspClients  map[string]*lsp.Client
 	permissions permission.Service
-	files       history.Service
 }
 
 type WriteResponseMetadata struct {
@@ -69,11 +67,10 @@ TIPS:
 - Always include descriptive comments when making changes to existing code`
 )
 
-func NewWriteTool(lspClients map[string]*lsp.Client, permissions permission.Service, files history.Service) BaseTool {
+func NewWriteTool(lspClients map[string]*lsp.Client, permissions permission.Service) BaseTool {
 	return &writeTool{
 		lspClients:  lspClients,
 		permissions: permissions,
-		files:       files,
 	}
 }
 
@@ -153,10 +150,6 @@ func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 		expected = &oldContent
 	}
 	if err = atomicWriteFile(ctx, filePath, params.Content, expected); err != nil {
-		return ToolResponse{}, err
-	}
-
-	if err := saveEditedFileHistory(ctx, w.files, sessionID, filePath, oldContent, params.Content); err != nil {
 		return ToolResponse{}, err
 	}
 

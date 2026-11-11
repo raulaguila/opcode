@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -34,4 +35,13 @@ func TestFullAccessIsTheOnlyWayOutOfTheSandbox(t *testing.T) {
 	free, err := shell.Command(shell.WithoutSandbox(context.Background()), cwd, "true")
 	require.NoError(t, err)
 	require.NotEqual(t, "bwrap", filepath.Base(free.Path))
+}
+
+func TestPackageFetchIsDeclaredOnlyWhileWorktreeMatchesHead(t *testing.T) {
+	dir := gitReadOnlyFixture(t, "none")
+	require.False(t, packageFetchDeclared(context.Background()), "a changed tracked file may add dependencies or install scripts")
+	gitFixtureCommand(t, dir, "checkout", "--", "tracked.txt")
+	require.True(t, packageFetchDeclared(context.Background()))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"scripts":{"postinstall":"x"}}`), 0600))
+	require.False(t, packageFetchDeclared(context.Background()), "an untracked manifest is not declared by the project")
 }

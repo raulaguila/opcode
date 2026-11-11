@@ -167,7 +167,7 @@ func TestPatchPreviewReceiptRejectsSourceChanges(t *testing.T) {
 	retrievalFixture(t, root, "a.txt", "before\n")
 	recordFileRead(path)
 	perms := &denyingPermissions{}
-	tool := SecureTool(NewPatchTool(nil, perms, nil), perms)
+	tool := SecureTool(NewPatchTool(nil, perms), perms)
 	patch := "*** Begin Patch\n*** Update File: " + path + "\n@@\n-before\n+after\n*** End Patch"
 	r, err := tool.Run(toolContext(), toolInput(map[string]any{"patch_text": patch, "preview": true}))
 	require.NoError(t, err)

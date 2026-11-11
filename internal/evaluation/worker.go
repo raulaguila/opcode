@@ -13,7 +13,6 @@ import (
 
 	"github.com/raulaguila/opcode/internal/config"
 	"github.com/raulaguila/opcode/internal/db"
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/interaction"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/llm/prompt"
@@ -42,7 +41,6 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 	queries := db.New(conn)
 	sessions := session.NewService(queries)
 	messages := message.NewService(queries, message.WithSearchIndex(config.Get().Data.Directory, config.WorkingDirectory(), tools.RedactCredentials))
-	files := history.NewService(queries, conn)
 	permissions := permission.NewPermissionService()
 	processes := tools.NewProcessManager()
 	defer processes.Close()
@@ -61,7 +59,7 @@ func Worker(ctx context.Context, jobPath string, out io.Writer) error {
 			}
 		}
 	}()
-	service, err := agent.NewAgent(config.AgentCoder, sessions, messages, agent.CoderAgentTools(permissions, sessions, messages, files, map[string]*lsp.Client{}, processes), agent.WithWorkflow(tasks, questions), agent.WithPermissions(permissions))
+	service, err := agent.NewAgent(config.AgentCoder, sessions, messages, agent.CoderAgentTools(permissions, sessions, messages, map[string]*lsp.Client{}, processes), agent.WithWorkflow(tasks, questions), agent.WithPermissions(permissions))
 	if err != nil {
 		return fmt.Errorf("evaluation agent initialization failed")
 	}

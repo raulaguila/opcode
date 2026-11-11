@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/llm/mcp"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/lsp"
@@ -16,7 +15,6 @@ func CoderAgentTools(
 	permissions permission.Service,
 	sessions session.Service,
 	messages message.Service,
-	history history.Service,
 	lspClients map[string]*lsp.Client,
 	managers ...*tools.ProcessManager,
 ) []tools.BaseTool {
@@ -48,7 +46,7 @@ func CoderAgentTools(
 	result := append(
 		[]tools.BaseTool{
 			bash,
-			tools.NewEditTool(lspClients, permissions, history),
+			tools.NewEditTool(lspClients, permissions),
 			tools.NewFetchTool(permissions),
 			tools.NewWebSearchTool(permissions),
 			tools.NewGlobTool(),
@@ -56,8 +54,8 @@ func CoderAgentTools(
 			tools.NewLsTool(),
 			tools.NewSourcegraphTool(permissions),
 			tools.NewViewTool(lspClients),
-			tools.NewPatchTool(lspClients, permissions, history),
-			tools.NewWriteTool(lspClients, permissions, history),
+			tools.NewPatchTool(lspClients, permissions),
+			tools.NewWriteTool(lspClients, permissions),
 			NewAgentTool(sessions, messages, lspClients, permissions),
 		}, otherTools...,
 	)

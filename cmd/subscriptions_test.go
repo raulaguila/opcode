@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/raulaguila/opcode/internal/app"
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/llm/agent"
 	"github.com/raulaguila/opcode/internal/message"
 	"github.com/raulaguila/opcode/internal/permission"
@@ -67,17 +66,17 @@ func (p *subscriptionAgentProbe) Subscribe(ctx context.Context) <-chan pubsub.Ev
 	return p.broker.Subscribe(ctx)
 }
 
-func TestCentralHistorySubscriptionRelaysBothSessionsAndCancels(t *testing.T) {
-	files := history.NewService(nil, nil)
+func TestCentralSubscriptionRelaysBothSessionsAndCancels(t *testing.T) {
+	files := session.NewService(nil)
 	source := files.(interface {
 		GetSubscriberCount() int
-		PublishEvent(pubsub.Event[history.File])
+		PublishEvent(pubsub.Event[session.Session])
 		Shutdown()
 	})
 	defer source.Shutdown()
 	coder := &subscriptionAgentProbe{broker: pubsub.NewBroker[agent.AgentEvent]()}
 	defer coder.broker.Shutdown()
-	application := &app.App{Sessions: session.NewService(nil), Messages: message.NewService(nil), Permissions: permission.NewPermissionService(), CoderAgent: coder, History: files}
+	application := &app.App{Sessions: files, Messages: message.NewService(nil), Permissions: permission.NewPermissionService(), CoderAgent: coder}
 	events, cleanup := setupSubscriptions(application, context.Background())
 	defer cleanup()
 	require.Eventually(t, func() bool { return source.GetSubscriberCount() == 1 }, time.Second, time.Millisecond)
@@ -86,9 +85,9 @@ func TestCentralHistorySubscriptionRelaysBothSessionsAndCancels(t *testing.T) {
 		if index%2 == 1 {
 			owner = "child"
 		}
-		file := history.File{ID: fmt.Sprint(index), SessionID: owner}
-		source.PublishEvent(pubsub.Event[history.File]{Type: pubsub.UpdatedEvent, Payload: file, ReconcileRequired: index == 79})
-		got := receiveHistoryEvent(t, events)
+		file := session.Session{ID: fmt.Sprint(index), ParentSessionID: owner}
+		source.PublishEvent(pubsub.Event[session.Session]{Type: pubsub.UpdatedEvent, Payload: file, ReconcileRequired: index == 79})
+		got := receiveSessionEvent(t, events)
 		require.Equal(t, file, got.Payload)
 		require.Equal(t, index == 79, got.ReconcileRequired)
 	}
@@ -98,20 +97,20 @@ func TestCentralHistorySubscriptionRelaysBothSessionsAndCancels(t *testing.T) {
 	for range events {
 	} // The central pipeline owns closing only after all workers exit.
 }
-func receiveHistoryEvent(t *testing.T, events <-chan tea.Msg) pubsub.Event[history.File] {
+func receiveSessionEvent(t *testing.T, events <-chan tea.Msg) pubsub.Event[session.Session] {
 	t.Helper()
 	timer := time.NewTimer(time.Second)
 	defer timer.Stop()
 	for {
 		select {
 		case msg, ok := <-events:
-			require.True(t, ok, "history pipeline closed before delivering the event")
-			if event, ok := msg.(pubsub.Event[history.File]); ok {
+			require.True(t, ok, "session pipeline closed before delivering the event")
+			if event, ok := msg.(pubsub.Event[session.Session]); ok {
 				return event
 			}
 		case <-timer.C:
-			t.Fatal("central history event was not delivered")
-			return pubsub.Event[history.File]{}
+			t.Fatal("central session event was not delivered")
+			return pubsub.Event[session.Session]{}
 		}
 	}
 }

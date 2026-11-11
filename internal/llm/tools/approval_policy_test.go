@@ -55,26 +55,25 @@ func expectedPolicyContent(tool, text string) string {
 
 func policyFileChange(t *testing.T, name string, permissions permission.Service, path string, existing bool) {
 	t.Helper()
-	files := &fileHistory{}
 	var tool BaseTool
 	var params any
 	switch name {
 	case "write":
-		tool = NewWriteTool(nil, permissions, files)
+		tool = NewWriteTool(nil, permissions)
 		content := "before\n"
 		if existing {
 			content = "after\n"
 		}
 		params = WriteParams{FilePath: path, Content: content}
 	case "edit":
-		tool = NewEditTool(nil, permissions, files)
+		tool = NewEditTool(nil, permissions)
 		edit := EditParams{FilePath: path, NewString: "before\n"}
 		if existing {
 			edit.OldString, edit.NewString = "before\n", "after\n"
 		}
 		params = edit
 	case "patch":
-		tool = NewPatchTool(nil, permissions, files)
+		tool = NewPatchTool(nil, permissions)
 		patch := fmt.Sprintf("*** Begin Patch\n*** Add File: %s\n+before\n*** End Patch", path)
 		if existing {
 			patch = fmt.Sprintf("*** Begin Patch\n*** Update File: %s\n@@\n-before\n+after\n*** End Patch", path)
@@ -127,14 +126,14 @@ func destructivePolicyOperation(kind string, permissions permission.Service, pat
 	if kind == "move" {
 		patch = fmt.Sprintf("*** Begin Patch\n*** Update File: %s\n*** Move to: %s.moved\n@@\n-before\n+after\n*** End Patch", path, path)
 	}
-	return NewPatchTool(nil, permissions, &fileHistory{}), PatchParams{PatchText: patch}
+	return NewPatchTool(nil, permissions), PatchParams{PatchText: patch}
 }
 
 func TestProjectEditPolicyDoesNotBypassNativeReadBeforeWrite(t *testing.T) {
 	root, permissions := nativePolicyFixture(t)
 	path := filepath.Join(root, "unread.txt")
 	require.NoError(t, os.WriteFile(path, []byte("before\n"), 0o600))
-	response, err := runPolicyTool(t, NewWriteTool(nil, permissions, &fileHistory{}), WriteParams{FilePath: path, Content: "after\n"})
+	response, err := runPolicyTool(t, NewWriteTool(nil, permissions), WriteParams{FilePath: path, Content: "after\n"})
 	require.NoError(t, err)
 	require.True(t, response.IsError)
 	content, err := os.ReadFile(path)

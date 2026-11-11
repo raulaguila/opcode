@@ -55,11 +55,13 @@ func Connect() (*sql.DB, error) {
 
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		logging.Error("Failed to set dialect", "error", err)
+		db.Close()
 		return nil, fmt.Errorf("failed to set dialect: %w", err)
 	}
 
 	if err := goose.Up(db, "migrations"); err != nil {
 		logging.Error("Failed to apply migrations", "error", err)
+		db.Close()
 		return nil, fmt.Errorf("failed to apply migrations: %w", err)
 	}
 	return db, nil

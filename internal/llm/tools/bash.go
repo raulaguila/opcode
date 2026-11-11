@@ -141,7 +141,7 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 			Params:      BashPermissionsParams(params),
 		}
 		level := permission.ApprovalFull
-		if packageFetchCommand(params.Command) {
+		if packageFetchCommand(params.Command) && packageFetchDeclared(ctx) {
 			level = permission.ApprovalAuto
 		}
 		if !permission.RequestAtLevel(ctx, b.permissions, network, level) {

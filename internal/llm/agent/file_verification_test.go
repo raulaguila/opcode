@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/raulaguila/opcode/internal/config"
-	"github.com/raulaguila/opcode/internal/history"
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
@@ -18,14 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type verificationFileHistory struct{ history.Service }
-
-func (*verificationFileHistory) GetByPathAndSession(_ context.Context, path, _ string) (history.File, error) {
-	return history.File{Path: path}, nil
-}
-func (*verificationFileHistory) CreateVersion(_ context.Context, _, path, content string) (history.File, error) {
-	return history.File{Path: path, Content: content}, nil
-}
 
 func fileEffectAgent(t *testing.T, approve bool) (*agent, *controlledProvider, string) {
 	t.Helper()
@@ -43,8 +34,7 @@ func fileEffectAgent(t *testing.T, approve bool) (*agent, *controlledProvider, s
 	if approve {
 		permissions.AutoApproveSession("s")
 	}
-	files := &verificationFileHistory{}
-	a.tools = []tools.BaseTool{tools.SecureTool(tools.NewWriteTool(nil, permissions, files), permissions), tools.SecureTool(tools.NewEditTool(nil, permissions, files), permissions), tools.SecureTool(tools.NewPatchTool(nil, permissions, files), permissions), tools.SecureTool(tools.NewViewTool(nil), permissions), tools.SecureTool(tools.NewBashTool(permissions), permissions)}
+	a.tools = []tools.BaseTool{tools.SecureTool(tools.NewWriteTool(nil, permissions), permissions), tools.SecureTool(tools.NewEditTool(nil, permissions), permissions), tools.SecureTool(tools.NewPatchTool(nil, permissions), permissions), tools.SecureTool(tools.NewViewTool(nil), permissions), tools.SecureTool(tools.NewBashTool(permissions), permissions)}
 	a.tools = append(a.tools, tools.NewValidationTools()...)
 	return a, p, root
 }

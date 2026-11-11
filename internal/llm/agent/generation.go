@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
@@ -233,6 +234,9 @@ func (a *agent) generationMessages(ctx context.Context, sessionID, content strin
 }
 func (a *agent) generateInitialTitle(ctx context.Context, sessionID, content string) {
 	defer logging.RecoverPanic("agent.Run", func() { logging.ErrorPersist("panic while generating title") })
+	// A short turn ends before a slower title model replies; the title outlives it.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
 	if err := a.generateTitle(ctx, sessionID, content); err != nil {
 		logging.ErrorPersist(fmt.Sprintf("failed to generate title: %v", err))
 	}

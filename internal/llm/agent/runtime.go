@@ -294,7 +294,7 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 		return nil, err
 	}
 	raw, _ := json.Marshal(taskProjection(task))
-	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s\n\nUser request:\n", run.mode, namesJSON(checkCommands()), string(raw))
+	header := fmt.Sprintf("Application state (not permission): mode=%s. Use get_tools_catalog/request_tools for more capabilities. ask_user_question obtains a real decision, never command approval. Save broad tasks with update_plan; update progress and finish_task before claiming completion. In plan mode finish as planned. File-change receipts verify only the affected contents, not tests or semantic correctness. Without required/configured checks, report files saved and content verified; do not claim tests passed. Commands and check receipts still require workspace verification. run_checks names come from configured checks: %s. Task data: %s", run.mode, namesJSON(checkCommands()), string(raw))
 	if run.selected["bash"] || run.selected["run_checks"] || run.selected["discover_checks"] {
 		constraints, _ := json.Marshal(a.executionConstraints(run, session))
 		header = "Execution constraints (policy, not approval or a readiness probe): " + string(constraints) + "\n" + header
@@ -302,25 +302,24 @@ func (a *agent) requestHistory(ctx context.Context, session string, history []me
 	if a.commandsRefused(session) {
 		header = sandboxBroken + header
 	}
-	copyHistory := projectReusedSources(history)
-	for i := len(copyHistory) - 1; i >= 0; i-- {
-		if copyHistory[i].Role == message.User {
-			copyHistory[i].Parts = slices.Clone(copyHistory[i].Parts)
-			found := false
-			for j, part := range copyHistory[i].Parts {
-				if text, ok := part.(message.TextContent); ok {
-					copyHistory[i].Parts[j] = message.TextContent{Text: header + text.Text}
-					found = true
-					break
-				}
-			}
-			if !found {
-				copyHistory[i].Parts = append(copyHistory[i].Parts, message.TextContent{Text: header})
-			}
-			break
+	// The state changes from step to step, so it rides at the tail as its own
+	// message: everything before it, the user's request included, stays
+	// byte-identical and keeps the provider's prompt cache.
+	return append(projectReusedSources(history), message.Message{Role: message.User, Parts: []message.ContentPart{message.TextContent{Text: header, Origin: stateOrigin}}}), nil
+}
+
+// stateOrigin marks the per-request application state; it is never stored.
+const stateOrigin = "application-state"
+
+// latestRequest is the index of the last user message, skipping the
+// per-request state, or -1.
+func latestRequest(history []message.Message) int {
+	for i, h := range slices.Backward(history) {
+		if h.Role == message.User && h.Content().Origin != stateOrigin {
+			return i
 		}
 	}
-	return copyHistory, nil
+	return -1
 }
 func namesJSON(commands map[string]string) string {
 	names := make([]string, 0, len(commands))

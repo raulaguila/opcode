@@ -48,7 +48,7 @@ func TestFinalProtocolRepairDoesNotReplayCompletedOperation(t *testing.T) {
 	require.NoError(t, err)
 	replyTools(nextGeneration(t, p), toolCall("bash", `{}`))
 	repaired := nextGeneration(t, p)
-	require.Contains(t, repaired.history[len(repaired.history)-1].Content().Text, "do not repeat edits or commands")
+	require.Contains(t, lastSent(repaired.history).Content().Text, "do not repeat edits or commands")
 	repaired.reply <- provider.ProviderResponse{Content: "Comando concluído.", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 	require.EqualValues(t, 1, command.count.Load())

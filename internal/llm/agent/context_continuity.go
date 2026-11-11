@@ -109,12 +109,7 @@ func continuityActionForResult(call message.ToolCall, result message.ToolResult,
 	return entry
 }
 func truncateContinuitySummaries(history []message.Message) {
-	latestUser := -1
-	for i := range history {
-		if history[i].Role == message.User {
-			latestUser = i
-		}
-	}
+	latestUser := latestRequest(history)
 	for i := 0; i < latestUser; i++ {
 		if history[i].Role != message.Assistant || !strings.HasPrefix(history[i].Content().Text, "[Opcode continuity:") || len(history[i].Content().Text) <= 500 {
 			continue

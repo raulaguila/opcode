@@ -10,6 +10,7 @@ import (
 	"github.com/raulaguila/opcode/internal/llm/provider"
 	"github.com/raulaguila/opcode/internal/llm/tools"
 	"github.com/raulaguila/opcode/internal/message"
+	"github.com/raulaguila/opcode/internal/pubsub"
 	"github.com/raulaguila/opcode/internal/session"
 	"github.com/stretchr/testify/require"
 )
@@ -82,4 +83,26 @@ func TestPerformanceWindowAndDetachedSnapshots(t *testing.T) {
 	empty, err := a.Usage(context.Background(), "other")
 	require.NoError(t, err)
 	require.Nil(t, empty.Performance)
+}
+
+func TestDeletedSessionStateIsForgotten(t *testing.T) {
+	sessions := session.NewService(nil).(interface {
+		Subscribe(context.Context) <-chan pubsub.Event[session.Session]
+		PublishEvent(pubsub.Event[session.Session])
+	})
+	a := &agent{contextStatuses: map[string]ContextStatus{"gone": {}, "kept": {}}, compactSessions: map[string]bool{"gone": true}, usageMetrics: map[string]UsageMetrics{"gone": {}}, performance: map[string]*performanceState{"gone": {}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { a.forgetDeletedSessions(sessions.Subscribe(ctx)); close(done) }()
+	require.Eventually(t, func() bool {
+		sessions.PublishEvent(pubsub.Event[session.Session]{Type: pubsub.DeletedEvent, Payload: session.Session{ID: "gone"}})
+		a.contextMu.Lock()
+		defer a.contextMu.Unlock()
+		return len(a.compactSessions)+len(a.usageMetrics)+len(a.performance) == 0
+	}, time.Second, time.Millisecond)
+	cancel()
+	<-done
+	a.contextMu.Lock()
+	defer a.contextMu.Unlock()
+	require.Equal(t, map[string]ContextStatus{"kept": {}}, a.contextStatuses)
 }

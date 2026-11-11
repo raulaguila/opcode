@@ -70,7 +70,7 @@ func TestReadModesRejectCommandsEditsAndOpaqueIntegrations(t *testing.T) {
 			}
 			replyTools(first, toolCall("request_tools", `{"names":["bash"]}`), toolCall("bash", `{"command":"touch forbidden"}`), toolCall("edit", `{}`), toolCall("mcp_untrusted", `{}`))
 			next := nextGeneration(t, p)
-			results := next.history[len(next.history)-1].ToolResults()
+			results := lastSent(next.history).ToolResults()
 			require.Len(t, results, 4)
 			for _, result := range results {
 				require.True(t, result.IsError)
@@ -96,7 +96,7 @@ func TestProgressiveToolsLoadForNextRequest(t *testing.T) {
 	require.Contains(t, toolNames(next), "extra")
 	replyTools(next, toolCall("extra", `{}`))
 	last := nextGeneration(t, p)
-	require.Contains(t, last.history[len(last.history)-1].ToolResults()[0].Content, "real result")
+	require.Contains(t, lastSent(last.history).ToolResults()[0].Content, "real result")
 	last.reply <- provider.ProviderResponse{Content: "Feito", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 	require.EqualValues(t, 1, extra.count.Load())
@@ -156,7 +156,7 @@ func TestActualChecksMustRunAgainAfterExternalEdit(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("external change"), 0600))
 	next.reply <- provider.ProviderResponse{Content: "Tudo validado", FinishReason: message.FinishReasonEndTurn}
 	repair := nextGeneration(t, p)
-	require.Contains(t, repair.history[len(repair.history)-1].Content().String(), "outdated validation")
+	require.Contains(t, lastSent(repair.history).Content().String(), "outdated validation")
 	replyTools(repair, toolCall("run_checks", `{"names":["test"]}`))
 	final := nextGeneration(t, p)
 	final.reply <- provider.ProviderResponse{Content: "Verificação repetida para os arquivos atuais.", FinishReason: message.FinishReasonEndTurn}
@@ -200,7 +200,7 @@ func TestPlanProtocolPersistsAndResumesInExecuteMode(t *testing.T) {
 	done, err = a.Run(context.Background(), "s", "Continue")
 	require.NoError(t, err)
 	resumed := nextGeneration(t, p)
-	require.Contains(t, resumed.history[len(resumed.history)-1].Content().String(), "Implementar")
+	require.Contains(t, resumed.history[len(resumed.history)-1].Content().String(), "Implementar", "the saved plan reaches the model in the application state")
 	replyTools(resumed, toolCall("finish_task", `{"status":"blocked","summary":"Sem autorização para implementar"}`))
 	last := nextGeneration(t, p)
 	last.reply <- provider.ProviderResponse{Content: "Tarefa bloqueada.", FinishReason: message.FinishReasonEndTurn}

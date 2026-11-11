@@ -221,7 +221,7 @@ func TestInstructionsDuringModelResponseAndSessionIsolation(t *testing.T) {
 	require.NoError(t, finishGeneration(t, otherEvents).Error)
 	first.reply <- provider.ProviderResponse{Content: "initial response", FinishReason: message.FinishReasonEndTurn}
 	second := nextGeneration(t, p)
-	require.Equal(t, "new constraints", second.history[len(second.history)-1].Content().String())
+	require.Equal(t, "new constraints", lastSent(second.history).Content().String())
 	second.reply <- provider.ProviderResponse{Content: "revised response", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, events).Error)
 }

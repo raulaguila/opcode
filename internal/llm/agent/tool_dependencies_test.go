@@ -33,7 +33,7 @@ func TestDependentEditWaitsForReadResult(t *testing.T) {
 			replyTools(first, calls...)
 			next := nextGeneration(t, p)
 			require.Zero(t, edit.count.Load(), "a sibling read cannot justify invented edit arguments")
-			results := next.history[len(next.history)-1].ToolResults()
+			results := lastSent(next.history).ToolResults()
 			for i, call := range calls {
 				if call.Name == "edit" {
 					require.True(t, results[i].IsError)

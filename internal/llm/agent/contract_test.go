@@ -23,7 +23,7 @@ func TestExplicitExplainOverridesImplementationHeuristicAndRejectsForgedTools(t 
 	require.NotContains(t, toolNames(first), "edit")
 	replyTools(first, toolCall("edit", `{}`))
 	next := nextGeneration(t, p)
-	require.True(t, next.history[len(next.history)-1].ToolResults()[0].IsError)
+	require.True(t, lastSent(next.history).ToolResults()[0].IsError)
 	next.reply <- provider.ProviderResponse{Content: "Explanation", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 	require.Zero(t, write.count.Load())
@@ -44,7 +44,7 @@ func TestVerifyContractCannotLoadOrCallWriteTools(t *testing.T) {
 	require.Contains(t, toolNames(first), "run_checks")
 	replyTools(first, toolCall("request_tools", `{"names":["edit","bash"]}`), toolCall("edit", `{}`), toolCall("bash", `{"command":"true"}`), toolCall("finish_task", `{"status":"blocked","summary":"Check unavailable"}`))
 	next := nextGeneration(t, p)
-	results := next.history[len(next.history)-1].ToolResults()
+	results := lastSent(next.history).ToolResults()
 	require.True(t, results[0].IsError)
 	require.True(t, results[1].IsError)
 	require.True(t, results[2].IsError)

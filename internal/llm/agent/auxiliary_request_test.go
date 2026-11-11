@@ -161,3 +161,13 @@ func TestTitleUsesPreparedEnvelopeWhenSeparatelySelected(t *testing.T) {
 	require.Len(t, p.requests, 1)
 	require.Equal(t, 1, p.requests[0].sent)
 }
+
+func TestTitleOutlivesTheTurnThatStartedIt(t *testing.T) {
+	steeringAgent(t) // Initialize the isolated configuration required by task prompts.
+	sessions := &titleSessions{}
+	a := &agent{provider: &titleProbe{model: models.Model{ID: "main", Provider: models.ProviderLocal}}, titleProvider: &auxiliaryPreparedProbe{}, sessions: sessions}
+	turn, cancel := context.WithCancel(context.Background())
+	cancel() // a short reply finished first
+	a.generateInitialTitle(turn, "s", "Explain the project")
+	require.Equal(t, "Prepared auxiliary", sessions.saved.Title)
+}

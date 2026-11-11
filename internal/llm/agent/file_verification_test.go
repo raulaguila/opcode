@@ -17,7 +17,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func fileEffectAgent(t *testing.T, approve bool) (*agent, *controlledProvider, string) {
 	t.Helper()
 	a, p, _, root := runtimeAgent(t, workflow.Execute)
@@ -55,20 +54,20 @@ func TestScopedCreateEditAndPatchFinishBesideLargeArtifactWithoutClaimingTests(t
 	} {
 		replyTools(call, operation)
 		call = nextGeneration(t, p)
-		result := call.history[len(call.history)-1].ToolResults()
+		result := lastSent(call.history).ToolResults()
 		require.Len(t, result, 1)
 		require.False(t, result[0].IsError, "%s: %s", operation.Name, result[0].Content)
 	}
 	replyTools(call, toolCall("get_validation_report", `{}`))
 	call = nextGeneration(t, p)
 	var report map[string]any
-	require.NoError(t, json.Unmarshal([]byte(call.history[len(call.history)-1].ToolResults()[0].Content), &report))
+	require.NoError(t, json.Unmarshal([]byte(lastSent(call.history).ToolResults()[0].Content), &report))
 	require.Equal(t, true, report["affected_files_verified"])
 	require.Equal(t, false, report["file_verification_is_test_validation"])
 	require.Empty(t, report["workspace_verification_error"])
 	replyTools(call, toolCall("finish_task", `{"status":"completed","summary":"Arquivo salvo e conteúdo verificado; testes não configurados"}`))
 	call = nextGeneration(t, p)
-	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError)
+	require.False(t, lastSent(call.history).ToolResults()[0].IsError)
 	call.reply <- provider.ProviderResponse{Content: "Arquivo salvo e conteúdo verificado. Testes não configurados.", FinishReason: message.FinishReasonEndTurn}
 	result := finishGeneration(t, done)
 	require.NoError(t, result.Error)
@@ -103,7 +102,7 @@ func TestAffectedFileChangedAfterToolCannotComplete(t *testing.T) {
 	call = nextGeneration(t, p)
 	replyTools(call, toolCall("write", `{"file_path":"notes.txt","content":"one"}`))
 	call = nextGeneration(t, p)
-	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError, "%s", call.history[len(call.history)-1].ToolResults()[0].Content)
+	require.False(t, lastSent(call.history).ToolResults()[0].IsError, "%s", lastSent(call.history).ToolResults()[0].Content)
 	path := filepath.Join(root, "notes.txt")
 	stamp, err := os.Stat(path)
 	require.NoError(t, err)
@@ -125,7 +124,7 @@ func TestScopedCreationWithoutExplicitFinishDoesNotPoisonTheNextTurn(t *testing.
 	call = nextGeneration(t, p)
 	replyTools(call, toolCall("write", `{"file_path":"notes.txt","content":"one"}`))
 	call = nextGeneration(t, p)
-	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError)
+	require.False(t, lastSent(call.history).ToolResults()[0].IsError)
 	call.reply <- provider.ProviderResponse{Content: "Arquivo criado e conteúdo verificado.", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 	done, err = a.Run(context.Background(), "s", "Obrigado")
@@ -150,7 +149,7 @@ func TestFileReceiptsDoNotBypassWorkspaceVerificationAfterCommands(t *testing.T)
 	call = nextGeneration(t, p)
 	replyTools(call, toolCall("bash", `{"command":"printf command-ran"}`))
 	call = nextGeneration(t, p)
-	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError)
+	require.False(t, lastSent(call.history).ToolResults()[0].IsError)
 	call.reply <- provider.ProviderResponse{Content: "Arquivo criado.", FinishReason: message.FinishReasonEndTurn}
 	require.ErrorContains(t, finishGeneration(t, done).Error, "workspace exceeds validation fingerprint limit")
 }
@@ -166,12 +165,12 @@ func TestUnavailableVerificationTellsTheModelHowToFinish(t *testing.T) {
 	call = nextGeneration(t, p)
 	replyTools(call, toolCall("finish_task", `{"status":"completed","summary":"ok"}`))
 	call = nextGeneration(t, p)
-	refused := call.history[len(call.history)-1].ToolResults()[0]
+	refused := lastSent(call.history).ToolResults()[0]
 	require.True(t, refused.IsError)
 	require.Contains(t, refused.Content, "call finish_task with status partial")
 	replyTools(call, toolCall("finish_task", `{"status":"partial","summary":"tests ran; workspace not verified"}`))
 	call = nextGeneration(t, p)
-	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError)
+	require.False(t, lastSent(call.history).ToolResults()[0].IsError)
 	call.reply <- provider.ProviderResponse{Content: "Testes executados.", FinishReason: message.FinishReasonEndTurn}
 	result := finishGeneration(t, done)
 	require.NoError(t, result.Error)
@@ -196,7 +195,7 @@ func TestVerifiedFilesRemainSeparateWhenConfiguredChecksCannotBeVerified(t *test
 	call = nextGeneration(t, p)
 	replyTools(call, toolCall("write", `{"file_path":"notes.txt","content":"one"}`))
 	call = nextGeneration(t, p)
-	require.False(t, call.history[len(call.history)-1].ToolResults()[0].IsError)
+	require.False(t, lastSent(call.history).ToolResults()[0].IsError)
 	call.reply <- provider.ProviderResponse{Content: "Arquivo criado; testes pendentes.", FinishReason: message.FinishReasonEndTurn}
 	result := finishGeneration(t, done)
 	require.NoError(t, result.Error)

@@ -108,7 +108,7 @@ func TestSkillCannotBeInvokedByModel(t *testing.T) {
 	}
 	replyTools(call, toolCall("invoke_skill", `{"name":"exploit"}`))
 	next := nextGeneration(t, p)
-	require.True(t, next.history[len(next.history)-1].ToolResults()[0].IsError)
+	require.True(t, lastSent(next.history).ToolResults()[0].IsError)
 	next.reply <- provider.ProviderResponse{Content: "Done", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 }

@@ -36,7 +36,7 @@ func TestEncodedChoicesWaitForHumanWithoutRepairGeneration(t *testing.T) {
 			}
 			require.NoError(t, a.questions.Answer("s", q.ID, "Contexto"))
 			last := nextGeneration(t, p)
-			require.Contains(t, last.history[len(last.history)-1].ToolResults()[0].Content, "Contexto")
+			require.Contains(t, lastSent(last.history).ToolResults()[0].Content, "Contexto")
 			last.reply <- provider.ProviderResponse{Content: "Vamos revisar o contexto.", FinishReason: message.FinishReasonEndTurn}
 			require.NoError(t, finishGeneration(t, done).Error)
 			task, err := a.workflow.Get(context.Background(), "s")

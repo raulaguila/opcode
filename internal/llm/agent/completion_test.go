@@ -22,7 +22,7 @@ func TestImplementationCannotFinishWithoutChanges(t *testing.T) {
 	for i := range 3 {
 		call := nextGeneration(t, p)
 		if i > 0 {
-			require.Contains(t, call.history[len(call.history)-1].Content().String(), "no file changes")
+			require.Contains(t, lastSent(call.history).Content().String(), "no file changes")
 		}
 		call.reply <- provider.ProviderResponse{Content: "Corrigido.", FinishReason: message.FinishReasonEndTurn}
 	}
@@ -67,7 +67,7 @@ func TestLiveEditFixtureLoadsEditAndRejectsUnchangedFinal(t *testing.T) {
 	require.Contains(t, toolNames(first), "edit")
 	first.reply <- provider.ProviderResponse{Content: "Corrigido.", FinishReason: message.FinishReasonEndTurn}
 	repair := nextGeneration(t, p)
-	require.Contains(t, repair.history[len(repair.history)-1].Content().String(), "no file changes")
+	require.Contains(t, lastSent(repair.history).Content().String(), "no file changes")
 	replyTools(repair, toolCall("finish_task", `{"status":"blocked","summary":"Nenhuma alteração foi aplicada"}`))
 	final := nextGeneration(t, p)
 	final.reply <- provider.ProviderResponse{Content: "A implementação não foi concluída.", FinishReason: message.FinishReasonEndTurn}
@@ -84,13 +84,13 @@ func TestInvalidStructuredPlanCannotFinishAsOrdinarySuccess(t *testing.T) {
 	first := nextGeneration(t, p)
 	replyTools(first, toolCall("update_plan", `{"objective":"Revisar igarape-42","steps":[{"title":"Inspecionar","status":"pending"}],"checks":[]}`), toolCall("finish_task", `{"status":"planned","summary":"Plano salvo"}`))
 	ordinary := nextGeneration(t, p)
-	for _, result := range ordinary.history[len(ordinary.history)-1].ToolResults() {
+	for _, result := range lastSent(ordinary.history).ToolResults() {
 		require.True(t, result.IsError)
 	}
 	ordinary.reply <- provider.ProviderResponse{Content: "Plano salvo para revisar igarape-42.", FinishReason: message.FinishReasonEndTurn}
 	for range 2 {
 		repair := nextGeneration(t, p)
-		require.Contains(t, repair.history[len(repair.history)-1].Content().String(), "no valid objective and steps were saved")
+		require.Contains(t, lastSent(repair.history).Content().String(), "no valid objective and steps were saved")
 		repair.reply <- provider.ProviderResponse{Content: "Plano concluído.", FinishReason: message.FinishReasonEndTurn}
 	}
 	require.ErrorContains(t, finishGeneration(t, done).Error, "no valid objective and steps were saved")
@@ -119,7 +119,7 @@ func TestStructuredPlanRepairCanSaveAndFinishNormally(t *testing.T) {
 	first := nextGeneration(t, p)
 	first.reply <- provider.ProviderResponse{Content: "Plano pronto.", FinishReason: message.FinishReasonEndTurn}
 	repair := nextGeneration(t, p)
-	require.Contains(t, repair.history[len(repair.history)-1].Content().String(), "structured saved plan")
+	require.Contains(t, lastSent(repair.history).Content().String(), "structured saved plan")
 	replyTools(repair, toolCall("update_plan", `{"objective":"Revisar igarape-42","steps":[{"title":"Inspecionar","status":"pending"}],"criteria":["Arquivo lido"],"checks":[]}`), toolCall("finish_task", `{"status":"planned","summary":"Plano salvo para revisão"}`))
 	final := nextGeneration(t, p)
 	final.reply <- provider.ProviderResponse{Content: "Plano salvo para revisão.", FinishReason: message.FinishReasonEndTurn}

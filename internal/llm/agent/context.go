@@ -92,13 +92,7 @@ func estimateContext(model models.Model, system string, history []message.Messag
 // Only old assistant prose/reasoning and old tool bodies are abbreviated. The
 // latest user turn (including its outstanding tool exchange) remains intact.
 func compactHistory(history []message.Message) ([]message.Message, int) {
-	latest := -1
-	for i, h := range slices.Backward(history) {
-		if h.Role == message.User {
-			latest = i
-			break
-		}
-	}
+	latest := latestRequest(history)
 	if latest < 1 {
 		return history, 0
 	}

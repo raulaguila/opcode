@@ -33,7 +33,7 @@ func TestGroupedQuestionsLoadProgressivelyAndWaitForHumanReview(t *testing.T) {
 	require.Error(t, a.questions.AnswerBatch("s", question.ID, []interaction.AnswerItem{{QuestionID: "features", Choices: []string{"A"}}}))
 	require.NoError(t, a.questions.AnswerBatch("s", question.ID, []interaction.AnswerItem{{QuestionID: "features", Choices: []string{"A", "B"}}, {QuestionID: "reason", Text: "Quero ambos"}}))
 	final := nextGeneration(t, p)
-	require.Contains(t, final.history[len(final.history)-1].ToolResults()[0].Content, "Quero ambos")
+	require.Contains(t, lastSent(final.history).ToolResults()[0].Content, "Quero ambos")
 	final.reply <- provider.ProviderResponse{Content: "As escolhas foram registradas.", FinishReason: message.FinishReasonEndTurn}
 	require.NoError(t, finishGeneration(t, done).Error)
 	task, err := a.workflow.Get(context.Background(), "s")

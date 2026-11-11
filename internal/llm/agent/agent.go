@@ -92,6 +92,7 @@ type agent struct {
 	usageMetrics      map[string]UsageMetrics
 	streamUsages      map[string]*streamUsage
 	performance       map[string]*performanceState
+	stopForgetting    context.CancelFunc
 }
 
 func NewAgent(
@@ -137,7 +138,27 @@ func NewAgent(
 	for _, option := range options {
 		option(agent)
 	}
+	if sessions != nil {
+		ctx, cancel := context.WithCancel(context.Background())
+		agent.stopForgetting = cancel
+		go agent.forgetDeletedSessions(sessions.Subscribe(ctx))
+	}
 	return agent, nil
+}
+
+// forgetDeletedSessions drops a deleted session's usage and context state,
+// which would otherwise live as long as the agent.
+func (a *agent) forgetDeletedSessions(events <-chan pubsub.Event[session.Session]) {
+	for event := range events {
+		if event.Type == pubsub.DeletedEvent {
+			a.contextMu.Lock()
+			delete(a.contextStatuses, event.Payload.ID)
+			delete(a.compactSessions, event.Payload.ID)
+			delete(a.usageMetrics, event.Payload.ID)
+			delete(a.performance, event.Payload.ID)
+			a.contextMu.Unlock()
+		}
+	}
 }
 
 func (a *agent) Model() models.Model {
@@ -545,6 +566,9 @@ func createAgentProviderFor(agentName config.AgentName, agentConfig config.Agent
 }
 
 func (a *agent) Close() error {
+	if a.stopForgetting != nil {
+		a.stopForgetting()
+	}
 	a.runMu.Lock()
 	a.closed = true
 	runs := make([]*generationRun, 0, len(a.runs))

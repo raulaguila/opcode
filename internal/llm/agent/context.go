@@ -113,17 +113,53 @@ func (a *agent) systemPrompt() string {
 	return ""
 }
 func (a *agent) budgetPreparedRequest(session string, history []message.Message, run *generationRun) ([]message.Message, provider.PreparedRequest, error) {
-	p := runProvider(a, run)
-	preparation := &requestPreparation{Provider: p}
-	if preparer, ok := p.(provider.RequestPreparer); ok {
-		preparation.preparer = preparer
-		p = preparation
+	prepare := func() ([]message.Message, provider.PreparedRequest, error) {
+		p := runProvider(a, run)
+		preparation := &requestPreparation{Provider: p}
+		if preparer, ok := p.(provider.RequestPreparer); ok {
+			preparation.preparer = preparer
+			p = preparation
+		}
+		bounded, err := a.budgetRequestWithProvider(session, history, run, p)
+		if err != nil {
+			return nil, nil, err
+		}
+		return bounded, preparation.prepared, nil
 	}
-	bounded, err := a.budgetRequestWithProvider(session, history, run, p)
+	bounded, prepared, err := prepare()
+	if errors.Is(err, ErrContextLimit) && a.shrinkOutput(session, run) {
+		bounded, prepared, err = prepare()
+	}
+	return bounded, prepared, err
+}
+
+// minimumReply is the smallest reply budget worth sending a request for.
+const minimumReply = 1024
+
+// shrinkOutput lowers this step's reply limit to the room the input leaves.
+// The step after a big write usually answers in a few lines; if not, the
+// model stops at the limit and says so, instead of never being asked.
+func (a *agent) shrinkOutput(session string, run *generationRun) bool {
+	if run == nil {
+		return false
+	}
+	a.contextMu.Lock()
+	status := a.contextStatuses[session]
+	a.contextMu.Unlock()
+	room := status.ContextWindow - status.EstimatedInputTokens - status.SafetyTokens
+	controller, ok := runProvider(a, run).(provider.SystemPromptController)
+	if !ok || room < minimumReply || room >= status.ReservedOutputTokens {
+		return false
+	}
+	next, err := controller.WithMaxTokens(room)
 	if err != nil {
-		return nil, nil, err
+		return false
 	}
-	return bounded, preparation.prepared, nil
+	if run.fullOutput == 0 {
+		run.fullOutput = status.ReservedOutputTokens
+	}
+	run.provider = next
+	return true
 }
 
 func (a *agent) budgetRequestWithProvider(session string, history []message.Message, run *generationRun, p provider.Provider) ([]message.Message, error) {

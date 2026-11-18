@@ -27,6 +27,8 @@ type instruction struct {
 }
 
 type generationRun struct {
+	// fullOutput is the reply limit before one tight step lowered it.
+	fullOutput       int64
 	contract         *workflow.Contract
 	ctx              context.Context
 	cancel           context.CancelFunc

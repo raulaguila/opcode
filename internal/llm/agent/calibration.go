@@ -21,8 +21,11 @@ const calibrationTTL = 24 * time.Hour
 const calibrationLimit = 65536
 
 type contextCalibration struct {
-	Window  int64 `json:"window"`
-	Expires int64 `json:"expires"`
+	Window int64 `json:"window,omitempty"`
+	// Ratio is the largest measured provider tokens / byte estimate, so a new
+	// process starts calibrated instead of counting twice the real input.
+	Ratio   float64 `json:"ratio,omitempty"`
+	Expires int64   `json:"expires"`
 }
 type ContextCalibrationControl interface {
 	RecalibrateContext(context.Context, string) (ContextStatus, error)
@@ -54,7 +57,7 @@ func calibrationRecords(path string) (map[string]contextCalibration, error) {
 	}
 	now := time.Now().Unix()
 	for k, v := range entries {
-		if len(k) != 64 || v.Expires <= now || v.Expires > now+int64(calibrationTTL/time.Second) || v.Window < 4096 {
+		if len(k) != 64 || v.Expires <= now || v.Expires > now+int64(calibrationTTL/time.Second) || v.Window != 0 && v.Window < 4096 || !(v.Ratio >= 0 && v.Ratio <= 4) || v.Window == 0 && v.Ratio == 0 {
 			delete(entries, k)
 		}
 	}
@@ -74,7 +77,36 @@ func learnedContext(model models.Model) int64 {
 	}
 	return entries[key].Window
 }
+func learnedTokenRatio(model models.Model) float64 {
+	path, key := calibrationLocation(model)
+	if path == "" {
+		return 0
+	}
+	unlock := localstate.Lock(path)
+	defer unlock()
+	entries, err := calibrationRecords(path)
+	if err != nil {
+		return 0
+	}
+	return entries[key].Ratio
+}
+
+// saveContextCalibration records a learned window; 0 forgets everything
+// learned for the model (an explicit recalibration).
 func saveContextCalibration(model models.Model, window int64) error {
+	return updateCalibration(model, func(record *contextCalibration) {
+		if window == 0 {
+			*record = contextCalibration{}
+		}
+		record.Window = window
+	})
+}
+
+func saveTokenRatio(model models.Model, ratio float64) error {
+	return updateCalibration(model, func(record *contextCalibration) { record.Ratio = min(ratio, 4) })
+}
+
+func updateCalibration(model models.Model, change func(*contextCalibration)) error {
 	path, key := calibrationLocation(model)
 	if path == "" {
 		return fmt.Errorf("context calibration storage unavailable")
@@ -85,10 +117,12 @@ func saveContextCalibration(model models.Model, window int64) error {
 	if err != nil {
 		return err
 	}
-	if window == 0 {
+	record := entries[key]
+	change(&record)
+	if record.Window == 0 && record.Ratio == 0 {
 		delete(entries, key)
 	} else {
-		if len(entries) >= 128 {
+		if _, known := entries[key]; !known && len(entries) >= 128 {
 			oldest := ""
 			for k, v := range entries {
 				if oldest == "" || v.Expires < entries[oldest].Expires {
@@ -97,7 +131,8 @@ func saveContextCalibration(model models.Model, window int64) error {
 			}
 			delete(entries, oldest)
 		}
-		entries[key] = contextCalibration{Window: window, Expires: time.Now().Add(calibrationTTL).Unix()}
+		record.Expires = time.Now().Add(calibrationTTL).Unix()
+		entries[key] = record
 	}
 	return localstate.Write(path, entries, calibrationLimit)
 }

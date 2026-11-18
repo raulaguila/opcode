@@ -32,6 +32,11 @@ func (a *agent) prepareStreamRequest(ctx context.Context, sessionID string, msgH
 			return nil, nil, err
 		}
 		run.provider = next
+		if limiter, ok := next.(provider.SystemPromptController); ok && run.fullOutput > 0 { // a lowered limit lasts one step
+			if restored, err := limiter.WithMaxTokens(run.fullOutput); err == nil {
+				run.provider, run.fullOutput = restored, 0
+			}
+		}
 	}
 	return a.budgetPreparedRequest(sessionID, requestHistory, run)
 }
